@@ -267,6 +267,19 @@ export default function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      }
+    }
+  };
 
   // Ctrl+K
   useEffect(() => {
@@ -290,7 +303,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#F0F2F5]" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="h-screen flex flex-col overflow-hidden bg-[#F0F2F5]" style={{ fontFamily: "'Inter', system-ui, sans-serif", zoom: zoomLevel }}>
       {/* ── Top Header ───────────────────────────────────────────────── */}
       <header className="bg-[#0C1524] border-b border-[#1E2D42] h-12 flex items-center gap-3 px-3 flex-shrink-0 z-40">
         {/* Logo */}
@@ -313,29 +326,53 @@ export default function App() {
         </button>
 
         {/* Global Search */}
-        <div className="flex-1 max-w-lg">
-          <div className="relative">
-            <Icon.Search />
-            <input
-              value={globalSearch}
-              onChange={e => setGlobalSearch(e.target.value)}
-              onFocus={() => setCmdOpen(true)}
-              placeholder="Search patients, MRN, appointments..."
-              className="w-full h-8 bg-white/10 border border-white/10 rounded text-[12.5px] text-white placeholder:text-[#64748B] pl-8 pr-3 focus:outline-none focus:bg-white/15 focus:border-white/25"
-            />
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#64748B]"><Icon.Search /></span>
-            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/10 text-[#64748B] text-[10px] px-1.5 py-0.5 rounded font-mono">⌘K</kbd>
-          </div>
+        <div className="w-[400px] ml-auto mr-4 group">
+          <button
+            onClick={() => setCmdOpen(true)}
+            className="w-full relative flex items-center h-9 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-lg text-left text-[13px] text-[#94A3B8] transition-all shadow-sm hover:shadow-[0_0_15px_rgba(27,79,216,0.15)] overflow-hidden"
+          >
+            <span className="absolute left-3 text-[#64748B] group-hover:text-blue-400 transition-colors">
+              <Icon.Search />
+            </span>
+            <span className="pl-10 pr-16 flex-1 truncate">Search patients, MRN, appointments...</span>
+            <div className="absolute right-2 flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+              <kbd className="bg-black/30 border border-white/10 text-white text-[10px] px-2 py-0.5 rounded shadow-sm font-mono tracking-wider">Ctrl</kbd>
+              <kbd className="bg-black/30 border border-white/10 text-white text-[10px] px-2 py-0.5 rounded shadow-sm font-mono tracking-wider">K</kbd>
+            </div>
+            {/* Inner glow */}
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-400/5 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+          </button>
         </div>
 
         {/* Quick Create */}
         <div className="relative ml-2">
-          <button className="flex items-center gap-1.5 h-7 px-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] rounded text-white text-[12px] font-medium transition-colors">
+          <button 
+            onClick={() => setNewMenuOpen(o => !o)}
+            className="flex items-center gap-1.5 h-7 px-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] rounded text-white text-[12px] font-medium transition-colors">
             <Icon.Plus /> New
           </button>
+          {newMenuOpen && (
+            <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-[#DDE2EC] rounded shadow-lg z-50 py-1">
+              <button onClick={() => { setModule("register"); setNewMenuOpen(false); }} className="w-full text-left px-4 py-1.5 text-[12px] hover:bg-[#F8FAFC] text-gray-700">New Patient</button>
+              <button onClick={() => { setModule("appointments"); setNewMenuOpen(false); }} className="w-full text-left px-4 py-1.5 text-[12px] hover:bg-[#F8FAFC] text-gray-700">New Appointment</button>
+              <button onClick={() => { setModule("chart"); setOrderOpen(true); setNewMenuOpen(false); }} className="w-full text-left px-4 py-1.5 text-[12px] hover:bg-[#F8FAFC] text-gray-700">New Order</button>
+            </div>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-1">
+          {/* Font Controls */}
+          <div className="flex items-center bg-white/5 rounded px-1 mr-1">
+             <button onClick={() => setZoomLevel(z => Math.max(0.8, z - 0.1))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[10px] font-bold">A-</button>
+             <button onClick={() => setZoomLevel(1)} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[12px] font-bold">A</button>
+             <button onClick={() => setZoomLevel(z => Math.min(1.5, z + 0.1))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[14px] font-bold">A+</button>
+          </div>
+
+          {/* Fullscreen */}
+          <button onClick={toggleFullscreen} className="w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors mr-1">
+            {isFullscreen ? <Icon.Minimize /> : <Icon.Maximize />}
+          </button>
+
           {/* Notifications */}
           <div className="relative">
             <button onClick={() => setNotifOpen(n => !n)}
@@ -372,7 +409,7 @@ export default function App() {
       {/* ── Body ─────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {/* ── Sidebar ──────────────────────────────────────────────── */}
-        <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-12" : "w-52"}`}>
+        <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-12" : "w-64"}`}>
           <div className="flex-1 py-2 px-2">
             {NAV.map((item) => {
               const isActive = module === item.key || (item.children?.some(c => c.key === module));
@@ -383,7 +420,10 @@ export default function App() {
                   <div
                     className={`nav-item ${isActive ? "active" : ""}`}
                     onClick={() => {
-                      if (item.children) { toggleExpand(item.key); setModule(item.key); }
+                      if (item.children) { 
+                        toggleExpand(item.key); 
+                        if (!expanded.includes(item.key)) setModule(item.children[0].key);
+                      }
                       else setModule(item.key);
                     }}>
                     <item.Icon />
@@ -423,7 +463,7 @@ export default function App() {
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded border border-white/10 text-[#64748B] hover:text-white hover:border-white/20 transition-colors text-[11.5px]">
                 <Icon.Cmd />
                 <span>Command Palette</span>
-                <kbd className="ml-auto font-mono text-[10px]">⌘K</kbd>
+                <kbd className="ml-auto font-mono text-[10px]">Ctrl+K</kbd>
               </button>
             </div>
           )}
