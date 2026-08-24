@@ -20,6 +20,23 @@ import Insurance from "./components/Insurance";
 import OrderDrawer from "./components/OrderDrawer";
 import CommandPalette from "./components/CommandPalette";
 import Registration from "./components/Registration";
+import SmartOCR from "./components/SmartOCR";
+import SymptomAI from "./components/SymptomAI";
+import ClinicalRAG from "./components/ClinicalRAG";
+import ClinicalSummaries from "./components/ClinicalSummaries";
+import BulkAI from "./components/BulkAI";
+import NLFiltering from "./components/NLFiltering";
+import QueueManagement from "./components/QueueManagement";
+import OPManagement from "./components/OPManagement";
+import DoctorWorkflow from "./components/DoctorWorkflow";
+import DoctorScheduling from "./components/DoctorScheduling";
+import PatientExperience from "./components/PatientExperience";
+import HRMS from "./components/HRMS";
+import Employees from "./components/Employees";
+import Admissions from "./components/Admissions";
+import Readmission from "./components/Readmission";
+import PaymentCollection from "./components/PaymentCollection";
+import RevenueReports from "./components/RevenueReports";
 
 type Module =
   | "dashboard" | "patients" | "appointments" | "emergency"
@@ -27,7 +44,13 @@ type Module =
   | "radiology" | "pharmacy" | "surgery" | "billing"
   | "icu" | "discharge" | "triage" | "insurance" | "analytics"
   | "reports" | "admin"
-  | "chart" | "register";
+  | "chart" | "register"
+  | "outpatient" | "queue" | "op_management" 
+  | "doctor_workflow" | "scheduling"
+  | "admissions" | "readmission" 
+  | "payments" | "revenue_reports" 
+  | "hrms" | "employees" | "patient_exp"
+  | "intelligence" | "ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering";
 
 interface NavItem {
   key: Module;
@@ -46,12 +69,12 @@ const NAV: NavItem[] = [
       { key: "register", label: "Registration" },
     ]
   },
-  { key: "appointments", label: "Appointments", Icon: Icon.Calendar, badge: 14 },
   {
-    key: "emergency", label: "Emergency", Icon: Icon.Emergency, badge: 8,
+    key: "outpatient", label: "Outpatient", Icon: Icon.Stethoscope,
     children: [
-      { key: "emergency", label: "ED Track Board" },
-      { key: "triage", label: "Triage" },
+      { key: "op_management", label: "OP Dashboard" },
+      { key: "appointments", label: "Appointments" },
+      { key: "queue", label: "Queue Management" },
     ]
   },
   {
@@ -60,12 +83,22 @@ const NAV: NavItem[] = [
       { key: "chart", label: "Encounters" },
       { key: "chart", label: "Orders" },
       { key: "chart", label: "Results" },
+      { key: "doctor_workflow", label: "Doctor Workflow" },
+    ]
+  },
+  {
+    key: "emergency", label: "Emergency", Icon: Icon.Emergency, badge: 8,
+    children: [
+      { key: "emergency", label: "ED Track Board" },
+      { key: "triage", label: "Triage" },
     ]
   },
   {
     key: "inpatient", label: "Inpatient", Icon: Icon.Bed,
     children: [
       { key: "inpatient", label: "Bed Board" },
+      { key: "admissions", label: "Admissions" },
+      { key: "readmission", label: "Readmission" },
       { key: "icu", label: "ICU" },
       { key: "discharge", label: "Discharge" },
     ]
@@ -75,9 +108,40 @@ const NAV: NavItem[] = [
   { key: "radiology", label: "Radiology", Icon: Icon.Radiology },
   { key: "pharmacy", label: "Pharmacy", Icon: Icon.Pharmacy, badge: 8 },
   { key: "surgery", label: "Surgery", Icon: Icon.Surgery },
-  { key: "billing", label: "Billing", Icon: Icon.Billing },
+  { 
+    key: "billing", label: "Billing", Icon: Icon.Billing,
+    children: [
+      { key: "billing", label: "Invoices" },
+      { key: "payments", label: "Payment Collection" },
+    ] 
+  },
   { key: "insurance", label: "Insurance", Icon: Icon.Insurance },
-  { key: "reports", label: "Reports", Icon: Icon.Reports },
+  {
+    key: "hrms", label: "HR & Staff", Icon: Icon.User,
+    children: [
+      { key: "hrms", label: "HRMS" },
+      { key: "employees", label: "Employees" },
+    ]
+  },
+  { key: "scheduling", label: "Doctor Scheduling", Icon: Icon.Calendar },
+  {
+    key: "intelligence", label: "Hosp AI", Icon: Icon.FlaskConical,
+    children: [
+      { key: "ocr", label: "Smart OCR" },
+      { key: "symptom_ai", label: "Symptom AI" },
+      { key: "clinical_rag", label: "Clinical RAG" },
+      { key: "clinical_summaries", label: "Clinical Summaries" },
+      { key: "bulk_ai", label: "Bulk Patient AI" },
+      { key: "nl_filtering", label: "NL Patient Filtering" },
+    ]
+  },
+  { 
+    key: "reports", label: "Reports", Icon: Icon.Reports,
+    children: [
+      { key: "reports", label: "General Reports" },
+      { key: "revenue_reports", label: "Revenue Reports" },
+    ]
+  },
   { key: "analytics", label: "Analytics", Icon: Icon.Analytics },
   { key: "admin", label: "Administration", Icon: Icon.Admin },
 ];
@@ -197,7 +261,7 @@ function PlaceholderModule({ title, sub }: { title: string; sub?: string }) {
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [module, setModule] = useState<Module>("dashboard");
-  const [expanded, setExpanded] = useState<string[]>(["patients"]);
+  const [expanded, setExpanded] = useState<string[]>(["patients", "outpatient"]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -231,12 +295,10 @@ export default function App() {
       <header className="bg-[#0C1524] border-b border-[#1E2D42] h-12 flex items-center gap-3 px-3 flex-shrink-0 z-40">
         {/* Logo */}
         <div className="flex items-center gap-2.5 mr-2">
-          <div className="w-7 h-7 bg-[#1B4FD8] rounded flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-sm">+</span>
-          </div>
+          <img src="/logo.png" alt="HospAI Logo" className="w-8 h-8 object-contain bg-white rounded p-0.5 flex-shrink-0" />
           {!sidebarCollapsed && (
             <div className="leading-tight">
-              <div className="text-[12.5px] font-semibold text-white">General Hospital</div>
+              <div className="text-[12.5px] font-semibold text-white">HospAI</div>
               <div className="text-[10px] text-[#64748B]">Main Campus ▾</div>
             </div>
           )}
@@ -371,13 +433,24 @@ export default function App() {
         <main className="flex-1 flex flex-col overflow-hidden">
           {/* Breadcrumb strip */}
           <div className="bg-white border-b border-[#DDE2EC] px-5 py-1.5 flex items-center gap-1.5 text-[11.5px] text-[#94A3B8] flex-shrink-0">
-            <span>General Hospital</span>
+            <span>HospAI</span>
             <Icon.ChevronRight />
             <span className="text-gray-700 font-medium capitalize">{
               module === "chart" ? "Patient Chart" : module === "register" ? "Registration" :
               module === "icu" ? "ICU" : module === "discharge" ? "Discharge Workflow" :
               module === "triage" ? "Triage" : module === "analytics" ? "Analytics" :
-              module === "radiology" ? "Radiology" : module
+              module === "radiology" ? "Radiology" : 
+              module === "op_management" ? "OP Management" : 
+              module === "patient_exp" ? "Patient Experience" :
+              module === "doctor_workflow" ? "Doctor Workflow" :
+              module === "scheduling" ? "Doctor Scheduling" :
+              module === "revenue_reports" ? "Revenue Reports" :
+              module === "symptom_ai" ? "Symptom AI" :
+              module === "clinical_rag" ? "Clinical RAG" :
+              module === "clinical_summaries" ? "Clinical Summaries" :
+              module === "bulk_ai" ? "Bulk Patient AI" :
+              module === "nl_filtering" ? "NL Patient Filtering" :
+              module
             }</span>
           </div>
 
@@ -418,6 +491,25 @@ export default function App() {
           {module === "clinical" && <PlaceholderModule title="Clinical" sub="Encounters, orders, results, and care plans" />}
           {module === "reports" && <PlaceholderModule title="Reports" sub="Operational and clinical reporting" />}
           {module === "admin" && <PlaceholderModule title="Administration" sub="Users, roles, departments, and system configuration" />}
+          
+          {/* New modules placeholders */}
+          {module === "queue" && <QueueManagement />}
+          {module === "op_management" && <OPManagement />}
+          {module === "patient_exp" && <PatientExperience />}
+          {module === "doctor_workflow" && <DoctorWorkflow />}
+          {module === "scheduling" && <DoctorScheduling />}
+          {module === "admissions" && <Admissions />}
+          {module === "readmission" && <Readmission />}
+          {module === "payments" && <PaymentCollection />}
+          {module === "revenue_reports" && <RevenueReports />}
+          {module === "hrms" && <HRMS />}
+          {module === "employees" && <Employees />}
+          {module === "ocr" && <SmartOCR />}
+          {module === "symptom_ai" && <SymptomAI />}
+          {module === "clinical_rag" && <ClinicalRAG />}
+          {module === "clinical_summaries" && <ClinicalSummaries />}
+          {module === "bulk_ai" && <BulkAI />}
+          {module === "nl_filtering" && <NLFiltering />}
         </main>
       </div>
 

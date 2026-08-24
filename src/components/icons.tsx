@@ -101,4 +101,7 @@ export const Icon = {
   TrendUp: () => (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 9.5l4-5 2.5 2 4-4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M8.5 2h3v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
   ),
+  Calendar: () => (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2" y="3" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M4 1.5v3M11 1.5v3M2 6.5h11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+  ),
 };
