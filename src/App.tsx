@@ -1,0 +1,434 @@
+import React, { useState, useEffect } from "react";
+import { Icon } from "./components/icons";
+import Login from "./components/Login";
+import Dashboard from "./components/Dashboard";
+import PatientSearch from "./components/PatientSearch";
+import PatientChart from "./components/PatientChart";
+import Emergency from "./components/Emergency";
+import Laboratory from "./components/Laboratory";
+import Pharmacy from "./components/Pharmacy";
+import Billing from "./components/Billing";
+import Inpatient from "./components/Inpatient";
+import Surgery from "./components/Surgery";
+import Appointments from "./components/Appointments";
+import Radiology from "./components/Radiology";
+import ICU from "./components/ICU";
+import Analytics from "./components/Analytics";
+import Discharge from "./components/Discharge";
+import Triage from "./components/Triage";
+import Insurance from "./components/Insurance";
+import OrderDrawer from "./components/OrderDrawer";
+import CommandPalette from "./components/CommandPalette";
+import Registration from "./components/Registration";
+
+type Module =
+  | "dashboard" | "patients" | "appointments" | "emergency"
+  | "clinical" | "inpatient" | "nursing" | "laboratory"
+  | "radiology" | "pharmacy" | "surgery" | "billing"
+  | "icu" | "discharge" | "triage" | "insurance" | "analytics"
+  | "reports" | "admin"
+  | "chart" | "register";
+
+interface NavItem {
+  key: Module;
+  label: string;
+  Icon: React.FC;
+  badge?: number;
+  children?: { key: Module; label: string }[];
+}
+
+const NAV: NavItem[] = [
+  { key: "dashboard", label: "Dashboard", Icon: Icon.Dashboard },
+  {
+    key: "patients", label: "Patients", Icon: Icon.Patients,
+    children: [
+      { key: "patients", label: "Patient Search" },
+      { key: "register", label: "Registration" },
+    ]
+  },
+  { key: "appointments", label: "Appointments", Icon: Icon.Calendar, badge: 14 },
+  {
+    key: "emergency", label: "Emergency", Icon: Icon.Emergency, badge: 8,
+    children: [
+      { key: "emergency", label: "ED Track Board" },
+      { key: "triage", label: "Triage" },
+    ]
+  },
+  {
+    key: "clinical", label: "Clinical", Icon: Icon.Clinical,
+    children: [
+      { key: "chart", label: "Encounters" },
+      { key: "chart", label: "Orders" },
+      { key: "chart", label: "Results" },
+    ]
+  },
+  {
+    key: "inpatient", label: "Inpatient", Icon: Icon.Bed,
+    children: [
+      { key: "inpatient", label: "Bed Board" },
+      { key: "icu", label: "ICU" },
+      { key: "discharge", label: "Discharge" },
+    ]
+  },
+  { key: "nursing", label: "Nursing", Icon: Icon.Nursing },
+  { key: "laboratory", label: "Laboratory", Icon: Icon.Lab, badge: 3 },
+  { key: "radiology", label: "Radiology", Icon: Icon.Radiology },
+  { key: "pharmacy", label: "Pharmacy", Icon: Icon.Pharmacy, badge: 8 },
+  { key: "surgery", label: "Surgery", Icon: Icon.Surgery },
+  { key: "billing", label: "Billing", Icon: Icon.Billing },
+  { key: "insurance", label: "Insurance", Icon: Icon.Insurance },
+  { key: "reports", label: "Reports", Icon: Icon.Reports },
+  { key: "analytics", label: "Analytics", Icon: Icon.Analytics },
+  { key: "admin", label: "Administration", Icon: Icon.Admin },
+];
+
+function NotificationPanel({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-[#DDE2EC] rounded shadow-xl z-50">
+      <div className="px-3.5 py-2.5 border-b border-[#DDE2EC] flex items-center justify-between">
+        <span className="text-[12.5px] font-semibold text-gray-900">Notifications</span>
+        <button onClick={onClose} className="text-[11px] text-[#1B4FD8] font-medium">Mark all read</button>
+      </div>
+      <div className="max-h-72 overflow-y-auto">
+        {[
+          { type: "critical", icon: "⚠", title: "Critical lab result", body: "Potassium 6.2 — John Smith", time: "2m ago", read: false },
+          { type: "warning", icon: "⚠", title: "ED capacity alert", body: "8 patients waiting > 30 min", time: "8m ago", read: false },
+          { type: "info", icon: "🧪", title: "Lab results ready", body: "CBC results for Mary Jones", time: "15m ago", read: false },
+          { type: "info", icon: "📅", title: "Appointment reminder", body: "Elena Torres arriving at 10:00", time: "30m ago", read: true },
+          { type: "info", icon: "💊", title: "Pharmacy ready", body: "Metformin ready for pickup — Rm 204", time: "42m ago", read: true },
+        ].map((n, i) => (
+          <div key={i} className={`flex gap-3 px-3.5 py-2.5 border-b border-[#F1F5F9] last:border-0 cursor-pointer hover:bg-[#F8FAFC] ${!n.read ? "bg-[#FAFBFF]" : ""}`}>
+            <span className="text-base mt-0.5">{n.icon}</span>
+            <div className="flex-1 min-w-0">
+              <div className={`text-[12px] ${!n.read ? "font-semibold text-gray-900" : "text-gray-700"}`}>{n.title}</div>
+              <div className="text-[11.5px] text-[#64748B] truncate">{n.body}</div>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[10.5px] text-[#94A3B8] whitespace-nowrap">{n.time}</span>
+              {!n.read && <div className="w-2 h-2 rounded-full bg-[#1B4FD8]" />}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="px-3.5 py-2 border-t border-[#DDE2EC] text-center">
+        <button className="text-[11.5px] text-[#1B4FD8] font-medium hover:underline">View all notifications</button>
+      </div>
+    </div>
+  );
+}
+
+function NursingDashboard() {
+  return (
+    <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3">
+        <h1 className="text-base font-semibold text-gray-900">Nursing Dashboard — 3N Medical</h1>
+        <p className="text-[11.5px] text-[#64748B]">RN Jessica Carter · Shift: 07:00–19:00 · Aug 23, 2026</p>
+      </div>
+      <div className="p-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { room: "204", patient: "John Smith", age: 41, vitals: "Due 11:00", meds: "Insulin 11:00 ▲", status: "Active", acuity: 2 },
+            { room: "208", patient: "Mary Jones", age: 53, vitals: "Done ✓", meds: "None due", status: "Stable", acuity: 3 },
+            { room: "212", patient: "Frank Torres", age: 55, vitals: "Due 12:00", meds: "Labetalol PRN", status: "Active", acuity: 2 },
+            { room: "215", patient: "Helen Park", age: 72, vitals: "Done ✓", meds: "Done ✓", status: "Isolation", acuity: 3 },
+            { room: "221", patient: "Robert Lee", age: 66, vitals: "Overdue ⚠", meds: "Overdue ⚠", status: "Concern", acuity: 2 },
+            { room: "225", patient: "Sandra Hill", age: 48, vitals: "Done ✓", meds: "None due", status: "Stable", acuity: 4 },
+          ].map((p, i) => (
+            <div key={i} className={`bg-white border rounded p-4 ${p.status === "Concern" ? "border-[#FECACA]" : p.status === "Isolation" ? "border-[#FED7AA]" : "border-[#DDE2EC]"}`}>
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[11px] text-[#94A3B8]">Rm {p.room}</span>
+                    <span className={`text-[10.5px] font-semibold px-1.5 py-px rounded ${
+                      p.acuity === 2 ? "bg-[#FEE2E2] text-[#B91C1C]" : p.acuity === 3 ? "bg-[#FEF3C7] text-[#B45309]" : "bg-[#DCFCE7] text-[#15803D]"}`}>
+                      Acuity {p.acuity}
+                    </span>
+                  </div>
+                  <div className="text-[13px] font-semibold text-gray-900 mt-0.5">{p.patient}</div>
+                  <div className="text-[11.5px] text-[#64748B]">{p.age} yrs</div>
+                </div>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                  p.status === "Concern" ? "bg-[#FEE2E2] text-[#B91C1C]" :
+                  p.status === "Isolation" ? "bg-[#FEF3C7] text-[#B45309]" :
+                  p.status === "Active" ? "bg-[#EFF6FF] text-[#1D4ED8]" :
+                  "bg-[#F0FDF4] text-[#15803D]"}`}>{p.status}</span>
+              </div>
+              <div className="space-y-1.5 text-[12px]">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#64748B]">Vitals</span>
+                  <span className={`font-medium ${p.vitals.includes("Overdue") ? "text-[#DC2626]" : p.vitals.includes("Due") ? "text-[#D97706]" : "text-[#16A34A]"}`}>{p.vitals}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#64748B]">Medications</span>
+                  <span className={`font-medium ${p.meds.includes("Overdue") ? "text-[#DC2626]" : p.meds.includes("▲") ? "text-[#D97706]" : "text-[#16A34A]"}`}>{p.meds}</span>
+                </div>
+              </div>
+              <div className="flex gap-1.5 mt-3">
+                <button className="flex-1 text-[11px] font-medium py-1 rounded border border-[#DDE2EC] bg-[#F8FAFC] hover:bg-[#F1F5F9] text-gray-700">Vitals</button>
+                <button className="flex-1 text-[11px] font-medium py-1 rounded border border-[#DDE2EC] bg-[#F8FAFC] hover:bg-[#F1F5F9] text-gray-700">Meds</button>
+                <button className="flex-1 text-[11px] font-medium py-1 rounded border border-[#DDE2EC] bg-[#F8FAFC] hover:bg-[#F1F5F9] text-gray-700">Notes</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlaceholderModule({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3">
+        <h1 className="text-base font-semibold text-gray-900">{title}</h1>
+        {sub && <p className="text-[11.5px] text-[#64748B]">{sub}</p>}
+      </div>
+      <div className="flex-1 flex items-center justify-center bg-[#F0F2F5]">
+        <div className="text-center">
+          <div className="text-5xl mb-4">📋</div>
+          <div className="text-sm font-semibold text-gray-700 mb-1">{title}</div>
+          <div className="text-[12px] text-[#64748B]">This module is available in the full implementation.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [module, setModule] = useState<Module>("dashboard");
+  const [expanded, setExpanded] = useState<string[]>(["patients"]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
+
+  // Ctrl+K
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") { e.preventDefault(); setCmdOpen(true); }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />;
+
+  const navigate = (m: string, sub?: string) => {
+    setModule(m as Module);
+    if (sub === "register") setModule("register");
+    setCmdOpen(false);
+  };
+
+  const toggleExpand = (key: string) => {
+    setExpanded(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  };
+
+  return (
+    <div className="h-screen flex flex-col overflow-hidden bg-[#F0F2F5]" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      {/* ── Top Header ───────────────────────────────────────────────── */}
+      <header className="bg-[#0C1524] border-b border-[#1E2D42] h-12 flex items-center gap-3 px-3 flex-shrink-0 z-40">
+        {/* Logo */}
+        <div className="flex items-center gap-2.5 mr-2">
+          <div className="w-7 h-7 bg-[#1B4FD8] rounded flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-bold text-sm">+</span>
+          </div>
+          {!sidebarCollapsed && (
+            <div className="leading-tight">
+              <div className="text-[12.5px] font-semibold text-white">General Hospital</div>
+              <div className="text-[10px] text-[#64748B]">Main Campus ▾</div>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar toggle */}
+        <button onClick={() => setSidebarCollapsed(c => !c)}
+          className="w-7 h-7 flex items-center justify-center text-[#64748B] hover:text-white transition-colors rounded hover:bg-white/10">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M2 3.5h10M2 7h10M2 10.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+        </button>
+
+        {/* Global Search */}
+        <div className="flex-1 max-w-lg">
+          <div className="relative">
+            <Icon.Search />
+            <input
+              value={globalSearch}
+              onChange={e => setGlobalSearch(e.target.value)}
+              onFocus={() => setCmdOpen(true)}
+              placeholder="Search patients, MRN, appointments..."
+              className="w-full h-8 bg-white/10 border border-white/10 rounded text-[12.5px] text-white placeholder:text-[#64748B] pl-8 pr-3 focus:outline-none focus:bg-white/15 focus:border-white/25"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#64748B]"><Icon.Search /></span>
+            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/10 text-[#64748B] text-[10px] px-1.5 py-0.5 rounded font-mono">⌘K</kbd>
+          </div>
+        </div>
+
+        {/* Quick Create */}
+        <div className="relative ml-2">
+          <button className="flex items-center gap-1.5 h-7 px-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] rounded text-white text-[12px] font-medium transition-colors">
+            <Icon.Plus /> New
+          </button>
+        </div>
+
+        <div className="ml-auto flex items-center gap-1">
+          {/* Notifications */}
+          <div className="relative">
+            <button onClick={() => setNotifOpen(n => !n)}
+              className="relative w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors">
+              <Icon.Bell />
+              <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-[#DC2626] rounded-full text-[9px] text-white font-bold flex items-center justify-center">7</span>
+            </button>
+            {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
+          </div>
+
+          {/* Messages */}
+          <button className="relative w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors">
+            <Icon.Message />
+            <span className="absolute top-1 right-1 w-3 h-3 bg-[#16A34A] rounded-full text-[8px] text-white font-bold flex items-center justify-center">3</span>
+          </button>
+
+          {/* Help */}
+          <button className="w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors text-[13px] font-bold">?</button>
+
+          {/* User */}
+          <div className="flex items-center gap-2 ml-1 pl-3 border-l border-white/10">
+            <div className="w-7 h-7 rounded-full bg-[#1B4FD8] flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0">JC</div>
+            <div className="hidden md:block">
+              <div className="text-[11.5px] font-medium text-white leading-tight">Jessica Carter</div>
+              <div className="text-[10px] text-[#64748B]">RN · 3N Medical</div>
+            </div>
+            <button onClick={() => setLoggedIn(false)} className="ml-1 text-[#64748B] hover:text-white text-[11px] font-medium transition-colors px-1.5 py-1 rounded hover:bg-white/10">
+              Sign out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Body ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* ── Sidebar ──────────────────────────────────────────────── */}
+        <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-12" : "w-52"}`}>
+          <div className="flex-1 py-2 px-2">
+            {NAV.map((item) => {
+              const isActive = module === item.key || (item.children?.some(c => c.key === module));
+              const isExpanded = expanded.includes(item.key);
+
+              return (
+                <div key={item.key}>
+                  <div
+                    className={`nav-item ${isActive ? "active" : ""}`}
+                    onClick={() => {
+                      if (item.children) { toggleExpand(item.key); setModule(item.key); }
+                      else setModule(item.key);
+                    }}>
+                    <item.Icon />
+                    {!sidebarCollapsed && (
+                      <>
+                        <span className="flex-1 truncate">{item.label}</span>
+                        {item.badge && !isActive && (
+                          <span className="badge bg-[#DC2626] text-white">{item.badge}</span>
+                        )}
+                        {item.children && (
+                          <span className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}>
+                            <Icon.ChevronRight />
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {!sidebarCollapsed && item.children && isExpanded && (
+                    <div>
+                      {item.children.map((child, ci) => (
+                        <div key={ci}
+                          className={`nav-item sub ${module === child.key && isActive ? "active" : ""}`}
+                          onClick={() => setModule(child.key)}>
+                          {child.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {!sidebarCollapsed && (
+            <div className="p-3 border-t border-[#1E2D42]">
+              <button onClick={() => setCmdOpen(true)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded border border-white/10 text-[#64748B] hover:text-white hover:border-white/20 transition-colors text-[11.5px]">
+                <Icon.Cmd />
+                <span>Command Palette</span>
+                <kbd className="ml-auto font-mono text-[10px]">⌘K</kbd>
+              </button>
+            </div>
+          )}
+        </aside>
+
+        {/* ── Main Workspace ───────────────────────────────────────── */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {/* Breadcrumb strip */}
+          <div className="bg-white border-b border-[#DDE2EC] px-5 py-1.5 flex items-center gap-1.5 text-[11.5px] text-[#94A3B8] flex-shrink-0">
+            <span>General Hospital</span>
+            <Icon.ChevronRight />
+            <span className="text-gray-700 font-medium capitalize">{
+              module === "chart" ? "Patient Chart" : module === "register" ? "Registration" :
+              module === "icu" ? "ICU" : module === "discharge" ? "Discharge Workflow" :
+              module === "triage" ? "Triage" : module === "analytics" ? "Analytics" :
+              module === "radiology" ? "Radiology" : module
+            }</span>
+          </div>
+
+          {/* Module Content */}
+          {module === "dashboard" && <Dashboard navigate={navigate} />}
+          {module === "patients" && (
+            <PatientSearch
+              onSelect={() => setModule("chart")}
+              onRegister={() => setModule("register")}
+            />
+          )}
+          {module === "register" && (
+            <Registration
+              onComplete={() => setModule("patients")}
+              onBack={() => setModule("patients")}
+            />
+          )}
+          {module === "chart" && (
+            <PatientChart
+              onBack={() => setModule("patients")}
+              openOrder={() => setOrderOpen(true)}
+            />
+          )}
+          {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
+          {module === "emergency" && <Emergency onSelect={() => setModule("chart")} />}
+          {module === "inpatient" && <Inpatient />}
+          {module === "nursing" && <NursingDashboard />}
+          {module === "laboratory" && <Laboratory />}
+          {module === "pharmacy" && <Pharmacy />}
+          {module === "surgery" && <Surgery />}
+          {module === "billing" && <Billing />}
+          {module === "radiology" && <Radiology />}
+          {module === "icu" && <ICU />}
+          {module === "analytics" && <Analytics />}
+          {module === "discharge" && <Discharge onComplete={() => setModule("inpatient")} />}
+          {module === "triage" && <Triage />}
+          {module === "insurance" && <Insurance />}
+          {module === "clinical" && <PlaceholderModule title="Clinical" sub="Encounters, orders, results, and care plans" />}
+          {module === "reports" && <PlaceholderModule title="Reports" sub="Operational and clinical reporting" />}
+          {module === "admin" && <PlaceholderModule title="Administration" sub="Users, roles, departments, and system configuration" />}
+        </main>
+      </div>
+
+      {/* ── Overlays ─────────────────────────────────────────────────── */}
+      <OrderDrawer open={orderOpen} onClose={() => setOrderOpen(false)} />
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)}
+        onNavigate={(key) => {
+          if (key === "order") { setModule("chart"); setOrderOpen(true); }
+          else if (key === "register") { setModule("register"); }
+          else { setModule(key as Module); }
+        }} />
+    </div>
+  );
+}

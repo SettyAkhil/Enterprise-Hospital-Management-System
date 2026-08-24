@@ -1,0 +1,10 @@
+{
+  "description": "An enterprise-grade hospital management system streamlining workflows for healthcare staff with unified modules from registration to billing and follow-up.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
