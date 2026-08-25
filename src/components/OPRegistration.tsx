@@ -140,13 +140,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       {/* Top Header */}
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3.5 flex items-center justify-between flex-shrink-0">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold text-gray-900">Outpatient (OP) Registration Desk</h1>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] font-mono flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse"></span>
-              UMR &amp; OP Number Sequence
-            </span>
-          </div>
+          <h1 className="text-base font-semibold text-gray-900">Outpatient (OP) Registration Desk</h1>
         </div>
 
         {/* Tab Switcher */}
@@ -235,9 +229,6 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                   OP Patient Registration Form
                 </h2>
               </div>
-              <span className="text-[11px] font-mono text-[#16A34A] bg-[#DCFCE7] px-2.5 py-1 rounded font-bold border border-[#86EFAC]">
-                Auto: 1. UMR ➔ 2. OP-001
-              </span>
             </div>
 
             <form onSubmit={handleRegisterNewPatient} className="space-y-5">
@@ -325,11 +316,11 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                 </div>
               </div>
 
-              {/* Submit Action */}
-              <div className="pt-4 border-t border-[#E2E8F0] flex justify-end items-center">
+              {/* Submit Action (Centered) */}
+              <div className="pt-5 border-t border-[#E2E8F0] flex justify-center items-center">
                 <button
                   type="submit"
-                  className="px-7 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[13.5px] rounded-lg shadow-sm transition-all flex items-center gap-2"
+                  className="px-8 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[14px] rounded-lg shadow-sm transition-all flex items-center gap-2"
                 >
                   <span>✓</span> Register OP &amp; Generate UMR / OP Number
                 </button>
