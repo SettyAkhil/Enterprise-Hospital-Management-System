@@ -101,13 +101,13 @@ export const Icon = {
   TrendUp: () => (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 9.5l4-5 2.5 2 4-4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M8.5 2h3v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
   ),
-  Calendar: () => (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2" y="3" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M4 1.5v3M11 1.5v3M2 6.5h11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
-  ),
   Maximize: () => (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 5V3h2M12 5V3h-2M3 10v2h2M12 10v2h-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
   ),
   Minimize: () => (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M5 3v2H3M10 3v2h2M5 12v-2H3M10 12v-2h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+  ),
+  Menu: () => (
+    <svg width="15" height="15" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M2 7h10M2 10.5h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
   ),
 };
