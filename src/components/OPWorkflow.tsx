@@ -312,16 +312,36 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
         conf = 94;
       }
 
-      setPatient(prev => ({
-        ...prev,
+      const nextPatientState = {
+        ...patient,
         doctorGenderPref: patientGender,
         aiSpecialty: specialty,
         aiDoctor: recommendedDoc,
         aiConfidence: conf,
         assignedDoctor: recommendedDoc,
-        status: "AI Recommended",
-        timestamps: { ...prev.timestamps, symptoms: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-      }));
+        status: "AI Recommended" as const,
+        timestamps: { ...patient.timestamps, symptoms: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+      };
+
+      setPatient(nextPatientState);
+
+      if (patient.id) {
+        try {
+          db.updateEncounter(patient.id, {
+            symptoms: patient.symptoms,
+            chiefComplaint: patient.chiefComplaint,
+            aiSpecialty: specialty,
+            aiDoctor: recommendedDoc,
+            aiConfidence: conf,
+            doctorGenderPref: patientGender,
+            assignedDoctor: recommendedDoc,
+            status: "AI Recommended"
+          });
+        } catch (e) {
+          console.warn("DB update failed:", e);
+        }
+      }
+
       setAiAnalyzing(false);
     }, 700);
   };
@@ -331,6 +351,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     const isDocAvailable = doc.status === "Available";
     const queueToken = `${doc.specialty.substring(0, 1)}-${patient.opNumber}`;
     const queuePos = isDocAvailable ? 1 : doc.workload + 1;
+    const newStatus = isDocAvailable ? "Doctor Assigned" : "In Queue";
 
     setPatient(prev => ({
       ...prev,
@@ -339,9 +360,24 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
       room: doc.room,
       queueToken: queueToken,
       queuePosition: queuePos,
-      status: isDocAvailable ? "Doctor Assigned" : "In Queue",
+      status: newStatus as any,
       timestamps: { ...prev.timestamps, doctorAssigned: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
     }));
+
+    if (patient.id) {
+      try {
+        db.updateEncounter(patient.id, {
+          assignedDoctor: doc.name,
+          doctorStatus: doc.status as any,
+          room: doc.room,
+          queueToken: queueToken,
+          queuePosition: queuePos,
+          status: newStatus as any
+        });
+      } catch (e) {
+        console.warn("DB update failed:", e);
+      }
+    }
   };
 
   const steps = [
@@ -1035,7 +1071,29 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </button>
               <button
                 onClick={() => {
-                  setPatient({ ...patient, status: "Consultation Completed" });
+                  const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  const nextState = {
+                    ...patient,
+                    status: "Consultation Completed" as const,
+                    timestamps: { ...patient.timestamps, consultationEnd: nowTime }
+                  };
+                  setPatient(nextState);
+
+                  if (patient.id) {
+                    try {
+                      db.updateEncounter(patient.id, {
+                        diagnosis: patient.diagnosis,
+                        icd10: patient.icd10,
+                        prescription: patient.prescription,
+                        advice: patient.advice,
+                        status: "Consultation Completed",
+                        timestamps: { ...patient.timestamps, consultationEnd: nowTime }
+                      });
+                    } catch (e) {
+                      console.warn("DB update failed:", e);
+                    }
+                  }
+
                   setCurrentStep(6);
                 }}
                 className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
@@ -1112,7 +1170,27 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </button>
               <button
                 onClick={() => {
-                  setPatient({ ...patient, status: "Awaiting Billing" });
+                  const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  const nextState = {
+                    ...patient,
+                    status: "Awaiting Billing" as const,
+                    timestamps: { ...patient.timestamps, vitalsRecorded: nowTime }
+                  };
+                  setPatient(nextState);
+
+                  if (patient.id) {
+                    try {
+                      db.updateEncounter(patient.id, {
+                        vitals: patient.vitals,
+                        furtherAction: patient.furtherAction,
+                        status: "Awaiting Billing",
+                        timestamps: { ...patient.timestamps, vitalsRecorded: nowTime }
+                      });
+                    } catch (e) {
+                      console.warn("DB update failed:", e);
+                    }
+                  }
+
                   setCurrentStep(7);
                 }}
                 className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
