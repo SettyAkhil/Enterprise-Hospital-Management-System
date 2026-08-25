@@ -472,15 +472,26 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
             {/* Identification Confirmation Banner */}
             {patient.umr && (
               <div className="p-4 bg-[#F0FDF4] border border-[#BBF7D0] rounded-xl flex items-center justify-between shadow-xs">
-                <div>
+                <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">✓</span>
                     <span className="font-bold text-[13.5px] text-[#166534]">
                       {patient.isNew ? "New Patient Identity Created" : "Existing Patient Identified (Revisit Mode)"}
                     </span>
                   </div>
-                  <div className="text-[12px] text-[#15803D] mt-1">
-                    Permanent <strong>UMR: {patient.umr}</strong> &nbsp;·&nbsp; New Visit <strong>OP Number: {patient.opNumber}</strong> &nbsp;·&nbsp; Patient: <strong>{patient.name}</strong> ({patient.age} yrs, {patient.sex})
+                  <div className="text-[12px] text-[#15803D] flex items-center gap-3">
+                    <span>
+                      <strong>1. Permanent UMR:</strong>{" "}
+                      <span className="font-mono font-bold text-[#166534]">{patient.umr}</span>{" "}
+                      {patient.isNew ? "(Newly Generated)" : "(Retained Old Record)"}
+                    </span>
+                    <span>➔</span>
+                    <span>
+                      <strong>2. Visit OP Number:</strong>{" "}
+                      <span className="font-mono font-bold text-[#D97706]">{patient.opNumber}</span>{" "}
+                      {patient.isNew ? "(1st Visit OP-001)" : "(New Encounter Assigned)"}
+                    </span>
+                    <span>· Patient: <strong>{patient.name}</strong> ({patient.age} yrs, {patient.sex})</span>
                   </div>
                 </div>
                 <button
