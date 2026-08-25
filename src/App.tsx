@@ -243,158 +243,166 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#F0F2F5]" style={{ fontFamily: "'Inter', system-ui, sans-serif", zoom: zoomLevel }}>
-      {/* ── Top Header ───────────────────────────────────────────────── */}
-      <header className="bg-[#0C1524] border-b border-[#1E2D42] h-12 flex items-center gap-3 px-3 flex-shrink-0 z-40">
-        {/* Logo */}
-        <div className="flex items-center gap-2 mr-2">
-          <img src="/logo.png" alt="HospAI Logo" className="w-7 h-7 object-contain flex-shrink-0" />
-          {!sidebarCollapsed && (
-            <div className="leading-tight">
-              <div className="text-[12.5px] font-semibold text-white">HospAI</div>
-              <div className="text-[10px] text-[#64748B]">Main Campus ▾</div>
-            </div>
-          )}
+    <div className="h-screen flex bg-[#0C1524] overflow-hidden" style={{ fontFamily: "'Inter', system-ui, sans-serif", zoom: zoomLevel }}>
+      {/* ── Left Sidebar (Full Height) ─────────────────────────────── */}
+      <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 h-full overflow-hidden ${sidebarCollapsed ? "w-16" : "w-[230px]"}`}>
+        {/* Top Logo Section */}
+        <div className="flex items-center justify-center py-3.5 px-3 border-b border-[#1E2D42]/50 flex-shrink-0">
+          <img
+            src="/logo.png"
+            alt="HospAI Logo"
+            className={`${sidebarCollapsed ? "w-8 h-8" : "w-32 h-12"} object-contain pointer-events-none transition-all`}
+          />
         </div>
 
-        {/* Sidebar Toggle */}
-        <button
-          onClick={() => setSidebarCollapsed(c => !c)}
-          className="w-7 h-7 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors">
-          <Icon.Menu />
-        </button>
+        {/* Navigation Items */}
+        <div className="flex-1 py-2.5 px-2.5 overflow-y-auto space-y-1">
+          {NAV.map((item) => {
+            const isActive = module === item.key || (item.children?.some(c => c.key === module));
+            const isExpanded = expanded.includes(item.key);
 
-        {/* Global Search */}
-        <div className="w-[380px] ml-auto mr-4 group">
-          <button
-            onClick={() => setCmdOpen(true)}
-            className="w-full relative flex items-center h-8.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-lg text-left text-[12.5px] text-[#94A3B8] transition-all shadow-sm hover:shadow-[0_0_15px_rgba(27,79,216,0.15)] overflow-hidden"
-          >
-            <span className="absolute left-3 text-[#64748B] group-hover:text-blue-400 transition-colors">
-              <Icon.Search />
-            </span>
-            <span className="pl-9 pr-16 flex-1 truncate">Search patients, MRN, appointments...</span>
-            <div className="absolute right-2 flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-              <kbd className="bg-black/30 border border-white/10 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm font-mono">Ctrl+K</kbd>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-400/5 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-          </button>
-        </div>
-
-        {/* Quick Create */}
-        <div className="relative ml-2">
-          <button 
-            onClick={() => setNewMenuOpen(o => !o)}
-            className="flex items-center gap-1.5 h-7 px-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] rounded text-white text-[12px] font-medium transition-colors">
-            <Icon.Plus /> New
-          </button>
-          {newMenuOpen && (
-            <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-[#DDE2EC] rounded shadow-lg z-50 py-1">
-              <button onClick={() => { setModule("register"); setNewMenuOpen(false); }} className="w-full text-left px-4 py-1.5 text-[12px] hover:bg-[#F8FAFC] text-gray-700">New Patient</button>
-              <button onClick={() => { setModule("appointments"); setNewMenuOpen(false); }} className="w-full text-left px-4 py-1.5 text-[12px] hover:bg-[#F8FAFC] text-gray-700">New Appointment</button>
-              <button onClick={() => { setModule("chart"); setOrderOpen(true); setNewMenuOpen(false); }} className="w-full text-left px-4 py-1.5 text-[12px] hover:bg-[#F8FAFC] text-gray-700">New Order</button>
-            </div>
-          )}
-        </div>
-
-        <div className="ml-auto flex items-center gap-1">
-          {/* Font Controls */}
-          <div className="flex items-center bg-white/5 rounded px-1 mr-1">
-             <button onClick={() => setZoomLevel(z => Math.max(0.8, z - 0.1))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[10px] font-bold">A-</button>
-             <button onClick={() => setZoomLevel(1)} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[12px] font-bold">A</button>
-             <button onClick={() => setZoomLevel(z => Math.min(1.5, z + 0.1))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[14px] font-bold">A+</button>
-          </div>
-
-          {/* Fullscreen */}
-          <button onClick={toggleFullscreen} className="w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors mr-1">
-            {isFullscreen ? <Icon.Minimize /> : <Icon.Maximize />}
-          </button>
-
-          {/* Notifications */}
-          <div className="relative">
-            <button onClick={() => setNotifOpen(n => !n)}
-              className="relative w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors">
-              <Icon.Bell />
-              <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-[#DC2626] rounded-full text-[9px] text-white font-bold flex items-center justify-center">7</span>
-            </button>
-            {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
-          </div>
-
-          {/* User Profile */}
-          <div className="flex items-center gap-2 pl-2 border-l border-[#1E2D42]">
-            <div className="w-7 h-7 rounded-full bg-[#1B4FD8] flex items-center justify-center text-[11px] font-bold text-white">JC</div>
-            <div className="hidden md:block leading-tight text-left">
-              <div className="text-[11.5px] font-medium text-white">Jessica Carter</div>
-              <div className="text-[10px] text-[#64748B]">RN · 3N Medical</div>
-            </div>
-            <button onClick={() => setLoggedIn(false)}
-              className="ml-1 text-[11px] text-[#64748B] hover:text-white transition-colors">Sign out</button>
-          </div>
-        </div>
-      </header>
-
-      {/* ── Body ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* ── Sidebar ──────────────────────────────────────────────── */}
-        <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 h-full overflow-hidden ${sidebarCollapsed ? "w-12" : "w-56"}`}>
-          <div className="flex-1 py-2 px-2 overflow-y-auto space-y-0.5">
-            {NAV.map((item) => {
-              const isActive = module === item.key || (item.children?.some(c => c.key === module));
-              const isExpanded = expanded.includes(item.key);
-
-              return (
-                <div key={item.key}>
-                  <div
-                    className={`nav-item ${isActive ? "active" : ""}`}
-                    onClick={() => {
-                      if (item.children) { 
-                        toggleExpand(item.key); 
-                        if (!expanded.includes(item.key)) setModule(item.children[0].key);
-                      }
-                      else setModule(item.key);
-                    }}>
-                    <item.Icon />
-                    {!sidebarCollapsed && (
-                      <>
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {item.badge && !isActive && (
-                          <span className="badge bg-[#DC2626] text-white">{item.badge}</span>
-                        )}
-                        {item.children && (
-                          <span className={`transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}>
-                            <Icon.ChevronRight />
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  {!sidebarCollapsed && item.children && isExpanded && (
-                    <div className="space-y-0.5 mt-0.5">
-                      {item.children.map((child, ci) => (
-                        <div key={ci}
-                          className={`nav-item sub ${module === child.key ? "active" : ""}`}
-                          onClick={() => setModule(child.key)}>
-                          {child.label}
-                        </div>
-                      ))}
-                    </div>
+            return (
+              <div key={item.key}>
+                <div
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer text-[13px] transition-all select-none ${isActive
+                      ? "bg-[#1B59F8] text-white font-semibold shadow-xs"
+                      : "text-[#94A3B8] hover:bg-white/5 hover:text-white font-medium"
+                    }`}
+                  onClick={() => {
+                    if (item.children) { 
+                      toggleExpand(item.key); 
+                      if (!expanded.includes(item.key)) setModule(item.children[0].key);
+                    }
+                    else setModule(item.key);
+                  }}>
+                  <item.Icon />
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {item.badge && !isActive && (
+                        <span className="bg-[#DC2626] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full font-mono">{item.badge}</span>
+                      )}
+                      {(item.children || ["patients", "clinical", "inpatient", "billing", "insurance", "hrms", "intelligence", "reports"].includes(item.key)) && (
+                        <span className={`text-[#64748B] text-[10px] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}>
+                          <Icon.ChevronRight />
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
-              );
-            })}
+
+                {/* Sub items */}
+                {!sidebarCollapsed && item.children && isExpanded && (
+                  <div className="space-y-0.5 mt-1 pl-3">
+                    {item.children.map((child, ci) => (
+                      <div
+                        key={ci}
+                        className={`flex items-center pl-5 pr-2.5 py-1.5 rounded-md cursor-pointer text-[12px] font-medium transition-colors select-none ${module === child.key
+                            ? "bg-white/10 text-white font-semibold"
+                            : "text-[#64748B] hover:text-[#94A3B8] hover:bg-white/5"
+                          }`}
+                        onClick={() => setModule(child.key)}>
+                        {child.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {!sidebarCollapsed && (
+          <div className="p-2.5 border-t border-[#1E2D42]/60 flex-shrink-0 bg-[#0C1524]">
+            <button onClick={() => setCmdOpen(true)}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/10 text-[#64748B] hover:text-white hover:border-white/20 transition-colors text-[11.5px]">
+              <Icon.Cmd />
+              <span>Command Palette</span>
+              <kbd className="ml-auto font-mono text-[10px]">Ctrl+K</kbd>
+            </button>
+          </div>
+        )}
+      </aside>
+
+      {/* ── Right Column (Header + Main Workspace) ────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-[#F0F2F5]">
+        {/* ── Top Header ────────────────────────────────────────── */}
+        <header className="bg-[#0C1524] border-b border-[#1E2D42] h-12 flex items-center gap-3 px-4 flex-shrink-0 z-40">
+          {/* Sidebar Toggle */}
+          <button
+            onClick={() => setSidebarCollapsed(c => !c)}
+            className="w-7 h-7 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors">
+            <Icon.Menu />
+          </button>
+
+          {/* Global Search */}
+          <div className="w-[380px] ml-auto mr-4 group">
+            <button
+              onClick={() => setCmdOpen(true)}
+              className="w-full relative flex items-center h-8.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-lg text-left text-[12.5px] text-[#94A3B8] transition-all shadow-sm hover:shadow-[0_0_15px_rgba(27,79,216,0.15)] overflow-hidden"
+            >
+              <span className="absolute left-3 text-[#64748B] group-hover:text-blue-400 transition-colors">
+                <Icon.Search />
+              </span>
+              <span className="pl-9 pr-16 flex-1 truncate">Search patients, MRN, appointments...</span>
+              <div className="absolute right-2 flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                <kbd className="bg-black/30 border border-white/10 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm font-mono">Ctrl+K</kbd>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-400/5 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            </button>
           </div>
 
-          {!sidebarCollapsed && (
-            <div className="p-2.5 border-t border-[#1E2D42] flex-shrink-0 bg-[#0C1524]">
-              <button onClick={() => setCmdOpen(true)}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded border border-white/10 text-[#64748B] hover:text-white hover:border-white/20 transition-colors text-[11.5px]">
-                <Icon.Cmd />
-                <span>Command Palette</span>
-                <kbd className="ml-auto font-mono text-[10px]">Ctrl+K</kbd>
-              </button>
+          {/* Quick Create */}
+          <div className="relative ml-2">
+            <button 
+              onClick={() => setNewMenuOpen(o => !o)}
+              className="flex items-center gap-1.5 h-7 px-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] rounded text-white text-[12px] font-medium transition-colors">
+              <Icon.Plus /> New
+            </button>
+            {newMenuOpen && (
+              <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-[#DDE2EC] rounded shadow-lg z-50 py-1">
+                <button onClick={() => { setModule("register"); setNewMenuOpen(false); }} className="w-full text-left px-4 py-1.5 text-[12px] hover:bg-[#F8FAFC] text-gray-700">New Patient</button>
+                <button onClick={() => { setModule("appointments"); setNewMenuOpen(false); }} className="w-full text-left px-4 py-1.5 text-[12px] hover:bg-[#F8FAFC] text-gray-700">New Appointment</button>
+                <button onClick={() => { setModule("chart"); setOrderOpen(true); setNewMenuOpen(false); }} className="w-full text-left px-4 py-1.5 text-[12px] hover:bg-[#F8FAFC] text-gray-700">New Order</button>
+              </div>
+            )}
+          </div>
+
+          <div className="ml-auto flex items-center gap-1">
+            {/* Font Controls */}
+            <div className="flex items-center bg-white/5 rounded px-1 mr-1">
+               <button onClick={() => setZoomLevel(z => Math.max(0.8, z - 0.1))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[10px] font-bold">A-</button>
+               <button onClick={() => setZoomLevel(1)} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[12px] font-bold">A</button>
+               <button onClick={() => setZoomLevel(z => Math.min(1.5, z + 0.1))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[14px] font-bold">A+</button>
             </div>
-          )}
-        </aside>
+
+            {/* Fullscreen */}
+            <button onClick={toggleFullscreen} className="w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors mr-1">
+              {isFullscreen ? <Icon.Minimize /> : <Icon.Maximize />}
+            </button>
+
+            {/* Notifications */}
+            <div className="relative">
+              <button onClick={() => setNotifOpen(n => !n)}
+                className="relative w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors">
+                <Icon.Bell />
+                <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-[#DC2626] rounded-full text-[9px] text-white font-bold flex items-center justify-center">7</span>
+              </button>
+              {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
+            </div>
+
+            {/* User Profile */}
+            <div className="flex items-center gap-2 pl-2 border-l border-[#1E2D42]">
+              <div className="w-7 h-7 rounded-full bg-[#1B4FD8] flex items-center justify-center text-[11px] font-bold text-white">JC</div>
+              <div className="hidden md:block leading-tight text-left">
+                <div className="text-[11.5px] font-medium text-white">Jessica Carter</div>
+                <div className="text-[10px] text-[#64748B]">RN · 3N Medical</div>
+              </div>
+              <button onClick={() => setLoggedIn(false)}
+                className="ml-1 text-[11px] text-[#64748B] hover:text-white transition-colors">Sign out</button>
+            </div>
+          </div>
+        </header>
 
         {/* ── Main Workspace ───────────────────────────────────────── */}
         <main className="flex-1 flex flex-col overflow-hidden min-w-0 bg-[#F0F2F5]">
