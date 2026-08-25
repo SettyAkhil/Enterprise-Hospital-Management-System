@@ -137,6 +137,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F0F2F5] overflow-hidden">
       {/* Top Header */}
+      {/* Top Header */}
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3.5 flex items-center justify-between flex-shrink-0">
         <div>
           <div className="flex items-center gap-2">
@@ -146,9 +147,6 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
               UMR &amp; OP Number Sequence
             </span>
           </div>
-          <p className="text-[11.5px] text-[#64748B] mt-0.5">
-            Register outpatient: First Name, Middle Name (optional), Last Name, DOB (Auto-fixed Age), and Phone.
-          </p>
         </div>
 
         {/* Tab Switcher */}
@@ -236,9 +234,6 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                   <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">1</span>
                   OP Patient Registration Form
                 </h2>
-                <p className="text-[12px] text-[#64748B] mt-0.5">
-                  Enter patient details. When submitted, the system generates the permanent <strong>UMR Number</strong> and initial <strong>OP Number</strong>.
-                </p>
               </div>
               <span className="text-[11px] font-mono text-[#16A34A] bg-[#DCFCE7] px-2.5 py-1 rounded font-bold border border-[#86EFAC]">
                 Auto: 1. UMR ➔ 2. OP-001
@@ -300,11 +295,8 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                 </div>
 
                 <div>
-                  <label className="text-[12px] font-semibold text-gray-800 flex items-center justify-between mb-1.5">
-                    <span>Age (Years)</span>
-                    <span className="text-[10px] font-mono text-[#166534] bg-[#DCFCE7] px-1.5 py-0.2 rounded font-bold">
-                      🔒 Fixed from DOB
-                    </span>
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    Age (Years)
                   </label>
                   <div className="relative">
                     <input
@@ -318,9 +310,6 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                       yrs
                     </span>
                   </div>
-                  <span className="text-[10.5px] text-[#64748B] mt-1 block">
-                    Automatically fixed to DOB. Changes only when DOB changes.
-                  </span>
                 </div>
 
                 <div>
@@ -337,10 +326,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
               </div>
 
               {/* Submit Action */}
-              <div className="pt-4 border-t border-[#E2E8F0] flex justify-between items-center">
-                <div className="text-[12px] text-[#64748B]">
-                  * Clicking will generate permanent <strong>UMR Number</strong> and assign initial <strong>OP Number</strong>.
-                </div>
+              <div className="pt-4 border-t border-[#E2E8F0] flex justify-end items-center">
                 <button
                   type="submit"
                   className="px-7 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[13.5px] rounded-lg shadow-sm transition-all flex items-center gap-2"

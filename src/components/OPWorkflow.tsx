@@ -602,7 +602,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                     />
                   </div>
                   <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Age (Fixed from DOB)</label>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Age (Years)</label>
                     <div className="relative">
                       <input
                         type="number"
