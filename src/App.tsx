@@ -459,7 +459,7 @@ export default function App() {
               openOrder={() => setOrderOpen(true)}
             />
           )}
-          {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
+          {module === "appointments" && <Appointments onSelect={() => setModule("op_workflow")} />}
           {module === "emergency" && <Emergency onSelect={() => setModule("chart")} />}
           {module === "inpatient" && <Inpatient />}
           {module === "nursing" && <NursingDashboard />}
@@ -478,7 +478,7 @@ export default function App() {
           {module === "admin" && <PlaceholderModule title="Administration" sub="Users, roles, departments, and system configuration" />}
 
           {/* Additional Integrated Modules */}
-          {module === "queue" && <QueueManagement />}
+          {module === "queue" && <QueueManagement onStartConsultation={() => setModule("op_workflow")} />}
           {module === "op_management" && (
             <OPManagement
               onStartWorkflow={() => setModule("op_workflow")}

@@ -398,9 +398,14 @@ export default function Appointments({ onSelect }: { onSelect?: () => void }) {
                   <TD><span className="text-[#64748B]">{a.duration}</span></TD>
                   <TD><StatusBadge status={a.status} /></TD>
                   <TD>
-                    <div className="flex gap-1">
+                    <div className="flex gap-1.5">
+                      <Btn variant="outline" size="xs" onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelect) onSelect();
+                      }}>
+                        Check-in OP ➔
+                      </Btn>
                       <Btn variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); }}>Chart</Btn>
-                      <Btn variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); }}>Edit</Btn>
                     </div>
                   </TD>
                 </TR>

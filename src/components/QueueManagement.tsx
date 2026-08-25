@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { Icon } from './icons';
 
-export default function QueueManagement() {
+interface QueueManagementProps {
+  onStartConsultation?: () => void;
+}
+
+export default function QueueManagement({ onStartConsultation }: QueueManagementProps) {
   const [selectedDept, setSelectedDept] = useState("Cardiology");
   
   const queueData = [
-    { token: "C-104", patient: "Maria Garcia", doctor: "Dr. Jenkins", priority: "Routine", wait: "12m", status: "IN_CONSULTATION" },
-    { token: "C-105", patient: "John Smith", doctor: "Dr. Jenkins", priority: "Routine", wait: "25m", status: "CALLED" },
-    { token: "C-106", patient: "Emma Wilson", doctor: "Dr. Sharma", priority: "Urgent", wait: "8m", status: "WAITING" },
-    { token: "C-107", patient: "Robert Lee", doctor: "Dr. Jenkins", priority: "Routine", wait: "45m", status: "WAITING" },
-    { token: "C-108", patient: "Sarah Davis", doctor: "Dr. Sharma", priority: "Routine", wait: "50m", status: "WAITING" },
-    { token: "C-101", patient: "Michael Brown", doctor: "Dr. Sharma", priority: "Routine", wait: "-", status: "COMPLETED" },
-    { token: "C-102", patient: "Emily Taylor", doctor: "Dr. Jenkins", priority: "Routine", wait: "-", status: "NO_SHOW" },
+    { token: "C-OP025", umr: "UMR10001", op: "OP025", patient: "Ravi Kumar", doctor: "Dr. Rajesh Sharma", room: "Room 104", priority: "Urgent", wait: "12m", status: "IN_CONSULTATION" },
+    { token: "C-OP003", umr: "UMR10002", op: "OP003", patient: "Sunita Patel", doctor: "Dr. Sarah Jenkins", room: "Room 102", priority: "Routine", wait: "25m", status: "CALLED" },
+    { token: "O-OP001", umr: "UMR10048", op: "OP001", patient: "Alex Turner", doctor: "Dr. David Anderson", room: "Room 112", priority: "Routine", wait: "8m", status: "WAITING" },
+    { token: "G-OP014", umr: "UMR10012", op: "OP014", patient: "Sarah Davis", doctor: "Dr. Anita Desai", room: "Room 101", priority: "Routine", wait: "15m", status: "WAITING" },
+    { token: "P-OP009", umr: "UMR10034", op: "OP009", patient: "Michael Brown", doctor: "Dr. Michael Chen", room: "Room 108", priority: "Routine", wait: "-", status: "COMPLETED" },
   ];
 
   const getStatusBadge = (status: string) => {
@@ -107,12 +109,35 @@ export default function QueueManagement() {
                       <td className="px-5 py-3 text-[12.5px] text-gray-600">{row.wait}</td>
                       <td className="px-5 py-3">{getStatusBadge(row.status)}</td>
                       <td className="px-5 py-3 text-right">
-                        {row.status === 'WAITING' && (
-                           <button className="text-[11.5px] font-medium text-[#1B4FD8] border border-[#1B4FD8] px-2 py-1 rounded hover:bg-[#EFF6FF]">Call</button>
-                        )}
-                        {(row.status === 'IN_CONSULTATION' || row.status === 'CALLED') && (
-                          <button className="text-[11.5px] font-medium text-[#15803D] border border-[#15803D] px-2 py-1 rounded hover:bg-[#F0FDF4]">Complete</button>
-                        )}
+                        <div className="flex items-center justify-end gap-1.5">
+                          {row.status === 'WAITING' && (
+                            <button
+                              onClick={onStartConsultation}
+                              className="text-[11px] font-semibold text-white bg-[#1B4FD8] hover:bg-[#1740B4] px-2.5 py-1 rounded shadow-xs"
+                            >
+                              Call ➔
+                            </button>
+                          )}
+                          {row.status === 'CALLED' && (
+                            <button
+                              onClick={onStartConsultation}
+                              className="text-[11px] font-semibold text-white bg-[#D97706] hover:bg-[#B45309] px-2.5 py-1 rounded shadow-xs"
+                            >
+                              Consult ➔
+                            </button>
+                          )}
+                          {row.status === 'IN_CONSULTATION' && (
+                            <button
+                              onClick={onStartConsultation}
+                              className="text-[11px] font-semibold text-[#15803D] bg-[#DCFCE7] border border-[#86EFAC] px-2.5 py-1 rounded"
+                            >
+                              Active ➔
+                            </button>
+                          )}
+                          {row.status === 'COMPLETED' && (
+                            <span className="text-[11px] text-gray-400 font-mono">Done</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
