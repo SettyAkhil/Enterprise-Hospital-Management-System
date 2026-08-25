@@ -221,10 +221,10 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
 
         {/* ── TAB 1: NEW PATIENT REGISTRATION FORM (EXACT REQUESTED FIELDS) ── */}
         {activeTab === "new" && (
-          <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
-            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
               <div>
-                <h2 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
+                <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">1</span>
                   OP Patient Registration Form
                 </h2>
@@ -280,7 +280,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     value={formData.dob}
                     onChange={e => handleDobChange(e.target.value)}
                     max={new Date().toISOString().split("T")[0]}
-                    className="w-full border border-[#DDE2EC] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8]"
+                    className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100"
                     required
                   />
                 </div>
@@ -295,9 +295,9 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                       value={formData.age}
                       readOnly
                       disabled
-                      className="w-full border border-[#DDE2EC] rounded-lg px-3 py-2 text-[13px] bg-[#F1F5F9] text-gray-800 font-bold font-mono cursor-not-allowed select-none"
+                      className="w-full border border-[#CBD5E1] rounded-lg px-3 py-2 text-[13px] bg-[#F1F5F9] text-gray-800 font-bold font-mono cursor-not-allowed select-none"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-semibold">
                       yrs
                     </span>
                   </div>
@@ -320,7 +320,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
               <div className="pt-5 border-t border-[#E2E8F0] flex justify-center items-center">
                 <button
                   type="submit"
-                  className="px-8 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[14px] rounded-lg shadow-sm transition-all flex items-center gap-2"
+                  className="px-8 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[14px] rounded-lg shadow-md transition-all flex items-center gap-2"
                 >
                   <span>✓</span> Register OP &amp; Generate UMR / OP Number
                 </button>
@@ -331,10 +331,10 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
 
         {/* ── TAB 2: EXISTING PATIENT REVISIT WORKFLOW ───────────────── */}
         {activeTab === "revisit" && (
-          <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
-            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
               <div>
-                <h2 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
+                <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">2</span>
                   Existing Patient Revisit (Keep Old UMR ➔ Generate New OP Number)
                 </h2>
@@ -431,10 +431,10 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
           <div className="space-y-6">
             {/* OP Book Card Preview */}
             {selectedEncounter && (
-              <div className="bg-white border border-[#DDE2EC] rounded-xl p-5 shadow-xs">
-                <div className="flex justify-between items-center mb-4">
+              <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-6 shadow-xl space-y-4 ring-1 ring-slate-900/5">
+                <div className="flex justify-between items-center mb-2">
                   <div>
-                    <h3 className="text-[14px] font-bold text-gray-900 flex items-center gap-2">
+                    <h3 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
                       <span>📖</span> Official Outpatient OP Book Pass
                     </h3>
                     <p className="text-[11.5px] text-[#64748B]">
@@ -453,7 +453,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                   </div>
                 </div>
 
-                <div className="max-w-xl mx-auto bg-white border-2 border-[#CBD5E1] text-gray-900 rounded-2xl p-6 shadow-xl relative overflow-hidden ring-1 ring-black/5">
+                <div className="max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded-2xl p-6 shadow-2xl relative overflow-hidden ring-2 ring-blue-500/10">
                   {/* Top Header Accent Strip */}
                   <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
 
@@ -499,7 +499,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
             )}
 
             {/* Today's Registration Log Table */}
-            <div className="bg-white border border-[#DDE2EC] rounded-xl shadow-xs overflow-hidden">
+            <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl shadow-xl overflow-hidden ring-1 ring-slate-900/5">
               <div className="px-5 py-3 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
                 <div>
                   <h3 className="text-[13.5px] font-bold text-gray-900">Database Encounter Registry</h3>
