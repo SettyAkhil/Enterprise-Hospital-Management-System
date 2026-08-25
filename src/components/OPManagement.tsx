@@ -1,20 +1,38 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from './icons';
+import { db, DBOPEncounter } from '../services/db';
 
 interface OPManagementProps {
   onStartWorkflow?: () => void;
   onNavigateQueue?: () => void;
   onNavigateAppointments?: () => void;
+  onNavigateRegistration?: () => void;
 }
 
-export default function OPManagement({ onStartWorkflow, onNavigateQueue, onNavigateAppointments }: OPManagementProps) {
-  const recentEncounters = [
-    { umr: "UMR10001", op: "OP025", name: "Ravi Kumar", age: 42, sex: "M", dept: "Cardiology", doctor: "Dr. Rajesh Sharma", status: "Under Consultation", time: "10:25 AM", queue: "#1" },
-    { umr: "UMR10002", op: "OP003", name: "Sunita Patel", age: 38, sex: "F", dept: "Cardiology", doctor: "Dr. Sarah Jenkins", status: "In Queue", time: "10:32 AM", queue: "#2" },
-    { umr: "UMR10003", op: "OP008", name: "John Smith", age: 55, sex: "M", dept: "General Medicine", doctor: "Dr. Anita Desai", status: "Post-Consultation", time: "10:14 AM", queue: "Done" },
-    { umr: "UMR10004", op: "OP041", name: "Elena Vasquez", age: 57, sex: "F", dept: "Pulmonology", doctor: "Dr. Michael Chen", status: "Awaiting Billing", time: "10:05 AM", queue: "Done" },
-    { umr: "UMR10005", op: "OP012", name: "Marcus Kim", age: 43, sex: "M", dept: "Orthopedics", doctor: "Dr. David Anderson", status: "OP Completed", time: "09:48 AM", queue: "Done" },
-  ];
+export default function OPManagement({
+  onStartWorkflow,
+  onNavigateQueue,
+  onNavigateAppointments,
+  onNavigateRegistration
+}: OPManagementProps) {
+  const [encounters, setEncounters] = useState<DBOPEncounter[]>([]);
+
+  const refresh = () => {
+    setEncounters(db.getEncounters());
+  };
+
+  useEffect(() => {
+    refresh();
+    const unsub = db.subscribe(refresh);
+    return () => unsub();
+  }, []);
+
+  const totalPatients = encounters.length;
+  const newPatientsCount = encounters.filter(e => e.isNew).length;
+  const revisitCount = encounters.filter(e => !e.isNew).length;
+  const inConsultCount = encounters.filter(e => e.status === "Under Consultation").length;
+  const inQueueCount = encounters.filter(e => e.status === "In Queue" || e.status === "Registered").length;
+  const completedCount = encounters.filter(e => e.status === "OP Completed").length;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F0F2F5] overflow-hidden">
@@ -23,8 +41,9 @@ export default function OPManagement({ onStartWorkflow, onNavigateQueue, onNavig
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-base font-semibold text-gray-900">Outpatient (OP) Department Dashboard</h1>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] font-mono">
-              Live Operations
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] font-mono flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse"></span>
+              Live Database Sync
             </span>
           </div>
           <p className="text-[11.5px] text-[#64748B] mt-0.5">
@@ -32,6 +51,14 @@ export default function OPManagement({ onStartWorkflow, onNavigateQueue, onNavig
           </p>
         </div>
         <div className="flex gap-2">
+          {onNavigateRegistration && (
+            <button
+              onClick={onNavigateRegistration}
+              className="h-8 px-3 bg-white border border-[#DDE2EC] text-[#16A34A] text-[12px] font-semibold rounded-lg hover:bg-[#F8FAFC] transition-colors flex items-center gap-1.5"
+            >
+              <Icon.Plus /> + Register OP Patient
+            </button>
+          )}
           {onNavigateQueue && (
             <button
               onClick={onNavigateQueue}
@@ -54,15 +81,15 @@ export default function OPManagement({ onStartWorkflow, onNavigateQueue, onNavig
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         <div className="max-w-7xl mx-auto space-y-6">
           
-          {/* Top Operational Stats from PDF (Section 27) */}
+          {/* Top Operational Stats from Database */}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3.5">
             {[
-              { label: "Total OP Patients", val: "40", sub: "Today's census", color: "text-gray-900" },
-              { label: "New Patients", val: "12", sub: "New UMRs created", color: "text-[#1B4FD8]" },
-              { label: "Existing Patients", val: "28", sub: "Revisit encounters", color: "text-[#6366F1]" },
-              { label: "In Consultation", val: "6", sub: "Active doctors", color: "text-[#D97706]" },
-              { label: "Awaiting / Queue", val: "10", sub: "In OP queue", color: "text-[#DC2626]" },
-              { label: "Completed Visits", val: "34", sub: "Encounter closed", color: "text-[#16A34A]" },
+              { label: "Total OP Patients", val: totalPatients.toString(), sub: "Database encounters", color: "text-gray-900" },
+              { label: "New Patients", val: newPatientsCount.toString(), sub: "New UMRs created", color: "text-[#1B4FD8]" },
+              { label: "Existing Patients", val: revisitCount.toString(), sub: "Revisit encounters", color: "text-[#6366F1]" },
+              { label: "In Consultation", val: inConsultCount.toString(), sub: "Active doctors", color: "text-[#D97706]" },
+              { label: "Awaiting / Queue", val: inQueueCount.toString(), sub: "In OP queue", color: "text-[#DC2626]" },
+              { label: "Completed Visits", val: completedCount.toString(), sub: "Encounter closed", color: "text-[#16A34A]" },
             ].map((stat, i) => (
               <div key={i} className="bg-white border border-[#DDE2EC] p-3.5 rounded-xl shadow-xs">
                 <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">{stat.label}</div>
@@ -73,137 +100,155 @@ export default function OPManagement({ onStartWorkflow, onNavigateQueue, onNavig
           </div>
 
           {/* Department Capacity & Active Pipeline */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Department Load */}
-            <div className="col-span-2 bg-white border border-[#DDE2EC] rounded-xl shadow-xs overflow-hidden">
-              <div className="px-5 py-3 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
-                <h2 className="text-[13.5px] font-semibold text-gray-900">Department Load &amp; Doctor Roster</h2>
-                <span className="text-[11.5px] text-[#64748B]">7 Doctors Available · 5 Busy</span>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Live Department Load */}
+            <div className="bg-white border border-[#DDE2EC] rounded-xl p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-4 border-b border-[#F1F5F9] pb-3">
+                <h2 className="text-[13.5px] font-bold text-gray-900">OP Department Load (FR-011)</h2>
+                <span className="text-[11px] text-[#64748B]">Capacity %</span>
               </div>
-              <table className="w-full text-left">
-                <thead className="border-b border-[#DDE2EC] bg-[#FAFAFA]">
-                  <tr>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Specialty</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Active Drs</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Queue</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Capacity Load</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
-                  {[
-                    { dept: "Cardiology", drs: "3 / 3 Active", wait: 12, status: "High", load: 88 },
-                    { dept: "General Medicine", drs: "6 / 8 Active", wait: 8, status: "Normal", load: 55 },
-                    { dept: "Pulmonology", drs: "2 / 2 Active", wait: 4, status: "Normal", load: 45 },
-                    { dept: "Orthopedics", drs: "4 / 5 Active", wait: 6, status: "Normal", load: 60 },
-                    { dept: "Pediatrics", drs: "5 / 5 Active", wait: 14, status: "Overloaded", load: 95 },
-                  ].map((row, i) => (
-                    <tr key={i} className="hover:bg-[#F8FAFC]">
-                      <td className="px-4 py-2.5 font-semibold text-gray-900">{row.dept}</td>
-                      <td className="px-4 py-2.5 text-gray-700">{row.drs}</td>
-                      <td className="px-4 py-2.5 font-mono text-gray-700">{row.wait} in queue</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-3">
-                          <span className={`w-20 px-1.5 py-0.5 text-[10px] font-bold text-center rounded uppercase ${
-                            row.status === 'Overloaded' ? 'bg-[#FEE2E2] text-[#991B1B]' :
-                            row.status === 'High' ? 'bg-[#FEF3C7] text-[#92400E]' :
-                            'bg-[#DCFCE7] text-[#15803D]'
-                          }`}>{row.status}</span>
-                          <div className="flex-1 h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
-                            <div className={`h-full ${row.load > 90 ? 'bg-[#DC2626]' : row.load > 75 ? 'bg-[#D97706]' : 'bg-[#16A34A]'}`} style={{width: `${row.load}%`}}></div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="space-y-3.5">
+                {[
+                  { name: "Cardiology", current: 8, max: 10, pct: 80, color: "bg-[#DC2626]" },
+                  { name: "General Medicine", current: 14, max: 20, pct: 70, color: "bg-[#D97706]" },
+                  { name: "Orthopedics", current: 5, max: 10, pct: 50, color: "bg-[#16A34A]" },
+                  { name: "Pulmonology", current: 4, max: 8, pct: 50, color: "bg-[#16A34A]" },
+                  { name: "Pediatrics", current: 3, max: 10, pct: 30, color: "bg-[#1B4FD8]" },
+                ].map((dept, i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="flex justify-between text-[12px]">
+                      <span className="font-medium text-gray-800">{dept.name}</span>
+                      <span className="font-mono text-[#64748B]">{dept.current} / {dept.max} ({dept.pct}%)</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${dept.color}`} style={{ width: `${dept.pct}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* Connected OP Workflow Banner */}
-            <div className="bg-gradient-to-br from-[#0C1524] to-[#1E2D42] text-white border border-[#334155] rounded-xl shadow-xs p-5 flex flex-col justify-between">
+            {/* Doctor Roster & Status */}
+            <div className="bg-white border border-[#DDE2EC] rounded-xl p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-4 border-b border-[#F1F5F9] pb-3">
+                <h2 className="text-[13.5px] font-bold text-gray-900">Consulting Roster (FR-012)</h2>
+                <span className="text-[11px] text-[#16A34A] font-bold">5 On Duty</span>
+              </div>
+              <div className="space-y-2.5">
+                {[
+                  { name: "Dr. Rajesh Sharma", spec: "Cardiology", room: "Room 104", status: "Busy", queue: 4 },
+                  { name: "Dr. Sarah Jenkins", spec: "Cardiology", room: "Room 102", status: "Available", queue: 1 },
+                  { name: "Dr. Anita Desai", spec: "Gen Medicine", room: "Room 101", status: "Available", queue: 2 },
+                  { name: "Dr. Michael Chen", spec: "Pulmonology", room: "Room 108", status: "Available", queue: 0 },
+                  { name: "Dr. David Anderson", spec: "Orthopedics", room: "Room 112", status: "Busy", queue: 3 },
+                ].map((doc, i) => (
+                  <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] text-[12px]">
+                    <div>
+                      <div className="font-semibold text-gray-900">{doc.name}</div>
+                      <div className="text-[11px] text-[#64748B]">{doc.spec} · {doc.room}</div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        doc.status === "Available" ? "bg-[#DCFCE7] text-[#15803D]" : "bg-[#FEF3C7] text-[#B45309]"
+                      }`}>
+                        {doc.status}
+                      </span>
+                      <div className="text-[10.5px] text-[#64748B] font-mono mt-0.5">Queue: {doc.queue}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Flow Actions */}
+            <div className="bg-gradient-to-br from-[#0C1524] to-[#1E2D42] text-white rounded-xl p-5 shadow-xs flex flex-col justify-between">
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xl">🩺</span>
-                  <div className="font-bold text-[14px]">Keppler OP Clinical Journey</div>
+                <div className="text-[11px] font-mono text-[#93C5FD] uppercase font-bold tracking-wider mb-1">
+                  Keppler Healthcare Spec
                 </div>
+                <h3 className="text-base font-bold mb-2">Connected Outpatient Clinical Journey</h3>
                 <p className="text-[12px] text-[#94A3B8] leading-relaxed mb-4">
-                  Experience the full 11-step outpatient pipeline matching the official requirements specification.
+                  Step-by-step 11-stage workflow managing UMR permanent IDs, visit OP numbers, symptom NLP matching, doctor assignment, vitals and billing.
                 </p>
-                <div className="space-y-2 text-[11.5px] text-[#CBD5E1]">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#60A5FA]">✓</span> Permanent UMR vs Per-Visit OP Number
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#60A5FA]">✓</span> AI Symptom Analysis &amp; Doctor Recommendation
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#60A5FA]">✓</span> Gender-Based Doctor Preference Rules
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#60A5FA]">✓</span> Real-time OP Queue &amp; Consultation
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#60A5FA]">✓</span> Nurse Vitals &amp; Billing Checkout
-                  </div>
+                <div className="space-y-1.5 text-[11.5px] text-[#CBD5E1]">
+                  <div className="flex items-center gap-2"><span>✓</span> 1 Permanent UMR Across Lifetime Visits</div>
+                  <div className="flex items-center gap-2"><span>✓</span> Unique Per-Visit OP Number Generated</div>
+                  <div className="flex items-center gap-2"><span>✓</span> AI Doctor Recommendation with Gender Pref</div>
+                  <div className="flex items-center gap-2"><span>✓</span> Permanent Database Storage &amp; Audit Logs</div>
                 </div>
               </div>
-              {onStartWorkflow && (
-                <button
-                  onClick={onStartWorkflow}
-                  className="w-full mt-5 py-2.5 bg-[#1B59F8] hover:bg-[#2563EB] text-white font-bold text-[12.5px] rounded-lg transition-colors flex items-center justify-center gap-2 shadow-md"
-                >
-                  Launch OP Patient Journey →
-                </button>
-              )}
+
+              <div className="pt-4 mt-4 border-t border-white/10 flex gap-2">
+                {onStartWorkflow && (
+                  <button
+                    onClick={onStartWorkflow}
+                    className="flex-1 py-2.5 bg-[#1B59F8] hover:bg-[#1546CC] text-white text-[12.5px] font-bold rounded-lg shadow-sm transition-all text-center"
+                  >
+                    Open OP Journey Wizard →
+                  </button>
+                )}
+              </div>
             </div>
+
           </div>
 
-          {/* Recent OP Encounters Table */}
+          {/* Today's Outpatient Encounters Table */}
           <div className="bg-white border border-[#DDE2EC] rounded-xl shadow-xs overflow-hidden">
-            <div className="px-5 py-3 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
-              <h2 className="text-[13.5px] font-semibold text-gray-900">Today's Outpatient Encounters</h2>
-              <span className="text-[11.5px] text-[#64748B]">Real-time Status Tracking</span>
+            <div className="px-5 py-3.5 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
+              <div>
+                <h2 className="text-[13.5px] font-bold text-gray-900">Today's Database Outpatient Encounters</h2>
+                <p className="text-[11.5px] text-[#64748B]">All active visits across hospital departments with permanent UMR mapping.</p>
+              </div>
+              <span className="text-[11.5px] text-[#1B4FD8] font-semibold font-mono">
+                {encounters.length} Total Encounters
+              </span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="border-b border-[#DDE2EC] bg-[#FAFAFA]">
-                  <tr>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">UMR</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">OP Number</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Patient Name</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Department</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Assigned Doctor</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Queue</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Encounter Status</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider text-right">Time</th>
+
+            <table className="w-full text-left">
+              <thead className="border-b border-[#DDE2EC] bg-[#FAFAFA]">
+                <tr>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Permanent UMR</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Visit OP No</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Patient Name</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Department</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Doctor</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Time</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
+                {encounters.map((row) => (
+                  <tr key={row.id} className="hover:bg-[#F8FAFC] transition-colors">
+                    <td className="px-4 py-3 font-mono font-bold text-[#1B4FD8]">{row.umr}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-[#D97706]">{row.opNumber}</td>
+                    <td className="px-4 py-3 font-semibold text-gray-900">{row.patientName} ({row.age} {row.sex})</td>
+                    <td className="px-4 py-3 text-gray-700">{row.dept}</td>
+                    <td className="px-4 py-3 text-gray-700">{row.assignedDoctor}</td>
+                    <td className="px-4 py-3 font-mono text-gray-500">{row.registrationTime}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold ${
+                        row.status === "Under Consultation" ? "bg-[#DBEAFE] text-[#1E3A8A]" :
+                        row.status === "In Queue" ? "bg-[#FEF3C7] text-[#92400E]" :
+                        row.status === "OP Completed" ? "bg-[#DCFCE7] text-[#15803D]" :
+                        "bg-[#F1F5F9] text-gray-700"
+                      }`}>
+                        {row.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={onStartWorkflow}
+                        className="text-[11.5px] font-semibold text-[#1B4FD8] hover:underline"
+                      >
+                        Open Journey ➔
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
-                  {recentEncounters.map((enc, i) => (
-                    <tr key={i} className="hover:bg-[#F8FAFC] cursor-pointer">
-                      <td className="px-4 py-3 font-mono font-bold text-[#1B4FD8]">{enc.umr}</td>
-                      <td className="px-4 py-3 font-mono font-bold text-[#D97706]">{enc.op}</td>
-                      <td className="px-4 py-3 font-semibold text-gray-900">{enc.name} ({enc.age} {enc.sex})</td>
-                      <td className="px-4 py-3 text-gray-700">{enc.dept}</td>
-                      <td className="px-4 py-3 text-gray-800">{enc.doctor}</td>
-                      <td className="px-4 py-3 font-mono text-[12px] font-bold text-gray-700">{enc.queue}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 text-[10.5px] font-bold rounded uppercase ${
-                          enc.status === 'Under Consultation' ? 'bg-[#DBEAFE] text-[#1E40AF]' :
-                          enc.status === 'In Queue' ? 'bg-[#FEF3C7] text-[#B45309]' :
-                          enc.status === 'Post-Consultation' ? 'bg-[#E0E7FF] text-[#4338CA]' :
-                          enc.status === 'Awaiting Billing' ? 'bg-[#FCE7F3] text-[#9D174D]' :
-                          'bg-[#DCFCE7] text-[#15803D]'
-                        }`}>
-                          {enc.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-gray-500 text-[11.5px]">{enc.time}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
 
         </div>

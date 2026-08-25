@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Icon } from "./icons";
 import { StatusBadge, Btn, Input } from "./shared";
+import { db, DBPatient, DBOPEncounter } from "../services/db";
 
 export interface OPPatient {
+  id?: string;
   umr: string;
   opNumber: string;
   name: string;
@@ -67,47 +69,22 @@ const INITIAL_DOCTORS = [
   { id: "D6", name: "Dr. Priya Patel", specialty: "Pediatrics", gender: "Female", status: "Available", room: "Room 105", workload: 1 },
 ];
 
-const EXISTING_PATIENTS_DATABASE = [
-  {
-    umr: "UMR10001",
-    name: "Ravi Kumar",
-    age: 42,
-    sex: "Male" as const,
-    phone: "(617) 555-0192",
-    address: "24 Park Avenue, Boston, MA",
-    previousVisits: [
-      { opNumber: "OP001", date: "12-Jan-2026", doctor: "Dr. Anita Desai", diagnosis: "Acute Bronchitis" },
-      { opNumber: "OP014", date: "28-May-2026", doctor: "Dr. Michael Chen", diagnosis: "Seasonal Allergic Rhinitis" }
-    ]
-  },
-  {
-    umr: "UMR10002",
-    name: "Sunita Patel",
-    age: 38,
-    sex: "Female" as const,
-    phone: "(617) 555-0284",
-    address: "108 Beacon St, Boston, MA",
-    previousVisits: [
-      { opNumber: "OP003", date: "05-Feb-2026", doctor: "Dr. Sarah Jenkins", diagnosis: "Hypertension Stage 1" }
-    ]
-  },
-  {
-    umr: "UMR10003",
-    name: "John Smith",
-    age: 55,
-    sex: "Male" as const,
-    phone: "(617) 555-0341",
-    address: "15 Cambridge St, Cambridge, MA",
-    previousVisits: [
-      { opNumber: "OP008", date: "14-Mar-2026", doctor: "Dr. Rajesh Sharma", diagnosis: "Type 2 Diabetes Mellitus" }
-    ]
-  }
-];
-
 export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
+  const [dbPatients, setDbPatients] = useState<DBPatient[]>([]);
+
+  // Load patients from DB
+  const refreshDbPatients = () => {
+    setDbPatients(db.getPatients());
+  };
+
+  useEffect(() => {
+    refreshDbPatients();
+    const unsub = db.subscribe(refreshDbPatients);
+    return () => unsub();
+  }, []);
   
   // New Patient Form State
   const [newPatientForm, setNewPatientForm] = useState({
@@ -159,20 +136,30 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
 
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
 
-  // Handlers for Step 1: Patient Identification
-  const handleSelectExistingPatient = (existing: typeof EXISTING_PATIENTS_DATABASE[0]) => {
-    const nextOpNum = `OP${String(Math.floor(Math.random() * 900) + 100)}`;
+  // Handlers for Step 1: Patient Identification with Database Sync
+  const handleSelectExistingPatient = (existing: DBPatient) => {
+    const previousEncounters = db.getEncountersForPatient(existing.umr);
+    const newEncounter = db.createRevisitEncounter(existing.umr, {
+      dept: patient.aiSpecialty || "General Medicine"
+    });
+
     setPatient({
       ...patient,
-      umr: existing.umr,
-      opNumber: nextOpNum,
+      id: newEncounter.id,
+      umr: existing.umr, // STRICTLY KEPT UNCHANGED
+      opNumber: newEncounter.opNumber, // BRAND NEW VISIT OP NUMBER
       name: existing.name,
       age: existing.age,
       sex: existing.sex,
       phone: existing.phone,
       address: existing.address,
       isNew: false,
-      previousVisits: existing.previousVisits,
+      previousVisits: previousEncounters.map(e => ({
+        opNumber: e.opNumber,
+        date: e.registrationTime,
+        doctor: e.assignedDoctor,
+        diagnosis: e.diagnosis || e.chiefComplaint
+      })),
       status: "Registered",
       timestamps: { ...patient.timestamps, registration: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
     });
@@ -182,18 +169,32 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     e.preventDefault();
     if (!newPatientForm.name.trim()) return;
 
-    const newUmr = `UMR${Math.floor(Math.random() * 90000) + 10000}`;
-    const newOp = `OP${String(Math.floor(Math.random() * 900) + 100)}`;
+    const parts = newPatientForm.name.trim().split(" ");
+    const firstName = parts[0] || "Patient";
+    const lastName = parts.slice(1).join(" ") || "";
 
-    setPatient({
-      ...patient,
-      umr: newUmr,
-      opNumber: newOp,
-      name: newPatientForm.name,
+    const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
+      firstName,
+      lastName,
       age: parseInt(newPatientForm.age) || 35,
       sex: newPatientForm.sex,
       phone: newPatientForm.phone || "(617) 555-0192",
       address: newPatientForm.address || "12 Beacon St, Boston, MA",
+      bloodGroup: "O+",
+      dept: patient.aiSpecialty || "General Medicine",
+      chiefComplaint: patient.chiefComplaint
+    });
+
+    setPatient({
+      ...patient,
+      id: createdEncounter.id,
+      umr: createdPatient.umr,
+      opNumber: createdEncounter.opNumber,
+      name: createdPatient.name,
+      age: createdPatient.age,
+      sex: createdPatient.sex,
+      phone: createdPatient.phone,
+      address: createdPatient.address,
       isNew: true,
       previousVisits: [],
       status: "Registered",
@@ -203,27 +204,41 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     setShowNewPatientModal(false);
   };
 
-  // Quick preset loader
+  // Quick preset loader with DB sync
   const loadPreset = (type: "new" | "revisit") => {
     if (type === "new") {
-      const newUmr = `UMR${Math.floor(Math.random() * 90000) + 10000}`;
-      const newOp = `OP${String(Math.floor(Math.random() * 900) + 100)}`;
-      setPatient({
-        ...patient,
-        umr: newUmr,
-        opNumber: newOp,
-        name: "David Miller",
+      const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
+        firstName: "David",
+        lastName: "Miller",
         age: 29,
         sex: "Male",
         phone: "(617) 555-8831",
         address: "50 Commonwealth Ave, Boston, MA",
+        bloodGroup: "A+",
+        dept: "Cardiology",
+        chiefComplaint: "Severe chest pain and palpitations"
+      });
+
+      setPatient({
+        ...patient,
+        id: createdEncounter.id,
+        umr: createdPatient.umr,
+        opNumber: createdEncounter.opNumber,
+        name: createdPatient.name,
+        age: createdPatient.age,
+        sex: createdPatient.sex,
+        phone: createdPatient.phone,
+        address: createdPatient.address,
         isNew: true,
         previousVisits: [],
         status: "Registered",
         timestamps: { ...patient.timestamps, registration: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
       });
     } else {
-      handleSelectExistingPatient(EXISTING_PATIENTS_DATABASE[0]);
+      const firstPatient = db.getPatients()[0];
+      if (firstPatient) {
+        handleSelectExistingPatient(firstPatient);
+      }
     }
   };
 
@@ -439,33 +454,36 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                 Existing Patient Database (Click to Select for Revisit)
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {EXISTING_PATIENTS_DATABASE.filter(p =>
+                {dbPatients.filter(p =>
                   searchQuery === "" ||
                   p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                   p.umr.toLowerCase().includes(searchQuery.toLowerCase()) ||
                   p.phone.includes(searchQuery)
-                ).map((p) => (
-                  <div
-                    key={p.umr}
-                    onClick={() => handleSelectExistingPatient(p)}
-                    className={`p-3.5 border rounded-lg cursor-pointer transition-all ${
-                      patient.umr === p.umr
-                        ? "border-[#1B4FD8] bg-[#EFF6FF] ring-2 ring-blue-500/20"
-                        : "border-[#DDE2EC] bg-white hover:border-[#94A3B8] hover:bg-[#F8FAFC]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-[13px] text-gray-900">{p.name}</span>
-                      <span className="font-mono font-bold text-[11px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
-                        {p.umr}
-                      </span>
+                ).map((p) => {
+                  const pEncounters = db.getEncountersForPatient(p.umr);
+                  return (
+                    <div
+                      key={p.umr}
+                      onClick={() => handleSelectExistingPatient(p)}
+                      className={`p-3.5 border rounded-lg cursor-pointer transition-all ${
+                        patient.umr === p.umr
+                          ? "border-[#1B4FD8] bg-[#EFF6FF] ring-2 ring-blue-500/20"
+                          : "border-[#DDE2EC] bg-white hover:border-[#94A3B8] hover:bg-[#F8FAFC]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-[13px] text-gray-900">{p.name}</span>
+                        <span className="font-mono font-bold text-[11px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
+                          {p.umr}
+                        </span>
+                      </div>
+                      <div className="text-[11.5px] text-[#64748B]">{p.age} yrs · {p.sex} · {p.phone}</div>
+                      <div className="text-[11px] text-[#16A34A] font-medium mt-1">
+                        {pEncounters.length} Previous OP Visits In Database
+                      </div>
                     </div>
-                    <div className="text-[11.5px] text-[#64748B]">{p.age} yrs · {p.sex} · {p.phone}</div>
-                    <div className="text-[11px] text-[#16A34A] font-medium mt-1">
-                      {p.previousVisits.length} Previous OP Visits On Record
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -1089,20 +1107,44 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
             <div className="flex justify-center">
               <button
                 onClick={() => {
+                  const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                   setPatient({
                     ...patient,
                     status: "OP Completed",
                     billing: { ...patient.billing, status: "Paid" },
                     timestamps: {
                       ...patient.timestamps,
-                      billingCompleted: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                      visitCompleted: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      billingCompleted: nowTime,
+                      visitCompleted: nowTime
                     }
                   });
+
+                  if (patient.id) {
+                    try {
+                      db.updateEncounter(patient.id, {
+                        diagnosis: patient.diagnosis,
+                        icd10: patient.icd10,
+                        prescription: patient.prescription,
+                        investigations: patient.investigations,
+                        advice: patient.advice,
+                        vitals: patient.vitals,
+                        furtherAction: patient.furtherAction,
+                        status: "OP Completed",
+                        billing: { ...patient.billing, status: "Paid" },
+                        timestamps: {
+                          ...patient.timestamps,
+                          billingCompleted: nowTime,
+                          visitCompleted: nowTime
+                        }
+                      });
+                    } catch (err) {
+                      console.warn("DB update:", err);
+                    }
+                  }
                 }}
                 className="px-8 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white text-[14px] font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
               >
-                <span>✓</span> Mark OP Visit Completed
+                <span>💾</span> Mark OP Visit Completed &amp; Save to Database
               </button>
             </div>
 
