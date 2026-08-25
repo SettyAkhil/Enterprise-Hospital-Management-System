@@ -69,7 +69,7 @@ const NAV: NavItem[] = [
   {
     key: "outpatient", label: "Outpatient", Icon: Icon.Stethoscope,
     children: [
-      { key: "op_management", label: "OP Dashboard" },
+      { key: "op_management", label: "OP Management" },
       { key: "op_registration", label: "OP Registration" },
       { key: "op_workflow", label: "OP Clinical Journey" },
       { key: "appointments", label: "Appointments" },
@@ -419,7 +419,7 @@ export default function App() {
               module === "icu" ? "ICU" : module === "discharge" ? "Discharge Workflow" :
               module === "triage" ? "Triage" : module === "analytics" ? "Analytics" :
               module === "radiology" ? "Radiology" :
-              module === "op_management" ? "OP Dashboard" :
+              module === "op_management" ? "OP Management" :
               module === "op_registration" ? "OP Registration" :
               module === "op_workflow" ? "OP Clinical Journey" :
               module === "queue" ? "Queue Management" :

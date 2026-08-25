@@ -450,7 +450,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between flex-shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold text-gray-900">Outpatient (OP) Clinical Patient Journey</h1>
+            <h1 className="text-base font-semibold text-gray-900">OP Management — Clinical Patient Journey</h1>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE] font-mono">
               Keppler OP Specification v1.0
             </span>

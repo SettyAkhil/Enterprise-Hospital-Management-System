@@ -176,7 +176,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       {/* Top Header */}
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3.5 flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-base font-semibold text-gray-900">Outpatient (OP) Registration Desk</h1>
+          <h1 className="text-base font-semibold text-gray-900">OP Management — Registration Desk</h1>
         </div>
 
         {/* Tab Switcher */}

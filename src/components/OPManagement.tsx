@@ -26,7 +26,7 @@ export default function OPManagement() {
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-4 flex items-center justify-between flex-shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-gray-900">Outpatient (OP) Management Dashboard</h1>
+            <h1 className="text-lg font-semibold text-gray-900">OP Management</h1>
             <span className="text-[10.5px] font-bold px-2 py-0.5 rounded bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] font-mono flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse"></span>
               Live Database Connected
