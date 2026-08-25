@@ -19,6 +19,8 @@ export interface OPPatient {
   aiSpecialty: string;
   aiDoctor: string;
   aiConfidence: number;
+  aiReasoning?: string;
+  aiDoctorRationale?: string;
   doctorGenderPref: "Any" | "Male" | "Female";
   assignedDoctor: string;
   doctorStatus: "Available" | "Busy" | "Inactive" | "Absent";
@@ -283,33 +285,69 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
       let specialty = "General Medicine";
       let recommendedDoc = "";
       let conf = 95;
+      let aiReasoning = "";
+      let aiDoctorRationale = "";
 
-      // STRICT SAME-GENDER RULE:
-      // Male Patient -> Male Doctor
-      // Female Patient -> Female Doctor
+      // Same-gender clinical assignment:
       const patientGender = patient.sex === "Female" ? "Female" : "Male";
+      const symText = (patient.symptoms.join(" ") + " " + patient.chiefComplaint).toLowerCase();
 
-      const symText = patient.symptoms.join(" ").toLowerCase() + " " + patient.chiefComplaint.toLowerCase();
       if (symText.includes("chest") || symText.includes("breath") || symText.includes("sweat") || symText.includes("palpitat") || symText.includes("heart")) {
         specialty = "Cardiology";
-        recommendedDoc = patientGender === "Female" ? "Dr. Sarah Jenkins" : "Dr. Rajesh Sharma";
         conf = 98;
+        aiReasoning = "Acute thoracic complaints (chest discomfort, shortness of breath, palpitations) represent significant cardiovascular risk. Immediate Cardiology assessment is indicated for acute coronary syndrome (ACS) rule-out, 12-lead ECG, and cardiac biomarker evaluation.";
+        if (patientGender === "Female") {
+          recommendedDoc = "Dr. Sarah Jenkins";
+          aiDoctorRationale = "Dr. Sarah Jenkins (Cardiology · Room 102) is on active duty with specialized expertise in non-invasive cardiac evaluation, telemetry, and shortest OPD wait time (8 min).";
+        } else {
+          recommendedDoc = "Dr. Rajesh Sharma";
+          aiDoctorRationale = "Dr. Rajesh Sharma (Lead Cardiologist · Room 104) is on active duty with direct access to emergency ECG review, catheterization lab standby, and optimal OPD queue capacity.";
+        }
       } else if (symText.includes("cough") || symText.includes("wheez") || symText.includes("asthma") || symText.includes("lung")) {
         specialty = "Pulmonology";
-        recommendedDoc = patientGender === "Female" ? "Dr. Maya Lin" : "Dr. Michael Chen";
-        conf = 92;
+        conf = 94;
+        aiReasoning = "Persistent respiratory symptoms with cough/wheezing indicate lower airway bronchospasm or respiratory tract infection requiring Pulmonology diagnostic correlation.";
+        if (patientGender === "Female") {
+          recommendedDoc = "Dr. Maya Lin";
+          aiDoctorRationale = "Dr. Maya Lin (Pulmonologist · Room 109) has active OPD slots and specialized expertise in bronchial asthma and pulmonary function triage.";
+        } else {
+          recommendedDoc = "Dr. Michael Chen";
+          aiDoctorRationale = "Dr. Michael Chen (Pulmonologist · Room 108) is available with immediate spirometry and nebulization unit access.";
+        }
       } else if (symText.includes("joint") || symText.includes("back") || symText.includes("fracture") || symText.includes("bone") || symText.includes("knee")) {
         specialty = "Orthopedics";
-        recommendedDoc = patientGender === "Female" ? "Dr. Elena Vance" : "Dr. David Anderson";
         conf = 96;
+        aiReasoning = "Localized musculoskeletal pain, joint swelling, or spinal discomfort warrants Orthopedic examination and digital radiologic correlation.";
+        if (patientGender === "Female") {
+          recommendedDoc = "Dr. Elena Vance";
+          aiDoctorRationale = "Dr. Elena Vance (Orthopedic Specialist · Room 114) is on duty with immediate joint assessment capacity.";
+        } else {
+          recommendedDoc = "Dr. David Anderson";
+          aiDoctorRationale = "Dr. David Anderson (Orthopedic Surgeon · Room 112) is available with digital X-ray correlation and open OPD consultation slots.";
+        }
       } else if (symText.includes("child") || symText.includes("baby") || symText.includes("pediatric") || patient.age < 16) {
         specialty = "Pediatrics";
-        recommendedDoc = patientGender === "Female" ? "Dr. Priya Patel" : "Dr. Amit Verma";
         conf = 95;
+        aiReasoning = "Pediatric profile and presenting symptoms require specialized developmental and child-care medical assessment.";
+        if (patientGender === "Female") {
+          recommendedDoc = "Dr. Priya Patel";
+          aiDoctorRationale = "Dr. Priya Patel (Pediatrician · Room 105) has active OPD consultation availability with specialized child wellness care.";
+        } else {
+          recommendedDoc = "Dr. Amit Verma";
+          aiDoctorRationale = "Dr. Amit Verma (Pediatrician · Room 106) has open OPD queue slots and immediate pediatric triage availability.";
+        }
       } else {
+        // High Fever / Severe Headache / General Medicine
         specialty = "General Medicine";
-        recommendedDoc = patientGender === "Female" ? "Dr. Anita Desai" : "Dr. Ramesh Kumar";
-        conf = 94;
+        conf = 96;
+        aiReasoning = "Presenting acute febrile presentation accompanied by severe headache over the past 2 days indicates an acute systemic febrile syndrome (screening required for viral pyrexia, tropical infection, or CNS/meningeal signs), requiring comprehensive internal medicine evaluation.";
+        if (patientGender === "Female") {
+          recommendedDoc = "Dr. Anita Desai";
+          aiDoctorRationale = "Dr. Anita Desai (Senior Consultant, General Medicine · Room 101) is recommended due to clinical specialization in acute febrile illnesses and infectious triage, immediate room availability, and shortest queue wait time.";
+        } else {
+          recommendedDoc = "Dr. Ramesh Kumar";
+          aiDoctorRationale = "Dr. Ramesh Kumar (Senior Physician, General Medicine · Room 103) is recommended due to clinical specialization in acute febrile illnesses and infectious workups, immediate room availability, and lowest active queue load (avg 12 min turnaround).";
+        }
       }
 
       const nextPatientState = {
@@ -318,6 +356,8 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
         aiSpecialty: specialty,
         aiDoctor: recommendedDoc,
         aiConfidence: conf,
+        aiReasoning: aiReasoning,
+        aiDoctorRationale: aiDoctorRationale,
         assignedDoctor: recommendedDoc,
         status: "AI Recommended" as const,
         timestamps: { ...patient.timestamps, symptoms: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
@@ -333,6 +373,8 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
             aiSpecialty: specialty,
             aiDoctor: recommendedDoc,
             aiConfidence: conf,
+            aiReasoning: aiReasoning,
+            aiDoctorRationale: aiDoctorRationale,
             doctorGenderPref: patientGender,
             assignedDoctor: recommendedDoc,
             status: "AI Recommended"
@@ -853,61 +895,69 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </div>
             </div>
 
-            {/* Same-Gender Matching Protocol */}
-            <div className="flex items-center justify-between p-3.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🔒</span>
-                <span className="text-[12px] font-bold text-gray-900">Same-Gender Clinical Assignment Protocol:</span>
-                <span className="text-[11.5px] text-[#1E40AF]">
-                  Patient is <strong>{patient.sex}</strong> ➔ Automatically routed to <strong>{patient.sex === "Female" ? "Female" : "Male"}</strong> Specialist
-                </span>
-              </div>
-              <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-blue-100 text-[#1B4FD8] border border-blue-300">
-                {patient.sex === "Female" ? "♀ Female Doctor Only" : "♂ Male Doctor Only"}
-              </span>
-            </div>
-
             {/* Run AI Analysis Button */}
-            <div className="flex justify-center">
+            <div className="flex justify-center pt-2">
               <button
                 onClick={runAiSymptomAnalysis}
                 disabled={aiAnalyzing || (patient.symptoms.length === 0 && !patient.chiefComplaint)}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#1E3A8A] to-[#1B4FD8] hover:from-[#1E40AF] hover:to-[#2563EB] text-white text-[13px] font-semibold rounded-lg shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+                className="px-7 py-3 bg-gradient-to-r from-[#1E3A8A] to-[#1B4FD8] hover:from-[#1E40AF] hover:to-[#2563EB] text-white text-[13px] font-semibold rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
               >
                 {aiAnalyzing ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <span>✨</span>
                 )}
-                {aiAnalyzing ? "Analyzing Symptoms with Clinical AI..." : "Run AI Specialty Recommendation"}
+                {aiAnalyzing ? "Analyzing Symptoms with Clinical AI Engine..." : "Run AI Specialty & Doctor Recommendation"}
               </button>
             </div>
 
             {/* AI Recommendation Result Box */}
-            {patient.status !== "Registered" && (
-              <div className="p-4 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider bg-[#1D4ED8] text-white px-2 py-0.5 rounded">
-                      AI Recommendation
+            {patient.status !== "Registered" && patient.aiDoctor && (
+              <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in">
+                <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider bg-[#1D4ED8] text-white px-2.5 py-1 rounded-md">
+                      ✨ Clinical AI Recommendation
                     </span>
-                    <span className="text-[12px] font-semibold text-[#1E3A8A]">
+                    <span className="text-[12px] font-semibold text-[#1E3A8A] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
                       Confidence: {patient.aiConfidence}%
                     </span>
                   </div>
-                  <div className="text-base font-bold text-gray-900 mt-1">
-                    Specialty: {patient.aiSpecialty} ➔ Doctor: {patient.aiDoctor}
+                  <button
+                    onClick={() => setCurrentStep(4)}
+                    className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                  >
+                    Check Availability &amp; Queue →
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Department & Specialty Rationale */}
+                  <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] space-y-1.5">
+                    <div className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
+                      <span>🏥</span> Recommended Department
+                    </div>
+                    <div className="text-[16px] font-bold text-[#1B4FD8]">
+                      {patient.aiSpecialty}
+                    </div>
+                    <div className="text-[12px] text-gray-700 leading-relaxed pt-1">
+                      {patient.aiReasoning || "Symptom presentation correlates with internal clinical pathways requiring diagnostic workup."}
+                    </div>
                   </div>
-                  <div className="text-[11.5px] text-[#475569] mt-0.5">
-                    Based on symptoms: {patient.symptoms.join(", ") || patient.chiefComplaint} with same-gender rule (<strong>{patient.sex === "Female" ? "Female" : "Male"} Doctor</strong>) assigned.
+
+                  {/* Doctor Match & Availability Rationale */}
+                  <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] space-y-1.5">
+                    <div className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
+                      <span>👨‍⚕️</span> Matched Physician &amp; Rationale
+                    </div>
+                    <div className="text-[16px] font-bold text-gray-900">
+                      {patient.aiDoctor}
+                    </div>
+                    <div className="text-[12px] text-gray-700 leading-relaxed pt-1">
+                      {patient.aiDoctorRationale || `Attending specialist on active duty with optimal room availability and shortest queue wait time.`}
+                    </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => setCurrentStep(4)}
-                  className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5"
-                >
-                  Check Availability &amp; Queue →
-                </button>
               </div>
             )}
           </div>

@@ -64,6 +64,8 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
     phone: "",
   });
 
+  const cardPreviewRef = React.useRef<HTMLDivElement>(null);
+
   // Handle DOB Change -> Dynamically updates and fixes Age
   const handleDobChange = (newDob: string) => {
     const computedAge = calculateAge(newDob);
@@ -74,7 +76,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
     }));
   };
 
-  // 1. Handle New Patient Registration -> Generates UMR -> then generates OP Number
+  // 1. Handle New Patient Registration -> Generates UMR -> then generates Global OP Number
   const handleRegisterNewPatient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.dob) return;
@@ -88,8 +90,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       dob: formData.dob,
       age: computedAge,
       sex: (formData.sex as "Male" | "Female" | "Other") || "Male",
-      phone: formData.phone.trim() || "(617) 555-0199",
-      dept: "General Medicine"
+      phone: formData.phone.trim() || "(617) 555-0199"
     });
 
     setSelectedEncounter(createdEncounter);
@@ -102,6 +103,9 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       phone: createdPatient.phone
     });
     setActiveTab("records");
+    setTimeout(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
 
     // Reset Form
     setFormData({
@@ -117,10 +121,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
 
   // 2. Handle Existing Patient Revisit -> Retains Permanent UMR -> generates new OP Number
   const handleCreateRevisitEncounter = (p: DBPatient) => {
-    const previousEncounters = db.getEncountersForPatient(p.umr);
-    const newEncounter = db.createRevisitEncounter(p.umr, {
-      dept: "General Medicine"
-    });
+    const newEncounter = db.createRevisitEncounter(p.umr);
 
     setSelectedEncounter(newEncounter);
     setGenerationAlert({
@@ -132,6 +133,17 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       phone: p.phone
     });
     setActiveTab("records");
+    setTimeout(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
+
+  const handleViewOpBook = (encounter: DBOPEncounter) => {
+    setSelectedEncounter(encounter);
+    setActiveTab("records");
+    setTimeout(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   // Filtered patients for revisit search
@@ -197,20 +209,11 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                 </span>
               </div>
               <div className="text-[12px] flex items-center gap-3">
-                <span>
-                  <strong>Step 1 (UMR):</strong>{" "}
-                  {generationAlert.type === "new" ? (
-                    <span className="font-mono font-bold text-[#15803D]">Generated Permanent {generationAlert.umr}</span>
-                  ) : (
-                    <span className="font-mono font-bold text-[#1E3A8A]">Retained Old {generationAlert.umr} (Unchanged)</span>
-                  )}
-                </span>
-                <span>➔</span>
-                <span>
-                  <strong>Step 2 (OP Number):</strong>{" "}
-                  <span className="font-mono font-bold text-[#D97706]">Generated Visit {generationAlert.opNumber}</span>
-                </span>
-                <span>· Phone: <strong>{generationAlert.phone}</strong></span>
+                <span>Permanent UMR: <strong className="font-mono text-[#1B4FD8]">{generationAlert.umr}</strong></span>
+                <span>·</span>
+                <span>Current Visit OP Number: <strong className="font-mono text-[#D97706]">{generationAlert.opNumber}</strong></span>
+                <span>·</span>
+                <span>Phone: <strong>{generationAlert.phone}</strong></span>
               </div>
             </div>
             <button
@@ -451,7 +454,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
           <div className="space-y-6">
             {/* OP Book Card Preview */}
             {selectedEncounter && (
-              <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-6 shadow-xl space-y-4 ring-1 ring-slate-900/5">
+              <div ref={cardPreviewRef} className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-6 shadow-xl space-y-4 ring-1 ring-slate-900/5">
                 <div className="flex justify-between items-center mb-2">
                   <div>
                     <h3 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
@@ -496,7 +499,11 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                       <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Patient Name</div>
                       <div className="text-[16px] font-bold text-gray-900 mt-0.5">{selectedEncounter.patientName}</div>
                       <div className="text-[11.5px] text-gray-600 mt-0.5 font-medium">Age: <strong>{selectedEncounter.age} yrs</strong> · Sex: <strong>{selectedEncounter.sex}</strong> · Phone: <strong>{selectedEncounter.phone}</strong></div>
-                      <div className="text-[11px] text-[#1B4FD8] font-semibold mt-1">Dept: {selectedEncounter.dept}</div>
+                      <div className="text-[11px] font-semibold mt-1">
+                        Dept: <span className={selectedEncounter.dept && selectedEncounter.dept !== "Awaiting Triage" ? "text-[#1B4FD8]" : "text-amber-600"}>
+                          {selectedEncounter.dept || "Awaiting AI Triage"}
+                        </span>
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent UMR (Lifetime)</div>
@@ -544,7 +551,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                   {encounters.map((e) => (
                     <tr
                       key={e.id}
-                      onClick={() => setSelectedEncounter(e)}
+                      onClick={() => handleViewOpBook(e)}
                       className={`hover:bg-[#F8FAFC] cursor-pointer transition-colors ${
                         selectedEncounter?.id === e.id ? "bg-[#EFF6FF]" : ""
                       }`}
@@ -566,9 +573,9 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                         <button
                           onClick={(ev) => {
                             ev.stopPropagation();
-                            setSelectedEncounter(e);
+                            handleViewOpBook(e);
                           }}
-                          className="text-[11.5px] text-[#1B4FD8] font-semibold hover:underline"
+                          className="px-2.5 py-1 bg-blue-50 text-[#1B4FD8] hover:bg-blue-100 rounded text-[11.5px] font-semibold border border-blue-200 transition-colors"
                         >
                           View OP Book
                         </button>

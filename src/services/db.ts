@@ -34,6 +34,8 @@ export interface DBOPEncounter {
   aiSpecialty: string;
   aiDoctor: string;
   aiConfidence: number;
+  aiReasoning?: string;
+  aiDoctorRationale?: string;
   doctorGenderPref: "Any" | "Male" | "Female";
   assignedDoctor: string;
   doctorStatus: "Available" | "Busy" | "Inactive" | "Absent";
@@ -261,6 +263,7 @@ const STORAGE_KEYS = {
   PATIENTS: "hospai_db_patients_v1",
   ENCOUNTERS: "hospai_db_encounters_v1",
   UMR_COUNTER: "hospai_db_umr_counter_v1",
+  OP_COUNTER: "hospai_db_op_counter_v1",
 };
 
 class HospitalDatabase {
@@ -280,6 +283,9 @@ class HospitalDatabase {
     }
     if (!localStorage.getItem(STORAGE_KEYS.UMR_COUNTER)) {
       localStorage.setItem(STORAGE_KEYS.UMR_COUNTER, "10048");
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.OP_COUNTER)) {
+      localStorage.setItem(STORAGE_KEYS.OP_COUNTER, "33");
     }
   }
 
@@ -338,7 +344,7 @@ class HospitalDatabase {
 
   /**
    * 1. Register New Patient:
-   * Generates next permanent UMR -> Generates OP-001 -> Saves to database
+   * Generates next permanent UMR -> Generates continuous global OP Number -> Saves to database
    */
   public registerNewPatient(data: {
     firstName: string;
@@ -362,6 +368,12 @@ class HospitalDatabase {
     localStorage.setItem(STORAGE_KEYS.UMR_COUNTER, nextUmrCounter.toString());
     const newUmr = `UMR${nextUmrCounter}`;
 
+    // Global Continuous Unique OP Number Generator
+    const currentOpCounter = parseInt(localStorage.getItem(STORAGE_KEYS.OP_COUNTER) || "33", 10);
+    const nextOpCounter = currentOpCounter + 1;
+    localStorage.setItem(STORAGE_KEYS.OP_COUNTER, nextOpCounter.toString());
+    const newOpNumber = `OP${String(nextOpCounter).padStart(3, '0')}`;
+
     const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ").trim();
     const nowIso = new Date().toISOString();
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -379,40 +391,39 @@ class HospitalDatabase {
       updatedAt: nowIso
     };
 
-    // Step 2: Create Initial OP Encounter (OP001)
-    const initialOpNumber = "OP001";
-    const encounterId = `ENC-${newUmr}-1`;
+    // Step 2: Create Initial OP Encounter with Global Continuous OP Number
+    const encounterId = `ENC-${newUmr}-${nextOpCounter}`;
 
     const newEncounter: DBOPEncounter = {
       id: encounterId,
       umr: newUmr,
-      opNumber: initialOpNumber,
+      opNumber: newOpNumber,
       patientName: fullName,
       age: data.age,
       sex: data.sex || "Male",
       phone: newPatient.phone,
       address: newPatient.address,
       bloodGroup: newPatient.bloodGroup,
-      dept: data.dept || "General Medicine",
+      dept: data.dept || "Awaiting Triage",
       isNew: true,
       registrationTime: timeStr,
-      chiefComplaint: data.chiefComplaint || "Initial Outpatient Consultation",
+      chiefComplaint: data.chiefComplaint || "",
       symptoms: data.chiefComplaint ? [data.chiefComplaint] : [],
-      aiSpecialty: data.dept || "General Medicine",
-      aiDoctor: "Dr. Anita Desai",
-      aiConfidence: 95,
-      doctorGenderPref: "Any",
-      assignedDoctor: "Dr. Anita Desai",
+      aiSpecialty: data.dept || "",
+      aiDoctor: "",
+      aiConfidence: 0,
+      doctorGenderPref: data.sex === "Female" ? "Female" : "Male",
+      assignedDoctor: "",
       doctorStatus: "Available",
-      queueToken: `${(data.dept || "G").charAt(0)}-${initialOpNumber}`,
+      queueToken: "",
       queuePosition: 1,
-      room: "Room 101",
+      room: "",
       diagnosis: "",
       icd10: "",
       prescription: [],
       investigations: [],
       advice: "",
-      vitals: { bp: "120/80 mmHg", pulse: "74 bpm", temp: "98.6 °F", spo2: "99%", weight: "70 kg", notes: "Initial check" },
+      vitals: { bp: "", pulse: "", temp: "", spo2: "", weight: "", notes: "" },
       billing: { consultationFee: 50, labFee: 0, total: 50, status: "Pending", mode: "Card" },
       furtherAction: "None",
       status: "Registered",
@@ -429,52 +440,52 @@ class HospitalDatabase {
 
   /**
    * 2. Revisit Patient Encounter:
-   * Keeps Permanent UMR unchanged -> Generates new visit OP Number (OP002, OP003, etc.) -> Saves
+   * Keeps Permanent UMR unchanged -> Generates continuous global next OP Number -> Saves
    */
   public createRevisitEncounter(umr: string, data?: { dept?: string; chiefComplaint?: string }): DBOPEncounter {
     const patient = this.getPatientByUmr(umr);
     if (!patient) throw new Error(`Patient with UMR ${umr} not found in database.`);
 
     const encounters = this.getEncounters();
-    const patientPreviousEncounters = encounters.filter(e => e.umr.toUpperCase() === umr.toUpperCase());
 
-    // Generate New OP Number for this visit
-    const visitIndex = patientPreviousEncounters.length + 1;
-    const newOpNumber = `OP${String(visitIndex).padStart(3, '0')}`;
-    const encounterId = `ENC-${umr}-${visitIndex}`;
+    // Generate Next Global Continuous OP Number across hospital
+    const currentOpCounter = parseInt(localStorage.getItem(STORAGE_KEYS.OP_COUNTER) || "33", 10);
+    const nextOpCounter = currentOpCounter + 1;
+    localStorage.setItem(STORAGE_KEYS.OP_COUNTER, nextOpCounter.toString());
+    const newOpNumber = `OP${String(nextOpCounter).padStart(3, '0')}`;
+    const encounterId = `ENC-${umr}-${nextOpCounter}`;
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const targetDept = data?.dept || patientPreviousEncounters[0]?.dept || "General Medicine";
 
     const newEncounter: DBOPEncounter = {
       id: encounterId,
       umr: patient.umr, // STRICTLY KEPT UNCHANGED
-      opNumber: newOpNumber, // BRAND NEW VISIT OP NUMBER
+      opNumber: newOpNumber, // GLOBAL CONTINUOUS NEXT OP NUMBER
       patientName: patient.name,
       age: patient.age,
       sex: patient.sex,
       phone: patient.phone,
       address: patient.address,
       bloodGroup: patient.bloodGroup,
-      dept: targetDept,
+      dept: data?.dept || "Awaiting Triage",
       isNew: false,
       registrationTime: timeStr,
-      chiefComplaint: data?.chiefComplaint || "Routine Revisit Consultation",
+      chiefComplaint: data?.chiefComplaint || "Revisit Consultation",
       symptoms: [],
-      aiSpecialty: targetDept,
-      aiDoctor: "Dr. Rajesh Sharma",
-      aiConfidence: 96,
-      doctorGenderPref: "Any",
-      assignedDoctor: "Dr. Rajesh Sharma",
+      aiSpecialty: "",
+      aiDoctor: "",
+      aiConfidence: 0,
+      doctorGenderPref: patient.sex === "Female" ? "Female" : "Male",
+      assignedDoctor: "",
       doctorStatus: "Available",
-      queueToken: `${targetDept.charAt(0)}-${newOpNumber}`,
+      queueToken: "",
       queuePosition: 1,
-      room: "Room 104",
+      room: "",
       diagnosis: "",
       icd10: "",
       prescription: [],
       investigations: [],
       advice: "",
-      vitals: { bp: "120/80 mmHg", pulse: "76 bpm", temp: "98.6 °F", spo2: "99%", weight: "72 kg", notes: "Revisit check" },
+      vitals: { bp: "", pulse: "", temp: "", spo2: "", weight: "", notes: "Revisit check" },
       billing: { consultationFee: 50, labFee: 0, total: 50, status: "Pending", mode: "Card" },
       furtherAction: "None",
       status: "Registered",
