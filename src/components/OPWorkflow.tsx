@@ -111,6 +111,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     lastName: "",
     dob: "1996-05-20",
     age: calculateAge("1996-05-20"),
+    sex: "Male" as "Male" | "Female" | "Other",
     phone: "",
   });
 
@@ -205,6 +206,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
       lastName: newPatientForm.lastName.trim(),
       dob: newPatientForm.dob,
       age: computedAge,
+      sex: newPatientForm.sex,
       phone: newPatientForm.phone || "(617) 555-0192",
       dept: patient.aiSpecialty || "General Medicine",
       chiefComplaint: patient.chiefComplaint
@@ -217,6 +219,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
       opNumber: createdEncounter.opNumber,
       name: createdPatient.name,
       age: computedAge,
+      sex: createdPatient.sex,
       phone: createdPatient.phone,
       isNew: true,
       previousVisits: [],
@@ -603,7 +606,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Date of Birth (DOB) *</label>
                     <input
@@ -627,6 +630,19 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">yrs</span>
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Gender *</label>
+                    <select
+                      value={newPatientForm.sex}
+                      onChange={e => setNewPatientForm({ ...newPatientForm, sex: e.target.value as "Male" | "Female" | "Other" })}
+                      className="w-full border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] bg-white focus:outline-none focus:border-[#1B4FD8] text-gray-900 font-medium"
+                      required
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
                   <div>
                     <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Phone Number *</label>

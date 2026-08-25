@@ -389,7 +389,7 @@ class HospitalDatabase {
       opNumber: initialOpNumber,
       patientName: fullName,
       age: data.age,
-      sex: data.sex,
+      sex: data.sex || "Male",
       phone: newPatient.phone,
       address: newPatient.address,
       bloodGroup: newPatient.bloodGroup,

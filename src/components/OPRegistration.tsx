@@ -53,13 +53,14 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
     return () => unsubscribe();
   }, []);
 
-  // Form State: First Name, Middle Name (optional), Last Name, DOB, Age (locked), Phone
+  // Form State: First Name, Middle Name (optional), Last Name, DOB, Age (locked), Gender, Phone
   const [formData, setFormData] = useState({
     firstName: "",
     middleName: "",
     lastName: "",
     dob: "1996-05-20",
     age: calculateAge("1996-05-20"),
+    sex: "Male" as "Male" | "Female" | "Other",
     phone: "",
   });
 
@@ -86,6 +87,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       lastName: formData.lastName.trim(),
       dob: formData.dob,
       age: computedAge,
+      sex: formData.sex,
       phone: formData.phone.trim() || "(617) 555-0199",
       dept: "General Medicine"
     });
@@ -108,6 +110,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       lastName: "",
       dob: "1996-05-20",
       age: calculateAge("1996-05-20"),
+      sex: "Male",
       phone: "",
     });
   };
@@ -269,8 +272,8 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                 </div>
               </div>
 
-              {/* DOB, Age (Locked), Phone Number */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* DOB, Age (Locked), Gender, Phone Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
                     Date of Birth (DOB) <span className="text-red-500">*</span>
@@ -280,7 +283,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     value={formData.dob}
                     onChange={e => handleDobChange(e.target.value)}
                     max={new Date().toISOString().split("T")[0]}
-                    className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100"
+                    className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900"
                     required
                   />
                 </div>
@@ -301,6 +304,22 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                       yrs
                     </span>
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    Gender / Sex <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.sex}
+                    onChange={e => setFormData({ ...formData, sex: e.target.value as "Male" | "Female" | "Other" })}
+                    className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900"
+                    required
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
 
                 <div>
@@ -475,7 +494,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     <div>
                       <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Patient Name</div>
                       <div className="text-[16px] font-bold text-gray-900 mt-0.5">{selectedEncounter.patientName}</div>
-                      <div className="text-[11.5px] text-gray-600 mt-0.5 font-medium">Age: <strong>{selectedEncounter.age} yrs</strong> · Phone: <strong>{selectedEncounter.phone}</strong></div>
+                      <div className="text-[11.5px] text-gray-600 mt-0.5 font-medium">Age: <strong>{selectedEncounter.age} yrs</strong> · Sex: <strong>{selectedEncounter.sex}</strong> · Phone: <strong>{selectedEncounter.phone}</strong></div>
                       <div className="text-[11px] text-[#1B4FD8] font-semibold mt-1">Dept: {selectedEncounter.dept}</div>
                     </div>
                     <div className="text-right">
