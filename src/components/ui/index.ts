@@ -1,0 +1,8 @@
+export { default as Button } from "./Button";
+export { default as Input } from "./Input";
+export { default as Textarea } from "./Textarea";
+export { default as Select } from "./Select";
+export { default as Label } from "./Label";
+export { Tabs, TabsContent, TabsTrigger } from "./Tabs";
+export { Table, TableCell, TableHead, TableRow } from "./Table";
+export { default as Modal } from "./Modal";
