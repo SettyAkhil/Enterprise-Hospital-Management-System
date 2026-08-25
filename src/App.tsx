@@ -20,7 +20,6 @@ import Insurance from "./components/Insurance";
 import OrderDrawer from "./components/OrderDrawer";
 import CommandPalette from "./components/CommandPalette";
 import Registration from "./components/Registration";
-import PatientResearch from "./components/PatientResearch";
 import SmartOCR from "./components/SmartOCR";
 import SymptomAI from "./components/SymptomAI";
 import ClinicalRAG from "./components/ClinicalRAG";
@@ -40,7 +39,7 @@ import PaymentCollection from "./components/PaymentCollection";
 import RevenueReports from "./components/RevenueReports";
 
 type Module =
-  | "dashboard" | "patients" | "patient_search" | "patient_research" | "appointments" | "emergency"
+  | "dashboard" | "patients" | "appointments" | "emergency"
   | "clinical" | "inpatient" | "nursing" | "laboratory"
   | "radiology" | "pharmacy" | "surgery" | "billing"
   | "icu" | "discharge" | "triage" | "insurance" | "analytics"
@@ -63,15 +62,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { key: "dashboard", label: "Dashboard", Icon: Icon.Dashboard },
-  {
-    key: "patients",
-    label: "Patients",
-    Icon: Icon.Patients,
-    children: [
-      { key: "patient_search", label: "Patient Search" },
-      { key: "patient_research", label: "Patient Research" },
-    ]
-  },
+  { key: "patients", label: "Patients", Icon: Icon.Patients },
   { key: "register", label: "Registration", Icon: Icon.User },
   {
     key: "outpatient", label: "Outpatient", Icon: Icon.Stethoscope,
@@ -210,7 +201,7 @@ function PlaceholderModule({ title, sub }: { title: string; sub?: string }) {
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [module, setModule] = useState<Module>("dashboard");
-  const [expanded, setExpanded] = useState<string[]>(["patients", "outpatient"]);
+  const [expanded, setExpanded] = useState<string[]>(["outpatient"]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -421,8 +412,6 @@ export default function App() {
             <span>›</span>
             <span className="text-gray-900 font-medium capitalize">{
               module === "chart" ? "Patient Chart" : module === "register" ? "Registration" :
-              module === "patients" || module === "patient_search" ? "Patient Search" :
-              module === "patient_research" ? "Patient Research" :
               module === "icu" ? "ICU" : module === "discharge" ? "Discharge Workflow" :
               module === "triage" ? "Triage" : module === "analytics" ? "Analytics" :
               module === "radiology" ? "Radiology" :
@@ -444,13 +433,12 @@ export default function App() {
 
           {/* Module Content */}
           {module === "dashboard" && <Dashboard navigate={navigate} />}
-          {(module === "patients" || module === "patient_search") && (
+          {module === "patients" && (
             <PatientSearch
               onSelect={() => setModule("chart")}
               onRegister={() => setModule("register")}
             />
           )}
-          {module === "patient_research" && <PatientResearch />}
           {module === "register" && (
             <Registration
               onComplete={() => setModule("patients")}
