@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "./icons";
 import { StatusBadge, Btn, Input } from "./shared";
 import { db, DBPatient, DBOPEncounter } from "../services/db";
-import PatientBarcode from "./PatientBarcode";
 
 export interface OPPatient {
   id?: string;
@@ -711,46 +710,9 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                 </div>
               )}
 
-              {/* Real dynamic scannable barcode */}
-              <div className="pt-2 border-t border-[#E2E8F0]">
-                <PatientBarcode
-                  encounter={{
-                    id: patient.id || "ENC-DEMO",
-                    umr: patient.umr,
-                    opNumber: patient.opNumber,
-                    patientName: patient.name,
-                    age: patient.age,
-                    sex: patient.sex,
-                    phone: patient.phone,
-                    address: patient.address,
-                    bloodGroup: "O+",
-                    dept: patient.aiSpecialty || "General Medicine",
-                    isNew: patient.isNew,
-                    registrationTime: patient.timestamps.registration || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    chiefComplaint: patient.chiefComplaint,
-                    symptoms: patient.symptoms,
-                    aiSpecialty: patient.aiSpecialty,
-                    aiDoctor: patient.aiDoctor,
-                    aiConfidence: patient.aiConfidence,
-                    doctorGenderPref: patient.doctorGenderPref,
-                    assignedDoctor: patient.assignedDoctor,
-                    doctorStatus: patient.doctorStatus,
-                    queueToken: patient.queueToken,
-                    queuePosition: patient.queuePosition,
-                    room: patient.room,
-                    diagnosis: patient.diagnosis,
-                    icd10: patient.icd10,
-                    prescription: patient.prescription,
-                    investigations: patient.investigations,
-                    advice: patient.advice,
-                    vitals: patient.vitals,
-                    billing: patient.billing,
-                    furtherAction: patient.furtherAction,
-                    status: patient.status,
-                    timestamps: patient.timestamps
-                  }}
-                  showScannerButton={true}
-                />
+              <div className="flex items-center justify-between pt-3 border-t border-[#E2E8F0] text-[11px] text-[#64748B]">
+                <span>Status: <strong className="text-[#166534] font-mono">{patient.status}</strong></span>
+                <span className="font-mono text-gray-700 font-bold tracking-wider">Barcode: ||||| | |||| ||| ||||</span>
               </div>
             </div>
 
