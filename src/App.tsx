@@ -20,6 +20,7 @@ import Insurance from "./components/Insurance";
 import OrderDrawer from "./components/OrderDrawer";
 import CommandPalette from "./components/CommandPalette";
 import Registration from "./components/Registration";
+import OPWorkflow from "./components/OPWorkflow";
 import SmartOCR from "./components/SmartOCR";
 import SymptomAI from "./components/SymptomAI";
 import ClinicalRAG from "./components/ClinicalRAG";
@@ -45,7 +46,7 @@ type Module =
   | "icu" | "discharge" | "triage" | "insurance" | "analytics"
   | "reports" | "admin"
   | "chart" | "register"
-  | "outpatient" | "queue" | "op_management"
+  | "outpatient" | "queue" | "op_management" | "op_workflow"
   | "doctor_workflow" | "scheduling"
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
@@ -68,6 +69,7 @@ const NAV: NavItem[] = [
     key: "outpatient", label: "Outpatient", Icon: Icon.Stethoscope,
     children: [
       { key: "op_management", label: "OP Dashboard" },
+      { key: "op_workflow", label: "OP Clinical Journey" },
       { key: "appointments", label: "Appointments" },
       { key: "queue", label: "Queue Management" },
     ]
@@ -415,7 +417,10 @@ export default function App() {
               module === "icu" ? "ICU" : module === "discharge" ? "Discharge Workflow" :
               module === "triage" ? "Triage" : module === "analytics" ? "Analytics" :
               module === "radiology" ? "Radiology" :
-              module === "op_management" ? "OP Management" :
+              module === "op_management" ? "OP Dashboard" :
+              module === "op_workflow" ? "OP Clinical Journey" :
+              module === "queue" ? "Queue Management" :
+              module === "appointments" ? "Appointments" :
               module === "patient_exp" ? "Patient Experience" :
               module === "doctor_workflow" ? "Doctor Workflow" :
               module === "scheduling" ? "Doctor Scheduling" :
@@ -471,7 +476,14 @@ export default function App() {
 
           {/* Additional Integrated Modules */}
           {module === "queue" && <QueueManagement />}
-          {module === "op_management" && <OPManagement />}
+          {module === "op_management" && (
+            <OPManagement
+              onStartWorkflow={() => setModule("op_workflow")}
+              onNavigateQueue={() => setModule("queue")}
+              onNavigateAppointments={() => setModule("appointments")}
+            />
+          )}
+          {module === "op_workflow" && <OPWorkflow onComplete={() => setModule("op_management")} />}
           {module === "patient_exp" && <PatientExperience />}
           {module === "doctor_workflow" && <DoctorWorkflow />}
           {module === "scheduling" && <DoctorScheduling />}
