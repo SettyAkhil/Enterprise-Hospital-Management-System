@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "./icons";
 import { StatusBadge, Btn, Input } from "./shared";
 import { db, DBPatient, DBOPEncounter } from "../services/db";
+import PatientBarcode from "./PatientBarcode";
 
 // Accurate age calculation from Date of Birth
 const calculateAge = (dobString: string): number => {
@@ -370,14 +371,28 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
               </span>
             </div>
 
-            {/* Search Box */}
-            <div className="max-w-xl">
-              <Input
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Search database by Patient Name, UMR (e.g. UMR10001), or Phone..."
-                icon={<Icon.Search />}
-              />
+            {/* Search & Barcode Scan Bar */}
+            <div className="flex gap-3 max-w-2xl">
+              <div className="flex-1">
+                <Input
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search database by Patient Name, UMR (e.g. UMR10001), or Phone..."
+                  icon={<Icon.Search />}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const firstPatient = patients[0];
+                  if (firstPatient) {
+                    setSearchQuery(firstPatient.umr);
+                  }
+                }}
+                className="px-4 py-2 bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-[#1D4ED8] text-[12.5px] font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs whitespace-nowrap"
+              >
+                <span>📷</span> Scan Card Barcode
+              </button>
             </div>
 
             {/* Existing Database Grid */}
@@ -462,39 +477,44 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                   </div>
                 </div>
 
-                <div className="max-w-xl mx-auto bg-gradient-to-br from-[#0C1524] to-[#1E2D42] text-white rounded-2xl p-5 shadow-md border border-[#334155]">
-                  <div className="flex justify-between items-center border-b border-white/10 pb-3 mb-3">
-                    <div className="flex items-center gap-2">
-                      <img src="/logo.png" alt="HospAI" className="w-7 h-7 object-contain" />
-                      <div>
-                        <div className="font-bold text-[13px]">HospAI General Hospital</div>
-                        <div className="text-[9.5px] text-[#94A3B8]">Official Outpatient (OP) Record</div>
+                <div className="max-w-xl mx-auto space-y-4">
+                  <div className="bg-gradient-to-br from-[#0C1524] to-[#1E2D42] text-white rounded-2xl p-5 shadow-md border border-[#334155]">
+                    <div className="flex justify-between items-center border-b border-white/10 pb-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <img src="/logo.png" alt="HospAI" className="w-7 h-7 object-contain" />
+                        <div>
+                          <div className="font-bold text-[13px]">HospAI General Hospital</div>
+                          <div className="text-[9.5px] text-[#94A3B8]">Official Outpatient (OP) Record</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9.5px] text-[#94A3B8]">Registration Date</div>
+                        <div className="text-[11px] font-mono font-bold">{selectedEncounter.registrationTime}</div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-[9.5px] text-[#94A3B8]">Registration Date</div>
-                      <div className="text-[11px] font-mono font-bold">{selectedEncounter.registrationTime}</div>
+
+                    <div className="grid grid-cols-2 gap-4 text-[12px] mb-4">
+                      <div>
+                        <div className="text-[9.5px] uppercase text-[#94A3B8] font-bold">Patient Name</div>
+                        <div className="text-base font-bold text-white">{selectedEncounter.patientName}</div>
+                        <div className="text-[11px] text-[#93C5FD]">Age: {selectedEncounter.age} yrs · Phone: {selectedEncounter.phone}</div>
+                        <div className="text-[10.5px] text-[#CBD5E1] mt-0.5">Dept: {selectedEncounter.dept}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9.5px] uppercase text-[#94A3B8] font-bold">Permanent UMR (Lifetime)</div>
+                        <div className="text-base font-mono font-bold text-[#60A5FA]">{selectedEncounter.umr}</div>
+                        <div className="text-[9.5px] uppercase text-[#94A3B8] font-bold mt-2">Current Visit OP Number</div>
+                        <div className="text-base font-mono font-bold text-[#F59E0B]">{selectedEncounter.opNumber}</div>
+                      </div>
+                    </div>
+
+                    {/* Integrated Scannable Barcode & QR Code */}
+                    <div className="bg-white/5 p-2 rounded-xl border border-white/10">
+                      <PatientBarcode encounter={selectedEncounter} showScannerButton={false} />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-[12px] mb-3">
-                    <div>
-                      <div className="text-[9.5px] uppercase text-[#94A3B8] font-bold">Patient Name</div>
-                      <div className="text-base font-bold text-white">{selectedEncounter.patientName}</div>
-                      <div className="text-[11px] text-[#93C5FD]">Age: {selectedEncounter.age} yrs · Phone: {selectedEncounter.phone}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[9.5px] uppercase text-[#94A3B8] font-bold">Permanent UMR (Lifetime)</div>
-                      <div className="text-base font-mono font-bold text-[#60A5FA]">{selectedEncounter.umr}</div>
-                      <div className="text-[9.5px] uppercase text-[#94A3B8] font-bold mt-2">Current Visit OP Number</div>
-                      <div className="text-base font-mono font-bold text-[#F59E0B]">{selectedEncounter.opNumber}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center pt-2 border-t border-white/10 text-[10.5px] text-[#94A3B8]">
-                    <span>Status: <strong className="text-white font-mono">{selectedEncounter.status}</strong></span>
-                    <span className="font-mono">Barcode: |||| ||| ||||| |||</span>
-                  </div>
+                  <PatientBarcode encounter={selectedEncounter} showScannerButton={true} />
                 </div>
               </div>
             )}
