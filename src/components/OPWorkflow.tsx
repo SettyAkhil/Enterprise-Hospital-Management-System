@@ -659,45 +659,52 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </p>
             </div>
 
-            {/* OP Book Digital Card */}
-            <div className="max-w-xl mx-auto bg-gradient-to-br from-[#0C1524] to-[#1E2D42] text-white rounded-2xl p-6 shadow-lg border border-[#334155] relative overflow-hidden">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
+            {/* OP Book Digital Card (White Color) */}
+            <div className="max-w-xl mx-auto bg-white border-2 border-[#DDE2EC] text-gray-900 rounded-2xl p-6 shadow-md relative overflow-hidden">
+              {/* Top Accent Strip */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1B4FD8] to-[#2563EB]"></div>
+
+              <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4 mb-4">
                 <div className="flex items-center gap-2.5">
                   <img src="/logo.png" alt="HospAI" className="w-8 h-8 object-contain" />
                   <div>
-                    <div className="font-bold text-[14px]">HospAI General Hospital</div>
-                    <div className="text-[10px] text-[#94A3B8]">Outpatient (OP) Record Pass</div>
+                    <div className="font-bold text-[14px] text-gray-900">HospAI General Hospital</div>
+                    <div className="text-[10px] text-[#64748B]">Outpatient (OP) Record Pass</div>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] text-[#94A3B8]">Visit Date</div>
-                  <div className="text-[12px] font-mono font-bold">{new Date().toLocaleDateString()}</div>
+                  <div className="text-[10px] uppercase font-bold text-[#64748B]">Visit Date</div>
+                  <div className="text-[12px] font-mono font-bold text-gray-900">{new Date().toLocaleDateString()}</div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-5 text-[12.5px]">
+              <div className="grid grid-cols-2 gap-4 mb-4 text-[12.5px]">
                 <div>
-                  <div className="text-[10px] uppercase text-[#94A3B8] font-bold tracking-wider">Patient Name</div>
-                  <div className="text-base font-bold text-white mt-0.5">{patient.name}</div>
-                  <div className="text-[11.5px] text-[#93C5FD]">{patient.age} yrs · {patient.sex}</div>
+                  <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Patient Name</div>
+                  <div className="text-base font-bold text-gray-900 mt-0.5">{patient.name}</div>
+                  <div className="text-[11.5px] text-gray-600 mt-0.5">{patient.age} yrs · {patient.sex} · {patient.phone}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] uppercase text-[#94A3B8] font-bold tracking-wider">Permanent UMR</div>
-                  <div className="text-base font-mono font-bold text-[#60A5FA] mt-0.5">{patient.umr}</div>
-                  <div className="text-[10px] uppercase text-[#94A3B8] font-bold tracking-wider mt-2">Visit OP Number</div>
-                  <div className="text-base font-mono font-bold text-[#F59E0B] mt-0.5">{patient.opNumber}</div>
+                  <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent UMR</div>
+                  <div className="text-base font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 inline-block mt-0.5">
+                    {patient.umr}
+                  </div>
+                  <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider mt-2">Visit OP Number</div>
+                  <div className="text-base font-mono font-bold text-[#D97706] bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
+                    {patient.opNumber}
+                  </div>
                 </div>
               </div>
 
               {/* Previous visits chip */}
               {patient.previousVisits && patient.previousVisits.length > 0 && (
-                <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 mb-4 text-[11px]">
-                  <div className="text-[#94A3B8] font-semibold mb-1">Previous OP History Associated with {patient.umr}:</div>
+                <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-2.5 mb-4 text-[11px]">
+                  <div className="text-[#64748B] font-bold mb-1">Previous OP History Associated with {patient.umr}:</div>
                   <div className="space-y-1">
                     {patient.previousVisits.map((pv, i) => (
-                      <div key={i} className="flex justify-between text-[#CBD5E1]">
+                      <div key={i} className="flex justify-between text-[#475569]">
                         <span>• {pv.date} ({pv.opNumber}): {pv.diagnosis}</span>
-                        <span className="text-[#94A3B8]">{pv.doctor}</span>
+                        <span className="text-[#64748B] font-medium">{pv.doctor}</span>
                       </div>
                     ))}
                   </div>
@@ -705,7 +712,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               )}
 
               {/* Real dynamic scannable barcode */}
-              <div className="pt-3 border-t border-white/10">
+              <div className="pt-2 border-t border-[#E2E8F0]">
                 <PatientBarcode
                   encounter={{
                     id: patient.id || "ENC-DEMO",
