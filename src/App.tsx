@@ -247,8 +247,8 @@ export default function App() {
       {/* ── Top Header ───────────────────────────────────────────────── */}
       <header className="bg-[#0C1524] border-b border-[#1E2D42] h-12 flex items-center gap-3 px-3 flex-shrink-0 z-40">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 mr-2">
-          <img src="/logo.png" alt="HospAI Logo" className="w-8 h-8 object-contain bg-white rounded p-0.5 flex-shrink-0" />
+        <div className="flex items-center gap-2 mr-2">
+          <img src="/logo.png" alt="HospAI Logo" className="w-7 h-7 object-contain flex-shrink-0" />
           {!sidebarCollapsed && (
             <div className="leading-tight">
               <div className="text-[12.5px] font-semibold text-white">HospAI</div>
@@ -265,18 +265,17 @@ export default function App() {
         </button>
 
         {/* Global Search */}
-        <div className="w-[400px] ml-auto mr-4 group">
+        <div className="w-[380px] ml-auto mr-4 group">
           <button
             onClick={() => setCmdOpen(true)}
-            className="w-full relative flex items-center h-9 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-lg text-left text-[13px] text-[#94A3B8] transition-all shadow-sm hover:shadow-[0_0_15px_rgba(27,79,216,0.15)] overflow-hidden"
+            className="w-full relative flex items-center h-8.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-lg text-left text-[12.5px] text-[#94A3B8] transition-all shadow-sm hover:shadow-[0_0_15px_rgba(27,79,216,0.15)] overflow-hidden"
           >
             <span className="absolute left-3 text-[#64748B] group-hover:text-blue-400 transition-colors">
               <Icon.Search />
             </span>
-            <span className="pl-10 pr-16 flex-1 truncate">Search patients, MRN, appointments...</span>
+            <span className="pl-9 pr-16 flex-1 truncate">Search patients, MRN, appointments...</span>
             <div className="absolute right-2 flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-              <kbd className="bg-black/30 border border-white/10 text-white text-[10px] px-2 py-0.5 rounded shadow-sm font-mono tracking-wider">Ctrl</kbd>
-              <kbd className="bg-black/30 border border-white/10 text-white text-[10px] px-2 py-0.5 rounded shadow-sm font-mono tracking-wider">K</kbd>
+              <kbd className="bg-black/30 border border-white/10 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm font-mono">Ctrl+K</kbd>
             </div>
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-400/5 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
           </button>
@@ -337,8 +336,8 @@ export default function App() {
       {/* ── Body ─────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {/* ── Sidebar ──────────────────────────────────────────────── */}
-        <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-12" : "w-64"}`}>
-          <div className="flex-1 py-2 px-2">
+        <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 h-full overflow-hidden ${sidebarCollapsed ? "w-12" : "w-56"}`}>
+          <div className="flex-1 py-2 px-2 overflow-y-auto space-y-0.5">
             {NAV.map((item) => {
               const isActive = module === item.key || (item.children?.some(c => c.key === module));
               const isExpanded = expanded.includes(item.key);
@@ -362,7 +361,7 @@ export default function App() {
                           <span className="badge bg-[#DC2626] text-white">{item.badge}</span>
                         )}
                         {item.children && (
-                          <span className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}>
+                          <span className={`transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}>
                             <Icon.ChevronRight />
                           </span>
                         )}
@@ -370,10 +369,10 @@ export default function App() {
                     )}
                   </div>
                   {!sidebarCollapsed && item.children && isExpanded && (
-                    <div>
+                    <div className="space-y-0.5 mt-0.5">
                       {item.children.map((child, ci) => (
                         <div key={ci}
-                          className={`nav-item sub ${module === child.key && isActive ? "active" : ""}`}
+                          className={`nav-item sub ${module === child.key ? "active" : ""}`}
                           onClick={() => setModule(child.key)}>
                           {child.label}
                         </div>
@@ -386,7 +385,7 @@ export default function App() {
           </div>
 
           {!sidebarCollapsed && (
-            <div className="p-3 border-t border-[#1E2D42]">
+            <div className="p-2.5 border-t border-[#1E2D42] flex-shrink-0 bg-[#0C1524]">
               <button onClick={() => setCmdOpen(true)}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded border border-white/10 text-[#64748B] hover:text-white hover:border-white/20 transition-colors text-[11.5px]">
                 <Icon.Cmd />
