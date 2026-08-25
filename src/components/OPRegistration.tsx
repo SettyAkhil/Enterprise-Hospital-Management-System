@@ -81,6 +81,21 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
     e.preventDefault();
     if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.dob) return;
 
+    if (matchingExistingPatient) {
+      handleCreateRevisitEncounter(matchingExistingPatient);
+      // Reset Form
+      setFormData({
+        firstName: "",
+        middleName: "",
+        lastName: "",
+        dob: "1996-05-20",
+        age: calculateAge("1996-05-20"),
+        sex: "",
+        phone: "",
+      });
+      return;
+    }
+
     const computedAge = calculateAge(formData.dob);
 
     const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
@@ -145,6 +160,12 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
   };
+
+  // Duplicate / Existing Patient Check:
+  const enteredFullName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(" ").trim().toLowerCase();
+  const matchingExistingPatient = enteredFullName.length >= 3 
+    ? db.getPatients().find(p => p.name.toLowerCase() === enteredFullName || (formData.phone.trim().length >= 7 && p.phone === formData.phone.trim()))
+    : undefined;
 
   // Filtered patients for revisit search
   const filteredPatients = db.searchPatients(searchQuery);
@@ -339,13 +360,65 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                 </div>
               </div>
 
+              {/* Patient Identity State Warning / Confirmation */}
+              {matchingExistingPatient ? (
+                <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 shadow-sm animate-in fade-in">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">⚠️</span>
+                      <span className="text-[13px] font-bold text-amber-950">Patient Already Exists in Database!</span>
+                      <span className="text-[11px] font-mono font-bold bg-amber-200/80 px-2 py-0.5 rounded border border-amber-400 text-amber-900">
+                        {matchingExistingPatient.umr}
+                      </span>
+                    </div>
+                    <div className="text-[12px] text-amber-900">
+                      Active record found for <strong>{matchingExistingPatient.name}</strong> ({matchingExistingPatient.age} yrs · {matchingExistingPatient.sex} · Phone: {matchingExistingPatient.phone}).
+                    </div>
+                    <div className="text-[11.5px] text-amber-800">
+                      To preserve lifetime medical history under <strong>{matchingExistingPatient.umr}</strong>, generate a <strong>Revisit OP Number</strong>.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCreateRevisitEncounter(matchingExistingPatient)}
+                    className="px-4 py-2.5 bg-[#D97706] hover:bg-[#B45309] text-white text-[12.5px] font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    <span>🔄</span> Generate Revisit ({matchingExistingPatient.umr})
+                  </button>
+                </div>
+              ) : (
+                formData.firstName.trim().length >= 2 && formData.lastName.trim().length >= 2 && (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between text-emerald-900 text-[12px] animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-600 font-bold text-sm">✓</span>
+                      <span><strong>New Patient:</strong> No existing record found for <strong>{formData.firstName} {formData.lastName}</strong>. System will issue a new permanent UMR &amp; visit OP Number.</span>
+                    </div>
+                    <span className="text-[10.5px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap">
+                      ✨ New Patient
+                    </span>
+                  </div>
+                )
+              )}
+
               {/* Submit Action (Centered) */}
-              <div className="pt-5 border-t border-[#E2E8F0] flex justify-center items-center">
+              <div className="pt-4 border-t border-[#E2E8F0] flex justify-center items-center">
                 <button
                   type="submit"
-                  className="px-8 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[14px] rounded-lg shadow-md transition-all flex items-center gap-2"
+                  className={`px-8 py-3 font-bold text-[14px] rounded-lg shadow-md transition-all flex items-center gap-2 ${
+                    matchingExistingPatient
+                      ? "bg-[#D97706] hover:bg-[#B45309] text-white"
+                      : "bg-[#16A34A] hover:bg-[#15803D] text-white"
+                  }`}
                 >
-                  <span>✓</span> Register OP &amp; Generate UMR / OP Number
+                  {matchingExistingPatient ? (
+                    <>
+                      <span>🔄</span> Patient Exists — Generate Revisit Encounter ({matchingExistingPatient.umr})
+                    </>
+                  ) : (
+                    <>
+                      <span>✓</span> Register OP &amp; Generate UMR / OP Number
+                    </>
+                  )}
                 </button>
               </div>
             </form>

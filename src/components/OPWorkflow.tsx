@@ -200,6 +200,18 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     e.preventDefault();
     if (!newPatientForm.firstName.trim() || !newPatientForm.lastName.trim() || !newPatientForm.dob) return;
 
+    // Check if patient already exists
+    const modalFullName = [newPatientForm.firstName, newPatientForm.middleName, newPatientForm.lastName].filter(Boolean).join(" ").trim().toLowerCase();
+    const modalExistingPatient = modalFullName.length >= 3 
+      ? db.getPatients().find(p => p.name.toLowerCase() === modalFullName || (newPatientForm.phone.trim().length >= 7 && p.phone === newPatientForm.phone.trim()))
+      : undefined;
+
+    if (modalExistingPatient) {
+      handleSelectExistingPatient(modalExistingPatient);
+      setShowNewPatientModal(false);
+      return;
+    }
+
     const computedAge = calculateAge(newPatientForm.dob);
 
     const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
@@ -733,6 +745,37 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                     />
                   </div>
                 </div>
+
+                {/* Duplicate / New Patient Status in Modal */}
+                {(() => {
+                  const modalFullName = [newPatientForm.firstName, newPatientForm.middleName, newPatientForm.lastName].filter(Boolean).join(" ").trim().toLowerCase();
+                  const modalExistingPatient = modalFullName.length >= 3 
+                    ? db.getPatients().find(p => p.name.toLowerCase() === modalFullName || (newPatientForm.phone.trim().length >= 7 && p.phone === newPatientForm.phone.trim()))
+                    : undefined;
+
+                  if (modalExistingPatient) {
+                    return (
+                      <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-[12px] space-y-1 animate-in fade-in">
+                        <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                          <span>⚠️</span> Patient Already Exists! (Permanent UMR: {modalExistingPatient.umr})
+                        </div>
+                        <div>Found active record for <strong>{modalExistingPatient.name}</strong> ({modalExistingPatient.age} yrs · Phone: {modalExistingPatient.phone}).</div>
+                        <div className="text-[11px] text-amber-800 font-medium">Submitting will automatically create a Revisit Encounter with the next continuous OP number.</div>
+                      </div>
+                    );
+                  } else if (newPatientForm.firstName.trim().length >= 2 && newPatientForm.lastName.trim().length >= 2) {
+                    return (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-lg text-emerald-900 text-[11.5px] flex items-center justify-between animate-in fade-in">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-emerald-600 font-bold">✓</span>
+                          <span><strong>New Patient:</strong> Will be registered with a new permanent UMR and initial OP number.</span>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">New</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
 
                 <div className="pt-3 border-t border-[#E2E8F0] flex justify-end gap-2">
                   <button
