@@ -61,12 +61,16 @@ export interface OPPatient {
 }
 
 const INITIAL_DOCTORS = [
-  { id: "D1", name: "Dr. Sarah Jenkins", specialty: "Cardiology", gender: "Female", status: "Available", room: "Room 102", workload: 3 },
-  { id: "D2", name: "Dr. Rajesh Sharma", specialty: "Cardiology", gender: "Male", status: "Busy", room: "Room 104", workload: 6 },
+  { id: "D1", name: "Dr. Sarah Jenkins", specialty: "Cardiology", gender: "Female", status: "Available", room: "Room 102", workload: 2 },
+  { id: "D2", name: "Dr. Rajesh Sharma", specialty: "Cardiology", gender: "Male", status: "Available", room: "Room 104", workload: 3 },
   { id: "D3", name: "Dr. Michael Chen", specialty: "Pulmonology", gender: "Male", status: "Available", room: "Room 108", workload: 2 },
-  { id: "D4", name: "Dr. Anita Desai", specialty: "General Medicine", gender: "Female", status: "Available", room: "Room 101", workload: 4 },
-  { id: "D5", name: "Dr. David Anderson", specialty: "Orthopedics", gender: "Male", status: "Busy", room: "Room 112", workload: 5 },
-  { id: "D6", name: "Dr. Priya Patel", specialty: "Pediatrics", gender: "Female", status: "Available", room: "Room 105", workload: 1 },
+  { id: "D4", name: "Dr. Maya Lin", specialty: "Pulmonology", gender: "Female", status: "Available", room: "Room 109", workload: 1 },
+  { id: "D5", name: "Dr. Anita Desai", specialty: "General Medicine", gender: "Female", status: "Available", room: "Room 101", workload: 3 },
+  { id: "D6", name: "Dr. Ramesh Kumar", specialty: "General Medicine", gender: "Male", status: "Available", room: "Room 103", workload: 4 },
+  { id: "D7", name: "Dr. David Anderson", specialty: "Orthopedics", gender: "Male", status: "Available", room: "Room 112", workload: 2 },
+  { id: "D8", name: "Dr. Elena Vance", specialty: "Orthopedics", gender: "Female", status: "Available", room: "Room 114", workload: 1 },
+  { id: "D9", name: "Dr. Priya Patel", specialty: "Pediatrics", gender: "Female", status: "Available", room: "Room 105", workload: 1 },
+  { id: "D10", name: "Dr. Amit Verma", specialty: "Pediatrics", gender: "Male", status: "Available", room: "Room 106", workload: 2 },
 ];
 
 export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) {
@@ -274,30 +278,40 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     setAiAnalyzing(true);
     setTimeout(() => {
       let specialty = "General Medicine";
-      let recommendedDoc = "Dr. Anita Desai";
+      let recommendedDoc = "";
       let conf = 95;
+
+      // STRICT SAME-GENDER RULE:
+      // Male Patient -> Male Doctor
+      // Female Patient -> Female Doctor
+      const patientGender = patient.sex === "Female" ? "Female" : "Male";
 
       const symText = patient.symptoms.join(" ").toLowerCase() + " " + patient.chiefComplaint.toLowerCase();
       if (symText.includes("chest") || symText.includes("breath") || symText.includes("sweat") || symText.includes("palpitat") || symText.includes("heart")) {
         specialty = "Cardiology";
-        recommendedDoc = patient.doctorGenderPref === "Female" ? "Dr. Sarah Jenkins" : "Dr. Rajesh Sharma";
+        recommendedDoc = patientGender === "Female" ? "Dr. Sarah Jenkins" : "Dr. Rajesh Sharma";
         conf = 98;
       } else if (symText.includes("cough") || symText.includes("wheez") || symText.includes("asthma") || symText.includes("lung")) {
         specialty = "Pulmonology";
-        recommendedDoc = "Dr. Michael Chen";
+        recommendedDoc = patientGender === "Female" ? "Dr. Maya Lin" : "Dr. Michael Chen";
         conf = 92;
       } else if (symText.includes("joint") || symText.includes("back") || symText.includes("fracture") || symText.includes("bone") || symText.includes("knee")) {
         specialty = "Orthopedics";
-        recommendedDoc = "Dr. David Anderson";
+        recommendedDoc = patientGender === "Female" ? "Dr. Elena Vance" : "Dr. David Anderson";
         conf = 96;
-      } else if (symText.includes("fever") || symText.includes("headache") || symText.includes("vomit") || symText.includes("pain")) {
+      } else if (symText.includes("child") || symText.includes("baby") || symText.includes("pediatric") || patient.age < 16) {
+        specialty = "Pediatrics";
+        recommendedDoc = patientGender === "Female" ? "Dr. Priya Patel" : "Dr. Amit Verma";
+        conf = 95;
+      } else {
         specialty = "General Medicine";
-        recommendedDoc = patient.doctorGenderPref === "Female" ? "Dr. Anita Desai" : "Dr. Rajesh Sharma";
+        recommendedDoc = patientGender === "Female" ? "Dr. Anita Desai" : "Dr. Ramesh Kumar";
         conf = 94;
       }
 
       setPatient(prev => ({
         ...prev,
+        doctorGenderPref: patientGender,
         aiSpecialty: specialty,
         aiDoctor: recommendedDoc,
         aiConfidence: conf,
@@ -786,20 +800,18 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </div>
             </div>
 
-            {/* Gender Preference */}
-            <div className="flex items-center gap-4 p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
-              <span className="text-[12px] font-semibold text-gray-800">Doctor Gender Preference (FR-010):</span>
-              {(["Any", "Male", "Female"] as const).map((g) => (
-                <label key={g} className="flex items-center gap-1.5 text-[12px] cursor-pointer text-gray-700">
-                  <input
-                    type="radio"
-                    name="genderPref"
-                    checked={patient.doctorGenderPref === g}
-                    onChange={() => setPatient({ ...patient, doctorGenderPref: g })}
-                  />
-                  {g} Doctor
-                </label>
-              ))}
+            {/* Same-Gender Matching Protocol */}
+            <div className="flex items-center justify-between p-3.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🔒</span>
+                <span className="text-[12px] font-bold text-gray-900">Same-Gender Clinical Assignment Protocol:</span>
+                <span className="text-[11.5px] text-[#1E40AF]">
+                  Patient is <strong>{patient.sex}</strong> ➔ Automatically routed to <strong>{patient.sex === "Female" ? "Female" : "Male"}</strong> Specialist
+                </span>
+              </div>
+              <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-blue-100 text-[#1B4FD8] border border-blue-300">
+                {patient.sex === "Female" ? "♀ Female Doctor Only" : "♂ Male Doctor Only"}
+              </span>
             </div>
 
             {/* Run AI Analysis Button */}
@@ -834,7 +846,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                     Specialty: {patient.aiSpecialty} ➔ Doctor: {patient.aiDoctor}
                   </div>
                   <div className="text-[11.5px] text-[#475569] mt-0.5">
-                    Based on symptoms: {patient.symptoms.join(", ") || patient.chiefComplaint} with {patient.doctorGenderPref} doctor preference rule applied.
+                    Based on symptoms: {patient.symptoms.join(", ") || patient.chiefComplaint} with same-gender rule (<strong>{patient.sex === "Female" ? "Female" : "Male"} Doctor</strong>) assigned.
                   </div>
                 </div>
                 <button
@@ -857,14 +869,15 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                 Doctor Availability &amp; Real-time Queue (FR-011, FR-012, FR-013, FR-014)
               </h2>
               <p className="text-[12px] text-[#64748B] mt-0.5">
-                Check live doctor roster. If the chosen doctor is available, assign directly; if busy, patient is placed into the OP queue with token generation.
+                Check live doctor roster. Filtered to <strong>{patient.sex === "Female" ? "Female" : "Male"}</strong> doctors matching the patient's gender.
               </p>
             </div>
 
             {/* Doctor Roster Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
               {INITIAL_DOCTORS.filter(d =>
-                d.specialty === patient.aiSpecialty || patient.aiSpecialty === "General Medicine"
+                (d.specialty === patient.aiSpecialty || patient.aiSpecialty === "General Medicine") &&
+                (d.gender === (patient.sex === "Female" ? "Female" : "Male"))
               ).map((doc) => {
                 const isSelected = patient.assignedDoctor === doc.name;
                 return (
