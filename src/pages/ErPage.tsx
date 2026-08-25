@@ -503,12 +503,17 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
     doctorName?: string;
   } | null>(null);
 
+  // Backend already supports both ?active_only=true and ?status=closed (see
+  // GET /api/er/visits) -- this was just never exposed in the UI, so once a
+  // visit closed (discharge/referral/transfer/LAMA/death) there was no way
+  // to look at it again anywhere in the ER module.
+  const [queueFilter, setQueueFilter] = useState<"active" | "closed" | "all">("active");
+
   const loadVisits = async () => {
     setLoading(true);
     try {
-      const data = await apiFetch<{ visits: ErVisit[] }>(
-        "/api/er/visits?active_only=true",
-      );
+      const qs = queueFilter === "active" ? "?active_only=true" : queueFilter === "closed" ? "?status=closed" : "";
+      const data = await apiFetch<{ visits: ErVisit[] }>(`/api/er/visits${qs}`);
       setVisits(data.visits);
     } catch (error: any) {
       reportError(setNotice, error, "Failed to load ER visits.");
@@ -542,6 +547,9 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
 
   useEffect(() => {
     loadVisits();
+  }, [queueFilter]);
+
+  useEffect(() => {
     loadCategories();
   }, []);
 
@@ -682,14 +690,31 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
               </TabsTrigger>
             </Tabs>
 
+            {tab === "queue" && (
+              <div style={{ display: "flex", justifyContent: "flex-end", margin: "0.7rem 0 0" }}>
+                <Select
+                  value={queueFilter}
+                  onChange={(e) => setQueueFilter(e.target.value as "active" | "closed" | "all")}
+                  style={{ width: "auto", minWidth: "160px" }}
+                  aria-label="Filter ER visits"
+                >
+                  <option value="active">Active visits</option>
+                  <option value="closed">Closed visits</option>
+                  <option value="all">All visits</option>
+                </Select>
+              </div>
+            )}
+
             {tab === "queue" ? (
               loading ? (
                 <p className="muted">Loading ER visits...</p>
               ) : visits.length === 0 ? (
                 <div className="module-empty-state">
-                  <p className="module-empty-state-title">No active ER visits</p>
+                  <p className="module-empty-state-title">
+                    {queueFilter === "closed" ? "No closed ER visits" : queueFilter === "all" ? "No ER visits yet" : "No active ER visits"}
+                  </p>
                   <p className="module-empty-state-hint">
-                    Register a new ER visit to get started.
+                    {queueFilter === "active" ? "Register a new ER visit to get started." : "Switch the filter above to see other visits."}
                   </p>
                 </div>
               ) : (

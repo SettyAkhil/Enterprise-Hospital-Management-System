@@ -197,6 +197,16 @@
 .module-page {
   min-width: 0;
   font-size: 12px;
+  /* .module-page is always this page's single root <section>, rendered
+     directly inside App.tsx's <main className="... flex flex-col
+     overflow-hidden ...">. Every other module's root div carries its own
+     `flex-1 overflow-y-auto` Tailwind classes for that reason; this one
+     needs the CSS equivalent or content taller than the viewport just gets
+     clipped with no scrollbar. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.1rem 1.4rem 1.75rem;
 }
 
 .module-panel-head {
@@ -985,6 +995,7 @@
   border: 1px solid hsl(var(--border));
   background: hsl(var(--card));
   padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
 }
 
 .er-visit-header-back { margin-bottom: 0.5rem; }
@@ -1474,4 +1485,195 @@
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+.er-queue-area,
+.er-timeline-container {
+  width: 100%;
+}
+
+/* ==================== Visit-detail progress stepper ==================== */
+/* Registered -> Triaged -> Treatment -> Doctor -> Disposition, shown at the
+   top of a visit's detail view. */
+
+.journey-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0.85rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  overflow-x: auto;
+  min-height: 4.25rem;
+  flex-shrink: 0;
+  margin-bottom: 1.25rem;
+  box-sizing: border-box;
+}
+
+.journey-step-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.journey-step-wrap:last-child {
+  flex: 0 0 auto;
+}
+
+.journey-step {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0.15rem 0.25rem;
+  border-radius: var(--radius);
+  text-align: left;
+}
+
+.journey-step-clickable {
+  cursor: pointer;
+}
+
+.journey-step-clickable:hover {
+  background: #F8FAFC;
+}
+
+.journey-step-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 2px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--card));
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.journey-step-active .journey-step-circle {
+  background: #1B4FD8;
+  border-color: #1B4FD8;
+  color: #fff;
+}
+
+.journey-step-completed .journey-step-circle {
+  background: #DCFCE7;
+  border-color: #16A34A;
+  color: #15803D;
+}
+
+.journey-step-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.journey-step-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+}
+
+.journey-step-upcoming .journey-step-label {
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+}
+
+.journey-step-hint {
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+
+.journey-step-connector {
+  flex: 1;
+  height: 2px;
+  min-width: 18px;
+  margin: 0 0.5rem;
+  background: hsl(var(--border));
+  border-radius: 2px;
+}
+
+.journey-step-connector.filled {
+  background: #16A34A;
+}
+
+@media (max-width: 720px) {
+  .journey-step-hint {
+    display: none;
+  }
+  .journey-step-connector {
+    min-width: 10px;
+    margin: 0 0.3rem;
+  }
+}
+
+/* ==================== Pill toggle buttons (view switcher) ==================== */
+/* Plain <button className="btn btn-sm btn-primary|btn-secondary"> elements,
+   distinct from the components/ui Button -- used for the Clinical Workflow /
+   Timeline view switcher. Sizing/radius come from inline styles on the
+   elements themselves; this supplies color, border, and interaction. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-weight: 600;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.btn-primary {
+  background: #1B4FD8;
+  color: #fff;
+  border-color: #1B4FD8;
+}
+
+.btn-primary:hover {
+  background: #1740B4;
+}
+
+.btn-secondary {
+  background: #fff;
+  color: #374151;
+  border-color: hsl(var(--border));
+}
+
+.btn-secondary:hover {
+  background: #F8FAFC;
+}
+
+/* ==================== Printable clinical handover sheet ==================== */
+
+.printable-handover-document {
+  font-family: var(--font-heading);
+  color: hsl(var(--foreground));
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .printable-handover-document,
+  .printable-handover-document * {
+    visibility: visible;
+  }
+  .printable-handover-document {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
 }
