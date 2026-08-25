@@ -111,7 +111,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     lastName: "",
     dob: "1996-05-20",
     age: calculateAge("1996-05-20"),
-    sex: "Male" as "Male" | "Female" | "Other",
+    sex: "" as "Male" | "Female" | "Other" | "",
     phone: "",
   });
 
@@ -206,7 +206,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
       lastName: newPatientForm.lastName.trim(),
       dob: newPatientForm.dob,
       age: computedAge,
-      sex: newPatientForm.sex,
+      sex: (newPatientForm.sex as "Male" | "Female" | "Other") || "Male",
       phone: newPatientForm.phone || "(617) 555-0192",
       dept: patient.aiSpecialty || "General Medicine",
       chiefComplaint: patient.chiefComplaint
@@ -639,6 +639,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                       className="w-full border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] bg-white focus:outline-none focus:border-[#1B4FD8] text-gray-900 font-medium"
                       required
                     >
+                      <option value="" disabled>Select</option>
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
                       <option value="Other">Other</option>

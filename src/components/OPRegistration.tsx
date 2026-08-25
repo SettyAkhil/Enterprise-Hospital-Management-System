@@ -60,7 +60,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
     lastName: "",
     dob: "1996-05-20",
     age: calculateAge("1996-05-20"),
-    sex: "Male" as "Male" | "Female" | "Other",
+    sex: "" as "Male" | "Female" | "Other" | "",
     phone: "",
   });
 
@@ -87,7 +87,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       lastName: formData.lastName.trim(),
       dob: formData.dob,
       age: computedAge,
-      sex: formData.sex,
+      sex: (formData.sex as "Male" | "Female" | "Other") || "Male",
       phone: formData.phone.trim() || "(617) 555-0199",
       dept: "General Medicine"
     });
@@ -110,7 +110,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       lastName: "",
       dob: "1996-05-20",
       age: calculateAge("1996-05-20"),
-      sex: "Male",
+      sex: "",
       phone: "",
     });
   };
@@ -316,6 +316,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900"
                     required
                   >
+                    <option value="" disabled>Select</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
