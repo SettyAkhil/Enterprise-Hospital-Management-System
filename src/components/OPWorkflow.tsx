@@ -658,17 +658,17 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </p>
             </div>
 
-            {/* OP Book Digital Card (White Color) */}
-            <div className="max-w-xl mx-auto bg-white border-2 border-[#DDE2EC] text-gray-900 rounded-2xl p-6 shadow-md relative overflow-hidden">
+            {/* OP Book Digital Card (White Color with Shadows and Crisp Border) */}
+            <div className="max-w-xl mx-auto bg-white border-2 border-[#CBD5E1] text-gray-900 rounded-2xl p-6 shadow-xl relative overflow-hidden ring-1 ring-black/5">
               {/* Top Accent Strip */}
-              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1B4FD8] to-[#2563EB]"></div>
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
 
-              <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4 mb-4">
+              <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3.5 mb-4">
                 <div className="flex items-center gap-2.5">
                   <img src="/logo.png" alt="HospAI" className="w-8 h-8 object-contain" />
                   <div>
                     <div className="font-bold text-[14px] text-gray-900">HospAI General Hospital</div>
-                    <div className="text-[10px] text-[#64748B]">Outpatient (OP) Record Pass</div>
+                    <div className="text-[10px] text-[#64748B]">Official Outpatient (OP) Record Pass</div>
                   </div>
                 </div>
                 <div className="text-right">
@@ -680,16 +680,16 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               <div className="grid grid-cols-2 gap-4 mb-4 text-[12.5px]">
                 <div>
                   <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Patient Name</div>
-                  <div className="text-base font-bold text-gray-900 mt-0.5">{patient.name}</div>
-                  <div className="text-[11.5px] text-gray-600 mt-0.5">{patient.age} yrs · {patient.sex} · {patient.phone}</div>
+                  <div className="text-[16px] font-bold text-gray-900 mt-0.5">{patient.name}</div>
+                  <div className="text-[11.5px] text-gray-600 mt-0.5 font-medium">{patient.age} yrs · {patient.sex} · {patient.phone}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent UMR</div>
-                  <div className="text-base font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 inline-block mt-0.5">
+                  <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200 inline-block mt-0.5">
                     {patient.umr}
                   </div>
                   <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider mt-2">Visit OP Number</div>
-                  <div className="text-base font-mono font-bold text-[#D97706] bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
+                  <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
                     {patient.opNumber}
                   </div>
                 </div>
@@ -711,8 +711,8 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               )}
 
               <div className="flex items-center justify-between pt-3 border-t border-[#E2E8F0] text-[11px] text-[#64748B]">
-                <span>Status: <strong className="text-[#166534] font-mono">{patient.status}</strong></span>
-                <span className="font-mono text-gray-700 font-bold tracking-wider">Barcode: ||||| | |||| ||| ||||</span>
+                <span>Status: <strong className="text-[#166534] font-mono font-bold bg-green-50 px-2 py-0.5 rounded border border-green-200">{patient.status}</strong></span>
+                <span className="font-mono text-gray-900 font-bold tracking-wider text-[12px]">Barcode: ||||| | |||| ||| ||||</span>
               </div>
             </div>
 

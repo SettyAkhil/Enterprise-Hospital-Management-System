@@ -476,38 +476,46 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                   </div>
                 </div>
 
-                <div className="max-w-xl mx-auto bg-white border border-[#DDE2EC] text-gray-900 rounded-2xl p-5 shadow-sm">
-                  <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-3 mb-3">
-                    <div className="flex items-center gap-2">
-                      <img src="/logo.png" alt="HospAI" className="w-7 h-7 object-contain" />
+                <div className="max-w-xl mx-auto bg-white border-2 border-[#CBD5E1] text-gray-900 rounded-2xl p-6 shadow-xl relative overflow-hidden ring-1 ring-black/5">
+                  {/* Top Header Accent Strip */}
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
+
+                  <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-3.5 mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <img src="/logo.png" alt="HospAI" className="w-8 h-8 object-contain" />
                       <div>
-                        <div className="font-bold text-[13px] text-gray-900">HospAI General Hospital</div>
-                        <div className="text-[9.5px] text-[#64748B]">Official Outpatient (OP) Record</div>
+                        <div className="font-bold text-[14px] text-gray-900">HospAI General Hospital</div>
+                        <div className="text-[10px] text-[#64748B]">Official Outpatient (OP) Record Pass</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[9.5px] text-[#64748B]">Registration Date</div>
-                      <div className="text-[11px] font-mono font-bold text-gray-900">{selectedEncounter.registrationTime}</div>
+                      <div className="text-[10px] uppercase font-bold text-[#64748B]">Registration Date</div>
+                      <div className="text-[12px] font-mono font-bold text-gray-900">{selectedEncounter.registrationTime}</div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-[12px] mb-3">
+                  <div className="grid grid-cols-2 gap-4 text-[12.5px] mb-4">
                     <div>
-                      <div className="text-[9.5px] uppercase text-[#64748B] font-bold">Patient Name</div>
-                      <div className="text-base font-bold text-gray-900">{selectedEncounter.patientName}</div>
-                      <div className="text-[11px] text-[#1B4FD8]">Age: {selectedEncounter.age} yrs · Phone: {selectedEncounter.phone}</div>
+                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Patient Name</div>
+                      <div className="text-[16px] font-bold text-gray-900 mt-0.5">{selectedEncounter.patientName}</div>
+                      <div className="text-[11.5px] text-gray-600 mt-0.5 font-medium">Age: <strong>{selectedEncounter.age} yrs</strong> · Phone: <strong>{selectedEncounter.phone}</strong></div>
+                      <div className="text-[11px] text-[#1B4FD8] font-semibold mt-1">Dept: {selectedEncounter.dept}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[9.5px] uppercase text-[#64748B] font-bold">Permanent UMR</div>
-                      <div className="text-base font-mono font-bold text-[#1B4FD8]">{selectedEncounter.umr}</div>
-                      <div className="text-[9.5px] uppercase text-[#64748B] font-bold mt-2">Visit OP Number</div>
-                      <div className="text-base font-mono font-bold text-[#D97706]">{selectedEncounter.opNumber}</div>
+                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent UMR (Lifetime)</div>
+                      <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200 inline-block mt-0.5">
+                        {selectedEncounter.umr}
+                      </div>
+                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider mt-2.5">Current Visit OP Number</div>
+                      <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
+                        {selectedEncounter.opNumber}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center pt-2 border-t border-[#E2E8F0] text-[10.5px] text-[#64748B]">
-                    <span>Status: <strong className="text-[#166534] font-mono">{selectedEncounter.status}</strong></span>
-                    <span className="font-mono text-gray-700 font-bold tracking-wider">Barcode: |||| ||| ||||| |||</span>
+                  <div className="flex justify-between items-center pt-3 border-t border-[#E2E8F0] text-[11px] text-[#64748B]">
+                    <span>Status: <strong className="text-[#166534] font-mono font-bold bg-green-50 px-2 py-0.5 rounded border border-green-200">{selectedEncounter.status}</strong></span>
+                    <span className="font-mono text-gray-900 font-bold tracking-wider text-[12px]">Barcode: |||| ||| ||||| |||</span>
                   </div>
                 </div>
               </div>
