@@ -107,9 +107,18 @@ const EXISTING_PATIENTS_DATABASE = [
 export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState("");
-  const [patientMode, setPatientMode] = useState<"search" | "new" | "existing">("search");
+  const [showNewPatientModal, setShowNewPatientModal] = useState(false);
   
-  // Patient state
+  // New Patient Form State
+  const [newPatientForm, setNewPatientForm] = useState({
+    name: "",
+    age: "35",
+    sex: "Male" as "Male" | "Female" | "Other",
+    phone: "",
+    address: "",
+  });
+
+  // Patient workflow state
   const [patient, setPatient] = useState<OPPatient>({
     umr: "",
     opNumber: "",
@@ -120,26 +129,27 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     address: "",
     isNew: true,
     previousVisits: [],
-    symptoms: [],
-    chiefComplaint: "",
-    aiSpecialty: "General Medicine",
-    aiDoctor: "Dr. Anita Desai",
-    aiConfidence: 94,
+    symptoms: ["Chest pain", "Breathing difficulty"],
+    chiefComplaint: "Patient complaining of chest tightness and shortness of breath.",
+    aiSpecialty: "Cardiology",
+    aiDoctor: "Dr. Rajesh Sharma",
+    aiConfidence: 96,
     doctorGenderPref: "Any",
-    assignedDoctor: "",
+    assignedDoctor: "Dr. Rajesh Sharma",
     doctorStatus: "Available",
-    queueToken: "",
+    queueToken: "C-OP001",
     queuePosition: 1,
-    room: "Room 101",
-    diagnosis: "",
-    icd10: "",
+    room: "Room 104",
+    diagnosis: "Acute Coronary Syndrome Rule-Out / Stable Angina",
+    icd10: "I20.9",
     prescription: [
-      { medicine: "Paracetamol 500mg", dosage: "1 tab", frequency: "TID (3 times/day)", duration: "5 days" }
+      { medicine: "Aspirin 81mg", dosage: "1 tab", frequency: "OD (Once Daily)", duration: "30 days" },
+      { medicine: "Atorvastatin 40mg", dosage: "1 tab", frequency: "HS (Bedtime)", duration: "30 days" }
     ],
-    investigations: [],
-    advice: "Drink plenty of warm fluids and rest for 3 days.",
-    vitals: { bp: "120/80 mmHg", pulse: "74 bpm", temp: "98.6 °F", spo2: "99%", weight: "70 kg", notes: "Patient alert and oriented." },
-    billing: { consultationFee: 50, labFee: 0, total: 50, status: "Pending", mode: "Card" },
+    investigations: ["ECG 12-Lead", "Serum Troponin I", "Lipid Profile"],
+    advice: "Avoid strenuous exertion. Return immediately if chest pain worsens. Follow low-sodium diet.",
+    vitals: { bp: "135/85 mmHg", pulse: "78 bpm", temp: "98.6 °F", spo2: "98%", weight: "74 kg", notes: "Patient alert and oriented. Mild diaphoresis on arrival." },
+    billing: { consultationFee: 50, labFee: 40, total: 90, status: "Pending", mode: "Card" },
     furtherAction: "None",
     status: "Registered",
     timestamps: {
@@ -166,27 +176,55 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
       status: "Registered",
       timestamps: { ...patient.timestamps, registration: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
     });
-    setPatientMode("existing");
   };
 
-  const handleCreateNewPatient = () => {
+  const handleRegisterNewPatientSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPatientForm.name.trim()) return;
+
     const newUmr = `UMR${Math.floor(Math.random() * 90000) + 10000}`;
     const newOp = `OP${String(Math.floor(Math.random() * 900) + 100)}`;
+
     setPatient({
       ...patient,
       umr: newUmr,
       opNumber: newOp,
-      name: searchQuery || "Ravi Kumar",
-      age: 42,
-      sex: "Male",
-      phone: "(617) 555-0192",
-      address: "12 Medical Center Blvd, Boston, MA",
+      name: newPatientForm.name,
+      age: parseInt(newPatientForm.age) || 35,
+      sex: newPatientForm.sex,
+      phone: newPatientForm.phone || "(617) 555-0192",
+      address: newPatientForm.address || "12 Beacon St, Boston, MA",
       isNew: true,
       previousVisits: [],
       status: "Registered",
       timestamps: { ...patient.timestamps, registration: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
     });
-    setPatientMode("new");
+
+    setShowNewPatientModal(false);
+  };
+
+  // Quick preset loader
+  const loadPreset = (type: "new" | "revisit") => {
+    if (type === "new") {
+      const newUmr = `UMR${Math.floor(Math.random() * 90000) + 10000}`;
+      const newOp = `OP${String(Math.floor(Math.random() * 900) + 100)}`;
+      setPatient({
+        ...patient,
+        umr: newUmr,
+        opNumber: newOp,
+        name: "David Miller",
+        age: 29,
+        sex: "Male",
+        phone: "(617) 555-8831",
+        address: "50 Commonwealth Ave, Boston, MA",
+        isNew: true,
+        previousVisits: [],
+        status: "Registered",
+        timestamps: { ...patient.timestamps, registration: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+      });
+    } else {
+      handleSelectExistingPatient(EXISTING_PATIENTS_DATABASE[0]);
+    }
   };
 
   // Symptom Analysis
@@ -206,18 +244,22 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
       let conf = 95;
 
       const symText = patient.symptoms.join(" ").toLowerCase() + " " + patient.chiefComplaint.toLowerCase();
-      if (symText.includes("chest") || symText.includes("breath") || symText.includes("sweat") || symText.includes("palpitat")) {
+      if (symText.includes("chest") || symText.includes("breath") || symText.includes("sweat") || symText.includes("palpitat") || symText.includes("heart")) {
         specialty = "Cardiology";
         recommendedDoc = patient.doctorGenderPref === "Female" ? "Dr. Sarah Jenkins" : "Dr. Rajesh Sharma";
         conf = 98;
-      } else if (symText.includes("cough") || symText.includes("wheez") || symText.includes("asthma")) {
+      } else if (symText.includes("cough") || symText.includes("wheez") || symText.includes("asthma") || symText.includes("lung")) {
         specialty = "Pulmonology";
         recommendedDoc = "Dr. Michael Chen";
         conf = 92;
-      } else if (symText.includes("joint") || symText.includes("back") || symText.includes("fracture") || symText.includes("bone")) {
+      } else if (symText.includes("joint") || symText.includes("back") || symText.includes("fracture") || symText.includes("bone") || symText.includes("knee")) {
         specialty = "Orthopedics";
         recommendedDoc = "Dr. David Anderson";
         conf = 96;
+      } else if (symText.includes("fever") || symText.includes("headache") || symText.includes("vomit") || symText.includes("pain")) {
+        specialty = "General Medicine";
+        recommendedDoc = patient.doctorGenderPref === "Female" ? "Dr. Anita Desai" : "Dr. Rajesh Sharma";
+        conf = 94;
       }
 
       setPatient(prev => ({
@@ -276,20 +318,28 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
             Unified 11-stage outpatient workflow from arrival, UMR/OP generation, AI doctor matching, consultation to billing.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {patient.umr && (
+        <div className="flex items-center gap-2.5">
+          {patient.umr ? (
             <div className="flex items-center gap-2 bg-[#F8FAFC] border border-[#E2E8F0] px-3 py-1 rounded text-[12px]">
-              <span className="text-[#64748B]">Active Encounter:</span>
+              <span className="text-[#64748B]">Active Patient:</span>
               <span className="font-mono font-bold text-[#1B4FD8]">{patient.umr}</span>
               <span className="text-gray-300">|</span>
               <span className="font-mono font-bold text-[#D97706]">{patient.opNumber}</span>
               <span className="text-gray-300">|</span>
               <span className="font-semibold text-gray-800">{patient.name}</span>
             </div>
+          ) : (
+            <div className="text-[12px] text-[#64748B] italic">No active patient loaded</div>
           )}
-          <Btn variant="outline" size="sm" onClick={() => { setCurrentStep(1); setPatientMode("search"); }}>
-            <Icon.Plus /> Reset / New Patient
-          </Btn>
+          <button
+            onClick={() => {
+              setPatient({ ...patient, umr: "", opNumber: "", name: "" });
+              setCurrentStep(1);
+            }}
+            className="px-3 py-1 bg-white border border-[#DDE2EC] text-[#1B4FD8] hover:bg-[#F8FAFC] rounded text-[12px] font-medium transition-colors"
+          >
+            Reset
+          </button>
         </div>
       </div>
 
@@ -302,7 +352,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
             return (
               <React.Fragment key={s.num}>
                 <div
-                  onClick={() => s.num <= currentStep && setCurrentStep(s.num)}
+                  onClick={() => setCurrentStep(s.num)}
                   className={`flex items-center gap-2 cursor-pointer transition-all ${
                     isCurrent ? "text-white font-semibold" : isCompleted ? "text-[#93C5FD]" : "text-[#64748B]"
                   }`}
@@ -335,29 +385,49 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
         {/* ── STEP 1: PATIENT IDENTIFICATION & UMR GENERATION ──────────── */}
         {currentStep === 1 && (
           <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
-            <div>
-              <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">1</span>
-                Patient Identification &amp; UMR Check (FR-001 – FR-006)
-              </h2>
-              <p className="text-[12px] text-[#64748B] mt-0.5">
-                Search hospital database by Patient Name, Phone, or UMR. If found, retrieve existing UMR and generate new OP number. If new, generate a brand new permanent UMR.
-              </p>
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">1</span>
+                  Patient Identification &amp; UMR Check (FR-001 – FR-006)
+                </h2>
+                <p className="text-[12px] text-[#64748B] mt-0.5">
+                  Search hospital database by Patient Name, Phone, or UMR. If found, retrieve existing UMR and generate new OP number. If new, register and generate a new UMR.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => loadPreset("new")}
+                  className="px-2.5 py-1 bg-[#EFF6FF] border border-[#BFDBFE] text-[#1D4ED8] text-[11px] font-bold rounded hover:bg-[#DBEAFE] transition-colors"
+                >
+                  ⚡ Load Demo New Patient
+                </button>
+                <button
+                  onClick={() => loadPreset("revisit")}
+                  className="px-2.5 py-1 bg-[#FEF3C7] border border-[#FDE68A] text-[#92400E] text-[11px] font-bold rounded hover:bg-[#FDE68A] transition-colors"
+                >
+                  ⚡ Load Demo Revisit Patient
+                </button>
+              </div>
             </div>
 
-            {/* Search Input */}
+            {/* Search Input & Action */}
             <div className="flex gap-3">
               <div className="flex-1">
                 <Input
                   value={searchQuery}
                   onChange={setSearchQuery}
-                  placeholder="Search patient by Name, UMR (e.g. UMR10001), or Phone number..."
+                  placeholder="Search existing patients by Name, UMR (e.g. UMR10001), or Phone..."
                   icon={<Icon.Search />}
                 />
               </div>
               <button
-                onClick={handleCreateNewPatient}
-                className="px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                type="button"
+                onClick={() => {
+                  setNewPatientForm({ ...newPatientForm, name: searchQuery });
+                  setShowNewPatientModal(true);
+                }}
+                className="px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
               >
                 <Icon.Plus /> Register New Patient
               </button>
@@ -401,7 +471,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
 
             {/* Identification Confirmation Banner */}
             {patient.umr && (
-              <div className="p-4 bg-[#F0FDF4] border border-[#BBF7D0] rounded-xl flex items-center justify-between">
+              <div className="p-4 bg-[#F0FDF4] border border-[#BBF7D0] rounded-xl flex items-center justify-between shadow-xs">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-lg">✓</span>
@@ -415,12 +485,103 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                 </div>
                 <button
                   onClick={() => setCurrentStep(2)}
-                  className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
                 >
                   Generate OP Book &amp; Continue →
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── NEW PATIENT REGISTRATION MODAL ─────────────────────────── */}
+        {showNewPatientModal && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#DDE2EC] animate-in fade-in">
+              <div className="px-6 py-4 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Register New OP Patient</h3>
+                  <p className="text-[11.5px] text-[#64748B]">Creates a new permanent UMR and initial OP visit encounter.</p>
+                </div>
+                <button
+                  onClick={() => setShowNewPatientModal(false)}
+                  className="text-gray-400 hover:text-gray-700 text-lg font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleRegisterNewPatientSubmit} className="p-6 space-y-4">
+                <div>
+                  <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Full Patient Name *</label>
+                  <Input
+                    value={newPatientForm.name}
+                    onChange={v => setNewPatientForm({ ...newPatientForm, name: v })}
+                    placeholder="e.g. David Miller"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Age *</label>
+                    <Input
+                      value={newPatientForm.age}
+                      onChange={v => setNewPatientForm({ ...newPatientForm, age: v })}
+                      placeholder="e.g. 35"
+                      type="number"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Gender *</label>
+                    <select
+                      value={newPatientForm.sex}
+                      onChange={e => setNewPatientForm({ ...newPatientForm, sex: e.target.value as any })}
+                      className="w-full border border-[#DDE2EC] rounded text-[13px] p-2 bg-white"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Phone Number</label>
+                  <Input
+                    value={newPatientForm.phone}
+                    onChange={v => setNewPatientForm({ ...newPatientForm, phone: v })}
+                    placeholder="e.g. (617) 555-0192"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Residential Address</label>
+                  <Input
+                    value={newPatientForm.address}
+                    onChange={v => setNewPatientForm({ ...newPatientForm, address: v })}
+                    placeholder="e.g. 50 Commonwealth Ave, Boston, MA"
+                  />
+                </div>
+
+                <div className="pt-3 border-t border-[#E2E8F0] flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPatientModal(false)}
+                    className="px-4 py-2 text-[12.5px] text-gray-600 hover:bg-gray-100 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white font-semibold text-[12.5px] rounded-lg shadow-sm"
+                  >
+                    Generate UMR &amp; Create Patient
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
@@ -494,7 +655,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </button>
               <button
                 onClick={() => setCurrentStep(3)}
-                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
               >
                 Proceed to Symptom Capture &amp; AI Analysis →
               </button>
@@ -684,7 +845,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                 </div>
                 <button
                   onClick={() => setCurrentStep(5)}
-                  className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                  className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
                 >
                   Enter Doctor Consultation Workspace →
                 </button>
@@ -736,6 +897,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               <div className="flex justify-between items-center mb-2">
                 <label className="text-[11.5px] font-semibold text-gray-700">Prescribed Medications</label>
                 <button
+                  type="button"
                   onClick={() => setPatient({
                     ...patient,
                     prescription: [
@@ -779,7 +941,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                   setPatient({ ...patient, status: "Consultation Completed" });
                   setCurrentStep(6);
                 }}
-                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
               >
                 Complete Consultation ➔ Send to Post-Consult Vitals →
               </button>
@@ -856,7 +1018,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                   setPatient({ ...patient, status: "Awaiting Billing" });
                   setCurrentStep(7);
                 }}
-                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
               >
                 Proceed to Billing &amp; Encounter Completion →
               </button>
@@ -878,7 +1040,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
             </div>
 
             {/* Billing Receipt Summary */}
-            <div className="max-w-md mx-auto bg-[#F8FAFC] border border-[#DDE2EC] rounded-xl p-5 space-y-3">
+            <div className="max-w-md mx-auto bg-[#F8FAFC] border border-[#DDE2EC] rounded-xl p-5 space-y-3 shadow-xs">
               <div className="text-[13px] font-bold text-gray-900 border-b border-[#E2E8F0] pb-2 flex justify-between">
                 <span>OP Consultation Invoice</span>
                 <span className="font-mono text-[#1B4FD8]">{patient.opNumber}</span>
@@ -947,7 +1109,10 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                   <Btn variant="outline" size="sm" onClick={() => window.print()}>
                     <Icon.Download /> Print OP Summary Card
                   </Btn>
-                  <Btn variant="primary" size="sm" onClick={() => { setCurrentStep(1); setPatientMode("search"); }}>
+                  <Btn variant="primary" size="sm" onClick={() => {
+                    setPatient({ ...patient, umr: "", opNumber: "", name: "" });
+                    setCurrentStep(1);
+                  }}>
                     Start Next OP Patient
                   </Btn>
                 </div>
