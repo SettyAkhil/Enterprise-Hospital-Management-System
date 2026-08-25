@@ -342,13 +342,15 @@ class HospitalDatabase {
    */
   public registerNewPatient(data: {
     firstName: string;
+    middleName?: string;
     lastName: string;
+    dob?: string;
     age: number;
-    sex: "Male" | "Female" | "Other";
+    sex?: "Male" | "Female" | "Other";
     phone: string;
-    address: string;
-    bloodGroup: string;
-    dept: string;
+    address?: string;
+    bloodGroup?: string;
+    dept?: string;
     chiefComplaint?: string;
   }): { patient: DBPatient; encounter: DBOPEncounter } {
     const patients = this.getPatients();
@@ -360,7 +362,7 @@ class HospitalDatabase {
     localStorage.setItem(STORAGE_KEYS.UMR_COUNTER, nextUmrCounter.toString());
     const newUmr = `UMR${nextUmrCounter}`;
 
-    const fullName = `${data.firstName} ${data.lastName}`.trim();
+    const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ").trim();
     const nowIso = new Date().toISOString();
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -369,7 +371,7 @@ class HospitalDatabase {
       umr: newUmr,
       name: fullName,
       age: data.age,
-      sex: data.sex,
+      sex: data.sex || "Male",
       phone: data.phone || "(617) 555-0199",
       address: data.address || "Boston, MA",
       bloodGroup: data.bloodGroup || "O+",

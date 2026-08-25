@@ -86,14 +86,38 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     return () => unsub();
   }, []);
   
+  // Accurate age calculation from DOB
+  const calculateAge = (dobString: string): number => {
+    if (!dobString) return 0;
+    const birthDate = new Date(dobString);
+    if (isNaN(birthDate.getTime())) return 0;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return Math.max(0, age);
+  };
+
   // New Patient Form State
   const [newPatientForm, setNewPatientForm] = useState({
-    name: "",
-    age: "35",
-    sex: "Male" as "Male" | "Female" | "Other",
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    dob: "1996-05-20",
+    age: calculateAge("1996-05-20"),
     phone: "",
-    address: "",
   });
+
+  const handleDobChange = (newDob: string) => {
+    const age = calculateAge(newDob);
+    setNewPatientForm(prev => ({
+      ...prev,
+      dob: newDob,
+      age: age
+    }));
+  };
 
   // Patient workflow state
   const [patient, setPatient] = useState<OPPatient>({
@@ -167,20 +191,17 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
 
   const handleRegisterNewPatientSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPatientForm.name.trim()) return;
+    if (!newPatientForm.firstName.trim() || !newPatientForm.lastName.trim() || !newPatientForm.dob) return;
 
-    const parts = newPatientForm.name.trim().split(" ");
-    const firstName = parts[0] || "Patient";
-    const lastName = parts.slice(1).join(" ") || "";
+    const computedAge = calculateAge(newPatientForm.dob);
 
     const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
-      firstName,
-      lastName,
-      age: parseInt(newPatientForm.age) || 35,
-      sex: newPatientForm.sex,
+      firstName: newPatientForm.firstName.trim(),
+      middleName: newPatientForm.middleName.trim() || undefined,
+      lastName: newPatientForm.lastName.trim(),
+      dob: newPatientForm.dob,
+      age: computedAge,
       phone: newPatientForm.phone || "(617) 555-0192",
-      address: newPatientForm.address || "12 Beacon St, Boston, MA",
-      bloodGroup: "O+",
       dept: patient.aiSpecialty || "General Medicine",
       chiefComplaint: patient.chiefComplaint
     });
@@ -191,10 +212,8 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
       umr: createdPatient.umr,
       opNumber: createdEncounter.opNumber,
       name: createdPatient.name,
-      age: createdPatient.age,
-      sex: createdPatient.sex,
+      age: computedAge,
       phone: createdPatient.phone,
-      address: createdPatient.address,
       isNew: true,
       previousVisits: [],
       status: "Registered",
@@ -541,57 +560,69 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </div>
 
               <form onSubmit={handleRegisterNewPatientSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Full Patient Name *</label>
-                  <Input
-                    value={newPatientForm.name}
-                    onChange={v => setNewPatientForm({ ...newPatientForm, name: v })}
-                    placeholder="e.g. David Miller"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Age *</label>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">First Name *</label>
                     <Input
-                      value={newPatientForm.age}
-                      onChange={v => setNewPatientForm({ ...newPatientForm, age: v })}
-                      placeholder="e.g. 35"
-                      type="number"
+                      value={newPatientForm.firstName}
+                      onChange={v => setNewPatientForm({ ...newPatientForm, firstName: v })}
+                      placeholder="e.g. John"
                       required
                     />
                   </div>
                   <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Gender *</label>
-                    <select
-                      value={newPatientForm.sex}
-                      onChange={e => setNewPatientForm({ ...newPatientForm, sex: e.target.value as any })}
-                      className="w-full border border-[#DDE2EC] rounded text-[13px] p-2 bg-white"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Middle Name</label>
+                    <Input
+                      value={newPatientForm.middleName}
+                      onChange={v => setNewPatientForm({ ...newPatientForm, middleName: v })}
+                      placeholder="e.g. Robert (Optional)"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Last Name *</label>
+                    <Input
+                      value={newPatientForm.lastName}
+                      onChange={v => setNewPatientForm({ ...newPatientForm, lastName: v })}
+                      placeholder="e.g. Smith"
+                      required
+                    />
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Phone Number</label>
-                  <Input
-                    value={newPatientForm.phone}
-                    onChange={v => setNewPatientForm({ ...newPatientForm, phone: v })}
-                    placeholder="e.g. (617) 555-0192"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Residential Address</label>
-                  <Input
-                    value={newPatientForm.address}
-                    onChange={v => setNewPatientForm({ ...newPatientForm, address: v })}
-                    placeholder="e.g. 50 Commonwealth Ave, Boston, MA"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Date of Birth (DOB) *</label>
+                    <input
+                      type="date"
+                      value={newPatientForm.dob}
+                      onChange={e => handleDobChange(e.target.value)}
+                      max={new Date().toISOString().split("T")[0]}
+                      className="w-full border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] bg-white focus:outline-none focus:border-[#1B4FD8]"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Age (Fixed from DOB)</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={newPatientForm.age}
+                        readOnly
+                        disabled
+                        className="w-full border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] bg-[#F1F5F9] text-gray-800 font-bold font-mono cursor-not-allowed"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">yrs</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Phone Number *</label>
+                    <Input
+                      value={newPatientForm.phone}
+                      onChange={v => setNewPatientForm({ ...newPatientForm, phone: v })}
+                      placeholder="e.g. (617) 555-0192"
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-3 border-t border-[#E2E8F0] flex justify-end gap-2">
@@ -606,7 +637,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                     type="submit"
                     className="px-5 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white font-semibold text-[12.5px] rounded-lg shadow-sm"
                   >
-                    Generate UMR &amp; Create Patient
+                    Register OP &amp; Generate UMR
                   </button>
                 </div>
               </form>
