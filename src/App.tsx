@@ -247,11 +247,11 @@ export default function App() {
       {/* ── Left Sidebar (Full Height) ─────────────────────────────── */}
       <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 h-full overflow-hidden ${sidebarCollapsed ? "w-16" : "w-[230px]"}`}>
         {/* Top Logo Section */}
-        <div className="flex items-center justify-center py-3.5 px-3 border-b border-[#1E2D42]/50 flex-shrink-0">
+        <div className="flex items-center justify-center pt-2 pb-1 px-2 border-b border-[#1E2D42]/50 flex-shrink-0">
           <img
             src="/logo.png"
             alt="HospAI Logo"
-            className={`${sidebarCollapsed ? "w-8 h-8" : "w-32 h-12"} object-contain pointer-events-none transition-all`}
+            className={`${sidebarCollapsed ? "w-10 h-10" : "w-40 h-40"} object-contain pointer-events-none transition-all duration-200`}
           />
         </div>
 
