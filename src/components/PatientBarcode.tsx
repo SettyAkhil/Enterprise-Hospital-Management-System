@@ -82,80 +82,55 @@ export default function PatientBarcode({ encounter, onScanComplete, showScannerB
   };
 
   return (
-    <div className="space-y-3">
-      {/* ── CARD PASS BARCODE & MOBILE QR SECTION ──────────────────── */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-gray-900">
+    <div className="space-y-2">
+      {/* Seamless Barcode & QR Code Section for White Card */}
+      <div className="flex items-center justify-between gap-4 bg-[#F8FAFC] border border-[#E2E8F0] p-3 rounded-xl">
         
-        {/* Top Instructions */}
-        <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <span className="text-base">📱</span>
-            <span className="text-[12px] font-bold text-gray-900">
-              Scan with Mobile Phone Camera
-            </span>
+        {/* 1. Linear Barcode */}
+        <div 
+          onClick={handleSimulateScan}
+          className="flex-1 cursor-pointer group hover:bg-white p-2 rounded-lg transition-all border border-transparent hover:border-gray-200"
+          title="Click to simulate hospital barcode scanner"
+        >
+          <div className="text-[10px] font-semibold text-[#64748B] mb-1 flex items-center justify-between">
+            <span>Hospital Barcode:</span>
+            <span className="text-[#1B4FD8] font-bold group-hover:underline text-[9.5px]">Click to Test ➔</span>
           </div>
-          <span className="text-[10px] font-bold text-[#166534] bg-[#DCFCE7] px-2 py-0.5 rounded border border-[#86EFAC]">
-            Point Phone Camera to Read
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          
-          {/* 1. Linear Barcode (Hospital Laser Scanner) */}
-          <div 
-            onClick={handleSimulateScan}
-            className="flex-1 cursor-pointer group hover:bg-[#F8FAFC] p-2 rounded-lg transition-all"
-            title="Click to test on-screen barcode scan"
-          >
-            <div className="text-[10.5px] font-semibold text-[#64748B] mb-1 flex items-center justify-between">
-              <span>Linear Hospital Barcode:</span>
-              <span className="text-[#1B4FD8] font-bold group-hover:underline text-[10px]">Laser Scan ➔</span>
-            </div>
-            <div className="flex items-stretch h-11 w-full justify-center px-1 bg-white border border-gray-100 rounded">
-              {barcodeBars.map((bar, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    width: `${bar.width * 2}px`,
-                    backgroundColor: bar.fill === "#000" ? "#0F172A" : "transparent"
-                  }}
-                  className="h-full flex-shrink-0"
-                />
-              ))}
-            </div>
-            <div className="text-center font-mono font-bold text-[11px] text-gray-800 tracking-[0.2em] mt-1">
-              *{barcodeCode}*
-            </div>
-          </div>
-
-          {/* 2. Mobile Phone Scannable QR Matrix */}
-          <div className="flex flex-col items-center flex-shrink-0 bg-[#F8FAFC] p-2 rounded-xl border border-gray-200 shadow-xs">
-            {qrDataUrl ? (
-              <img
-                src={qrDataUrl}
-                alt="Patient QR Code"
-                className="w-24 h-24 rounded-lg shadow-xs border border-gray-300"
+          <div className="flex items-stretch h-10 w-full justify-center px-1 bg-white border border-gray-200 rounded">
+            {barcodeBars.map((bar, idx) => (
+              <div
+                key={idx}
+                style={{
+                  width: `${bar.width * 2}px`,
+                  backgroundColor: bar.fill === "#000" ? "#0F172A" : "transparent"
+                }}
+                className="h-full flex-shrink-0"
               />
-            ) : (
-              <div className="w-24 h-24 bg-gray-100 animate-pulse rounded-lg flex items-center justify-center text-xs text-gray-400">
-                Loading QR...
-              </div>
-            )}
-            <span className="text-[9.5px] font-bold text-[#1E3A8A] mt-1 uppercase tracking-wider">
-              Mobile Scannable
-            </span>
+            ))}
           </div>
-
+          <div className="text-center font-mono font-bold text-[11px] text-gray-800 tracking-[0.2em] mt-1">
+            *{barcodeCode}*
+          </div>
         </div>
 
-        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-[#64748B]">
-          <span>
-            UMR: <strong className="font-mono text-[#1B4FD8]">{encounter.umr}</strong> · OP: <strong className="font-mono text-[#D97706]">{encounter.opNumber}</strong>
-          </span>
-          <span className="text-[10.5px] text-gray-500">
-            Open camera app &amp; aim at QR code
+        {/* 2. Mobile Scannable QR Matrix */}
+        <div className="flex flex-col items-center flex-shrink-0 bg-white p-2 rounded-xl border border-gray-200 shadow-2xs text-center">
+          {qrDataUrl ? (
+            <img
+              src={qrDataUrl}
+              alt="Patient Mobile QR Code"
+              className="w-20 h-20 rounded shadow-2xs"
+            />
+          ) : (
+            <div className="w-20 h-20 bg-gray-100 animate-pulse rounded flex items-center justify-center text-xs text-gray-400">
+              Loading...
+            </div>
+          )}
+          <span className="text-[9px] font-bold text-[#1B4FD8] mt-1 uppercase tracking-wider">
+            📱 Mobile Scan
           </span>
         </div>
+
       </div>
 
       {showScannerButton && (

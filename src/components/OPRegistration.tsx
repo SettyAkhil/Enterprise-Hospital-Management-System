@@ -526,8 +526,6 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                       <span className="font-mono text-gray-400">Card ID: #{selectedEncounter.id}</span>
                     </div>
                   </div>
-
-                  <PatientBarcode encounter={selectedEncounter} showScannerButton={true} />
                 </div>
               </div>
             )}
