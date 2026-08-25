@@ -479,13 +479,7 @@ export default function App() {
 
           {/* Additional Integrated Modules */}
           {module === "queue" && <QueueManagement onStartConsultation={() => setModule("op_workflow")} />}
-          {module === "op_management" && (
-            <OPManagement
-              onStartWorkflow={() => setModule("op_workflow")}
-              onNavigateQueue={() => setModule("queue")}
-              onNavigateAppointments={() => setModule("appointments")}
-            />
-          )}
+          {module === "op_management" && <OPManagement />}
           {module === "op_registration" && (
             <OPRegistration onProceedToQueue={() => setModule("op_workflow")} />
           )}
