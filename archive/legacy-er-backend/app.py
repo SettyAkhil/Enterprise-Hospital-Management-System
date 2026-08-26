@@ -195,11 +195,13 @@ from modules.op.routes import op_bp
 from modules.symptom_ai.routes import symptom_ai_bp
 from modules.beds.routes import beds_bp
 from modules.er.routes import er_bp
+from modules.patients.routes import patients_bp
 
 app.register_blueprint(op_bp)
 app.register_blueprint(symptom_ai_bp)
 app.register_blueprint(beds_bp)
 app.register_blueprint(er_bp)
+app.register_blueprint(patients_bp)
 
 
 if __name__ == "__main__":

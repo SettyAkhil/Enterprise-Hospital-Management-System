@@ -412,7 +412,7 @@ def init_database():
                 patient_id TEXT,
                 patient_name TEXT NOT NULL,
                 consent_type TEXT NOT NULL DEFAULT 'general'
-                    CHECK(consent_type IN ('general', 'procedure', 'privacy', 'insurance', 'lama')),
+                    CHECK(consent_type IN ('general', 'procedure', 'privacy', 'insurance', 'lama', 'dama', 'admission', 'emergency')),
                 signed_by TEXT NOT NULL,
                 relation_to_patient TEXT,
                 witness_doctor TEXT,
@@ -421,9 +421,18 @@ def init_database():
                 legal_waiver_acknowledged BOOLEAN DEFAULT FALSE,
                 status TEXT NOT NULL DEFAULT 'signed' CHECK(status IN ('signed', 'revoked')),
                 notes TEXT,
-                signed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                signed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                document_filename TEXT,
+                document_mime_type TEXT,
+                document_data BYTEA
             )
         """)
+        # Added after patient_consents already existed in earlier dev databases --
+        # CREATE TABLE IF NOT EXISTS above is a no-op there, so these columns need
+        # an explicit ALTER for anyone who ran init_database() before this change.
+        _ensure_column(cursor, "patient_consents", "document_filename", "TEXT")
+        _ensure_column(cursor, "patient_consents", "document_mime_type", "TEXT")
+        _ensure_column(cursor, "patient_consents", "document_data", "BYTEA")
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS audit_logs (
@@ -729,6 +738,27 @@ def get_patient(patient_id, hospital_id=None):
         return cursor.fetchone()
 
 
+def search_patients(query, hospital_id=None, limit=8):
+    """Backs the "Search Existing" patient lookup used by ER's New Visit
+    modal and its unknown-patient merge flow -- both call GET /api/patients?q=
+    directly. Matches name/last_name/patient_id/phone, case-insensitive."""
+    scoped_hospital_id = hospital_id or resolve_hospital_id()
+    like_query = f"%{query}%"
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM patients
+            WHERE hospital_id = ? AND deleted_at IS NULL
+              AND (name ILIKE ? OR last_name ILIKE ? OR patient_id ILIKE ? OR phone ILIKE ?)
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (scoped_hospital_id, like_query, like_query, like_query, like_query, limit),
+        )
+        return cursor.fetchall()
+
+
 def add_admission(patient_id, notes="", hospital_id=None):
     scoped_hospital_id = hospital_id or resolve_hospital_id()
     with get_connection() as conn:
@@ -888,12 +918,57 @@ def list_patient_consents(patient_id=None, er_visit_id=None, hospital_id=None):
         if er_visit_id:
             clauses.append("er_visit_id = ?")
             params.append(er_visit_id)
+        # Explicit column list, excluding document_data -- the raw file bytes
+        # aren't JSON-serializable and would bloat this list response anyway;
+        # document_filename alone is enough for the frontend to show a "View
+        # document" link (fetched separately via get_consent_document).
         cursor.execute(
-            f"SELECT * FROM patient_consents WHERE {' AND '.join(clauses)} "
-            "ORDER BY signed_at DESC, id DESC",
+            f"""
+            SELECT id, hospital_id, er_visit_id, patient_id, patient_name, consent_type,
+                   signed_by, relation_to_patient, witness_doctor, signed_by_phone,
+                   refusal_reason, legal_waiver_acknowledged, status, notes, signed_at,
+                   document_filename, document_mime_type
+            FROM patient_consents WHERE {' AND '.join(clauses)}
+            ORDER BY signed_at DESC, id DESC
+            """,
             tuple(params),
         )
         return cursor.fetchall()
+
+
+def attach_consent_document(hospital_id, consent_id, filename, mime_type, data):
+    """Stores a photo/scan of a physically-signed paper consent form against
+    an existing consent record -- durable proof for the "receptionist marks
+    it signed on the system, but the actual paper may lag or vice versa"
+    real-world case. One attachment per consent (re-uploading replaces it)."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE patient_consents SET document_filename = ?, document_mime_type = ?, document_data = ? "
+            "WHERE id = ? AND hospital_id = ? RETURNING id",
+            (filename, mime_type, psycopg2.Binary(data), consent_id, hospital_id),
+        )
+        row = cursor.fetchone()
+        conn.commit()
+        return bool(row)
+
+
+def get_consent_document(hospital_id, consent_id):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT document_filename, document_mime_type, document_data "
+            "FROM patient_consents WHERE id = ? AND hospital_id = ?",
+            (consent_id, hospital_id),
+        )
+        row = cursor.fetchone()
+        if not row or not row["document_data"]:
+            return None
+        return {
+            "filename": row["document_filename"],
+            "mime_type": row["document_mime_type"],
+            "data": bytes(row["document_data"]),
+        }
 
 
 # ==================== Invoices ====================
@@ -1287,11 +1362,40 @@ def get_discharge_checklist(hospital_id, bed_id):
         admission_id = allocation["admission_id"]
         patient_id = allocation["patient_id"]
 
+        cursor.execute(
+            "SELECT er_visit_id FROM admissions WHERE id = ? AND hospital_id = ?",
+            (admission_id, hospital_id),
+        )
+        admission_row = cursor.fetchone()
+        er_visit_id = admission_row["er_visit_id"] if admission_row else None
+
+        # Consents aren't tagged with an admission_id, only patient_id/er_visit_id --
+        # scope to the ER visit that led to this admission when there is one (the
+        # closest thing to "this stay"), else fall back to all of the patient's
+        # consents since there's no tighter signal available.
+        if er_visit_id:
+            cursor.execute(
+                "SELECT COUNT(*) AS cnt FROM patient_consents "
+                "WHERE hospital_id = ? AND er_visit_id = ? AND document_data IS NOT NULL",
+                (hospital_id, er_visit_id),
+            )
+        else:
+            cursor.execute(
+                "SELECT COUNT(*) AS cnt FROM patient_consents "
+                "WHERE hospital_id = ? AND patient_id = ? AND document_data IS NOT NULL",
+                (hospital_id, patient_id),
+            )
+        document_count = cursor.fetchone()["cnt"]
+
     room_charges = compute_room_charges(hospital_id, admission_id)
     return {
         "admission_id": admission_id,
         "patient_id": patient_id,
         "billing": {"ok": billing_ok, "pending_invoices": pending_invoices},
+        # Pharmacy/prescriptions tracking is out of scope for this build (see
+        # PrescriptionUploadModal) -- report honestly-zero, not fabricated data.
+        "prescriptions": {"ok": True, "pending_count": 0},
+        "documents": {"count": document_count},
         "room_charges": room_charges,
         "clear": billing_ok,
     }
@@ -1840,9 +1944,11 @@ def list_er_bed_requests(hospital_id, status=None):
             params.append(status)
         cursor.execute(
             f"""
-            SELECT r.*, v.visit_no, v.patient_id, v.unknown_patient_label, v.is_unknown_patient
+            SELECT r.*, v.visit_no, v.patient_id, v.unknown_patient_label, v.is_unknown_patient,
+                   p.name AS patient_name, p.last_name AS patient_last_name
             FROM er_bed_requests r
             JOIN er_visits v ON v.id = r.er_visit_id
+            LEFT JOIN patients p ON p.patient_id = v.patient_id AND p.hospital_id = r.hospital_id
             WHERE {' AND '.join(clauses)}
             ORDER BY r.requested_at ASC
             """,
