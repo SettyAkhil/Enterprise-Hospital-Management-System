@@ -6,7 +6,7 @@ const COMMANDS = [
     { label: "Dashboard", key: "dashboard", icon: "🏠" },
     { label: "Patient Search", key: "patients", icon: "🔍" },
     { label: "Appointments", key: "appointments", icon: "📅" },
-    { label: "Emergency Department", key: "emergency", icon: "🚨" },
+    { label: "Emergency Room", key: "er", icon: "🚨" },
     { label: "Inpatient / Bed Board", key: "inpatient", icon: "🛏" },
     { label: "Laboratory", key: "laboratory", icon: "🧪" },
     { label: "Pharmacy", key: "pharmacy", icon: "💊" },
@@ -17,7 +17,7 @@ const COMMANDS = [
     { label: "Register New Patient", key: "register", icon: "👤" },
     { label: "New Appointment", key: "newappt", icon: "➕" },
     { label: "New Order — John Smith", key: "order", icon: "📋" },
-    { label: "Open ED Board", key: "emergency", icon: "🚑" },
+    { label: "Open ED Board", key: "er", icon: "🚑" },
     { label: "Assign Bed", key: "inpatient", icon: "🏥" },
   ]},
   { group: "Recent Patients", items: [

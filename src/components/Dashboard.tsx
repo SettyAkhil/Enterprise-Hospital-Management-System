@@ -64,7 +64,7 @@ export default function Dashboard({ navigate }: { navigate: (m: string, s?: stri
             </div>
           </div>
           <button
-            onClick={() => navigate("emergency")}
+            onClick={() => navigate("er")}
             className="text-[12.5px] font-bold text-[#D97706] hover:underline cursor-pointer">
             View ED
           </button>
@@ -141,7 +141,7 @@ export default function Dashboard({ navigate }: { navigate: (m: string, s?: stri
             </div>
             <div className="text-[11px] text-[#94A3B8] mt-0.5">3 ESI-1 or ESI-2</div>
           </div>
-          <button onClick={() => navigate("emergency")} className="text-[11.5px] font-semibold text-[#2563EB] hover:underline mt-3 text-left">
+          <button onClick={() => navigate("er")} className="text-[11.5px] font-semibold text-[#2563EB] hover:underline mt-3 text-left">
             View ED →
           </button>
         </div>
