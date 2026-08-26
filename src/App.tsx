@@ -4,7 +4,6 @@ import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
 import PatientSearch from "./components/PatientSearch";
 import PatientChart from "./components/PatientChart";
-import Emergency from "./components/Emergency";
 import Laboratory from "./components/Laboratory";
 import Pharmacy from "./components/Pharmacy";
 import Billing from "./components/Billing";
@@ -39,9 +38,12 @@ import Admissions from "./components/Admissions";
 import Readmission from "./components/Readmission";
 import PaymentCollection from "./components/PaymentCollection";
 import RevenueReports from "./components/RevenueReports";
+import ErPage from "./pages/ErPage";
+import BedManagementPage from "./pages/BedManagementPage";
+import type { Notice } from "./types";
 
 type Module =
-  | "dashboard" | "patients" | "appointments" | "emergency"
+  | "dashboard" | "patients" | "appointments"
   | "clinical" | "inpatient" | "nursing" | "laboratory"
   | "radiology" | "pharmacy" | "surgery" | "billing"
   | "icu" | "discharge" | "triage" | "insurance" | "analytics"
@@ -52,7 +54,8 @@ type Module =
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
   | "hrms" | "employees" | "patient_exp"
-  | "intelligence" | "ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering";
+  | "intelligence" | "ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering"
+  | "er" | "beds";
 
 interface NavItem {
   key: Module;
@@ -77,8 +80,9 @@ const NAV: NavItem[] = [
     ]
   },
   { key: "clinical", label: "Clinical", Icon: Icon.Clinical },
-  { key: "emergency", label: "Emergency", Icon: Icon.Emergency, badge: 8 },
+  { key: "er", label: "Emergency Room", Icon: Icon.Emergency },
   { key: "inpatient", label: "Inpatient", Icon: Icon.Bed },
+  { key: "beds", label: "Bed Management", Icon: Icon.Bed },
   { key: "nursing", label: "Nursing", Icon: Icon.Nursing },
   { key: "laboratory", label: "Laboratory", Icon: Icon.Lab, badge: 3 },
   { key: "radiology", label: "Radiology", Icon: Icon.Radiology },
@@ -214,6 +218,13 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeoutId = window.setTimeout(() => setNotice(null), 4200);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -434,12 +445,19 @@ export default function App() {
               module === "bulk_ai" ? "Bulk Patient AI" :
               module === "nl_filtering" ? "NL Patient Filtering" :
               module === "intelligence" ? "Hosp AI" :
+              module === "er" ? "Emergency Room" :
+              module === "beds" ? "Bed Management" :
               module === "reports" ? "Reports" :
               module
             }</span>
           </div>
 
           {/* Module Content */}
+          {notice && (
+            <div className={`notice ${notice.type} mx-4 mt-3`} role="status">
+              {notice.message}
+            </div>
+          )}
           {module === "dashboard" && <Dashboard navigate={navigate} />}
           {module === "patients" && (
             <PatientSearch
@@ -462,6 +480,7 @@ export default function App() {
           {module === "appointments" && <Appointments onSelect={() => setModule("op_workflow")} />}
           {module === "emergency" && <Emergency onSelect={() => setModule("chart")} />}
           {module === "inpatient" && <Inpatient />}
+          {module === "beds" && <BedManagementPage setNotice={setNotice} />}
           {module === "nursing" && <NursingDashboard />}
           {module === "laboratory" && <Laboratory />}
           {module === "pharmacy" && <Pharmacy />}
