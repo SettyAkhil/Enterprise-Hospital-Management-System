@@ -61,12 +61,20 @@ type ErBedRequest = {
   er_visit_id: number;
   visit_no: string;
   patient_id: string | null;
+  patient_name: string | null;
+  patient_last_name: string | null;
   is_unknown_patient: boolean;
   unknown_patient_label: string | null;
   requested_level_of_care: string;
   requested_specialty: string | null;
   requested_at: string;
 };
+
+function erRequestPatientLabel(req: ErBedRequest): string {
+  if (req.is_unknown_patient) return req.unknown_patient_label || "Unknown patient";
+  const name = `${req.patient_name || ""} ${req.patient_last_name || ""}`.trim();
+  return name || req.patient_id || "Patient";
+}
 
 type RoomChargeSegment = {
   ward: string;
@@ -528,14 +536,15 @@ export default function BedManagementPage({ setNotice }: Props) {
     }
   };
 
-  const openDischarge = async () => {
-    if (!selectedBed) return;
+  const openDischarge = async (bed?: Bed) => {
+    const targetBed = bed ?? selectedBed;
+    if (!targetBed) return;
     setDischargeOpen(true);
     setChecklistLoading(true);
     setDischargeReason("");
     try {
       const data = await apiFetch<DischargeChecklist>(
-        `/api/beds/${selectedBed.id}/discharge-checklist`,
+        `/api/beds/${targetBed.id}/discharge-checklist`,
       );
       setChecklist(data);
       setRoomChargeSegments(data.room_charges?.segments || []);
@@ -742,11 +751,7 @@ export default function BedManagementPage({ setNotice }: Props) {
               {erRequests.map((req) => (
                 <TableRow key={req.id}>
                   <TableCell>{req.visit_no}</TableCell>
-                  <TableCell>
-                    {req.is_unknown_patient
-                      ? req.unknown_patient_label || "Unknown patient"
-                      : req.patient_id}
-                  </TableCell>
+                  <TableCell>{erRequestPatientLabel(req)}</TableCell>
                   <TableCell style={{ textTransform: "uppercase" }}>
                     {req.requested_level_of_care}
                   </TableCell>
@@ -978,7 +983,7 @@ export default function BedManagementPage({ setNotice }: Props) {
                                   className="bed-card-action-btn bed-card-action-btn-danger"
                                   onClick={() => {
                                     openBed(bed);
-                                    void openDischarge();
+                                    void openDischarge(bed);
                                   }}
                                 >
                                   Discharge
@@ -1596,7 +1601,7 @@ export default function BedManagementPage({ setNotice }: Props) {
         title="Allocate Bed"
         description={
           allocatingRequest
-            ? `ER Admission: ${allocatingRequest.visit_no} — ${allocatingRequest.patient_id || allocatingRequest.unknown_patient_label || "Patient"}`
+            ? `ER Admission: ${allocatingRequest.visit_no} — ${erRequestPatientLabel(allocatingRequest)}`
             : undefined
         }
       >
@@ -1822,7 +1827,7 @@ function BedRequestLamaModal({
   onSaved: () => void;
   setNotice: (notice: Notice | null) => void;
 }) {
-  const patientLabel = request.patient_id || request.unknown_patient_label || "Patient";
+  const patientLabel = erRequestPatientLabel(request);
   const [refusalReason, setRefusalReason] = useState("Going to another hospital / facility of choice");
   const [signedBy, setSignedBy] = useState(patientLabel);
   const [relation, setRelation] = useState("Self (Patient)");

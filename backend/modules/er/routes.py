@@ -1,5 +1,6 @@
 import re
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, g, jsonify, request, send_file
+import io
 
 from app import (
     require_permissions,
@@ -31,7 +32,20 @@ from utils.database import (
     allocate_er_bed_request,
     create_patient_consent,
     list_patient_consents,
+    attach_consent_document,
+    get_consent_document,
 )
+
+# Real-world consent capture is often paper-first: a receptionist may tick
+# "signed" in the system before (or after) the physical form is actually
+# signed. This lets staff attach a photo/scan of that signed paper as durable
+# proof against the consent record already created above -- not a general
+# document/EMR library (out of scope for this build), just proof tied to one
+# consent. Kept small: common photo formats + PDF, 8MB cap.
+CONSENT_DOCUMENT_ALLOWED_MIME_TYPES = {
+    "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf",
+}
+CONSENT_DOCUMENT_MAX_BYTES = 8 * 1024 * 1024
 
 er_bp = Blueprint("er", __name__)
 
@@ -566,3 +580,48 @@ def er_bed_request_lama_record(request_id):
     visit_id = req["er_visit_id"]
     # Delegate to er_visit_lama_record logic
     return er_visit_lama_record(visit_id)
+
+
+@er_bp.post("/api/er/consents/<int:consent_id>/document")
+@require_permissions("er.disposition.write")
+def er_consent_document_upload(consent_id):
+    """Attaches a photo/scan of the physically-signed paper form to an
+    already-created consent record -- durable proof, separate from the
+    typed signer/witness/checkbox fields captured at consent creation."""
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    mime_type = (uploaded.mimetype or "").lower()
+    if mime_type not in CONSENT_DOCUMENT_ALLOWED_MIME_TYPES:
+        return (
+            jsonify({"error": "Unsupported file type. Upload a JPG, PNG, WEBP, HEIC, or PDF."}),
+            400,
+        )
+
+    data = uploaded.read()
+    if len(data) > CONSENT_DOCUMENT_MAX_BYTES:
+        return jsonify({"error": "File is too large (8MB limit)."}), 400
+
+    hospital_id = current_hospital_id()
+    attached = attach_consent_document(hospital_id, consent_id, uploaded.filename, mime_type, data)
+    if not attached:
+        return jsonify({"error": "Consent record not found"}), 404
+
+    log_audit_event("attach_document", "patient_consents", str(consent_id), {"filename": uploaded.filename})
+    return jsonify({"success": True, "filename": uploaded.filename}), 201
+
+
+@er_bp.get("/api/er/consents/<int:consent_id>/document")
+@require_permissions("er.read")
+def er_consent_document_download(consent_id):
+    hospital_id = current_hospital_id()
+    doc = get_consent_document(hospital_id, consent_id)
+    if not doc:
+        return jsonify({"error": "No document attached to this consent"}), 404
+    return send_file(
+        io.BytesIO(doc["data"]),
+        mimetype=doc["mime_type"] or "application/octet-stream",
+        as_attachment=False,
+        download_name=doc["filename"] or f"consent-{consent_id}",
+    )
