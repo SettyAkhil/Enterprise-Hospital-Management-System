@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Icon } from "./icons";
-import { Btn, Input } from "./shared";
-import { apiFetch, reportError } from "../lib/api";
-import type { Notice } from "../types";
+import { StatusBadge, Btn, Input } from "./shared";
+import { db, DBPatient, DBOPEncounter } from "../services/db";
 
+// Accurate age calculation from Date of Birth
 const calculateAge = (dobString: string): number => {
   if (!dobString) return 0;
   const birthDate = new Date(dobString);
@@ -11,208 +11,215 @@ const calculateAge = (dobString: string): number => {
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
   return Math.max(0, age);
 };
 
-type PatientMatch = {
-  patient_id: string;
-  full_name: string;
-  phone: string;
-  gender: string;
-  age: number | null;
-  dob: string | null;
-  total_op_visits: number;
-};
-
-type OPVisit = {
-  id: number;
-  patient_id: string;
-  patient_name: string;
-  patient_age: number | null;
-  patient_gender: string | null;
-  patient_phone: string | null;
-  department: string | null;
-  token_no: number | null;
-  appointment_kind: string;
-  status: string;
-  created_at: string;
-};
-
-export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?: () => void }) {
-  const [notice, setNotice] = useState<Notice | null>(null);
+export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?: (patient: DBOPEncounter) => void }) {
   const [activeTab, setActiveTab] = useState<"new" | "revisit" | "records">("new");
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<PatientMatch[]>([]);
+  
+  // Database live state
+  const [patients, setPatients] = useState<DBPatient[]>([]);
+  const [encounters, setEncounters] = useState<DBOPEncounter[]>([]);
+  const [selectedEncounter, setSelectedEncounter] = useState<DBOPEncounter | null>(null);
 
-  const [visits, setVisits] = useState<OPVisit[]>([]);
-  const [selectedVisit, setSelectedVisit] = useState<OPVisit | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
+  // Generation Audit state
   const [generationAlert, setGenerationAlert] = useState<{
     type: "new" | "revisit";
-    patientId: string;
-    tokenNo: number;
+    umr: string;
+    opNumber: string;
     name: string;
     age: number;
     phone: string;
   } | null>(null);
 
+  // Sync with DB
+  const refreshFromDb = () => {
+    const allPatients = db.getPatients();
+    const allEncounters = db.getEncounters();
+    setPatients(allPatients);
+    setEncounters(allEncounters);
+    if (!selectedEncounter && allEncounters.length > 0) {
+      setSelectedEncounter(allEncounters[0]);
+    }
+  };
+
+  useEffect(() => {
+    refreshFromDb();
+    const unsubscribe = db.subscribe(refreshFromDb);
+    return () => unsubscribe();
+  }, []);
+
+  // Form State: First Name, Middle Name (optional), Last Name, DOB, Age (locked), Gender, Phone
   const [formData, setFormData] = useState({
     firstName: "",
     middleName: "",
     lastName: "",
-    dob: "",
-    age: 0,
+    dob: "1996-05-20",
+    age: calculateAge("1996-05-20"),
     sex: "" as "Male" | "Female" | "Other" | "",
     phone: "",
   });
-  const [matchingExistingPatient, setMatchingExistingPatient] = useState<PatientMatch | null>(null);
 
   const cardPreviewRef = React.useRef<HTMLDivElement>(null);
 
-  const loadVisits = () => {
-    apiFetch<{ appointments: OPVisit[] }>("/api/appointments?visit_type=OP")
-      .then((data) => {
-        const list = data.appointments || [];
-        setVisits(list);
-        setSelectedVisit((prev) => prev || list[0] || null);
-      })
-      .catch((error) => reportError(setNotice, error, "Unable to load OP visits."));
+  // Handle DOB Change -> Dynamically updates and fixes Age
+  const handleDobChange = (newDob: string) => {
+    const computedAge = calculateAge(newDob);
+    setFormData(prev => ({
+      ...prev,
+      dob: newDob,
+      age: computedAge
+    }));
   };
 
-  useEffect(() => { loadVisits(); }, []);
-
-  // Live duplicate-check as the new-patient form name fills in
-  useEffect(() => {
-    const fullName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(" ").trim();
-    if (fullName.length < 3 && formData.phone.trim().length < 7) {
-      setMatchingExistingPatient(null);
-      return;
-    }
-    const term = fullName.length >= 3 ? fullName : formData.phone.trim();
-    const handle = setTimeout(() => {
-      apiFetch<{ matches: PatientMatch[] }>(`/api/op/patients/check-match?q=${encodeURIComponent(term)}`)
-        .then((data) => {
-          const exact = (data.matches || []).find(
-            (m) => m.full_name.toLowerCase() === fullName.toLowerCase() || (formData.phone.trim().length >= 7 && m.phone === formData.phone.trim()),
-          );
-          setMatchingExistingPatient(exact || null);
-        })
-        .catch(() => setMatchingExistingPatient(null));
-    }, 350);
-    return () => clearTimeout(handle);
-  }, [formData.firstName, formData.middleName, formData.lastName, formData.phone]);
-
-  // Revisit-tab search
-  useEffect(() => {
-    if (activeTab !== "revisit") return;
-    const handle = setTimeout(() => {
-      apiFetch<{ matches: PatientMatch[] }>(`/api/op/patients/check-match?q=${encodeURIComponent(searchQuery)}`)
-        .then((data) => setSearchResults(data.matches || []))
-        .catch((error) => reportError(setNotice, error, "Search failed."));
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [searchQuery, activeTab]);
-
-  const resetForm = () => {
-    setFormData({ firstName: "", middleName: "", lastName: "", dob: "", age: 0, sex: "", phone: "" });
-    setMatchingExistingPatient(null);
-  };
-
-  const showGenerated = (type: "new" | "revisit", patientId: string, tokenNo: number, name: string, age: number, phone: string) => {
-    setGenerationAlert({ type, patientId, tokenNo, name, age, phone });
-    setActiveTab("records");
-    loadVisits();
-    setTimeout(() => cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
-  };
-
-  const handleCreateRevisitEncounter = async (p: PatientMatch) => {
-    setSubmitting(true);
-    try {
-      const res = await apiFetch<{ appointment_id: number; op_number: number; patient_id: string }>("/api/op/visits", {
-        method: "POST",
-        body: JSON.stringify({ patient_id: p.patient_id, appointment: {} }),
-      });
-      showGenerated("revisit", p.patient_id, res.op_number, p.full_name, p.age || 0, p.phone);
-    } catch (error) {
-      reportError(setNotice, error as { status?: number; message?: string }, "Unable to create revisit encounter.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleRegisterNewPatient = async (e: React.FormEvent) => {
+  // 1. Handle New Patient Registration -> Generates UMR -> then generates Global OP Number
+  const handleRegisterNewPatient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.dob) return;
 
     if (matchingExistingPatient) {
-      await handleCreateRevisitEncounter(matchingExistingPatient);
-      resetForm();
+      handleCreateRevisitEncounter(matchingExistingPatient);
+      // Reset Form
+      setFormData({
+        firstName: "",
+        middleName: "",
+        lastName: "",
+        dob: "1996-05-20",
+        age: calculateAge("1996-05-20"),
+        sex: "",
+        phone: "",
+      });
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const fullName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(" ").trim();
-      const res = await apiFetch<{ appointment_id: number; op_number: number; patient_id: string }>("/api/op/visits", {
-        method: "POST",
-        body: JSON.stringify({
-          patient: {
-            name: formData.firstName.trim(),
-            middle_name: formData.middleName.trim(),
-            last_name: formData.lastName.trim(),
-            dob: formData.dob,
-            age: formData.age,
-            gender: formData.sex || "Other",
-            phone: formData.phone.trim(),
-          },
-          appointment: {},
-        }),
-      });
-      showGenerated("new", res.patient_id, res.op_number, fullName, formData.age, formData.phone.trim());
-      resetForm();
-    } catch (error) {
-      reportError(setNotice, error as { status?: number; message?: string }, "Unable to register patient.");
-    } finally {
-      setSubmitting(false);
-    }
+    const computedAge = calculateAge(formData.dob);
+
+    const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
+      firstName: formData.firstName.trim(),
+      middleName: formData.middleName.trim() || undefined,
+      lastName: formData.lastName.trim(),
+      dob: formData.dob,
+      age: computedAge,
+      sex: (formData.sex as "Male" | "Female" | "Other") || "Male",
+      phone: formData.phone.trim() || "(617) 555-0199"
+    });
+
+    setSelectedEncounter(createdEncounter);
+    setGenerationAlert({
+      type: "new",
+      umr: createdPatient.umr,
+      opNumber: createdEncounter.opNumber,
+      name: createdPatient.name,
+      age: computedAge,
+      phone: createdPatient.phone
+    });
+    setActiveTab("records");
+    setTimeout(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+
+    // Reset Form
+    setFormData({
+      firstName: "",
+      middleName: "",
+      lastName: "",
+      dob: "1996-05-20",
+      age: calculateAge("1996-05-20"),
+      sex: "",
+      phone: "",
+    });
   };
 
-  const handleViewVisit = (visit: OPVisit) => {
-    setSelectedVisit(visit);
+  // 2. Handle Existing Patient Revisit -> Retains Permanent UMR -> generates new OP Number
+  const handleCreateRevisitEncounter = (p: DBPatient) => {
+    const newEncounter = db.createRevisitEncounter(p.umr);
+
+    setSelectedEncounter(newEncounter);
+    setGenerationAlert({
+      type: "revisit",
+      umr: p.umr,
+      opNumber: newEncounter.opNumber,
+      name: p.name,
+      age: p.age,
+      phone: p.phone
+    });
     setActiveTab("records");
-    setTimeout(() => cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+    setTimeout(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
+
+  const handleViewOpBook = (encounter: DBOPEncounter) => {
+    setSelectedEncounter(encounter);
+    setActiveTab("records");
+    setTimeout(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
+
+  // Duplicate / Existing Patient Check:
+  const enteredFullName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(" ").trim().toLowerCase();
+  const matchingExistingPatient = enteredFullName.length >= 3 
+    ? db.getPatients().find(p => p.name.toLowerCase() === enteredFullName || (formData.phone.trim().length >= 7 && p.phone === formData.phone.trim()))
+    : undefined;
+
+  // Filtered patients for revisit search
+  const filteredPatients = db.searchPatients(searchQuery);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F0F2F5] overflow-hidden">
+      {/* Top Header */}
+      {/* Top Header */}
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3.5 flex items-center justify-between flex-shrink-0">
-        <h1 className="text-base font-semibold text-gray-900">OP Management — Registration Desk</h1>
-        <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-[#DDE2EC]">
-          <button onClick={() => setActiveTab("new")} className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all ${activeTab === "new" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"}`}>
-            + New OP Registration
-          </button>
-          <button onClick={() => setActiveTab("revisit")} className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all ${activeTab === "revisit" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"}`}>
-            🔄 Existing Patient Revisit
-          </button>
-          <button onClick={() => setActiveTab("records")} className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all ${activeTab === "records" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"}`}>
-            📋 OP Book &amp; Log ({visits.length})
-          </button>
+        <div>
+          <h1 className="text-base font-semibold text-gray-900">OP Management — Registration Desk</h1>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-[#DDE2EC]">
+            <button
+              onClick={() => setActiveTab("new")}
+              className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all ${
+                activeTab === "new" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              + New OP Registration
+            </button>
+            <button
+              onClick={() => setActiveTab("revisit")}
+              className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all ${
+                activeTab === "revisit" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              🔄 Existing Patient Revisit
+            </button>
+            <button
+              onClick={() => setActiveTab("records")}
+              className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all ${
+                activeTab === "records" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              📋 OP Book &amp; Log ({encounters.length})
+            </button>
+          </div>
         </div>
       </div>
 
-      {notice && (
-        <div className={`mx-6 mt-3 p-3 rounded-lg text-[12px] font-medium flex items-center justify-between flex-shrink-0 ${notice.type === "error" ? "bg-red-50 text-red-800 border border-red-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}>
-          <span>{notice.message}</span>
-          <button className="underline" onClick={() => setNotice(null)}>Dismiss</button>
-        </div>
-      )}
-
+      {/* Main Workspace */}
       <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-6">
 
+        {/* ── GENERATION AUDIT BANNER ─────────────────────────────────── */}
         {generationAlert && (
-          <div className={`p-4 rounded-xl border flex items-center justify-between shadow-xs ${generationAlert.type === "new" ? "bg-[#F0FDF4] border-[#86EFAC] text-[#166534]" : "bg-[#EFF6FF] border-[#BFDBFE] text-[#1E3A8A]"}`}>
+          <div className={`p-4 rounded-xl border flex items-center justify-between shadow-xs animate-in fade-in ${
+            generationAlert.type === "new"
+              ? "bg-[#F0FDF4] border-[#86EFAC] text-[#166534]"
+              : "bg-[#EFF6FF] border-[#BFDBFE] text-[#1E3A8A]"
+          }`}>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold">
@@ -223,112 +230,194 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                 </span>
               </div>
               <div className="text-[12px] flex items-center gap-3">
-                <span>Patient ID: <strong className="font-mono text-[#1B4FD8]">{generationAlert.patientId}</strong></span>
+                <span>Permanent UMR: <strong className="font-mono text-[#1B4FD8]">{generationAlert.umr}</strong></span>
                 <span>·</span>
-                <span>Token: <strong className="font-mono text-[#D97706]">#{generationAlert.tokenNo}</strong></span>
+                <span>Current Visit OP Number: <strong className="font-mono text-[#D97706]">{generationAlert.opNumber}</strong></span>
                 <span>·</span>
-                <span>Phone: <strong>{generationAlert.phone || "—"}</strong></span>
+                <span>Phone: <strong>{generationAlert.phone}</strong></span>
               </div>
             </div>
-            <button onClick={() => setGenerationAlert(null)} className="text-xs px-2.5 py-1 rounded bg-white/80 hover:bg-white border font-semibold">Dismiss</button>
+            <button
+              onClick={() => setGenerationAlert(null)}
+              className="text-xs px-2.5 py-1 rounded bg-white/80 hover:bg-white border font-semibold"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
+        {/* ── TAB 1: NEW PATIENT REGISTRATION FORM (EXACT REQUESTED FIELDS) ── */}
         {activeTab === "new" && (
           <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
-              <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">1</span>
-                OP Patient Registration Form
-              </h2>
+              <div>
+                <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">1</span>
+                  OP Patient Registration Form
+                </h2>
+              </div>
             </div>
 
-            <form onSubmit={(e) => void handleRegisterNewPatient(e)} className="space-y-5">
+            <form onSubmit={handleRegisterNewPatient} className="space-y-5">
+              
+              {/* Name Fields: First Name, Middle Name (optional), Last Name */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">First Name <span className="text-red-500">*</span></label>
-                  <Input value={formData.firstName} onChange={v => setFormData({ ...formData, firstName: v })} placeholder="e.g. John" />
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    First Name <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={formData.firstName}
+                    onChange={v => setFormData({ ...formData, firstName: v })}
+                    placeholder="e.g. John"
+                    required
+                  />
                 </div>
                 <div>
-                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">Middle Name <span className="text-[11px] text-[#64748B] font-normal">(Optional)</span></label>
-                  <Input value={formData.middleName} onChange={v => setFormData({ ...formData, middleName: v })} placeholder="e.g. Robert" />
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    Middle Name <span className="text-[11px] text-[#64748B] font-normal">(Optional)</span>
+                  </label>
+                  <Input
+                    value={formData.middleName}
+                    onChange={v => setFormData({ ...formData, middleName: v })}
+                    placeholder="e.g. Robert"
+                  />
                 </div>
                 <div>
-                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">Last Name <span className="text-red-500">*</span></label>
-                  <Input value={formData.lastName} onChange={v => setFormData({ ...formData, lastName: v })} placeholder="e.g. Smith" />
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    Last Name <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={formData.lastName}
+                    onChange={v => setFormData({ ...formData, lastName: v })}
+                    placeholder="e.g. Smith"
+                    required
+                  />
                 </div>
               </div>
 
+              {/* DOB, Age (Locked), Gender, Phone Number */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">Date of Birth (DOB) <span className="text-red-500">*</span></label>
-                  <input type="date" value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value, age: calculateAge(e.target.value) })} max={new Date().toISOString().split("T")[0]}
-                    className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900" required />
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    Date of Birth (DOB) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.dob}
+                    onChange={e => handleDobChange(e.target.value)}
+                    max={new Date().toISOString().split("T")[0]}
+                    className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900"
+                    required
+                  />
                 </div>
+
                 <div>
-                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">Age (Years)</label>
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    Age (Years)
+                  </label>
                   <div className="relative">
-                    <input type="number" value={formData.age} readOnly disabled className="w-full border border-[#CBD5E1] rounded-lg px-3 py-2 text-[13px] bg-[#F1F5F9] text-gray-800 font-bold font-mono cursor-not-allowed select-none" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-semibold">yrs</span>
+                    <input
+                      type="number"
+                      value={formData.age}
+                      readOnly
+                      disabled
+                      className="w-full border border-[#CBD5E1] rounded-lg px-3 py-2 text-[13px] bg-[#F1F5F9] text-gray-800 font-bold font-mono cursor-not-allowed select-none"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-semibold">
+                      yrs
+                    </span>
                   </div>
                 </div>
+
                 <div>
-                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">Gender / Sex <span className="text-red-500">*</span></label>
-                  <select value={formData.sex} onChange={e => setFormData({ ...formData, sex: e.target.value as "Male" | "Female" | "Other" })}
-                    className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900" required>
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    Gender / Sex <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.sex}
+                    onChange={e => setFormData({ ...formData, sex: e.target.value as "Male" | "Female" | "Other" })}
+                    className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900"
+                    required
+                  >
                     <option value="" disabled>Select</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
+
                 <div>
-                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">Phone Number <span className="text-red-500">*</span></label>
-                  <Input value={formData.phone} onChange={v => setFormData({ ...formData, phone: v })} placeholder="e.g. (617) 555-0192" />
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={formData.phone}
+                    onChange={v => setFormData({ ...formData, phone: v })}
+                    placeholder="e.g. (617) 555-0192"
+                    required
+                  />
                 </div>
               </div>
 
+              {/* Patient Identity State Warning / Confirmation */}
               {matchingExistingPatient ? (
-                <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 shadow-sm">
+                <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 shadow-sm animate-in fade-in">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-base">⚠️</span>
                       <span className="text-[13px] font-bold text-amber-950">Patient Already Exists in Database!</span>
-                      <span className="text-[11px] font-mono font-bold bg-amber-200/80 px-2 py-0.5 rounded border border-amber-400 text-amber-900">{matchingExistingPatient.patient_id}</span>
+                      <span className="text-[11px] font-mono font-bold bg-amber-200/80 px-2 py-0.5 rounded border border-amber-400 text-amber-900">
+                        {matchingExistingPatient.umr}
+                      </span>
                     </div>
                     <div className="text-[12px] text-amber-900">
-                      Active record found for <strong>{matchingExistingPatient.full_name}</strong> ({matchingExistingPatient.age ?? "—"} yrs · {matchingExistingPatient.gender} · Phone: {matchingExistingPatient.phone || "—"}). {matchingExistingPatient.total_op_visits} past OP visits on record.
+                      Active record found for <strong>{matchingExistingPatient.name}</strong> ({matchingExistingPatient.age} yrs · {matchingExistingPatient.sex} · Phone: {matchingExistingPatient.phone}).
                     </div>
                     <div className="text-[11.5px] text-amber-800">
-                      To preserve lifetime medical history under <strong>{matchingExistingPatient.patient_id}</strong>, generate a <strong>Revisit visit</strong>.
+                      To preserve lifetime medical history under <strong>{matchingExistingPatient.umr}</strong>, generate a <strong>Revisit OP Number</strong>.
                     </div>
                   </div>
-                  <button type="button" onClick={() => void handleCreateRevisitEncounter(matchingExistingPatient)} disabled={submitting}
-                    className="px-4 py-2.5 bg-[#D97706] hover:bg-[#B45309] text-white text-[12.5px] font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50">
-                    <span>🔄</span> Generate Revisit ({matchingExistingPatient.patient_id})
+                  <button
+                    type="button"
+                    onClick={() => handleCreateRevisitEncounter(matchingExistingPatient)}
+                    className="px-4 py-2.5 bg-[#D97706] hover:bg-[#B45309] text-white text-[12.5px] font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    <span>🔄</span> Generate Revisit ({matchingExistingPatient.umr})
                   </button>
                 </div>
               ) : (
                 formData.firstName.trim().length >= 2 && formData.lastName.trim().length >= 2 && (
-                  <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between text-emerald-900 text-[12px]">
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between text-emerald-900 text-[12px] animate-in fade-in">
                     <div className="flex items-center gap-2">
                       <span className="text-emerald-600 font-bold text-sm">✓</span>
-                      <span><strong>New Patient:</strong> No existing record found for <strong>{formData.firstName} {formData.lastName}</strong>. System will issue a new permanent patient ID &amp; visit token.</span>
+                      <span><strong>New Patient:</strong> No existing record found for <strong>{formData.firstName} {formData.lastName}</strong>. System will issue a new permanent UMR &amp; visit OP Number.</span>
                     </div>
-                    <span className="text-[10.5px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap">✨ New Patient</span>
+                    <span className="text-[10.5px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap">
+                      ✨ New Patient
+                    </span>
                   </div>
                 )
               )}
 
+              {/* Submit Action (Centered) */}
               <div className="pt-4 border-t border-[#E2E8F0] flex justify-center items-center">
-                <button type="submit" disabled={submitting}
-                  className={`px-8 py-3 font-bold text-[14px] rounded-lg shadow-md transition-all flex items-center gap-2 disabled:opacity-50 ${matchingExistingPatient ? "bg-[#D97706] hover:bg-[#B45309] text-white" : "bg-[#16A34A] hover:bg-[#15803D] text-white"}`}>
-                  {submitting ? (
-                    <>Saving…</>
-                  ) : matchingExistingPatient ? (
-                    <><span>🔄</span> Patient Exists — Generate Revisit Encounter ({matchingExistingPatient.patient_id})</>
+                <button
+                  type="submit"
+                  className={`px-8 py-3 font-bold text-[14px] rounded-lg shadow-md transition-all flex items-center gap-2 ${
+                    matchingExistingPatient
+                      ? "bg-[#D97706] hover:bg-[#B45309] text-white"
+                      : "bg-[#16A34A] hover:bg-[#15803D] text-white"
+                  }`}
+                >
+                  {matchingExistingPatient ? (
+                    <>
+                      <span>🔄</span> Patient Exists — Generate Revisit Encounter ({matchingExistingPatient.umr})
+                    </>
                   ) : (
-                    <><span>✓</span> Register OP &amp; Generate Patient ID</>
+                    <>
+                      <span>✓</span> Register OP &amp; Generate UMR / OP Number
+                    </>
                   )}
                 </button>
               </div>
@@ -336,74 +425,134 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
           </div>
         )}
 
+        {/* ── TAB 2: EXISTING PATIENT REVISIT WORKFLOW ───────────────── */}
         {activeTab === "revisit" && (
           <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
-            <div className="border-b border-[#E2E8F0] pb-4">
-              <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">2</span>
-                Existing Patient Revisit (Keep Old Patient ID ➔ Generate New Token)
-              </h2>
-              <p className="text-[12px] text-[#64748B] mt-0.5">
-                Search the live database by name, patient ID, or phone. The permanent <strong>patient ID stays unchanged</strong>, and a <strong>new visit token</strong> is generated for today.
-              </p>
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
+              <div>
+                <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">2</span>
+                  Existing Patient Revisit (Keep Old UMR ➔ Generate New OP Number)
+                </h2>
+                <p className="text-[12px] text-[#64748B] mt-0.5">
+                  Search patient in database. The permanent <strong>UMR remains unchanged</strong>, and a <strong>new OP number</strong> is generated for today's visit.
+                </p>
+              </div>
+              <span className="text-[11px] font-mono text-[#1E40AF] bg-[#DBEAFE] px-2.5 py-1 rounded font-bold border border-[#BFDBFE]">
+                Permanent UMR Retained + New OP Generated
+              </span>
             </div>
 
-            <div className="max-w-2xl">
-              <Input value={searchQuery} onChange={setSearchQuery} placeholder="Search by Patient Name, ID (e.g. PAT-100001), or Phone..." icon={<Icon.Search />} />
+            {/* Search & Barcode Scan Bar */}
+            <div className="flex gap-3 max-w-2xl">
+              <div className="flex-1">
+                <Input
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search database by Patient Name, UMR (e.g. UMR10001), or Phone..."
+                  icon={<Icon.Search />}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const firstPatient = patients[0];
+                  if (firstPatient) {
+                    setSearchQuery(firstPatient.umr);
+                  }
+                }}
+                className="px-4 py-2 bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-[#1D4ED8] text-[12.5px] font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs whitespace-nowrap"
+              >
+                <span>📷</span> Scan Card Barcode
+              </button>
             </div>
 
+            {/* Existing Database Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {searchResults.length === 0 && searchQuery.trim().length >= 2 && (
-                <div className="col-span-2 text-center text-[12.5px] text-[#94A3B8] py-6">No matching patients found.</div>
-              )}
-              {searchResults.map((p) => (
-                <div key={p.patient_id} className="p-4 border border-[#DDE2EC] rounded-xl hover:border-[#1B4FD8] transition-all bg-white shadow-xs">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <div className="font-bold text-[14px] text-gray-900">{p.full_name}</div>
-                      <div className="text-[12px] text-[#64748B]">{p.age ?? "—"} yrs · {p.phone || "—"}</div>
+              {filteredPatients.map((p) => {
+                const pEncounters = db.getEncountersForPatient(p.umr);
+                return (
+                  <div key={p.umr} className="p-4 border border-[#DDE2EC] rounded-xl hover:border-[#1B4FD8] transition-all bg-white shadow-xs">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <div className="font-bold text-[14px] text-gray-900">{p.name}</div>
+                        <div className="text-[12px] text-[#64748B]">{p.age} yrs · {p.phone}</div>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-mono font-bold text-[11.5px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded block">
+                          {p.umr}
+                        </span>
+                        <span className="text-[10px] text-[#64748B]">Permanent UMR</span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="font-mono font-bold text-[11.5px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded block">{p.patient_id}</span>
-                      <span className="text-[10px] text-[#64748B]">Patient ID</span>
+
+                    {/* Previous OP visits history */}
+                    <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-2.5 my-2.5 text-[11.5px] space-y-1">
+                      <div className="font-semibold text-gray-700 flex justify-between">
+                        <span>Past OP Visits On Record:</span>
+                        <span className="font-mono text-[#D97706]">{pEncounters.length} Visits in Database</span>
+                      </div>
+                      {pEncounters.length > 0 ? (
+                        pEncounters.slice(0, 3).map((pv) => (
+                          <div key={pv.id} className="flex justify-between text-[#475569]">
+                            <span>• {pv.opNumber} ({pv.registrationTime})</span>
+                            <span className="text-[#64748B]">{pv.dept}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-gray-400 italic">No past encounters</div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center pt-2 border-t border-[#F1F5F9]">
+                      <span className="text-[11.5px] text-[#16A34A] font-semibold">
+                        ✓ Retain {p.umr}
+                      </span>
+                      <button
+                        onClick={() => handleCreateRevisitEncounter(p)}
+                        className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+                      >
+                        <span>🔄</span> Generate New Visit OP Number ➔
+                      </button>
                     </div>
                   </div>
-                  <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-2.5 my-2.5 text-[11.5px]">
-                    <span className="font-semibold text-gray-700">Past OP Visits On Record: </span>
-                    <span className="font-mono text-[#D97706]">{p.total_op_visits}</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-[#F1F5F9]">
-                    <span className="text-[11.5px] text-[#16A34A] font-semibold">✓ Retain {p.patient_id}</span>
-                    <button onClick={() => void handleCreateRevisitEncounter(p)} disabled={submitting}
-                      className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs disabled:opacity-50">
-                      <span>🔄</span> Generate New Visit ➔
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
+        {/* ── TAB 3: DIGITAL OP BOOK & TODAYS REGISTRATIONS ───────────── */}
         {activeTab === "records" && (
           <div className="space-y-6">
-            {selectedVisit && (
+            {/* OP Book Card Preview */}
+            {selectedEncounter && (
               <div ref={cardPreviewRef} className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-6 shadow-xl space-y-4 ring-1 ring-slate-900/5">
                 <div className="flex justify-between items-center mb-2">
                   <div>
-                    <h3 className="text-[15px] font-bold text-gray-900 flex items-center gap-2"><span>📖</span> Official Outpatient OP Book Pass</h3>
-                    <p className="text-[11.5px] text-[#64748B]">Shows the patient's permanent ID alongside this visit's token.</p>
+                    <h3 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
+                      <span>📖</span> Official Outpatient OP Book Pass
+                    </h3>
+                    <p className="text-[11.5px] text-[#64748B]">
+                      Shows patient permanent UMR alongside the active visit OP number.
+                    </p>
                   </div>
                   <div className="flex gap-2">
-                    <Btn variant="outline" size="sm" onClick={() => window.print()}><Icon.Download /> Print OP Pass</Btn>
+                    <Btn variant="outline" size="sm" onClick={() => window.print()}>
+                      <Icon.Download /> Print OP Pass
+                    </Btn>
                     {onProceedToQueue && (
-                      <Btn variant="primary" size="sm" onClick={onProceedToQueue}>Proceed to Queue &amp; Doctor Consultation →</Btn>
+                      <Btn variant="primary" size="sm" onClick={() => onProceedToQueue(selectedEncounter)}>
+                        Proceed to Queue &amp; Doctor Consultation →
+                      </Btn>
                     )}
                   </div>
                 </div>
 
                 <div className="max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded-2xl p-6 shadow-2xl relative overflow-hidden ring-2 ring-blue-500/10">
+                  {/* Top Header Accent Strip */}
                   <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
+
                   <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-3.5 mb-4">
                     <div className="flex items-center gap-2.5">
                       <img src="/logo.png" alt="HospAI" className="w-8 h-8 object-contain" />
@@ -414,47 +563,55 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     </div>
                     <div className="text-right">
                       <div className="text-[10px] uppercase font-bold text-[#64748B]">Registration Date</div>
-                      <div className="text-[12px] font-mono font-bold text-gray-900">{new Date(selectedVisit.created_at).toLocaleString()}</div>
+                      <div className="text-[12px] font-mono font-bold text-gray-900">{selectedEncounter.registrationTime}</div>
                     </div>
                   </div>
+
                   <div className="grid grid-cols-2 gap-4 text-[12.5px] mb-4">
                     <div>
                       <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Patient Name</div>
-                      <div className="text-[16px] font-bold text-gray-900 mt-0.5">{selectedVisit.patient_name}</div>
-                      <div className="text-[11.5px] text-gray-600 mt-0.5 font-medium">
-                        Age: <strong>{selectedVisit.patient_age ?? "—"} yrs</strong> · Sex: <strong>{selectedVisit.patient_gender || "—"}</strong> · Phone: <strong>{selectedVisit.patient_phone || "—"}</strong>
-                      </div>
+                      <div className="text-[16px] font-bold text-gray-900 mt-0.5">{selectedEncounter.patientName}</div>
+                      <div className="text-[11.5px] text-gray-600 mt-0.5 font-medium">Age: <strong>{selectedEncounter.age} yrs</strong> · Sex: <strong>{selectedEncounter.sex}</strong> · Phone: <strong>{selectedEncounter.phone}</strong></div>
                       <div className="text-[11px] font-semibold mt-1">
-                        Dept: <span className={selectedVisit.department ? "text-[#1B4FD8]" : "text-amber-600"}>{selectedVisit.department || "Awaiting Triage"}</span>
+                        Dept: <span className={selectedEncounter.dept && selectedEncounter.dept !== "Awaiting Triage" ? "text-[#1B4FD8]" : "text-amber-600"}>
+                          {selectedEncounter.dept || "Awaiting AI Triage"}
+                        </span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent Patient ID</div>
-                      <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200 inline-block mt-0.5">{selectedVisit.patient_id}</div>
-                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider mt-2.5">Visit Token</div>
-                      <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">#{selectedVisit.token_no ?? "—"}</div>
+                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent UMR (Lifetime)</div>
+                      <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200 inline-block mt-0.5">
+                        {selectedEncounter.umr}
+                      </div>
+                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider mt-2.5">Current Visit OP Number</div>
+                      <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
+                        {selectedEncounter.opNumber}
+                      </div>
                     </div>
                   </div>
+
                   <div className="flex justify-between items-center pt-3 border-t border-[#E2E8F0] text-[11px] text-[#64748B]">
-                    <span>Status: <strong className="text-[#166534] font-mono font-bold bg-green-50 px-2 py-0.5 rounded border border-green-200 capitalize">{selectedVisit.status.replace("_", " ")}</strong></span>
+                    <span>Status: <strong className="text-[#166534] font-mono font-bold bg-green-50 px-2 py-0.5 rounded border border-green-200">{selectedEncounter.status}</strong></span>
+                    <span className="font-mono text-gray-900 font-bold tracking-wider text-[12px]">Barcode: |||| ||| ||||| |||</span>
                   </div>
                 </div>
               </div>
             )}
 
+            {/* Today's Registration Log Table */}
             <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl shadow-xl overflow-hidden ring-1 ring-slate-900/5">
               <div className="px-5 py-3 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
                 <div>
-                  <h3 className="text-[13.5px] font-bold text-gray-900">Database Visit Registry</h3>
-                  <p className="text-[11px] text-[#64748B]">All registered outpatients with permanent ID and visit tokens.</p>
+                  <h3 className="text-[13.5px] font-bold text-gray-900">Database Encounter Registry</h3>
+                  <p className="text-[11px] text-[#64748B]">All registered outpatients with permanent UMR and visit OP numbers.</p>
                 </div>
-                <span className="text-[11.5px] text-[#64748B]">Total: {visits.length} Database Records</span>
+                <span className="text-[11.5px] text-[#64748B]">Total: {encounters.length} Database Records</span>
               </div>
               <table className="w-full text-left">
                 <thead className="border-b border-[#DDE2EC] bg-[#FAFAFA]">
                   <tr>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Patient ID</th>
-                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Token</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Permanent UMR</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Current OP No</th>
                     <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Patient Name</th>
                     <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Age</th>
                     <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Phone</th>
@@ -464,24 +621,35 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
-                  {visits.length === 0 && (
-                    <tr><td colSpan={8} className="px-4 py-8 text-center text-[#94A3B8]">No OP visits registered yet.</td></tr>
-                  )}
-                  {visits.map((v) => (
-                    <tr key={v.id} onClick={() => handleViewVisit(v)} className={`hover:bg-[#F8FAFC] cursor-pointer transition-colors ${selectedVisit?.id === v.id ? "bg-[#EFF6FF]" : ""}`}>
-                      <td className="px-4 py-3 font-mono font-bold text-[#1B4FD8]">{v.patient_id}</td>
-                      <td className="px-4 py-3 font-mono font-bold text-[#D97706]">#{v.token_no ?? "—"}</td>
-                      <td className="px-4 py-3 font-semibold text-gray-900">{v.patient_name}</td>
-                      <td className="px-4 py-3 font-mono text-gray-700">{v.patient_age ?? "—"} yrs</td>
-                      <td className="px-4 py-3 text-gray-700">{v.patient_phone || "—"}</td>
+                  {encounters.map((e) => (
+                    <tr
+                      key={e.id}
+                      onClick={() => handleViewOpBook(e)}
+                      className={`hover:bg-[#F8FAFC] cursor-pointer transition-colors ${
+                        selectedEncounter?.id === e.id ? "bg-[#EFF6FF]" : ""
+                      }`}
+                    >
+                      <td className="px-4 py-3 font-mono font-bold text-[#1B4FD8]">{e.umr}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-[#D97706]">{e.opNumber}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">{e.patientName}</td>
+                      <td className="px-4 py-3 font-mono text-gray-700">{e.age} yrs</td>
+                      <td className="px-4 py-3 text-gray-700">{e.phone}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold ${v.appointment_kind === "new" ? "bg-[#DCFCE7] text-[#15803D]" : "bg-[#FEF3C7] text-[#B45309]"}`}>
-                          {v.appointment_kind === "new" ? "New Patient" : "Revisit Encounter"}
+                        <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold ${
+                          e.isNew ? "bg-[#DCFCE7] text-[#15803D]" : "bg-[#FEF3C7] text-[#B45309]"
+                        }`}>
+                          {e.isNew ? "New Patient" : "Revisit Encounter"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-mono text-gray-500">{new Date(v.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
+                      <td className="px-4 py-3 font-mono text-gray-500">{e.registrationTime}</td>
                       <td className="px-4 py-3 text-right">
-                        <button onClick={(ev) => { ev.stopPropagation(); handleViewVisit(v); }} className="px-2.5 py-1 bg-blue-50 text-[#1B4FD8] hover:bg-blue-100 rounded text-[11.5px] font-semibold border border-blue-200 transition-colors">
+                        <button
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            handleViewOpBook(e);
+                          }}
+                          className="px-2.5 py-1 bg-blue-50 text-[#1B4FD8] hover:bg-blue-100 rounded text-[11.5px] font-semibold border border-blue-200 transition-colors"
+                        >
                           View OP Book
                         </button>
                       </td>

@@ -41,9 +41,28 @@ import {
   Textarea,
 } from "../components/ui";
 import PrescriptionUploadModal from "../components/PrescriptionUploadModal";
-import { apiFetch, reportError } from "../lib/api";
+import { apiFetch, reportError, getHospitalCode } from "../lib/api";
+import { API_BASE } from "../lib/constants";
 import { formatDateTimeIST } from "../lib/format";
 import type { Notice, Patient } from "../types";
+
+// apiFetch always sends Content-Type: application/json, which breaks a
+// multipart file upload -- this is the one place in the ER module that needs
+// a raw fetch instead (attaching a scanned/photographed signed consent form).
+async function uploadConsentDocument(consentId: number, file: File): Promise<void> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE}/api/er/consents/${consentId}/document`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "X-Hospital-Code": getHospitalCode() },
+    body: formData,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "Failed to upload the signed document.");
+  }
+}
 
 type Props = {
   setNotice: (notice: Notice | null) => void;
@@ -173,6 +192,8 @@ type ErConsent = {
   er_visit_id?: number;
   notes?: string;
   signed_at?: string;
+  document_filename?: string | null;
+  document_mime_type?: string | null;
 };
 
 type ErVisitDetail = ErVisit & {
@@ -600,28 +621,44 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
 
   if (selectedVisitId && detail) {
     return (
-      <VisitDetailPanel
-        detail={detail}
-        loading={detailLoading}
-        categories={categories}
-        setNotice={setNotice}
-        onNavigate={onNavigate}
-        onBack={() => {
-          setSelectedVisitId(null);
-          setDetail(null);
-          loadVisits();
-        }}
-        onRefresh={refreshAfterAction}
-        onOrderMedication={() =>
-          setPrescriptionTarget({
-            id: detail.patient_id || "",
-            name: detail.patient_id
-              ? detail.patient_id
-              : detail.unknown_patient_label || detail.visit_no,
-            doctorName: detail.assigned_doctor_name || undefined,
-          })
-        }
-      />
+      <>
+        <VisitDetailPanel
+          detail={detail}
+          loading={detailLoading}
+          categories={categories}
+          setNotice={setNotice}
+          onNavigate={onNavigate}
+          onBack={() => {
+            setSelectedVisitId(null);
+            setDetail(null);
+            loadVisits();
+          }}
+          onRefresh={refreshAfterAction}
+          onOrderMedication={() =>
+            setPrescriptionTarget({
+              id: detail.patient_id || "",
+              name: detail.patient_id
+                ? detail.patient_id
+                : detail.unknown_patient_label || detail.visit_no,
+              doctorName: detail.assigned_doctor_name || undefined,
+            })
+          }
+        />
+        {/* Order Medication (on VisitDetailPanel, above) sets prescriptionTarget,
+            but this component early-returns just VisitDetailPanel while a visit is
+            open -- without rendering the modal here too, that button could never
+            actually open anything. */}
+        {prescriptionTarget && (
+          <PrescriptionUploadModal
+            patientId={prescriptionTarget.id}
+            patientName={prescriptionTarget.name}
+            doctorName={prescriptionTarget.doctorName}
+            mode="manual"
+            setNotice={setNotice}
+            onClose={() => setPrescriptionTarget(null)}
+          />
+        )}
+      </>
     );
   }
 
@@ -1972,7 +2009,7 @@ function VisitDetailPanel({
                     )}
                   </div>
                 </div>
-                <ConsentsList consents={consents} loading={loadingConsents} />
+                <ConsentsList consents={consents} loading={loadingConsents} setNotice={setNotice} onDocumentChanged={loadConsents} />
               </div>
 
               <div className="panel">
@@ -3431,7 +3468,84 @@ const RELATION_OPTIONS = [
   "Other",
 ];
 
-function ConsentsList({ consents, loading }: { consents: ErConsent[]; loading: boolean }) {
+function ConsentDocumentControl({
+  consentId,
+  filename,
+  setNotice,
+  onChanged,
+}: {
+  consentId: number;
+  filename?: string | null;
+  setNotice: (notice: Notice | null) => void;
+  onChanged: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  const handlePick = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      await uploadConsentDocument(consentId, file);
+      setNotice({ type: "success", message: "Signed document attached." });
+      onChanged();
+    } catch (error: any) {
+      setNotice({ type: "error", message: error.message || "Failed to upload the signed document." });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (filename) {
+    return (
+      <a
+        href={`${API_BASE}/api/er/consents/${consentId}/document`}
+        target="_blank"
+        rel="noreferrer"
+        className="bed-link-button"
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.35rem" }}
+      >
+        <FiFileText aria-hidden /> View signed document
+      </a>
+    );
+  }
+
+  return (
+    <label
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.3rem",
+        marginTop: "0.35rem",
+        fontSize: "0.76rem",
+        fontWeight: 600,
+        color: uploading ? "#94a3b8" : "#1B4FD8",
+        cursor: uploading ? "not-allowed" : "pointer",
+      }}
+    >
+      <FiPrinter aria-hidden />
+      {uploading ? "Uploading..." : "Attach signed paper form"}
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+        disabled={uploading}
+        onChange={(e) => handlePick(e.target.files?.[0])}
+        style={{ display: "none" }}
+      />
+    </label>
+  );
+}
+
+function ConsentsList({
+  consents,
+  loading,
+  setNotice,
+  onDocumentChanged,
+}: {
+  consents: ErConsent[];
+  loading: boolean;
+  setNotice: (notice: Notice | null) => void;
+  onDocumentChanged: () => void;
+}) {
   if (loading) return <p className="muted" style={{ fontSize: "0.85rem" }}>Loading consents...</p>;
   if (consents.length === 0) {
     return (
@@ -3487,6 +3601,12 @@ function ConsentsList({ consents, loading }: { consents: ErConsent[]; loading: b
                   <strong>Refusal Reason:</strong> {c.refusal_reason}
                 </div>
               )}
+              <ConsentDocumentControl
+                consentId={c.id}
+                filename={c.document_filename}
+                setNotice={setNotice}
+                onChanged={onDocumentChanged}
+              />
             </div>
             <span
               style={{
@@ -3714,6 +3834,11 @@ function ErConsentModal({
   const [witnessDoctor, setWitnessDoctor] = useState(detail.assigned_doctor_name || "Dr. G. Suryanarayana");
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Real-world consents are often paper-first -- staff may tick this
+  // checkbox before (or after) the patient/guardian actually signs the
+  // physical form. This optional attachment is the durable proof: a photo
+  // or scan of that signed paper, uploaded right alongside the typed record.
+  const [signedDocument, setSignedDocument] = useState<File | null>(null);
 
   const title = type === "admission" ? "📋 Informed Inpatient / ICU Admission Consent" : "⚡ Emergency High-Risk Treatment Consent";
 
@@ -3733,7 +3858,7 @@ function ErConsentModal({
 
     setSubmitting(true);
     try {
-      await apiFetch(`/api/er/visits/${detail.id}/consents`, {
+      const result = await apiFetch<{ consent_id: number }>(`/api/er/visits/${detail.id}/consents`, {
         method: "POST",
         body: JSON.stringify({
           patient_name: patientFullName,
@@ -3746,6 +3871,19 @@ function ErConsentModal({
           notes: type === "admission" ? "Inpatient Admission Consent recorded prior to bed transfer" : "Emergency Clinical Treatment Consent recorded",
         }),
       });
+      if (signedDocument) {
+        try {
+          await uploadConsentDocument(result.consent_id, signedDocument);
+        } catch (uploadError: any) {
+          // The consent record itself is already saved and legally valid on
+          // its own -- a failed attachment upload shouldn't look like the
+          // whole consent failed, just that the proof photo didn't make it.
+          setNotice({ type: "warning", message: `${title} recorded, but the attached document failed to upload: ${uploadError.message}` });
+          onClose();
+          onSaved();
+          return;
+        }
+      }
       setNotice({ type: "success", message: `${title} recorded.` });
       onClose();
       onSaved();
@@ -3818,6 +3956,19 @@ function ErConsentModal({
             <Label>Attending Doctor</Label>
             <Input value={witnessDoctor} onChange={(e) => setWitnessDoctor(e.target.value)} placeholder="Doctor name" />
           </div>
+        </div>
+
+        <div>
+          <Label>Attach signed paper form (optional)</Label>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+            onChange={(e) => setSignedDocument(e.target.files?.[0] || null)}
+          />
+          <p className="er-field-hint">
+            A photo or scan of the physically-signed form -- proof independent of the checkbox below,
+            for when the paper is signed before or after this is recorded on the system.
+          </p>
         </div>
 
         <label

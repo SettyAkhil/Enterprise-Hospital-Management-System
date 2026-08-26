@@ -71,20 +71,14 @@ export function MetricCard({
   label, value, sub, trend, color, action
 }: { label: string; value: string | number; sub?: string; trend?: string; color?: string; action?: string }) {
   return (
-    <div className="bg-white border border-[#DDE2EC] rounded p-3 hover:border-[#1B4FD8] transition-colors cursor-pointer flex flex-col justify-between">
-      <div>
-        <div className="text-[10.5px] font-semibold text-[#64748B] uppercase tracking-wider mb-1 truncate">{label}</div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-xl font-bold leading-none tracking-tight" style={{ color: color || "#0F1624" }}>{value}</span>
-          {trend && <span className={`text-[10.5px] font-mono ${trend.startsWith("↑") ? "text-[#DC2626]" : trend.startsWith("↓") ? "text-[#16A34A]" : "text-[#64748B]"}`}>{trend}</span>}
-        </div>
+    <div className="bg-white border border-[#DDE2EC] rounded p-3.5 hover:border-[#1B4FD8] transition-colors cursor-pointer">
+      <div className="text-[11px] font-medium text-[#64748B] uppercase tracking-wider mb-1">{label}</div>
+      <div className="flex items-end gap-2">
+        <span className="text-2xl font-semibold leading-none" style={{ color: color || "#0F1624" }}>{value}</span>
+        {trend && <span className={`text-[11px] font-mono mb-0.5 ${trend.startsWith("↑") ? "text-[#DC2626]" : trend.startsWith("↓") ? "text-[#16A34A]" : "text-[#64748B]"}`}>{trend}</span>}
       </div>
-      {(sub || action) && (
-        <div className="mt-1.5 pt-1.5 border-t border-[#F1F5F9] flex items-center justify-between text-[10.5px]">
-          {sub && <span className="text-[#94A3B8] truncate">{sub}</span>}
-          {action && <span className="text-[#1B4FD8] font-medium hover:underline ml-auto whitespace-nowrap">{action} →</span>}
-        </div>
-      )}
+      {sub && <div className="text-[11px] text-[#94A3B8] mt-1">{sub}</div>}
+      {action && <div className="text-[11px] text-[#1B4FD8] font-medium mt-2 hover:underline">{action} →</div>}
     </div>
   );
 }
@@ -93,11 +87,11 @@ export function MetricCard({
 export function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[12px]">
+      <table className="w-full text-[12.5px]">
         <thead>
           <tr className="border-b border-[#DDE2EC] bg-[#F8FAFC]">
             {headers.map(h => (
-              <th key={h} className="text-left px-3 py-1.5 font-semibold text-[#64748B] uppercase text-[10.5px] tracking-wider whitespace-nowrap">{h}</th>
+              <th key={h} className="text-left px-3 py-2 font-semibold text-[#64748B] uppercase text-[10.5px] tracking-wider whitespace-nowrap">{h}</th>
             ))}
           </tr>
         </thead>
@@ -115,8 +109,8 @@ export function TR({ children, onClick }: { children: React.ReactNode; onClick?:
   );
 }
 
-export function TD({ children, className, colSpan }: { children?: React.ReactNode; className?: string; colSpan?: number }) {
-  return <td className={`px-3 py-2 ${className || ""}`} colSpan={colSpan}>{children}</td>;
+export function TD({ children, className }: { children?: React.ReactNode; className?: string }) {
+  return <td className={`px-3 py-2.5 ${className || ""}`}>{children}</td>;
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
@@ -126,24 +120,23 @@ export function Card({ title, children, actions, className }: {
   return (
     <div className={`bg-white border border-[#DDE2EC] rounded ${className || ""}`}>
       {title && (
-        <div className="flex items-center justify-between px-3.5 py-2 border-b border-[#DDE2EC]">
-          <span className="text-[11.5px] font-semibold text-gray-800 uppercase tracking-wider">{title}</span>
-          {actions && <div className="flex items-center gap-1.5">{actions}</div>}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#DDE2EC]">
+          <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">{title}</span>
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
       )}
-      <div className="p-3">{children}</div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }
 
 // ─── Btn ──────────────────────────────────────────────────────────────────────
-export function Btn({ children, variant = "primary", size = "sm", onClick, className, disabled }: {
+export function Btn({ children, variant = "primary", size = "sm", onClick, className }: {
   children: React.ReactNode;
   variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
   size?: "xs" | "sm" | "md";
   onClick?: () => void;
   className?: string;
-  disabled?: boolean;
 }) {
   const variants = {
     primary: "bg-[#1B4FD8] text-white hover:bg-[#1740B4] border border-[#1B4FD8]",
@@ -153,12 +146,12 @@ export function Btn({ children, variant = "primary", size = "sm", onClick, class
     outline: "bg-white text-[#374151] hover:bg-[#F8FAFC] border border-[#DDE2EC]",
   };
   const sizes = {
-    xs: "px-2 py-0.5 text-[10.5px]",
-    sm: "px-2.5 py-1 text-[11.5px]",
-    md: "px-3.5 py-1.5 text-[12.5px]",
+    xs: "px-2 py-1 text-[11px]",
+    sm: "px-3 py-1.5 text-[12px]",
+    md: "px-4 py-2 text-[13px]",
   };
   return (
-    <button onClick={onClick} disabled={disabled}
+    <button onClick={onClick}
       className={`${variants[variant]} ${sizes[size]} rounded font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${className || ""}`}>
       {children}
     </button>
@@ -176,7 +169,7 @@ export function Input({ placeholder, value, onChange, icon, className }: {
         value={value}
         onChange={e => onChange?.(e.target.value)}
         placeholder={placeholder}
-        className={`w-full border border-[#DDE2EC] rounded bg-white text-[12px] text-gray-800 placeholder:text-[#94A3B8] focus:border-[#1B4FD8] focus:outline-none py-1.5 ${icon ? "pl-8 pr-3" : "px-3"}`}
+        className={`w-full border border-[#DDE2EC] rounded bg-white text-[12.5px] text-gray-800 placeholder:text-[#94A3B8] focus:border-[#1B4FD8] focus:outline-none py-1.5 ${icon ? "pl-8 pr-3" : "px-3"}`}
       />
     </div>
   );
@@ -194,20 +187,20 @@ export function AlertBanner({ type, title, body, action }: {
   const s = map[type];
   return (
     <div style={{ backgroundColor: s.bg, borderColor: s.border, color: s.text }}
-      className="border rounded px-3 py-1.5 flex items-center gap-2.5 text-[12px]">
-      <span className="font-bold text-sm leading-none">{s.icon}</span>
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="font-semibold">{title}</span>
-        {body && <span className="text-[11.5px] opacity-80 truncate">— {body}</span>}
+      className="border rounded px-3.5 py-2.5 flex items-start gap-2.5">
+      <span className="font-bold mt-px text-sm">{s.icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-xs">{title}</div>
+        {body && <div className="text-[11.5px] mt-0.5 opacity-80">{body}</div>}
       </div>
-      {action && <button className="text-[11px] font-semibold underline underline-offset-2 whitespace-nowrap hover:opacity-80 ml-2">{action}</button>}
+      {action && <button className="text-[11px] font-semibold underline underline-offset-2 whitespace-nowrap">{action}</button>}
     </div>
   );
 }
 
 // ─── Timeline Item ────────────────────────────────────────────────────────────
-export function TimelineItem({ time, type, title, detail, isLast, children }: {
-  time: string; type: string; title: string; detail?: string; isLast?: boolean; children?: React.ReactNode;
+export function TimelineItem({ time, type, title, detail, isLast }: {
+  time: string; type: string; title: string; detail?: string; isLast?: boolean;
 }) {
   const typeColors: Record<string, string> = {
     clinical: "#1B4FD8", lab: "#7C3AED", imaging: "#0284C7",
@@ -227,50 +220,32 @@ export function TimelineItem({ time, type, title, detail, isLast, children }: {
         </div>
         <div className="text-[12.5px] font-medium text-gray-800">{title}</div>
         {detail && <div className="text-[11.5px] text-[#64748B] mt-0.5">{detail}</div>}
-        {children && <div className="text-[11.5px] text-[#64748B] mt-0.5">{children}</div>}
       </div>
     </div>
   );
 }
 
 // ─── Patient Banner ───────────────────────────────────────────────────────────
-export function PatientBanner({ patient, onAction }: { patient?: any; onAction?: (a: string) => void }) {
-  const name = patient?.patient_name || patient?.name || "Unknown Patient";
-  const initials = name.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase();
-  const mrn = patient?.patient_id || patient?.mrn || "—";
-  const age = patient?.age ?? "—";
-  const gender = patient?.gender || "—";
-  const dob = patient?.dob || "—";
-  const phone = patient?.phone || "—";
-  const allergies = (patient?.allergies || "").trim();
-  const bloodGroup = patient?.blood_group;
-  const address = patient?.address;
-
+export function PatientBanner({ onAction }: { onAction?: (a: string) => void }) {
   return (
     <div className="bg-white border-b border-[#DDE2EC] px-5 py-3">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#1B4FD8] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">{initials}</div>
+          <div className="w-10 h-10 rounded-full bg-[#1B4FD8] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">JS</div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-base font-semibold text-gray-900">{name}</span>
-              {allergies ? (
-                <span className="bg-[#FEE2E2] text-[#B91C1C] text-[11px] font-semibold px-2 py-0.5 rounded border border-[#FECACA] flex items-center gap-1">
-                  ⚠ ALLERGY: {allergies}
-                </span>
-              ) : (
-                <span className="bg-[#F1F5F9] text-[#64748B] text-[11px] font-semibold px-2 py-0.5 rounded border border-[#E2E8F0]">
-                  NKDA
-                </span>
-              )}
-              <StatusBadge status={patient?.status || "Active"} />
+              <span className="text-base font-semibold text-gray-900">John Smith</span>
+              <span className="bg-[#FEE2E2] text-[#B91C1C] text-[11px] font-semibold px-2 py-0.5 rounded border border-[#FECACA] flex items-center gap-1">
+                ⚠ ALLERGY: Penicillin
+              </span>
+              <StatusBadge status="Inpatient" />
             </div>
             <div className="flex items-center gap-3 mt-0.5 text-[11.5px] text-[#64748B] flex-wrap">
-              <span className="font-mono">MRN: {mrn}</span>
-              <span>{age} yrs · {gender} · DOB: {dob}</span>
-              <span>{phone}</span>
-              {bloodGroup && <span>Blood Group: {bloodGroup}</span>}
-              {address && <span className="truncate max-w-[220px]">{address}</span>}
+              <span>DOB: 04/12/1985 · 41 yrs · Male</span>
+              <span className="font-mono text-[#374151]">MRN: 100245</span>
+              <span>PCP: Dr. Anderson</span>
+              <span>Room: 204 · 3N Medical</span>
+              <span>Ins: BlueCross PPO</span>
             </div>
           </div>
         </div>

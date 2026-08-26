@@ -22,26 +22,6 @@ export function getCsrfToken(): string | undefined {
   return match ? decodeURIComponent(match[1]) : undefined;
 }
 
-/**
- * For requests that can't go through apiFetch's JSON body (FormData uploads,
- * blob downloads): still need the X-Hospital-Code and X-CSRF-Token headers
- * apiFetch attaches automatically.
- */
-export function withAuthHeaders(
-  headers: HeadersInit = {},
-  method = "POST",
-): HeadersInit {
-  const csrfToken = getCsrfToken();
-  const upperMethod = method.toUpperCase();
-  return {
-    "X-Hospital-Code": getHospitalCode(),
-    ...(csrfToken && upperMethod !== "GET" && upperMethod !== "HEAD"
-      ? { "X-CSRF-Token": csrfToken }
-      : {}),
-    ...headers,
-  };
-}
-
 export async function apiFetch<T = any>(
   path: string,
   options: RequestInit & { cache?: RequestCache } = {},

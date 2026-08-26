@@ -1,314 +1,174 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
+import { MetricCard, Card, Table, TR, TD, StatusBadge, AlertBanner, Btn } from "./shared";
 import { Icon } from "./icons";
-import { apiFetch, reportError } from "../lib/api";
-import { formatDateTime } from "../lib/format";
-import type { Notice } from "../types";
 
-type Stats = {
-  active_admissions: number;
-  documents: number;
-  readmitted_patients: number;
-  today: number;
-  total: number;
-};
+const ALERTS = [
+  { type: "critical" as const, title: "Critical Lab Result — John Smith", body: "Potassium 6.2 mmol/L — Requires immediate physician review", action: "Review Now" },
+  { type: "warning" as const, title: "ED Capacity Alert", body: "ED census at 38/42 beds. 8 patients waiting > 30 minutes.", action: "View ED" },
+];
 
-type HospitalSummary = {
-  bed_occupancy: { available: number; maintenance: number; occupancy_rate: number; occupied: number; total: number };
-  revenue: { due: number; total: number };
-};
+const QUEUES = [
+  { dept: "Emergency", waiting: 8, critical: 3, inCare: 30, available: 4 },
+  { dept: "Inpatient 3N", waiting: 0, critical: 2, inCare: 24, available: 2 },
+  { dept: "Inpatient 4S", waiting: 0, critical: 1, inCare: 28, available: 4 },
+  { dept: "ICU", waiting: 0, critical: 6, inCare: 12, available: 2 },
+  { dept: "Surgery OR", waiting: 2, critical: 0, inCare: 3, available: 2 },
+];
 
-type Analytics = {
-  admission_status_distribution: { count: number; label: string }[];
-};
+const APPOINTMENTS = [
+  { time: "09:00", patient: "Sarah Connelly", provider: "Dr. Adams", type: "Follow-up", room: "101", status: "Completed" },
+  { time: "09:30", patient: "Marcus Webb", provider: "Dr. Lee", type: "New Patient", room: "102", status: "In Progress" },
+  { time: "10:00", patient: "Elena Torres", provider: "Dr. Adams", type: "Follow-up", room: "103", status: "Checked In" },
+  { time: "10:30", patient: "Robert Kim", provider: "Dr. Patel", type: "Procedure", room: "104", status: "Pending" },
+  { time: "11:00", patient: "Jennifer Walsh", provider: "Dr. Lee", type: "Consult", room: "102", status: "Pending" },
+  { time: "11:30", patient: "David Chu", provider: "Dr. Adams", type: "Follow-up", room: "101", status: "Pending" },
+];
 
-type Appointment = {
-  id: number;
-  patient_name: string;
-  department: string | null;
-  doctor_name: string | null;
-  appointment_date: string;
-  status: string;
-};
-
-type Bed = { ward: string; status: string };
-
-type ErVisit = { id: number; triage_category?: string | null; status?: string | null };
-
-const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; label: string }> = {
-  completed: { bg: "bg-[#F1F5F9]", text: "text-[#475569]", dot: "bg-[#64748B]", label: "Completed" },
-  in_consultation: { bg: "bg-[#EFF6FF]", text: "text-[#2563EB]", dot: "bg-[#2563EB]", label: "In Progress" },
-  checked_in: { bg: "bg-[#EFF6FF]", text: "text-[#2563EB]", dot: "bg-[#2563EB]", label: "Checked In" },
-  scheduled: { bg: "bg-[#FFFBEB]", text: "text-[#B45309]", dot: "bg-[#D97706]", label: "Scheduled" },
-  no_show: { bg: "bg-[#FEF2F2]", text: "text-[#B91C1C]", dot: "bg-[#DC2626]", label: "No Show" },
-  cancelled: { bg: "bg-[#F1F5F9]", text: "text-[#64748B]", dot: "bg-[#94A3B8]", label: "Cancelled" },
-};
-
-function statusMeta(status: string) {
-  return STATUS_STYLE[status] || { bg: "bg-[#F1F5F9]", text: "text-[#475569]", dot: "bg-[#94A3B8]", label: status };
-}
+const PENDING_LABS = [
+  { patient: "John Smith", mrn: "100245", test: "BMP", ordered: "08:42", status: "Processing" },
+  { patient: "Mary Jones", mrn: "100246", test: "CBC w/ diff", ordered: "09:10", status: "Collected" },
+  { patient: "Thomas Reed", mrn: "100301", test: "Troponin x2", ordered: "09:28", status: "Critical" },
+  { patient: "Anna Weiss", mrn: "100189", test: "Urinalysis", ordered: "09:55", status: "Pending" },
+];
 
 export default function Dashboard({ navigate }: { navigate: (m: string, s?: string) => void }) {
-  const [notice, setNotice] = useState<Notice | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [summary, setSummary] = useState<HospitalSummary | null>(null);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [beds, setBeds] = useState<Bed[]>([]);
-  const [erVisits, setErVisits] = useState<ErVisit[]>([]);
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    Promise.all([
-      apiFetch<Stats>("/api/stats"),
-      apiFetch<HospitalSummary>("/api/dashboard/hospital-summary"),
-      apiFetch<Analytics>("/api/dashboard/analytics?days=7"),
-      apiFetch<{ appointments: Appointment[] }>("/api/appointments"),
-      apiFetch<{ beds: Bed[] }>("/api/beds"),
-      apiFetch<{ visits: ErVisit[] }>("/api/er/visits"),
-    ])
-      .then(([statsRes, summaryRes, analyticsRes, appointmentsRes, bedsRes, erRes]) => {
-        if (!active) return;
-        setStats(statsRes);
-        setSummary(summaryRes);
-        setAnalytics(analyticsRes);
-        setAppointments(appointmentsRes.appointments || []);
-        setBeds(bedsRes.beds || []);
-        setErVisits(erRes.visits || []);
-      })
-      .catch((error) => {
-        if (active) reportError(setNotice, error, "Unable to load dashboard data.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [refreshKey]);
-
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const appointmentsToday = appointments.filter((a) => a.appointment_date?.startsWith(todayKey));
-  const appointmentsRemaining = appointmentsToday.filter(
-    (a) => !["completed", "cancelled", "no_show"].includes(a.status),
-  ).length;
-  const recentAppointments = [...appointments]
-    .sort((a, b) => (a.appointment_date < b.appointment_date ? 1 : -1))
-    .slice(0, 5);
-
-  const discharged = analytics?.admission_status_distribution.find((d) => d.label === "Discharged")?.count ?? 0;
-  const erWaiting = erVisits.filter((v) => (v.status || "").toLowerCase().includes("wait")).length;
-
-  const wardTotals = beds.reduce<Record<string, { total: number; occupied: number; available: number }>>(
-    (acc, bed) => {
-      const key = bed.ward || "Unassigned";
-      if (!acc[key]) acc[key] = { total: 0, occupied: 0, available: 0 };
-      acc[key].total += 1;
-      if (bed.status === "Occupied") acc[key].occupied += 1;
-      else if (bed.status === "Available") acc[key].available += 1;
-      return acc;
-    },
-    {},
-  );
-  const wardRows = Object.entries(wardTotals).map(([ward, counts]) => ({ ward, ...counts }));
-
-  const kpis = [
-    {
-      label: "TOTAL PATIENTS",
-      value: stats?.total ?? "—",
-      sub: `${stats?.today ?? 0} registered today`,
-      action: "patients",
-      actionLabel: "View All →",
-    },
-    {
-      label: "APPOINTMENTS TODAY",
-      value: appointmentsToday.length,
-      sub: `${appointmentsRemaining} remaining`,
-      action: "appointments",
-      actionLabel: "Schedule →",
-    },
-    {
-      label: "ACTIVE ADMISSIONS",
-      value: stats?.active_admissions ?? "—",
-      sub: summary ? `${summary.bed_occupancy.occupied}/${summary.bed_occupancy.total} beds occupied` : "",
-      action: "inpatient",
-      actionLabel: "Bed Board →",
-    },
-    {
-      label: "DISCHARGED (7d)",
-      value: discharged,
-      sub: "past 7 days",
-      action: "discharge",
-      actionLabel: "View →",
-    },
-    {
-      label: "ED WAITING",
-      value: erWaiting,
-      sub: `${erVisits.length} total ED census`,
-      action: "er",
-      actionLabel: "View ED →",
-      critical: erWaiting > 0,
-    },
-    {
-      label: "BEDS AVAILABLE",
-      value: summary?.bed_occupancy.available ?? "—",
-      sub: summary ? `${summary.bed_occupancy.occupancy_rate}% occupancy` : "",
-      action: "beds",
-      actionLabel: "View →",
-    },
-  ];
+  const [_, setRefresh] = useState(0);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F4F6F9] min-w-0 p-5 space-y-4 text-gray-900" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      {notice && (
-        <div className={`p-3 rounded-lg text-[12px] font-medium flex items-center justify-between ${notice.type === "error" ? "bg-red-50 text-red-800 border border-red-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}>
-          <span>{notice.message}</span>
-          <button className="underline" onClick={() => setNotice(null)}>Dismiss</button>
-        </div>
-      )}
-
-      {/* ── Dashboard Title Row ─────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+    <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
+      {/* Page header */}
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
         <div>
-          <h1 className="text-[19px] font-bold text-[#0F172A] tracking-tight">Hospital Operations Dashboard</h1>
-          <p className="text-[12px] text-[#64748B] mt-0.5">Live data from the connected hospital database</p>
+          <h1 className="text-base font-semibold text-gray-900">Hospital Operations Dashboard</h1>
+          <p className="text-[11.5px] text-[#64748B]">General Hospital · 3-North Medical · Last updated 10:47 AM</p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] text-[#64748B]">{formatDateTime(new Date().toISOString())}</span>
-          <button
-            onClick={() => setRefreshKey((n) => n + 1)}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#DDE2EC] rounded-lg text-[12px] font-medium text-gray-700 hover:bg-[#F8FAFC] shadow-xs transition-colors disabled:opacity-50">
-            <Icon.Refresh /> {loading ? "Loading…" : "Refresh"}
-          </button>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-[#64748B]">Aug 23, 2026 · 10:47 AM</span>
+          <Btn variant="outline" size="xs" onClick={() => setRefresh(n => n+1)}>
+            <Icon.Refresh /> Refresh
+          </Btn>
         </div>
       </div>
 
-      {/* ── ED Capacity Alert (only shown when real ED waits exist) ── */}
-      {erWaiting > 0 && (
-        <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-4 py-3 flex items-center justify-between shadow-2xs">
-          <div className="flex items-center gap-3">
-            <span className="text-[#D97706] text-base"><Icon.Alert /></span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-[13px] font-bold text-[#D97706]">ED Capacity Alert</span>
-              <span className="text-[12px] text-[#475569]">{erWaiting} patient{erWaiting === 1 ? "" : "s"} currently waiting in the Emergency Department.</span>
-            </div>
-          </div>
-          <button onClick={() => navigate("er")} className="text-[12.5px] font-bold text-[#D97706] hover:underline cursor-pointer">
-            View ED
-          </button>
+      <div className="p-5 space-y-4">
+        {/* Alerts */}
+        <div className="space-y-2">
+          {ALERTS.map((a, i) => <AlertBanner key={i} {...a} />)}
         </div>
-      )}
 
-      {/* ── 6-Column KPI Grid ───────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {kpis.map((k) => (
-          <div key={k.label} className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex flex-col justify-between hover:border-[#2563EB] transition-colors">
-            <div>
-              <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">{k.label}</div>
-              <div className="flex items-baseline gap-1.5 mt-1.5">
-                <span className={`text-[24px] font-extrabold leading-tight ${k.critical ? "text-[#DC2626]" : "text-[#0F172A]"}`}>
-                  {loading ? "—" : k.value}
-                </span>
-              </div>
-              <div className="text-[11px] text-[#94A3B8] mt-0.5">{loading ? " " : k.sub}</div>
-            </div>
-            <button onClick={() => navigate(k.action)} className="text-[11.5px] font-semibold text-[#2563EB] hover:underline mt-3 text-left">
-              {k.actionLabel}
-            </button>
-          </div>
-        ))}
-      </div>
+        {/* Key Metrics */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <MetricCard label="Patients Today" value="428" sub="↑ 12 from yesterday" trend="↑12" action="View All" />
+          <MetricCard label="Appointments" value="126" sub="14 remaining today" action="Schedule" />
+          <MetricCard label="Admissions" value="38" sub="7 pending bed assignment" trend="↑3" action="Bed Board" />
+          <MetricCard label="Discharges" value="31" sub="6 ready to discharge" action="View" />
+          <MetricCard label="ED Waiting" value="8" sub="3 ESI-1 or ESI-2" color="#DC2626" trend="↑4" action="View ED" />
+          <MetricCard label="Critical Alerts" value="7" sub="2 unacknowledged" color="#DC2626" action="Review" />
+        </div>
 
-      {/* ── Main Section: Department Census & Recent Appointments ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)] gap-4">
-        {/* Department Census */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col">
-          <div className="flex items-center justify-between pb-3 border-b border-[#F1F5F9] mb-1">
-            <span className="text-[12.5px] font-bold text-[#0F172A] tracking-wider uppercase">WARD CENSUS</span>
-            <button onClick={() => navigate("beds")} className="text-[12px] font-semibold text-[#64748B] hover:text-[#2563EB]">
-              Full View
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#F1F5F9] text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">
-                  <th className="py-2.5 px-2">WARD</th>
-                  <th className="py-2.5 px-2">OCCUPIED</th>
-                  <th className="py-2.5 px-2">AVAILABLE</th>
-                  <th className="py-2.5 px-2">TOTAL BEDS</th>
-                  <th className="py-2.5 px-2"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
-                {!loading && wardRows.length === 0 && (
-                  <tr><td colSpan={5} className="py-6 px-2 text-center text-[#94A3B8]">No beds configured yet.</td></tr>
-                )}
-                {wardRows.map((q) => (
-                  <tr key={q.ward} className="hover:bg-[#F8FAFC] transition-colors">
-                    <td className="py-3 px-2 font-bold text-[#0F172A]">{q.ward}</td>
-                    <td className="py-3 px-2 font-medium text-[#334155]">{q.occupied}</td>
-                    <td className="py-3 px-2 font-bold text-[#16A34A]">{q.available}</td>
-                    <td className="py-3 px-2 font-medium text-[#334155]">{q.total}</td>
-                    <td className="py-3 px-2 text-right">
-                      <button onClick={() => navigate("beds")} className="text-[12px] font-semibold text-[#2563EB] hover:underline">
-                        View →
-                      </button>
-                    </td>
-                  </tr>
+        {/* Department Status + Appointments */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <Card title="Department Census" actions={<Btn variant="ghost" size="xs">Full View</Btn>}>
+              <Table headers={["Department", "In Care", "Waiting", "Critical", "Available", ""]}>
+                {QUEUES.map((q, i) => (
+                  <TR key={i}>
+                    <TD><span className="font-medium text-gray-800">{q.dept}</span></TD>
+                    <TD><span className="font-mono text-[12px]">{q.inCare}</span></TD>
+                    <TD><span className="font-mono text-[12px]">{q.waiting > 0 ? <span className="text-[#D97706] font-semibold">{q.waiting}</span> : "—"}</span></TD>
+                    <TD><span className="font-mono text-[12px]">{q.critical > 0 ? <span className="text-[#DC2626] font-semibold">{q.critical}</span> : "—"}</span></TD>
+                    <TD><span className="font-mono text-[12px] text-[#16A34A]">{q.available}</span></TD>
+                    <TD><Btn variant="ghost" size="xs" onClick={() => navigate("inpatient")}>View →</Btn></TD>
+                  </TR>
                 ))}
-              </tbody>
-            </table>
+              </Table>
+            </Card>
           </div>
-        </div>
 
-        {/* Recent Appointments */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-[#F1F5F9] mb-3">
-              <span className="text-[12.5px] font-bold text-[#0F172A] tracking-wider uppercase">RECENT APPOINTMENTS</span>
-              <button onClick={() => navigate("appointments")} className="text-[12px] font-semibold text-[#64748B] hover:text-[#2563EB]">
-                All
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {!loading && recentAppointments.length === 0 && (
-                <div className="text-[12px] text-[#94A3B8] text-center py-4">No appointments yet.</div>
-              )}
-              {recentAppointments.map((a) => {
-                const meta = statusMeta(a.status);
-                return (
-                  <div key={a.id} className="flex items-center justify-between">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <span className="text-[12px] text-[#64748B] font-medium mt-0.5 w-14 flex-shrink-0">
-                        {new Date(a.appointment_date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-bold text-[#0F172A] leading-tight truncate">{a.patient_name}</div>
-                        <div className="text-[11.5px] text-[#64748B] mt-0.5 truncate">
-                          {a.doctor_name || a.department || "Unassigned"}
-                        </div>
-                      </div>
-                    </div>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold flex-shrink-0 ${meta.bg} ${meta.text}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
-                      {meta.label}
-                    </span>
+          <Card title="Today's Appointments" actions={<Btn variant="ghost" size="xs" onClick={() => navigate("appointments")}>All</Btn>}>
+            <div className="space-y-1">
+              {APPOINTMENTS.map((a, i) => (
+                <div key={i} className="flex items-center gap-2.5 py-1.5 border-b border-[#F1F5F9] last:border-0">
+                  <span className="font-mono text-[11px] text-[#94A3B8] w-10 flex-shrink-0">{a.time}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-medium text-gray-800 truncate">{a.patient}</div>
+                    <div className="text-[11px] text-[#64748B] truncate">{a.provider} · {a.type}</div>
                   </div>
-                );
-              })}
+                  <StatusBadge status={a.status} />
+                </div>
+              ))}
             </div>
-          </div>
-
-          <button onClick={() => navigate("appointments")} className="text-[12px] font-semibold text-[#2563EB] hover:underline mt-6 text-left block">
-            View Full Schedule →
-          </button>
+          </Card>
         </div>
+
+        {/* Pending Labs + Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card title="Pending Lab Results" actions={<Btn variant="ghost" size="xs" onClick={() => navigate("laboratory")}>View All →</Btn>}>
+            <Table headers={["Patient", "MRN", "Test", "Ordered", "Status"]}>
+              {PENDING_LABS.map((l, i) => (
+                <TR key={i}>
+                  <TD><span className="font-medium text-gray-800">{l.patient}</span></TD>
+                  <TD><span className="font-mono text-[11.5px] text-[#64748B]">{l.mrn}</span></TD>
+                  <TD>{l.test}</TD>
+                  <TD><span className="font-mono text-[11.5px]">{l.ordered}</span></TD>
+                  <TD>
+                    {l.status === "Critical" ? (
+                      <span className="bg-[#FEE2E2] text-[#B91C1C] text-[11px] font-semibold px-2 py-0.5 rounded border border-[#FECACA]">⚠ Critical</span>
+                    ) : <StatusBadge status={l.status} />}
+                  </TD>
+                </TR>
+              ))}
+            </Table>
+          </Card>
+
+          <Card title="Quick Actions">
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: "New Patient Registration", icon: "👤", action: () => navigate("patients", "register") },
+                { label: "Schedule Appointment", icon: "📅", action: () => navigate("appointments") },
+                { label: "View ED Board", icon: "🚨", action: () => navigate("emergency") },
+                { label: "Bed Assignment", icon: "🛏", action: () => navigate("inpatient") },
+                { label: "Lab Orders", icon: "🧪", action: () => navigate("laboratory") },
+                { label: "Pharmacy Queue", icon: "💊", action: () => navigate("pharmacy") },
+                { label: "OR Board", icon: "⚕", action: () => navigate("surgery") },
+                { label: "Billing Queue", icon: "💳", action: () => navigate("billing") },
+              ].map((q, i) => (
+                <button key={i} onClick={q.action}
+                  className="flex items-center gap-2.5 p-2.5 border border-[#DDE2EC] rounded text-left hover:border-[#1B4FD8] hover:bg-[#EFF6FF] transition-colors group">
+                  <span className="text-base">{q.icon}</span>
+                  <span className="text-[12px] font-medium text-gray-700 group-hover:text-[#1B4FD8]">{q.label}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        {/* Bed Utilization mini-chart */}
+        <Card title="Unit Utilization Overview">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { unit: "3N Medical", total: 32, occupied: 28, color: "#DC2626" },
+              { unit: "4S Medical", total: 32, occupied: 24, color: "#D97706" },
+              { unit: "ICU", total: 14, occupied: 12, color: "#DC2626" },
+              { unit: "Oncology 5W", total: 24, occupied: 18, color: "#D97706" },
+              { unit: "Surgery 2E", total: 20, occupied: 10, color: "#16A34A" },
+            ].map((u, i) => {
+              const pct = Math.round((u.occupied / u.total) * 100);
+              return (
+                <div key={i} className="text-center">
+                  <div className="text-[11.5px] font-medium text-gray-700 mb-1.5">{u.unit}</div>
+                  <div className="relative h-2 bg-[#E2E8F0] rounded-full mb-1.5">
+                    <div className="absolute left-0 top-0 h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: u.color }} />
+                  </div>
+                  <div className="text-[11px] text-[#64748B]">
+                    <span className="font-mono font-semibold" style={{ color: u.color }}>{u.occupied}</span>
+                    <span className="text-[#94A3B8]">/{u.total} · {pct}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       </div>
     </div>
   );

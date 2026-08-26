@@ -1,12 +1,13 @@
-# figma-make-app
+# Enterprise Hospital Management System
 
-React + Vite + Tailwind CSS project running inside Figma Make.
+React + Vite + Tailwind CSS frontend for a hospital management system, backed by a microservice backend (see `hospital-backend/`, symlinked to `keppler-backend/`).
 
 ## Development Server
 
-A Vite development server is **already running** on `$PORT` (default 8443). You don't need to start it manually.
+Start the frontend with `npm run dev`; it serves on `$PORT` (default 8443).
 
-- Preview URL: The user can access the running app through the preview panel
+The backend is 9 independent Flask services (auth, patients, appointments, er, billing, pharmacy, hr, ai, reporting) sitting behind an nginx API gateway, all defined in `keppler-backend/docker-compose.yml`. The frontend only ever talks to the gateway at `http://localhost:8010` -- same `API_BASE` as before the split, no frontend code depends on which service actually owns a route. Start the whole backend with `docker compose up -d` from `keppler-backend/`; each service also has a standalone entrypoint at `backend/services/<name>/app.py` (e.g. `services/auth/app.py`, `services/billing/app.py`) for running one service outside Docker. See `keppler-backend/backend/shared/` for the cross-service auth/CSRF/DB helpers every service imports, and `keppler-backend/gateway/nginx.conf` for the path-to-service routing table.
+
 - Hot reload: Changes to source files are reflected immediately
 
 ## Project Structure
@@ -18,7 +19,7 @@ This is the canonical project structure. Start with task-relevant files below. O
 - `src/index.css` - Global CSS entrypoint and Tailwind CSS v4 import
 - `index.html` - Vite HTML shell containing the `#root` element and loading `src/main.tsx`
 - `package.json` - Project dependencies and the Vite build, development, preview, and formatting scripts
-- `vite.config.ts` - Vite configuration with React, Tailwind CSS v4, and Figma Make plugins plus the `@` alias for `src`
+- `vite.config.ts` - Vite configuration with React, Tailwind CSS v4, and the `@` alias for `src`
 - `.mise.toml` - Toolchain versions for Node.js and pnpm
 
 ## Dependencies

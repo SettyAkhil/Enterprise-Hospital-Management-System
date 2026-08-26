@@ -1,207 +1,189 @@
-import React, { useEffect, useState } from "react";
-import { Table, TR, TD, StatusBadge, Btn, Card, MetricCard } from "./shared";
-import { Input, Modal } from "./ui";
-import { apiFetch, reportError } from "../lib/api";
-import type { Notice } from "../types";
+import React, { useState } from "react";
+import { QueueTab, Table, TR, TD, StatusBadge, Btn, Card, MetricCard, AlertBanner } from "./shared";
+import { Icon } from "./icons";
 
-type Verification = {
-  id: number;
-  patient_id: string | null;
-  patient_name: string;
-  insurer_name: string;
-  policy_number: string | null;
-  member_id: string | null;
-  verification_status: string;
-  coverage_notes: string | null;
-  created_at: string;
-};
+const QUEUES = [
+  { label: "Verification", count: 12 },
+  { label: "Pre-Auth", count: 8 },
+  { label: "Pending", count: 24 },
+  { label: "Approved", count: 89 },
+  { label: "Denied", count: 7 },
+  { label: "Appeals", count: 5 },
+];
 
-type Claim = {
-  id: number;
-  invoice_id: number;
-  insurer_name: string;
-  claim_amount: number;
-  claim_status: string;
-};
+const ELIGIBILITY = [
+  { patient: "Thomas Reed", mrn: "100301", payer: "Medicare", plan: "Medicare Part A", member: "1EG4-TE5-MK72", group: "—", status: "Verified", copay: "$0", ded: "$1,600 met", auth: "Not Required" },
+  { patient: "John Smith", mrn: "100245", payer: "BlueCross PPO", plan: "BlueCross Select PPO", member: "BCB-28847291", group: "EMR-44102", status: "Verified", copay: "$250 inpatient", ded: "$1,200 of $2,500", auth: "Approved" },
+  { patient: "Mary Jones", mrn: "100246", payer: "Aetna HMO", plan: "Aetna HealthFund", member: "AET-9920118", group: "GH-8812", status: "Verified", copay: "$300 inpatient", ded: "$0 remaining", auth: "Pending" },
+  { patient: "Elena Vasquez", mrn: "100198", payer: "Medicaid", plan: "MassHealth Standard", member: "MH-0045512", group: "—", status: "Verified", copay: "$0", ded: "$0", auth: "Not Required" },
+  { patient: "Patricia Okonkwo", mrn: "100149", payer: "BlueCross PPO", plan: "BlueCross Select HMO", member: "BCB-71199044", group: "GEN-2201", status: "Verification Pending", copay: "Unknown", ded: "Unknown", auth: "Required" },
+  { patient: "Marcus Kim", mrn: "100377", payer: "Cigna PPO", plan: "Cigna Connect Plus", member: "CIG-4422981", group: "CORP-8821", status: "Verified", copay: "$150 inpatient", ded: "$800 of $3,000", auth: "Approved" },
+];
 
-function currency(n: number | undefined | null) {
-  return `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function NewVerificationModal({ onClose, onSaved, setNotice }: { onClose: () => void; onSaved: () => void; setNotice: (n: Notice | null) => void }) {
-  const [patientId, setPatientId] = useState("");
-  const [patientName, setPatientName] = useState("");
-  const [insurer, setInsurer] = useState("");
-  const [policyNumber, setPolicyNumber] = useState("");
-  const [memberId, setMemberId] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const submit = async () => {
-    if (!patientName.trim() || !insurer.trim()) {
-      setNotice({ type: "warning", message: "Patient name and insurer are required." });
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiFetch("/api/registration/insurance", {
-        method: "POST",
-        body: JSON.stringify({
-          patient_id: patientId.trim() || undefined,
-          patient_name: patientName.trim(),
-          insurer_name: insurer.trim(),
-          policy_number: policyNumber.trim() || undefined,
-          member_id: memberId.trim() || undefined,
-          verification_status: "pending",
-        }),
-      });
-      setNotice({ type: "success", message: "Eligibility verification request created." });
-      onSaved();
-      onClose();
-    } catch (error) {
-      reportError(setNotice, error as { status?: number; message?: string }, "Unable to create verification.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal open onClose={onClose} title="New Eligibility Verification">
-      <div className="flex flex-col gap-3 p-1">
-        <label className="flex flex-col gap-1 text-[12px] font-medium text-gray-700">Patient ID (optional)<Input value={patientId} onChange={(e) => setPatientId(e.target.value)} placeholder="e.g. PAT-100001" /></label>
-        <label className="flex flex-col gap-1 text-[12px] font-medium text-gray-700">Patient Name<Input value={patientName} onChange={(e) => setPatientName(e.target.value)} /></label>
-        <label className="flex flex-col gap-1 text-[12px] font-medium text-gray-700">Insurer Name<Input value={insurer} onChange={(e) => setInsurer(e.target.value)} placeholder="e.g. BlueCross PPO" /></label>
-        <label className="flex flex-col gap-1 text-[12px] font-medium text-gray-700">Policy Number<Input value={policyNumber} onChange={(e) => setPolicyNumber(e.target.value)} /></label>
-        <label className="flex flex-col gap-1 text-[12px] font-medium text-gray-700">Member ID<Input value={memberId} onChange={(e) => setMemberId(e.target.value)} /></label>
-        <div className="flex justify-end gap-2 mt-2">
-          <Btn variant="ghost" onClick={onClose} disabled={saving}>Cancel</Btn>
-          <Btn variant="primary" onClick={() => void submit()} disabled={saving}>{saving ? "Saving..." : "Create Verification"}</Btn>
-        </div>
-      </div>
-    </Modal>
-  );
-}
+const PRIOR_AUTHS = [
+  { patient: "John Smith", mrn: "100245", service: "Inpatient Medical Admission", payer: "BlueCross PPO", submitted: "08/22/26", status: "Approved", authNum: "AUTH-2026-18845", expires: "08/28/26" },
+  { patient: "Mary Jones", mrn: "100246", service: "CT Abdomen/Pelvis", payer: "Aetna HMO", submitted: "08/21/26", status: "Pending", authNum: "—", expires: "—" },
+  { patient: "Thomas Reed", mrn: "100301", service: "Cardiac Catheterization", payer: "Medicare", submitted: "—", status: "Not Required", authNum: "—", expires: "—" },
+  { patient: "Marcus Kim", mrn: "100377", service: "Inpatient Cardiac Monitoring", payer: "Cigna PPO", submitted: "08/20/26", status: "Approved", authNum: "CIG-2026-5541", expires: "08/27/26" },
+  { patient: "Patricia Okonkwo", mrn: "100149", service: "Hip Replacement Surgery", payer: "BlueCross PPO", submitted: "08/23/26", status: "Pending", authNum: "—", expires: "—" },
+  { patient: "Sandra Brown", mrn: "100331", service: "MRI Brain w/ & w/o", payer: "United PPO", submitted: "08/15/26", status: "Denied", authNum: "UH-DENIED-8231", expires: "—" },
+];
 
 export default function Insurance() {
-  const [notice, setNotice] = useState<Notice | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [verifications, setVerifications] = useState<Verification[]>([]);
-  const [claims, setClaims] = useState<Claim[]>([]);
+  const [activeQueue, setActiveQueue] = useState(0);
   const [activeTab, setActiveTab] = useState<"eligibility" | "auth">("eligibility");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [updating, setUpdating] = useState<number | null>(null);
-
-  const load = () => {
-    setLoading(true);
-    Promise.all([
-      apiFetch<{ verifications: Verification[] }>("/api/registration/insurance"),
-      apiFetch<{ claims: Claim[] }>("/api/billing/claims"),
-    ])
-      .then(([vRes, cRes]) => {
-        setVerifications(vRes.verifications || []);
-        setClaims(cRes.claims || []);
-      })
-      .catch((error) => reportError(setNotice, error, "Unable to load insurance data."))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const verified = verifications.filter((v) => v.verification_status === "verified").length;
-  const pending = verifications.filter((v) => v.verification_status === "pending").length;
-  const submittedClaims = claims.filter((c) => c.claim_status === "submitted").length;
-  const totalClaimAmount = claims.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
-
-  const reverify = async (id: number) => {
-    setUpdating(id);
-    try {
-      await apiFetch(`/api/registration/insurance/${id}`, { method: "PUT", body: JSON.stringify({ verification_status: "verified" }) });
-      load();
-    } catch (error) {
-      reportError(setNotice, error as { status?: number; message?: string }, "Unable to update verification.");
-    } finally {
-      setUpdating(null);
-    }
-  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
-      {modalOpen && <NewVerificationModal onClose={() => setModalOpen(false)} onSaved={load} setNotice={setNotice} />}
-
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
         <div>
-          <h1 className="text-base font-semibold text-gray-900">Insurance &amp; Authorization</h1>
-          <p className="text-[11.5px] text-[#64748B]">Eligibility verification and claims — live from the connected database</p>
+          <h1 className="text-base font-semibold text-gray-900">Insurance & Authorization</h1>
+          <p className="text-[11.5px] text-[#64748B]">Revenue Cycle · Eligibility Verification & Prior Authorization</p>
         </div>
-        <Btn variant="primary" size="sm" onClick={() => setModalOpen(true)}>+ New Verification</Btn>
+        <div className="flex gap-2">
+          <Btn variant="outline" size="sm">Batch Verify</Btn>
+          <Btn variant="primary" size="sm">+ Prior Auth Request</Btn>
+        </div>
       </div>
 
-      {notice && (
-        <div className={`mx-6 mt-3 p-3 rounded-lg text-[12px] font-medium flex items-center justify-between ${notice.type === "error" ? "bg-red-50 text-red-800 border border-red-200" : notice.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}>
-          <span>{notice.message}</span>
-          <button className="underline" onClick={() => setNotice(null)}>Dismiss</button>
-        </div>
-      )}
-
       <div className="p-5 space-y-4">
+        {/* Metrics */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MetricCard label="Total Verifications" value={loading ? "—" : verifications.length} sub="all records" />
-          <MetricCard label="Verified" value={loading ? "—" : verified} color="#16A34A" sub="eligibility confirmed" />
-          <MetricCard label="Pending" value={loading ? "—" : pending} color="#D97706" sub="awaiting verification" />
-          <MetricCard label="Claims Filed" value={loading ? "—" : claims.length} color="#7C3AED" sub={`${submittedClaims} submitted · ${currency(totalClaimAmount)} total`} />
+          <MetricCard label="Verifications Today" value="47" sub="All admissions + new encounters" />
+          <MetricCard label="Prior Auth Pending" value="8" sub="Avg 2.3 days to decision" color="#D97706" />
+          <MetricCard label="Auth Approval Rate" value="91.2%" sub="↑ 3.1% vs last quarter" color="#16A34A" />
+          <MetricCard label="Denials — MTD" value="7" sub="$38K at risk · 5 in appeal" color="#DC2626" />
         </div>
 
+        {/* Alert */}
+        <AlertBanner type="warning" title="Prior Auth Expiring Soon"
+          body="John Smith (BCB-28847291) — Inpatient auth expires Aug 28. Review if continued stay needed." action="Extend Auth" />
+
+        {/* Tabs */}
         <div className="bg-white border border-[#DDE2EC] rounded overflow-hidden">
           <div className="flex border-b border-[#DDE2EC]">
-            <button onClick={() => setActiveTab("eligibility")} className={`px-5 py-2.5 text-[12.5px] font-medium border-b-2 transition-colors ${activeTab === "eligibility" ? "border-[#1B4FD8] text-[#1B4FD8]" : "border-transparent text-[#64748B] hover:text-gray-700"}`}>
+            <button onClick={() => setActiveTab("eligibility")}
+              className={`px-5 py-2.5 text-[12.5px] font-medium border-b-2 transition-colors
+                ${activeTab === "eligibility" ? "border-[#1B4FD8] text-[#1B4FD8]" : "border-transparent text-[#64748B] hover:text-gray-700"}`}>
               Eligibility Verification
             </button>
-            <button onClick={() => setActiveTab("auth")} className={`px-5 py-2.5 text-[12.5px] font-medium border-b-2 transition-colors ${activeTab === "auth" ? "border-[#1B4FD8] text-[#1B4FD8]" : "border-transparent text-[#64748B] hover:text-gray-700"}`}>
-              Insurance Claims
+            <button onClick={() => setActiveTab("auth")}
+              className={`px-5 py-2.5 text-[12.5px] font-medium border-b-2 transition-colors
+                ${activeTab === "auth" ? "border-[#1B4FD8] text-[#1B4FD8]" : "border-transparent text-[#64748B] hover:text-gray-700"}`}>
+              Prior Authorizations
             </button>
           </div>
 
           {activeTab === "eligibility" && (
-            <Table headers={["Patient", "Patient ID", "Insurer", "Policy #", "Member ID", "Status", "Date", ""]}>
-              {!loading && verifications.length === 0 && (
-                <TR><TD colSpan={8} className="text-center text-[#64748B] py-6">No eligibility verifications on file.</TD></TR>
-              )}
-              {verifications.map((v) => (
-                <TR key={v.id}>
-                  <TD><span className="font-semibold text-gray-800">{v.patient_name}</span></TD>
-                  <TD><span className="font-mono text-[11.5px] text-[#64748B]">{v.patient_id || "—"}</span></TD>
-                  <TD><span className="font-medium text-[#64748B]">{v.insurer_name}</span></TD>
-                  <TD><span className="font-mono text-[11.5px] text-[#64748B]">{v.policy_number || "—"}</span></TD>
-                  <TD><span className="font-mono text-[11.5px] text-[#64748B]">{v.member_id || "—"}</span></TD>
-                  <TD><StatusBadge status={v.verification_status} /></TD>
-                  <TD><span className="font-mono text-[11px] text-[#94A3B8]">{new Date(v.created_at).toLocaleDateString()}</span></TD>
-                  <TD>
-                    {v.verification_status !== "verified" && (
-                      <Btn variant="outline" size="xs" onClick={() => void reverify(v.id)} disabled={updating === v.id}>
-                        {updating === v.id ? "Updating…" : "Mark Verified"}
-                      </Btn>
-                    )}
-                  </TD>
-                </TR>
-              ))}
-            </Table>
+            <div>
+              <Table headers={["Patient", "MRN", "Payer", "Plan", "Member ID", "Copay / Ded", "Auth Status", "Eligibility", ""]}>
+                {ELIGIBILITY.map((e, i) => (
+                  <TR key={i}>
+                    <TD><span className="font-semibold text-gray-800">{e.patient}</span></TD>
+                    <TD><span className="font-mono text-[11.5px] text-[#64748B]">{e.mrn}</span></TD>
+                    <TD><span className="font-medium text-[#64748B]">{e.payer}</span></TD>
+                    <TD><span className="text-[11.5px] text-gray-700">{e.plan}</span></TD>
+                    <TD><span className="font-mono text-[11.5px] text-[#64748B]">{e.member}</span></TD>
+                    <TD>
+                      <div>
+                        <div className="text-[12px]">{e.copay}</div>
+                        <div className="text-[11px] text-[#94A3B8]">{e.ded}</div>
+                      </div>
+                    </TD>
+                    <TD>
+                      <span className={`text-[11.5px] font-medium ${e.auth === "Approved" ? "text-[#16A34A]" : e.auth === "Pending" ? "text-[#D97706]" : e.auth === "Required" ? "text-[#DC2626]" : "text-[#64748B]"}`}>
+                        {e.auth}
+                      </span>
+                    </TD>
+                    <TD>
+                      <span className={`text-[11.5px] font-semibold ${e.status === "Verified" ? "text-[#16A34A]" : "text-[#D97706]"}`}>
+                        {e.status === "Verified" ? "✓ " : "⏳ "}{e.status}
+                      </span>
+                    </TD>
+                    <TD>
+                      <div className="flex gap-1">
+                        <Btn variant="ghost" size="xs">View</Btn>
+                        <Btn variant="ghost" size="xs">Re-verify</Btn>
+                      </div>
+                    </TD>
+                  </TR>
+                ))}
+              </Table>
+            </div>
           )}
 
           {activeTab === "auth" && (
-            <Table headers={["Invoice", "Insurer", "Claim Amount", "Status"]}>
-              {!loading && claims.length === 0 && (
-                <TR><TD colSpan={4} className="text-center text-[#64748B] py-6">No claims filed yet.</TD></TR>
-              )}
-              {claims.map((c) => (
-                <TR key={c.id}>
-                  <TD><span className="font-mono text-[11.5px]">#{c.invoice_id}</span></TD>
-                  <TD>{c.insurer_name}</TD>
-                  <TD><span className="font-mono">{currency(c.claim_amount)}</span></TD>
-                  <TD><StatusBadge status={c.claim_status} /></TD>
-                </TR>
-              ))}
-            </Table>
+            <div>
+              {/* Queue tabs */}
+              <div className="flex border-b border-[#F1F5F9] overflow-x-auto">
+                {QUEUES.map((q, i) => (
+                  <QueueTab key={i} label={q.label} count={q.count} active={activeQueue === i} onClick={() => setActiveQueue(i)} />
+                ))}
+              </div>
+              <Table headers={["Patient", "MRN", "Service Requested", "Payer", "Submitted", "Auth #", "Status", "Expires", ""]}>
+                {PRIOR_AUTHS.map((a, i) => (
+                  <TR key={i}>
+                    <TD><span className="font-semibold text-gray-800">{a.patient}</span></TD>
+                    <TD><span className="font-mono text-[11.5px] text-[#64748B]">{a.mrn}</span></TD>
+                    <TD><span className="text-[#64748B]">{a.service}</span></TD>
+                    <TD><span className="text-[#64748B]">{a.payer}</span></TD>
+                    <TD><span className="font-mono text-[11.5px]">{a.submitted}</span></TD>
+                    <TD><span className="font-mono text-[11.5px] text-[#64748B]">{a.authNum}</span></TD>
+                    <TD><StatusBadge status={a.status.replace(/\s/g, "")} /></TD>
+                    <TD>
+                      <span className={`font-mono text-[11.5px] ${a.expires !== "—" && a.expires <= "08/25/26" ? "text-[#DC2626] font-semibold" : "text-[#64748B]"}`}>
+                        {a.expires}
+                      </span>
+                    </TD>
+                    <TD>
+                      <div className="flex gap-1">
+                        <Btn variant="ghost" size="xs">View</Btn>
+                        {a.status === "Denied" && <Btn variant="danger" size="xs">Appeal</Btn>}
+                        {a.status === "Pending" && <Btn variant="outline" size="xs">Follow Up</Btn>}
+                        {a.status === "Approved" && <Btn variant="outline" size="xs">Extend</Btn>}
+                      </div>
+                    </TD>
+                  </TR>
+                ))}
+              </Table>
+            </div>
           )}
         </div>
+
+        {/* Denial Management */}
+        <Card title="Denial Management — Active Cases">
+          <div className="space-y-3">
+            {[
+              { patient: "Sandra Brown", service: "MRI Brain w/ & w/o", payer: "United PPO", denialReason: "Medical necessity not established", amount: "$4,200", daysLeft: 12, stage: "Appeal Filed" },
+              { patient: "George Watts", service: "Extended ED Visit", payer: "Cigna PPO", denialReason: "Level of service downgraded", amount: "$1,850", daysLeft: 5, stage: "Peer Review Pending" },
+              { patient: "Isabel Cruz", service: "Ankle MRI", payer: "Aetna HMO", denialReason: "Requires X-ray first (step therapy)", amount: "$2,100", daysLeft: 21, stage: "Resubmit with X-ray" },
+            ].map((d, i) => (
+              <div key={i} className={`border rounded p-3.5 ${d.daysLeft <= 7 ? "border-[#FECACA] bg-[#FEF2F2]" : "border-[#DDE2EC]"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-[13px] text-gray-900">{d.patient}</span>
+                      <span className="font-mono font-semibold text-[#DC2626] text-[12px]">{d.amount}</span>
+                    </div>
+                    <div className="text-[12px] text-gray-700 mt-0.5">{d.service} · {d.payer}</div>
+                    <div className="text-[11.5px] text-[#D97706] mt-0.5">⚠ {d.denialReason}</div>
+                    <div className="text-[11.5px] text-[#64748B] mt-0.5">Stage: {d.stage}</div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className={`font-mono font-semibold text-[13px] ${d.daysLeft <= 7 ? "text-[#DC2626]" : "text-[#D97706]"}`}>
+                      {d.daysLeft} days left
+                    </div>
+                    <div className="text-[11px] text-[#94A3B8]">to appeal deadline</div>
+                    <div className="flex gap-1 mt-2">
+                      <Btn variant="outline" size="xs">Docs</Btn>
+                      <Btn variant="danger" size="xs">Submit Appeal</Btn>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
     </div>
   );
