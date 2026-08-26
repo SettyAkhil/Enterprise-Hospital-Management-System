@@ -19,6 +19,8 @@ import Insurance from "./components/Insurance";
 import OrderDrawer from "./components/OrderDrawer";
 import CommandPalette from "./components/CommandPalette";
 import Registration from "./components/Registration";
+import OPWorkflow from "./components/OPWorkflow";
+import OPRegistration from "./components/OPRegistration";
 import SmartOCR from "./components/SmartOCR";
 import SymptomAI from "./components/SymptomAI";
 import ClinicalRAG from "./components/ClinicalRAG";
@@ -47,7 +49,7 @@ type Module =
   | "icu" | "discharge" | "triage" | "insurance" | "analytics"
   | "reports" | "admin"
   | "chart" | "register"
-  | "outpatient" | "queue" | "op_management"
+  | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow"
   | "doctor_workflow" | "scheduling"
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
@@ -70,7 +72,9 @@ const NAV: NavItem[] = [
   {
     key: "outpatient", label: "Outpatient", Icon: Icon.Stethoscope,
     children: [
-      { key: "op_management", label: "OP Dashboard" },
+      { key: "op_management", label: "OP Management" },
+      { key: "op_registration", label: "OP Registration" },
+      { key: "op_workflow", label: "OP Clinical Journey" },
       { key: "appointments", label: "Appointments" },
       { key: "queue", label: "Queue Management" },
     ]
@@ -427,6 +431,10 @@ export default function App() {
               module === "triage" ? "Triage" : module === "analytics" ? "Analytics" :
               module === "radiology" ? "Radiology" :
               module === "op_management" ? "OP Management" :
+              module === "op_registration" ? "OP Registration" :
+              module === "op_workflow" ? "OP Clinical Journey" :
+              module === "queue" ? "Queue Management" :
+              module === "appointments" ? "Appointments" :
               module === "patient_exp" ? "Patient Experience" :
               module === "doctor_workflow" ? "Doctor Workflow" :
               module === "scheduling" ? "Doctor Scheduling" :
@@ -469,8 +477,8 @@ export default function App() {
               openOrder={() => setOrderOpen(true)}
             />
           )}
-          {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
-          {module === "er" && <ErPage setNotice={setNotice} />}
+          {module === "appointments" && <Appointments onSelect={() => setModule("op_workflow")} />}
+          {module === "emergency" && <Emergency onSelect={() => setModule("chart")} />}
           {module === "inpatient" && <Inpatient />}
           {module === "beds" && <BedManagementPage setNotice={setNotice} />}
           {module === "nursing" && <NursingDashboard />}
@@ -489,8 +497,12 @@ export default function App() {
           {module === "admin" && <PlaceholderModule title="Administration" sub="Users, roles, departments, and system configuration" />}
 
           {/* Additional Integrated Modules */}
-          {module === "queue" && <QueueManagement />}
+          {module === "queue" && <QueueManagement onStartConsultation={() => setModule("op_workflow")} />}
           {module === "op_management" && <OPManagement />}
+          {module === "op_registration" && (
+            <OPRegistration onProceedToQueue={() => setModule("op_workflow")} />
+          )}
+          {module === "op_workflow" && <OPWorkflow onComplete={() => setModule("op_management")} />}
           {module === "patient_exp" && <PatientExperience />}
           {module === "doctor_workflow" && <DoctorWorkflow />}
           {module === "scheduling" && <DoctorScheduling />}

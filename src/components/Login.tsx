@@ -58,10 +58,19 @@ export default function Login({ onLogin }: LoginProps) {
 
           {/* Title & Subtitle directly below Logo */}
           <div className="mb-12">
-            <h1 className="text-white text-3xl font-bold leading-snug mb-3">
+            <h1
+              className="text-white mb-3"
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+                fontSize: "30px",
+                lineHeight: "41.3px",
+                letterSpacing: "0px",
+              }}
+            >
               Universal Hospital<br />Management System
             </h1>
-            <p className="text-[#94A3B8] text-[13.5px] leading-relaxed max-w-lg">
+            <p className="text-[#94A3B8] text-[13.5px] leading-relaxed max-w-lg" style={{ fontFamily: "'Inter', sans-serif" }}>
               Enterprise-grade clinical operations platform for physicians, nurses, pharmacists, laboratory staff, and administrators.
             </p>
           </div>
