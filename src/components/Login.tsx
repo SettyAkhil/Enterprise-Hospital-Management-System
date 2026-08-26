@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { apiFetch } from "../lib/api";
 
 interface LoginProps { onLogin: () => void; }
 
@@ -10,24 +9,12 @@ export default function Login({ onLogin }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !pass) { setError("Please enter your credentials."); return; }
     setError("");
     setLoading(true);
-    // Authenticates against the ER + Bed Management backend
-    // (`python backend/app.py`, see the integration report) so its
-    // require_permissions()/current_hospital_id() checks have a real
-    // session. Everything else in this app stays a local mock -- this
-    // login is the one thing the ER/Beds pages actually depend on.
-    try {
-      await apiFetch("/api/auth/login", { method: "POST", body: JSON.stringify({ username: user, password: pass }) });
-      onLogin();
-    } catch (err: any) {
-      setError(err?.message || "Invalid credentials.");
-    } finally {
-      setLoading(false);
-    }
+    setTimeout(() => { setLoading(false); onLogin(); }, 900);
   };
 
   const ROLES = [
@@ -127,11 +114,8 @@ export default function Login({ onLogin }: LoginProps) {
                 User ID / Employee Number
               </label>
               <input value={user} onChange={e => setUser(e.target.value)}
-                placeholder="e.g. admin"
+                placeholder="e.g. jcarter@generalhospital.org"
                 className="w-full border border-[#DDE2EC] rounded bg-white text-[13px] px-3.5 py-2.5 focus:outline-none focus:border-[#1B4FD8]" />
-              <div className="text-[10.5px] text-[#94A3B8] mt-1">
-                Demo accounts (ER + Bed Management): admin / Admin@123, reception / Reception@123, nurse / Nurse@123, erdoctor / ErDoctor@123, cardiodoctor / Cardio@123
-              </div>
             </div>
 
             <div>

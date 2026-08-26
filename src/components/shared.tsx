@@ -71,20 +71,14 @@ export function MetricCard({
   label, value, sub, trend, color, action
 }: { label: string; value: string | number; sub?: string; trend?: string; color?: string; action?: string }) {
   return (
-    <div className="bg-white border border-[#DDE2EC] rounded p-3 hover:border-[#1B4FD8] transition-colors cursor-pointer flex flex-col justify-between">
-      <div>
-        <div className="text-[10.5px] font-semibold text-[#64748B] uppercase tracking-wider mb-1 truncate">{label}</div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-xl font-bold leading-none tracking-tight" style={{ color: color || "#0F1624" }}>{value}</span>
-          {trend && <span className={`text-[10.5px] font-mono ${trend.startsWith("↑") ? "text-[#DC2626]" : trend.startsWith("↓") ? "text-[#16A34A]" : "text-[#64748B]"}`}>{trend}</span>}
-        </div>
+    <div className="bg-white border border-[#DDE2EC] rounded p-3.5 hover:border-[#1B4FD8] transition-colors cursor-pointer">
+      <div className="text-[11px] font-medium text-[#64748B] uppercase tracking-wider mb-1">{label}</div>
+      <div className="flex items-end gap-2">
+        <span className="text-2xl font-semibold leading-none" style={{ color: color || "#0F1624" }}>{value}</span>
+        {trend && <span className={`text-[11px] font-mono mb-0.5 ${trend.startsWith("↑") ? "text-[#DC2626]" : trend.startsWith("↓") ? "text-[#16A34A]" : "text-[#64748B]"}`}>{trend}</span>}
       </div>
-      {(sub || action) && (
-        <div className="mt-1.5 pt-1.5 border-t border-[#F1F5F9] flex items-center justify-between text-[10.5px]">
-          {sub && <span className="text-[#94A3B8] truncate">{sub}</span>}
-          {action && <span className="text-[#1B4FD8] font-medium hover:underline ml-auto whitespace-nowrap">{action} →</span>}
-        </div>
-      )}
+      {sub && <div className="text-[11px] text-[#94A3B8] mt-1">{sub}</div>}
+      {action && <div className="text-[11px] text-[#1B4FD8] font-medium mt-2 hover:underline">{action} →</div>}
     </div>
   );
 }
@@ -93,11 +87,11 @@ export function MetricCard({
 export function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[12px]">
+      <table className="w-full text-[12.5px]">
         <thead>
           <tr className="border-b border-[#DDE2EC] bg-[#F8FAFC]">
             {headers.map(h => (
-              <th key={h} className="text-left px-3 py-1.5 font-semibold text-[#64748B] uppercase text-[10.5px] tracking-wider whitespace-nowrap">{h}</th>
+              <th key={h} className="text-left px-3 py-2 font-semibold text-[#64748B] uppercase text-[10.5px] tracking-wider whitespace-nowrap">{h}</th>
             ))}
           </tr>
         </thead>
@@ -116,7 +110,7 @@ export function TR({ children, onClick }: { children: React.ReactNode; onClick?:
 }
 
 export function TD({ children, className }: { children?: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2 ${className || ""}`}>{children}</td>;
+  return <td className={`px-3 py-2.5 ${className || ""}`}>{children}</td>;
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
@@ -126,12 +120,12 @@ export function Card({ title, children, actions, className }: {
   return (
     <div className={`bg-white border border-[#DDE2EC] rounded ${className || ""}`}>
       {title && (
-        <div className="flex items-center justify-between px-3.5 py-2 border-b border-[#DDE2EC]">
-          <span className="text-[11.5px] font-semibold text-gray-800 uppercase tracking-wider">{title}</span>
-          {actions && <div className="flex items-center gap-1.5">{actions}</div>}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#DDE2EC]">
+          <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">{title}</span>
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
       )}
-      <div className="p-3">{children}</div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }
@@ -152,9 +146,9 @@ export function Btn({ children, variant = "primary", size = "sm", onClick, class
     outline: "bg-white text-[#374151] hover:bg-[#F8FAFC] border border-[#DDE2EC]",
   };
   const sizes = {
-    xs: "px-2 py-0.5 text-[10.5px]",
-    sm: "px-2.5 py-1 text-[11.5px]",
-    md: "px-3.5 py-1.5 text-[12.5px]",
+    xs: "px-2 py-1 text-[11px]",
+    sm: "px-3 py-1.5 text-[12px]",
+    md: "px-4 py-2 text-[13px]",
   };
   return (
     <button onClick={onClick}
@@ -175,7 +169,7 @@ export function Input({ placeholder, value, onChange, icon, className }: {
         value={value}
         onChange={e => onChange?.(e.target.value)}
         placeholder={placeholder}
-        className={`w-full border border-[#DDE2EC] rounded bg-white text-[12px] text-gray-800 placeholder:text-[#94A3B8] focus:border-[#1B4FD8] focus:outline-none py-1.5 ${icon ? "pl-8 pr-3" : "px-3"}`}
+        className={`w-full border border-[#DDE2EC] rounded bg-white text-[12.5px] text-gray-800 placeholder:text-[#94A3B8] focus:border-[#1B4FD8] focus:outline-none py-1.5 ${icon ? "pl-8 pr-3" : "px-3"}`}
       />
     </div>
   );
@@ -193,13 +187,13 @@ export function AlertBanner({ type, title, body, action }: {
   const s = map[type];
   return (
     <div style={{ backgroundColor: s.bg, borderColor: s.border, color: s.text }}
-      className="border rounded px-3 py-1.5 flex items-center gap-2.5 text-[12px]">
-      <span className="font-bold text-sm leading-none">{s.icon}</span>
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="font-semibold">{title}</span>
-        {body && <span className="text-[11.5px] opacity-80 truncate">— {body}</span>}
+      className="border rounded px-3.5 py-2.5 flex items-start gap-2.5">
+      <span className="font-bold mt-px text-sm">{s.icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-xs">{title}</div>
+        {body && <div className="text-[11.5px] mt-0.5 opacity-80">{body}</div>}
       </div>
-      {action && <button className="text-[11px] font-semibold underline underline-offset-2 whitespace-nowrap hover:opacity-80 ml-2">{action}</button>}
+      {action && <button className="text-[11px] font-semibold underline underline-offset-2 whitespace-nowrap">{action}</button>}
     </div>
   );
 }

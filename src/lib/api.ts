@@ -16,14 +16,22 @@ export function setHospitalCode(hospitalCode: string): void {
   window.localStorage.setItem(HOSPITAL_CODE_KEY, normalized);
 }
 
+export function getCsrfToken(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 export async function apiFetch<T = any>(
   path: string,
   options: RequestInit & { cache?: RequestCache } = {},
 ): Promise<T> {
   const method = (options.method || "GET").toUpperCase();
+  const csrfToken = getCsrfToken();
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     "X-Hospital-Code": getHospitalCode(),
+    ...(csrfToken && method !== "GET" && method !== "HEAD" ? { "X-CSRF-Token": csrfToken } : {}),
     ...(options.headers || {}),
   };
 

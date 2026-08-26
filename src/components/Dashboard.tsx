@@ -1,271 +1,174 @@
 import React, { useState } from "react";
+import { MetricCard, Card, Table, TR, TD, StatusBadge, AlertBanner, Btn } from "./shared";
 import { Icon } from "./icons";
 
+const ALERTS = [
+  { type: "critical" as const, title: "Critical Lab Result — John Smith", body: "Potassium 6.2 mmol/L — Requires immediate physician review", action: "Review Now" },
+  { type: "warning" as const, title: "ED Capacity Alert", body: "ED census at 38/42 beds. 8 patients waiting > 30 minutes.", action: "View ED" },
+];
+
 const QUEUES = [
-  { dept: "Emergency", inCare: 30, waiting: 8, critical: 3, available: 4 },
-  { dept: "Inpatient 3N", inCare: 24, waiting: 0, critical: 2, available: 2 },
-  { dept: "Inpatient 4S", inCare: 28, waiting: 0, critical: 1, available: 4 },
-  { dept: "ICU", inCare: 12, waiting: 0, critical: 6, available: 2 },
-  { dept: "Surgery OR", inCare: 3, waiting: 2, critical: 0, available: 2 },
+  { dept: "Emergency", waiting: 8, critical: 3, inCare: 30, available: 4 },
+  { dept: "Inpatient 3N", waiting: 0, critical: 2, inCare: 24, available: 2 },
+  { dept: "Inpatient 4S", waiting: 0, critical: 1, inCare: 28, available: 4 },
+  { dept: "ICU", waiting: 0, critical: 6, inCare: 12, available: 2 },
+  { dept: "Surgery OR", waiting: 2, critical: 0, inCare: 3, available: 2 },
 ];
 
 const APPOINTMENTS = [
-  { time: "09:00", patient: "Sarah Connelly", provider: "Dr. Adams · Follow-up", status: "Completed", type: "completed" },
-  { time: "09:30", patient: "Marcus Webb", provider: "Dr. Lee · New Patient", status: "In Progress", type: "in_progress" },
-  { time: "10:00", patient: "Elena Torres", provider: "Dr. Adams · Follow-up", status: "Checked In", type: "checked_in" },
+  { time: "09:00", patient: "Sarah Connelly", provider: "Dr. Adams", type: "Follow-up", room: "101", status: "Completed" },
+  { time: "09:30", patient: "Marcus Webb", provider: "Dr. Lee", type: "New Patient", room: "102", status: "In Progress" },
+  { time: "10:00", patient: "Elena Torres", provider: "Dr. Adams", type: "Follow-up", room: "103", status: "Checked In" },
+  { time: "10:30", patient: "Robert Kim", provider: "Dr. Patel", type: "Procedure", room: "104", status: "Pending" },
+  { time: "11:00", patient: "Jennifer Walsh", provider: "Dr. Lee", type: "Consult", room: "102", status: "Pending" },
+  { time: "11:30", patient: "David Chu", provider: "Dr. Adams", type: "Follow-up", room: "101", status: "Pending" },
+];
+
+const PENDING_LABS = [
+  { patient: "John Smith", mrn: "100245", test: "BMP", ordered: "08:42", status: "Processing" },
+  { patient: "Mary Jones", mrn: "100246", test: "CBC w/ diff", ordered: "09:10", status: "Collected" },
+  { patient: "Thomas Reed", mrn: "100301", test: "Troponin x2", ordered: "09:28", status: "Critical" },
+  { patient: "Anna Weiss", mrn: "100189", test: "Urinalysis", ordered: "09:55", status: "Pending" },
 ];
 
 export default function Dashboard({ navigate }: { navigate: (m: string, s?: string) => void }) {
   const [_, setRefresh] = useState(0);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F4F6F9] min-w-0 p-5 space-y-4 text-gray-900" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      {/* ── Dashboard Title Row ─────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+    <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
+      {/* Page header */}
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
         <div>
-          <h1 className="text-[19px] font-bold text-[#0F172A] tracking-tight">Hospital Operations Dashboard</h1>
-          <p className="text-[12px] text-[#64748B] mt-0.5">General Hospital · 3-North Medical · Last updated 10:47 AM</p>
+          <h1 className="text-base font-semibold text-gray-900">Hospital Operations Dashboard</h1>
+          <p className="text-[11.5px] text-[#64748B]">General Hospital · 3-North Medical · Last updated 10:47 AM</p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] text-[#64748B]">Aug 23, 2026 · 10:47 AM</span>
-          <button
-            onClick={() => setRefresh(n => n + 1)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#DDE2EC] rounded-lg text-[12px] font-medium text-gray-700 hover:bg-[#F8FAFC] shadow-xs transition-colors">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-[#64748B]">Aug 23, 2026 · 10:47 AM</span>
+          <Btn variant="outline" size="xs" onClick={() => setRefresh(n => n+1)}>
             <Icon.Refresh /> Refresh
-          </button>
+          </Btn>
         </div>
       </div>
 
-      {/* ── Alert Banners ───────────────────────────────────────── */}
-      <div className="space-y-2.5">
-        {/* Critical Alert */}
-        <div className="bg-[#FFF1F2] border border-[#FECDD3] rounded-lg px-4 py-3 flex items-center justify-between shadow-2xs">
-          <div className="flex items-center gap-3">
-            <span className="text-[#DC2626] text-base"><Icon.Alert /></span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-[13px] font-bold text-[#DC2626]">Critical Lab Result — John Smith</span>
-              <span className="text-[12px] text-[#475569]">Potassium 6.2 mmol/L — Requires immediate physician review</span>
-            </div>
-          </div>
-          <button
-            onClick={() => navigate("laboratory")}
-            className="text-[12.5px] font-bold text-[#DC2626] hover:underline cursor-pointer">
-            Review Now
-          </button>
+      <div className="p-5 space-y-4">
+        {/* Alerts */}
+        <div className="space-y-2">
+          {ALERTS.map((a, i) => <AlertBanner key={i} {...a} />)}
         </div>
 
-        {/* Warning Alert */}
-        <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-4 py-3 flex items-center justify-between shadow-2xs">
-          <div className="flex items-center gap-3">
-            <span className="text-[#D97706] text-base"><Icon.Alert /></span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-[13px] font-bold text-[#D97706]">ED Capacity Alert</span>
-              <span className="text-[12px] text-[#475569]">ED census at 38/42 beds. 8 patients waiting &gt; 30 minutes.</span>
-            </div>
-          </div>
-          <button
-            onClick={() => navigate("er")}
-            className="text-[12.5px] font-bold text-[#D97706] hover:underline cursor-pointer">
-            View ED
-          </button>
-        </div>
-      </div>
-
-      {/* ── 6-Column KPI Grid ───────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* Card 1 */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex flex-col justify-between hover:border-[#2563EB] transition-colors">
-          <div>
-            <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">PATIENTS TODAY</div>
-            <div className="flex items-baseline gap-1.5 mt-1.5">
-              <span className="text-[24px] font-extrabold text-[#0F172A] leading-tight">428</span>
-              <span className="text-[11.5px] font-bold text-[#DC2626]">↑12</span>
-            </div>
-            <div className="text-[11px] text-[#94A3B8] mt-0.5">↑ 12 from yesterday</div>
-          </div>
-          <button onClick={() => navigate("patients")} className="text-[11.5px] font-semibold text-[#2563EB] hover:underline mt-3 text-left">
-            View All →
-          </button>
+        {/* Key Metrics */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <MetricCard label="Patients Today" value="428" sub="↑ 12 from yesterday" trend="↑12" action="View All" />
+          <MetricCard label="Appointments" value="126" sub="14 remaining today" action="Schedule" />
+          <MetricCard label="Admissions" value="38" sub="7 pending bed assignment" trend="↑3" action="Bed Board" />
+          <MetricCard label="Discharges" value="31" sub="6 ready to discharge" action="View" />
+          <MetricCard label="ED Waiting" value="8" sub="3 ESI-1 or ESI-2" color="#DC2626" trend="↑4" action="View ED" />
+          <MetricCard label="Critical Alerts" value="7" sub="2 unacknowledged" color="#DC2626" action="Review" />
         </div>
 
-        {/* Card 2 */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex flex-col justify-between hover:border-[#2563EB] transition-colors">
-          <div>
-            <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">APPOINTMENTS</div>
-            <div className="mt-1.5">
-              <span className="text-[24px] font-extrabold text-[#0F172A] leading-tight">126</span>
-            </div>
-            <div className="text-[11px] text-[#94A3B8] mt-0.5">14 remaining today</div>
-          </div>
-          <button onClick={() => navigate("appointments")} className="text-[11.5px] font-semibold text-[#2563EB] hover:underline mt-3 text-left">
-            Schedule →
-          </button>
-        </div>
-
-        {/* Card 3 */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex flex-col justify-between hover:border-[#2563EB] transition-colors">
-          <div>
-            <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">ADMISSIONS</div>
-            <div className="flex items-baseline gap-1.5 mt-1.5">
-              <span className="text-[24px] font-extrabold text-[#0F172A] leading-tight">38</span>
-              <span className="text-[11.5px] font-bold text-[#DC2626]">↑3</span>
-            </div>
-            <div className="text-[11px] text-[#94A3B8] mt-0.5">7 pending bed assignment</div>
-          </div>
-          <button onClick={() => navigate("inpatient")} className="text-[11.5px] font-semibold text-[#2563EB] hover:underline mt-3 text-left">
-            Bed Board →
-          </button>
-        </div>
-
-        {/* Card 4 */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex flex-col justify-between hover:border-[#2563EB] transition-colors">
-          <div>
-            <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">DISCHARGES</div>
-            <div className="mt-1.5">
-              <span className="text-[24px] font-extrabold text-[#0F172A] leading-tight">31</span>
-            </div>
-            <div className="text-[11px] text-[#94A3B8] mt-0.5">6 ready to discharge</div>
-          </div>
-          <button onClick={() => navigate("discharge")} className="text-[11.5px] font-semibold text-[#2563EB] hover:underline mt-3 text-left">
-            View →
-          </button>
-        </div>
-
-        {/* Card 5 */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex flex-col justify-between hover:border-[#2563EB] transition-colors">
-          <div>
-            <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">ED WAITING</div>
-            <div className="flex items-baseline gap-1.5 mt-1.5">
-              <span className="text-[24px] font-extrabold text-[#DC2626] leading-tight">8</span>
-              <span className="text-[11.5px] font-bold text-[#DC2626]">↑4</span>
-            </div>
-            <div className="text-[11px] text-[#94A3B8] mt-0.5">3 ESI-1 or ESI-2</div>
-          </div>
-          <button onClick={() => navigate("er")} className="text-[11.5px] font-semibold text-[#2563EB] hover:underline mt-3 text-left">
-            View ED →
-          </button>
-        </div>
-
-        {/* Card 6 */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex flex-col justify-between hover:border-[#2563EB] transition-colors">
-          <div>
-            <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">CRITICAL ALERTS</div>
-            <div className="mt-1.5">
-              <span className="text-[24px] font-extrabold text-[#DC2626] leading-tight">7</span>
-            </div>
-            <div className="text-[11px] text-[#94A3B8] mt-0.5">2 unacknowledged</div>
-          </div>
-          <button onClick={() => navigate("laboratory")} className="text-[11.5px] font-semibold text-[#2563EB] hover:underline mt-3 text-left">
-            Review →
-          </button>
-        </div>
-      </div>
-
-      {/* ── Main Section: Department Census & Today's Appointments ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)] gap-4">
-        {/* Department Census */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col">
-          <div className="flex items-center justify-between pb-3 border-b border-[#F1F5F9] mb-1">
-            <span className="text-[12.5px] font-bold text-[#0F172A] tracking-wider uppercase">DEPARTMENT CENSUS</span>
-            <button onClick={() => navigate("inpatient")} className="text-[12px] font-semibold text-[#64748B] hover:text-[#2563EB]">
-              Full View
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#F1F5F9] text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">
-                  <th className="py-2.5 px-2">DEPARTMENT</th>
-                  <th className="py-2.5 px-2">IN CARE</th>
-                  <th className="py-2.5 px-2">WAITING</th>
-                  <th className="py-2.5 px-2">CRITICAL</th>
-                  <th className="py-2.5 px-2">AVAILABLE</th>
-                  <th className="py-2.5 px-2"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
+        {/* Department Status + Appointments */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <Card title="Department Census" actions={<Btn variant="ghost" size="xs">Full View</Btn>}>
+              <Table headers={["Department", "In Care", "Waiting", "Critical", "Available", ""]}>
                 {QUEUES.map((q, i) => (
-                  <tr key={i} className="hover:bg-[#F8FAFC] transition-colors">
-                    <td className="py-3 px-2 font-bold text-[#0F172A]">{q.dept}</td>
-                    <td className="py-3 px-2 font-medium text-[#334155]">{q.inCare}</td>
-                    <td className="py-3 px-2">
-                      {q.waiting > 0 ? (
-                        <span className="font-bold text-[#EA580C]">{q.waiting}</span>
-                      ) : (
-                        <span className="text-[#94A3B8] font-medium">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-2">
-                      {q.critical > 0 ? (
-                        <span className="font-bold text-[#DC2626]">{q.critical}</span>
-                      ) : (
-                        <span className="text-[#94A3B8] font-medium">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-2 font-bold text-[#16A34A]">{q.available}</td>
-                    <td className="py-3 px-2 text-right">
-                      <button onClick={() => navigate("inpatient")} className="text-[12px] font-semibold text-[#2563EB] hover:underline">
-                        View →
-                      </button>
-                    </td>
-                  </tr>
+                  <TR key={i}>
+                    <TD><span className="font-medium text-gray-800">{q.dept}</span></TD>
+                    <TD><span className="font-mono text-[12px]">{q.inCare}</span></TD>
+                    <TD><span className="font-mono text-[12px]">{q.waiting > 0 ? <span className="text-[#D97706] font-semibold">{q.waiting}</span> : "—"}</span></TD>
+                    <TD><span className="font-mono text-[12px]">{q.critical > 0 ? <span className="text-[#DC2626] font-semibold">{q.critical}</span> : "—"}</span></TD>
+                    <TD><span className="font-mono text-[12px] text-[#16A34A]">{q.available}</span></TD>
+                    <TD><Btn variant="ghost" size="xs" onClick={() => navigate("inpatient")}>View →</Btn></TD>
+                  </TR>
                 ))}
-              </tbody>
-            </table>
+              </Table>
+            </Card>
           </div>
-        </div>
 
-        {/* Today's Appointments */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-[#F1F5F9] mb-3">
-              <span className="text-[12.5px] font-bold text-[#0F172A] tracking-wider uppercase">TODAY'S APPOINTMENTS</span>
-              <button onClick={() => navigate("appointments")} className="text-[12px] font-semibold text-[#64748B] hover:text-[#2563EB]">
-                All
-              </button>
-            </div>
-
-            <div className="space-y-4">
+          <Card title="Today's Appointments" actions={<Btn variant="ghost" size="xs" onClick={() => navigate("appointments")}>All</Btn>}>
+            <div className="space-y-1">
               {APPOINTMENTS.map((a, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="flex items-start gap-3">
-                    <span className="text-[12px] text-[#64748B] font-medium mt-0.5 w-10 flex-shrink-0">{a.time}</span>
-                    <div>
-                      <div className="text-[13px] font-bold text-[#0F172A] leading-tight">{a.patient}</div>
-                      <div className="text-[11.5px] text-[#64748B] mt-0.5">{a.provider}</div>
-                    </div>
+                <div key={i} className="flex items-center gap-2.5 py-1.5 border-b border-[#F1F5F9] last:border-0">
+                  <span className="font-mono text-[11px] text-[#94A3B8] w-10 flex-shrink-0">{a.time}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-medium text-gray-800 truncate">{a.patient}</div>
+                    <div className="text-[11px] text-[#64748B] truncate">{a.provider} · {a.type}</div>
                   </div>
-
-                  <div>
-                    {a.type === "completed" && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#F1F5F9] text-[#475569]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#64748B]" />
-                        Completed
-                      </span>
-                    )}
-                    {a.type === "in_progress" && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#EFF6FF] text-[#2563EB]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
-                        In Progress
-                      </span>
-                    )}
-                    {a.type === "checked_in" && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#EFF6FF] text-[#2563EB]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
-                        Checked In
-                      </span>
-                    )}
-                  </div>
+                  <StatusBadge status={a.status} />
                 </div>
               ))}
             </div>
-          </div>
-
-          <button onClick={() => navigate("appointments")} className="text-[12px] font-semibold text-[#2563EB] hover:underline mt-6 text-left block">
-            View Full Schedule →
-          </button>
+          </Card>
         </div>
+
+        {/* Pending Labs + Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card title="Pending Lab Results" actions={<Btn variant="ghost" size="xs" onClick={() => navigate("laboratory")}>View All →</Btn>}>
+            <Table headers={["Patient", "MRN", "Test", "Ordered", "Status"]}>
+              {PENDING_LABS.map((l, i) => (
+                <TR key={i}>
+                  <TD><span className="font-medium text-gray-800">{l.patient}</span></TD>
+                  <TD><span className="font-mono text-[11.5px] text-[#64748B]">{l.mrn}</span></TD>
+                  <TD>{l.test}</TD>
+                  <TD><span className="font-mono text-[11.5px]">{l.ordered}</span></TD>
+                  <TD>
+                    {l.status === "Critical" ? (
+                      <span className="bg-[#FEE2E2] text-[#B91C1C] text-[11px] font-semibold px-2 py-0.5 rounded border border-[#FECACA]">⚠ Critical</span>
+                    ) : <StatusBadge status={l.status} />}
+                  </TD>
+                </TR>
+              ))}
+            </Table>
+          </Card>
+
+          <Card title="Quick Actions">
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: "New Patient Registration", icon: "👤", action: () => navigate("patients", "register") },
+                { label: "Schedule Appointment", icon: "📅", action: () => navigate("appointments") },
+                { label: "View ED Board", icon: "🚨", action: () => navigate("emergency") },
+                { label: "Bed Assignment", icon: "🛏", action: () => navigate("inpatient") },
+                { label: "Lab Orders", icon: "🧪", action: () => navigate("laboratory") },
+                { label: "Pharmacy Queue", icon: "💊", action: () => navigate("pharmacy") },
+                { label: "OR Board", icon: "⚕", action: () => navigate("surgery") },
+                { label: "Billing Queue", icon: "💳", action: () => navigate("billing") },
+              ].map((q, i) => (
+                <button key={i} onClick={q.action}
+                  className="flex items-center gap-2.5 p-2.5 border border-[#DDE2EC] rounded text-left hover:border-[#1B4FD8] hover:bg-[#EFF6FF] transition-colors group">
+                  <span className="text-base">{q.icon}</span>
+                  <span className="text-[12px] font-medium text-gray-700 group-hover:text-[#1B4FD8]">{q.label}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        {/* Bed Utilization mini-chart */}
+        <Card title="Unit Utilization Overview">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { unit: "3N Medical", total: 32, occupied: 28, color: "#DC2626" },
+              { unit: "4S Medical", total: 32, occupied: 24, color: "#D97706" },
+              { unit: "ICU", total: 14, occupied: 12, color: "#DC2626" },
+              { unit: "Oncology 5W", total: 24, occupied: 18, color: "#D97706" },
+              { unit: "Surgery 2E", total: 20, occupied: 10, color: "#16A34A" },
+            ].map((u, i) => {
+              const pct = Math.round((u.occupied / u.total) * 100);
+              return (
+                <div key={i} className="text-center">
+                  <div className="text-[11.5px] font-medium text-gray-700 mb-1.5">{u.unit}</div>
+                  <div className="relative h-2 bg-[#E2E8F0] rounded-full mb-1.5">
+                    <div className="absolute left-0 top-0 h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: u.color }} />
+                  </div>
+                  <div className="text-[11px] text-[#64748B]">
+                    <span className="font-mono font-semibold" style={{ color: u.color }}>{u.occupied}</span>
+                    <span className="text-[#94A3B8]">/{u.total} · {pct}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       </div>
     </div>
   );
