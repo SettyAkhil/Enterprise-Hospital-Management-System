@@ -115,8 +115,8 @@ export function TR({ children, onClick }: { children: React.ReactNode; onClick?:
   );
 }
 
-export function TD({ children, className }: { children?: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2 ${className || ""}`}>{children}</td>;
+export function TD({ children, className, colSpan }: { children?: React.ReactNode; className?: string; colSpan?: number }) {
+  return <td className={`px-3 py-2 ${className || ""}`} colSpan={colSpan}>{children}</td>;
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
@@ -137,12 +137,13 @@ export function Card({ title, children, actions, className }: {
 }
 
 // ─── Btn ──────────────────────────────────────────────────────────────────────
-export function Btn({ children, variant = "primary", size = "sm", onClick, className }: {
+export function Btn({ children, variant = "primary", size = "sm", onClick, className, disabled }: {
   children: React.ReactNode;
   variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
   size?: "xs" | "sm" | "md";
   onClick?: () => void;
   className?: string;
+  disabled?: boolean;
 }) {
   const variants = {
     primary: "bg-[#1B4FD8] text-white hover:bg-[#1740B4] border border-[#1B4FD8]",
@@ -157,7 +158,7 @@ export function Btn({ children, variant = "primary", size = "sm", onClick, class
     md: "px-3.5 py-1.5 text-[12.5px]",
   };
   return (
-    <button onClick={onClick}
+    <button onClick={onClick} disabled={disabled}
       className={`${variants[variant]} ${sizes[size]} rounded font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${className || ""}`}>
       {children}
     </button>
@@ -205,8 +206,8 @@ export function AlertBanner({ type, title, body, action }: {
 }
 
 // ─── Timeline Item ────────────────────────────────────────────────────────────
-export function TimelineItem({ time, type, title, detail, isLast }: {
-  time: string; type: string; title: string; detail?: string; isLast?: boolean;
+export function TimelineItem({ time, type, title, detail, isLast, children }: {
+  time: string; type: string; title: string; detail?: string; isLast?: boolean; children?: React.ReactNode;
 }) {
   const typeColors: Record<string, string> = {
     clinical: "#1B4FD8", lab: "#7C3AED", imaging: "#0284C7",
@@ -226,32 +227,50 @@ export function TimelineItem({ time, type, title, detail, isLast }: {
         </div>
         <div className="text-[12.5px] font-medium text-gray-800">{title}</div>
         {detail && <div className="text-[11.5px] text-[#64748B] mt-0.5">{detail}</div>}
+        {children && <div className="text-[11.5px] text-[#64748B] mt-0.5">{children}</div>}
       </div>
     </div>
   );
 }
 
 // ─── Patient Banner ───────────────────────────────────────────────────────────
-export function PatientBanner({ onAction }: { onAction?: (a: string) => void }) {
+export function PatientBanner({ patient, onAction }: { patient?: any; onAction?: (a: string) => void }) {
+  const name = patient?.patient_name || patient?.name || "Unknown Patient";
+  const initials = name.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase();
+  const mrn = patient?.patient_id || patient?.mrn || "—";
+  const age = patient?.age ?? "—";
+  const gender = patient?.gender || "—";
+  const dob = patient?.dob || "—";
+  const phone = patient?.phone || "—";
+  const allergies = (patient?.allergies || "").trim();
+  const bloodGroup = patient?.blood_group;
+  const address = patient?.address;
+
   return (
     <div className="bg-white border-b border-[#DDE2EC] px-5 py-3">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#1B4FD8] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">JS</div>
+          <div className="w-10 h-10 rounded-full bg-[#1B4FD8] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">{initials}</div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-base font-semibold text-gray-900">John Smith</span>
-              <span className="bg-[#FEE2E2] text-[#B91C1C] text-[11px] font-semibold px-2 py-0.5 rounded border border-[#FECACA] flex items-center gap-1">
-                ⚠ ALLERGY: Penicillin
-              </span>
-              <StatusBadge status="Inpatient" />
+              <span className="text-base font-semibold text-gray-900">{name}</span>
+              {allergies ? (
+                <span className="bg-[#FEE2E2] text-[#B91C1C] text-[11px] font-semibold px-2 py-0.5 rounded border border-[#FECACA] flex items-center gap-1">
+                  ⚠ ALLERGY: {allergies}
+                </span>
+              ) : (
+                <span className="bg-[#F1F5F9] text-[#64748B] text-[11px] font-semibold px-2 py-0.5 rounded border border-[#E2E8F0]">
+                  NKDA
+                </span>
+              )}
+              <StatusBadge status={patient?.status || "Active"} />
             </div>
             <div className="flex items-center gap-3 mt-0.5 text-[11.5px] text-[#64748B] flex-wrap">
-              <span>DOB: 04/12/1985 · 41 yrs · Male</span>
-              <span className="font-mono text-[#374151]">MRN: 100245</span>
-              <span>PCP: Dr. Anderson</span>
-              <span>Room: 204 · 3N Medical</span>
-              <span>Ins: BlueCross PPO</span>
+              <span className="font-mono">MRN: {mrn}</span>
+              <span>{age} yrs · {gender} · DOB: {dob}</span>
+              <span>{phone}</span>
+              {bloodGroup && <span>Blood Group: {bloodGroup}</span>}
+              {address && <span className="truncate max-w-[220px]">{address}</span>}
             </div>
           </div>
         </div>

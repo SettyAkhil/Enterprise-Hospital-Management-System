@@ -33,7 +33,16 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
-      watch: { ignored: ['**/.figma/**'] },
+      watch: { ignored: ['**/.figma/**', '**/dpi-ocr/**', '**/public/**', '**/*.png', '**/*.jpg', '**/*.jpeg'] },
+      // Routes API calls through this same origin/port to the Keppler backend,
+      // so only one port ever needs to be reachable (e.g. through an SSH
+      // tunnel) -- the frontend's own fetches never need a second origin.
+      proxy: {
+        '/api': {
+          target: process.env.BACKEND_URL || 'http://localhost:8010',
+          changeOrigin: true,
+        },
+      },
     },
     preview: {
       host: '0.0.0.0',

@@ -35,8 +35,8 @@ export const Icon = {
   Billing: () => (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1.5" y="3" width="12" height="9" rx="1" stroke="currentColor" strokeWidth="1.3"/><path d="M1.5 6h12" stroke="currentColor" strokeWidth="1.3"/><path d="M4.5 9.5h3M11 9.5h-.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
   ),
-  Insurance: () => (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L2 4v4c0 3.5 2.5 5.5 5.5 6 3-0.5 5.5-2.5 5.5-6V4L7.5 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/><path d="M5 7.5l1.5 1.5 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+  Insurance: ({ className }: { className?: string }) => (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={className}><path d="M7.5 1.5L2 4v4c0 3.5 2.5 5.5 5.5 6 3-0.5 5.5-2.5 5.5-6V4L7.5 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/><path d="M5 7.5l1.5 1.5 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
   ),
   Reports: () => (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2" y="1.5" width="11" height="12" rx="1" stroke="currentColor" strokeWidth="1.3"/><path d="M4.5 5h6M4.5 7.5h6M4.5 10h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
@@ -62,8 +62,8 @@ export const Icon = {
   ChevronDown: () => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5l3.5 3 3.5-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
   ),
-  ChevronRight: () => (
-    <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M4 2.5l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+  ChevronRight: ({ className }: { className?: string }) => (
+    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" className={className}><path d="M4 2.5l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
   ),
   Alert: () => (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1L14 13H1L7.5 1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/><path d="M7.5 6v3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="7.5" cy="11" r=".75" fill="currentColor"/></svg>

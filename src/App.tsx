@@ -478,8 +478,8 @@ export default function App() {
             />
           )}
           {module === "appointments" && <Appointments onSelect={() => setModule("op_workflow")} />}
-          {module === "emergency" && <Emergency onSelect={() => setModule("chart")} />}
           {module === "inpatient" && <Inpatient />}
+          {module === "er" && <ErPage setNotice={setNotice} />}
           {module === "beds" && <BedManagementPage setNotice={setNotice} />}
           {module === "nursing" && <NursingDashboard />}
           {module === "laboratory" && <Laboratory />}

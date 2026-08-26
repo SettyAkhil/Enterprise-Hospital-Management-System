@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StatusBadge, Btn, Input } from "./shared";
 import { Icon } from "./icons";
+import { apiFetch } from "../lib/api";
 
 const PATIENTS = [
   { initials: "JS", name: "John Smith", mrn: "100245", dob: "04/12/1985", age: 41, sex: "M", provider: "Dr. Anderson", status: "Inpatient", location: "Room 204", phone: "(617) 555-0182", ins: "BlueCross PPO", alerts: ["Allergy: Penicillin"] },
@@ -14,25 +15,41 @@ const PATIENTS = [
 ];
 
 export default function PatientSearch({ onSelect, onRegister }: {
-  onSelect: (p: typeof PATIENTS[0]) => void;
+  onSelect: (p: any) => void;
   onRegister: () => void;
 }) {
   const [q, setQ] = useState("");
-  const filtered = q.length > 0
-    ? PATIENTS.filter(p =>
-        p.name.toLowerCase().includes(q.toLowerCase()) ||
-        p.mrn.includes(q) ||
-        p.dob.includes(q) ||
-        p.phone.includes(q)
-      )
-    : PATIENTS;
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    apiFetch(`/api/emr/search?q=${encodeURIComponent(q)}`)
+      .then(res => {
+        const mapped = res.map((p: any) => ({
+          ...p,
+          initials: (p.name?.[0] || "") + (p.last_name?.[0] || ""),
+          name: `${p.name || ""} ${p.last_name || ""}`.trim(),
+          mrn: p.patient_id,
+          sex: p.gender === "Male" ? "M" : (p.gender === "Female" ? "F" : "U"),
+          provider: "Not Assigned",
+          status: "Active",
+          location: "Not Admitted",
+          ins: "Unknown",
+          alerts: []
+        }));
+        setPatients(mapped);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [q]);
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-gray-900">Patient Search</h1>
-          <p className="text-[11.5px] text-[#64748B]">{PATIENTS.length} active records · Search by name, MRN, DOB, or phone</p>
+          <p className="text-[11.5px] text-[#64748B]">{loading ? "Searching..." : `${patients.length} active records`} · Search by name, MRN, DOB, or phone</p>
         </div>
         <Btn variant="primary" size="sm" onClick={onRegister}><Icon.Plus /> New Patient</Btn>
       </div>
@@ -62,14 +79,14 @@ export default function PatientSearch({ onSelect, onRegister }: {
           </div>
           <div className="flex items-center gap-2 mt-3">
             <Btn variant="primary" size="sm">Search</Btn>
-            <Btn variant="ghost" size="sm">Clear</Btn>
-            <span className="text-[11.5px] text-[#64748B] ml-2">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
+            <Btn variant="ghost" size="sm" onClick={() => setQ("")}>Clear</Btn>
+            <span className="text-[11.5px] text-[#64748B] ml-2">{patients.length} result{patients.length !== 1 ? "s" : ""}</span>
           </div>
         </div>
 
         {/* Results */}
         <div className="space-y-2">
-          {filtered.map((p, i) => (
+          {patients.map((p, i) => (
             <div key={i} className="bg-white border border-[#DDE2EC] rounded hover:border-[#1B4FD8] transition-colors">
               <div className="p-4 flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-[#1B4FD8] flex items-center justify-center text-white text-[13px] font-semibold flex-shrink-0">
@@ -80,7 +97,7 @@ export default function PatientSearch({ onSelect, onRegister }: {
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[13.5px] font-semibold text-gray-900">{p.name}</span>
-                        {p.alerts.map((a, j) => (
+                        {p.alerts.map((a: any, j: number) => (
                           <span key={j} className="bg-[#FEF3C7] text-[#B45309] text-[11px] font-medium px-1.5 py-0.5 rounded border border-[#FDE68A]">
                             ⚠ {a}
                           </span>
@@ -109,7 +126,7 @@ export default function PatientSearch({ onSelect, onRegister }: {
               </div>
             </div>
           ))}
-          {filtered.length === 0 && (
+          {!loading && patients.length === 0 && (
             <div className="bg-white border border-[#DDE2EC] rounded p-12 text-center">
               <div className="text-[#94A3B8] text-4xl mb-3">🔍</div>
               <div className="text-sm font-semibold text-gray-700 mb-1">No patients found</div>

@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StatusBadge, Btn, Card } from "./shared";
+import { apiFetch } from "../lib/api";
 
 type BedStatus = "Occupied" | "Available" | "Cleaning" | "Reserved" | "Isolation" | "Maintenance";
 
@@ -11,38 +12,6 @@ interface Bed {
   los?: string;
   status: BedStatus;
 }
-
-const BED_DATA: { floor: string; unit: string; rooms: { room: string; beds: Bed[] }[] }[] = [
-  {
-    floor: "3rd Floor", unit: "3N — Medical/Surgical",
-    rooms: [
-      { room: "301", beds: [{ id: "A", patient: "John Smith", age: 41, provider: "Dr. Anderson", los: "2d", status: "Occupied" }, { id: "B", status: "Available" }] },
-      { room: "302", beds: [{ id: "A", patient: "Mary Jones", age: 53, provider: "Dr. Lee", los: "4d", status: "Occupied" }, { id: "B", status: "Cleaning" }] },
-      { room: "303", beds: [{ id: "A", status: "Available" }, { id: "B", patient: "Robert Lee", age: 66, provider: "Dr. Patel", los: "1d", status: "Occupied" }] },
-      { room: "304", beds: [{ id: "A", patient: "Helen Park", age: 72, provider: "Dr. Anderson", los: "3d", status: "Isolation" }, { id: "B", status: "Isolation" }] },
-      { room: "305", beds: [{ id: "A", status: "Reserved" }, { id: "B", status: "Available" }] },
-      { room: "306", beds: [{ id: "A", patient: "Frank Torres", age: 55, provider: "Dr. Chen", los: "1d", status: "Occupied" }, { id: "B", status: "Maintenance" }] },
-    ]
-  },
-  {
-    floor: "4th Floor", unit: "4S — Medical/Surgical",
-    rooms: [
-      { room: "401", beds: [{ id: "A", patient: "Sandra Hill", age: 48, provider: "Dr. Park", los: "2d", status: "Occupied" }, { id: "B", status: "Available" }] },
-      { room: "402", beds: [{ id: "A", status: "Available" }, { id: "B", status: "Available" }] },
-      { room: "403", beds: [{ id: "A", patient: "Marcus Kim", age: 43, provider: "Dr. Park", los: "5d", status: "Occupied" }, { id: "B", patient: "Lisa Webb", age: 61, provider: "Dr. Lee", los: "2d", status: "Occupied" }] },
-      { room: "404", beds: [{ id: "A", status: "Cleaning" }, { id: "B", status: "Reserved" }] },
-    ]
-  },
-  {
-    floor: "ICU", unit: "Medical ICU — 14 beds",
-    rooms: [
-      { room: "ICU-1", beds: [{ id: "", patient: "Thomas Reed", age: 68, provider: "Dr. Shah", los: "1d", status: "Occupied" }] },
-      { room: "ICU-2", beds: [{ id: "", patient: "Ann Martinez", age: 52, provider: "Dr. Shah", los: "2d", status: "Occupied" }] },
-      { room: "ICU-3", beds: [{ id: "", status: "Available" }] },
-      { room: "ICU-4", beds: [{ id: "", patient: "James Liu", age: 35, provider: "Dr. Chen", los: "3d", status: "Occupied" }] },
-    ]
-  },
-];
 
 const STATUS_STYLE: Record<BedStatus, { bg: string; border: string; text: string }> = {
   Occupied:    { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF" },
@@ -78,9 +47,59 @@ function BedCard({ bed, room }: { bed: Bed; room: string }) {
 
 export default function Inpatient() {
   const [selectedUnit, setSelectedUnit] = useState(0);
-  const unit = BED_DATA[selectedUnit];
+  const [bedData, setBedData] = useState<{ floor: string; unit: string; rooms: { room: string; beds: Bed[] }[] }[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const allBeds = BED_DATA.flatMap(u => u.rooms.flatMap(r => r.beds));
+  useEffect(() => {
+    apiFetch("/api/beds")
+      .then(res => {
+        if (!res.beds) return;
+        
+        // Group beds by ward and then by room_no
+        const unitsMap: Record<string, any> = {};
+        
+        res.beds.forEach((b: any) => {
+          const unitName = b.ward || "General";
+          if (!unitsMap[unitName]) {
+            unitsMap[unitName] = { floor: unitName, unit: unitName, rooms: {} };
+          }
+          
+          const roomNo = b.room_no || "Unknown";
+          if (!unitsMap[unitName].rooms[roomNo]) {
+            unitsMap[unitName].rooms[roomNo] = { room: roomNo, beds: [] };
+          }
+          
+          let los = "";
+          if (b.admission_date) {
+            const adDate = new Date(b.admission_date);
+            const diffDays = Math.floor((new Date().getTime() - adDate.getTime()) / (1000 * 3600 * 24));
+            los = diffDays + "d";
+          }
+
+          unitsMap[unitName].rooms[roomNo].beds.push({
+            id: b.bed_no || b.id.toString(),
+            patient: b.patient_name ? `${b.patient_name} ${b.patient_last_name || ""}` : undefined,
+            age: b.patient_age,
+            provider: "Unknown", // API doesn't return provider in list_beds
+            los: los,
+            status: b.status as BedStatus
+          });
+        });
+        
+        const structuredData = Object.values(unitsMap).map(u => ({
+          ...u,
+          rooms: Object.values(u.rooms)
+        }));
+        
+        setBedData(structuredData);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const unit = bedData.length > 0 ? bedData[selectedUnit] : null;
+
+  const allBeds = bedData.flatMap(u => u.rooms.flatMap((r: any) => r.beds));
   const totalBeds = allBeds.length;
   const occupied = allBeds.filter(b => b.status === "Occupied").length;
   const available = allBeds.filter(b => b.status === "Available").length;
@@ -120,11 +139,10 @@ export default function Inpatient() {
 
       <div className="p-5">
         {/* Unit selector */}
-        <div className="flex gap-2 mb-4">
-          {BED_DATA.map((u, i) => (
+        <div className="flex bg-white border-b border-[#DDE2EC]">
+          {bedData.map((u, i) => (
             <button key={i} onClick={() => setSelectedUnit(i)}
-              className={`px-4 py-2 text-[12.5px] font-medium rounded border transition-colors
-                ${selectedUnit === i ? "bg-[#1B4FD8] text-white border-[#1B4FD8]" : "bg-white text-[#64748B] border-[#DDE2EC] hover:border-[#94A3B8]"}`}>
+              className={`px-6 py-2.5 text-[12.5px] font-medium border-b-2 transition-colors ${selectedUnit === i ? "border-[#1B4FD8] text-[#1B4FD8]" : "border-transparent text-[#64748B] hover:text-gray-900"}`}>
               {u.unit}
             </button>
           ))}
@@ -132,18 +150,18 @@ export default function Inpatient() {
 
         <div className="bg-white border border-[#DDE2EC] rounded p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-800">{unit.floor} — {unit.unit}</h3>
+            <h3 className="text-sm font-semibold text-gray-800">{unit?.floor} — {unit?.unit}</h3>
             <span className="text-[11.5px] text-[#64748B]">
-              {unit.rooms.flatMap(r => r.beds).filter(b => b.status === "Occupied").length} occupied ·{" "}
-              {unit.rooms.flatMap(r => r.beds).filter(b => b.status === "Available").length} available
+              {unit?.rooms.flatMap(r => r.beds).filter(b => b.status === "Occupied").length} occupied ·{" "}
+              {unit?.rooms.flatMap(r => r.beds).filter(b => b.status === "Available").length} available
             </span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-            {unit.rooms.map((room) =>
+            {unit?.rooms.map((room) =>
               room.beds.map((bed, bi) => (
                 <BedCard key={`${room.room}-${bed.id}-${bi}`} bed={bed} room={room.room} />
               ))
-            )}
+            ) || <div className="text-[#64748B] text-sm">No beds available</div>}
           </div>
         </div>
 

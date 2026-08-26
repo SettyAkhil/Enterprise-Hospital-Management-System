@@ -6,3 +6,5 @@ export { default as Label } from "./Label";
 export { Tabs, TabsContent, TabsTrigger } from "./Tabs";
 export { Table, TableCell, TableHead, TableRow } from "./Table";
 export { default as Modal } from "./Modal";
+export { default as Badge } from "./Badge";
+export { default as ConfirmDialog } from "./ConfirmDialog";

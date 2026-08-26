@@ -159,3 +159,31 @@ textarea:focus-visible {
 .critical-pulse {
   animation: critical-pulse 1.5s ease-in-out infinite;
 }
+
+/* Interactive Anatomy Body Selector Styles */
+.part {
+  cursor: pointer;
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  transition: transform .18s ease, filter .18s ease, opacity .18s ease;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.part:hover {
+  filter: brightness(1.06) drop-shadow(0 7px 10px rgba(39, 110, 190, .22));
+  transform: translateY(-2px);
+}
+.part.selected {
+  stroke: #0b62d6;
+  stroke-width: 5;
+  filter: drop-shadow(0 0 8px rgba(25, 113, 231, .38));
+}
+.blue { fill: #5db6ed; }
+.blue2 { fill: #78c9f1; }
+.cyan { fill: #58c8c6; }
+.green { fill: #78d89b; }
+.purple { fill: #a58de8; }
+.orange { fill: #f6b65e; }
+.pink { fill: #ef8ca9; }
+

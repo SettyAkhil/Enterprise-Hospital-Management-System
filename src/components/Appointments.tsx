@@ -1,29 +1,55 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StatusBadge, Btn, Card, Table, TR, TD } from "./shared";
 import { Icon } from "./icons";
+import { apiFetch, reportError } from "../lib/api";
+import type { Notice } from "../types";
 
-const INITIAL_APPOINTMENTS = [
-  { time: "08:00", patient: "Harold Thompson", age: 68, type: "Post-op Follow-up", provider: "Dr. Adams", room: "Ortho 1", duration: "30m", status: "Completed", mrn: "100401" },
-  { time: "08:30", patient: "Sandra Brown", age: 44, type: "Follow-up", provider: "Dr. Williams", room: "Surg 2", duration: "20m", status: "Completed", mrn: "100331" },
-  { time: "09:00", patient: "Sarah Connelly", age: 35, type: "Annual Physical", provider: "Dr. Adams", room: "101", duration: "45m", status: "Completed", mrn: "100289" },
-  { time: "09:30", patient: "Marcus Webb", age: 43, type: "New Patient", provider: "Dr. Lee", room: "102", duration: "60m", status: "In Progress", mrn: "100500" },
-  { time: "10:00", patient: "Elena Torres", age: 57, type: "Diabetes Follow-up", provider: "Dr. Adams", room: "103", duration: "30m", status: "Checked In", mrn: "100198" },
-  { time: "10:30", patient: "Robert Kim", age: 52, type: "Cardiac Consult", provider: "Dr. Patel", room: "Card 1", duration: "45m", status: "Pending", mrn: "100377" },
-  { time: "11:00", patient: "Jennifer Walsh", age: 29, type: "GYN Consult", provider: "Dr. Lee", room: "102", duration: "30m", status: "Pending", mrn: "100511" },
-  { time: "11:30", patient: "David Chu", age: 61, type: "Hypertension", provider: "Dr. Adams", room: "101", duration: "20m", status: "Pending", mrn: "100289" },
-  { time: "13:00", patient: "Helen Park", age: 72, type: "Post-discharge", provider: "Dr. Chen", room: "104", duration: "30m", status: "Pending", mrn: "100402" },
-  { time: "13:30", patient: "Frank Torres", age: 55, type: "Lab Review", provider: "Dr. Anderson", room: "105", duration: "20m", status: "Pending", mrn: "100501" },
-  { time: "14:00", patient: "Mia Thompson", age: 31, type: "Pre-op Visit", provider: "Dr. Park", room: "Eye 1", duration: "45m", status: "Pending", mrn: "100312" },
-  { time: "15:00", patient: "Diane Walsh", age: 80, type: "Follow-up", provider: "Dr. Anderson", room: "103", duration: "30m", status: "Pending", mrn: "100142" },
-];
+type Appointment = {
+  id: number;
+  patient_name: string;
+  patient_id: string | null;
+  patient_age: number | null;
+  patient_gender: string | null;
+  patient_phone: string | null;
+  department: string | null;
+  doctor_name: string | null;
+  appointment_date: string;
+  status: string;
+  token_no: number | null;
+  visit_type: string;
+  chief_complaint: string | null;
+};
 
-const DAYS = ["Mon\nAug 19", "Tue\nAug 20", "Wed\nAug 21", "Thu\nAug 22", "Fri\nAug 23", "Sat\nAug 24", "Sun\nAug 25"];
-const SELECTED_DAY = 4;
+const STATUS_LABEL: Record<string, string> = {
+  scheduled: "Pending",
+  checked_in: "Checked In",
+  in_consultation: "In Progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  no_show: "No Show",
+};
+
+function statusLabel(status: string) {
+  return STATUS_LABEL[status] || status;
+}
+
+function last7Days() {
+  const days: { label: string; iso: string }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push({
+      label: `${d.toLocaleDateString(undefined, { weekday: "short" })}\n${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
+      iso: d.toISOString().slice(0, 10),
+    });
+  }
+  return days;
+}
 
 const detectDepartmentFromSymptoms = (text: string): { dept: string, doc: string, urgency: string } | null => {
   if (!text || text.trim().length < 2) return null;
   const lower = text.toLowerCase();
-  
+
   if (/\b(chest|heart|palpitat|breathless|cardio|angina|tachycardia|ecg|hypertens|bp\b|pressure)\b/i.test(lower)) {
     return { dept: "Cardiology", doc: "Dr. Patel", urgency: "High - Same Day" };
   }
@@ -39,7 +65,22 @@ const detectDepartmentFromSymptoms = (text: string): { dept: string, doc: string
   return { dept: "General Medicine", doc: "Dr. Chen", urgency: "Routine" };
 };
 
-function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSchedule: (appt: any) => void }) {
+type NewAppointmentPayload = {
+  patient_name: string;
+  visit_type: string;
+  appointment_date: string;
+  department?: string;
+  doctor_name?: string;
+  patient_age?: number;
+  patient_gender?: string;
+  patient_phone?: string;
+  chief_complaint?: string;
+  symptoms?: string;
+  symptom_duration?: string;
+  symptom_severity?: string;
+};
+
+function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSchedule: (payload: NewAppointmentPayload) => void }) {
   const [registryType, setRegistryType] = useState<"OP" | "IP">("OP");
   const [patient, setPatient] = useState("");
   const [age, setAge] = useState("");
@@ -58,7 +99,7 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
     setIsAnalyzing(true);
     setResult(null);
 
-    // Simulate AI delay
+    // Client-side keyword heuristic -- not a real AI call, just a quick department suggestion.
     setTimeout(() => {
       const combined = `${complaint} ${symptoms}`;
       const res = detectDepartmentFromSymptoms(combined) || { dept: "General Medicine", doc: "Dr. Chen", urgency: "Routine" };
@@ -72,22 +113,21 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
 
   const handleSchedule = () => {
     if (!result || !patient) return;
-    
-    const now = new Date();
-    const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
     onSchedule({
-      time: time,
-      patient: patient,
-      age: parseInt(age) || 30,
-      type: registryType === "IP" ? "IP Admission" : (complaint || "New Patient"),
-      provider: result.doc,
-      room: registryType === "IP" ? "Ward Pending" : "Triage 1",
-      duration: registryType === "IP" ? "Admitted" : "30m",
-      status: "Checked In",
-      mrn: `100${Math.floor(Math.random() * 900) + 100}`
+      patient_name: patient,
+      visit_type: registryType === "IP" ? "IP" : visitType,
+      appointment_date: new Date().toISOString(),
+      department: result.dept,
+      doctor_name: result.doc,
+      patient_age: age ? parseInt(age, 10) : undefined,
+      patient_gender: gender,
+      patient_phone: phone || undefined,
+      chief_complaint: complaint || undefined,
+      symptoms: symptoms || undefined,
+      symptom_duration: symptomDuration || undefined,
+      symptom_severity: symptomSeverity,
     });
-    onClose();
   };
 
   return (
@@ -104,17 +144,17 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
-        
+
         <div className="p-6 overflow-y-auto flex-1 space-y-5">
           {/* IP / OP Toggle */}
           <div className="flex bg-[#F1F5F9] p-1 rounded-lg">
-            <button 
+            <button
               onClick={() => { setRegistryType("OP"); setVisitType("OP"); }}
               className={`flex-1 py-1.5 text-[13px] font-semibold rounded-md transition-colors ${registryType === "OP" ? "bg-white text-[#1B4FD8] shadow-sm" : "text-[#64748B] hover:text-gray-900"}`}
             >
               Outpatient (OP)
             </button>
-            <button 
+            <button
               onClick={() => { setRegistryType("IP"); setVisitType("Admission"); }}
               className={`flex-1 py-1.5 text-[13px] font-semibold rounded-md transition-colors ${registryType === "IP" ? "bg-white text-[#1B4FD8] shadow-sm" : "text-[#64748B] hover:text-gray-900"}`}
             >
@@ -168,13 +208,13 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
 
           <div>
             <label className="block text-[12px] font-semibold text-gray-700 mb-1">Detailed Symptoms (for AI Analysis)</label>
-            <textarea 
-              value={symptoms} onChange={e => setSymptoms(e.target.value)} 
-              className="w-full h-20 bg-white border border-[#DDE2EC] rounded p-3 text-[13px] focus:outline-none focus:border-[#1B4FD8] resize-none" 
-              placeholder="Describe symptoms in detail..." 
+            <textarea
+              value={symptoms} onChange={e => setSymptoms(e.target.value)}
+              className="w-full h-20 bg-white border border-[#DDE2EC] rounded p-3 text-[13px] focus:outline-none focus:border-[#1B4FD8] resize-none"
+              placeholder="Describe symptoms in detail..."
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[12px] font-semibold text-gray-700 mb-1">Symptom Duration</label>
@@ -191,7 +231,7 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
             </div>
           </div>
 
-          <button 
+          <button
             onClick={handleAnalyze}
             disabled={isAnalyzing || (!symptoms && !complaint)}
             className="w-full h-10 bg-[#EFF6FF] text-[#1B4FD8] font-semibold text-[13px] rounded border border-[#BFDBFE] hover:bg-[#DBEAFE] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
@@ -233,36 +273,76 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
 }
 
 export default function Appointments({ onSelect }: { onSelect?: () => void }) {
-  const [appointments, setAppointments] = useState(INITIAL_APPOINTMENTS);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"day" | "week" | "list">("day");
-  const [activeDay, setActiveDay] = useState(SELECTED_DAY);
+  const [activeDay, setActiveDay] = useState(6);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
 
-  const completed = appointments.filter(a => a.status === "Completed").length;
-  const inProgress = appointments.filter(a => a.status === "In Progress").length;
-  const pending = appointments.filter(a => a.status === "Pending" || a.status === "Checked In").length;
+  const days = last7Days();
 
-  const handleAddAppointment = (appt: any) => {
-    setAppointments(prev => {
-      const updated = [...prev, appt];
-      updated.sort((a, b) => a.time.localeCompare(b.time));
-      return updated;
-    });
+  const loadAppointments = () => {
+    setLoading(true);
+    apiFetch<{ appointments: Appointment[] }>("/api/appointments")
+      .then((data) => setAppointments(data.appointments || []))
+      .catch((error) => reportError(setNotice, error, "Unable to load appointments."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadAppointments();
+  }, []);
+
+  const completed = appointments.filter((a) => a.status === "completed").length;
+  const inProgress = appointments.filter((a) => a.status === "in_consultation").length;
+  const pending = appointments.filter((a) => a.status === "scheduled" || a.status === "checked_in").length;
+  const providers = Array.from(new Set(appointments.map((a) => a.doctor_name).filter(Boolean))) as string[];
+
+  const handleAddAppointment = async (payload: NewAppointmentPayload) => {
+    setScheduling(true);
+    try {
+      await apiFetch("/api/appointments", { method: "POST", body: JSON.stringify(payload) });
+      setIsModalOpen(false);
+      loadAppointments();
+      setNotice({ type: "success", message: `Appointment scheduled for ${payload.patient_name}.` });
+    } catch (error) {
+      reportError(setNotice, error as { status?: number; message?: string }, "Unable to schedule appointment.");
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const updateStatus = async (id: number, status: string) => {
+    try {
+      await apiFetch(`/api/appointments/${id}`, { method: "PUT", body: JSON.stringify({ status }) });
+      loadAppointments();
+    } catch (error) {
+      reportError(setNotice, error as { status?: number; message?: string }, "Unable to update appointment.");
+    }
   };
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F0F2F5] relative">
       {isModalOpen && (
-        <AIAppointmentModal 
-          onClose={() => setIsModalOpen(false)} 
-          onSchedule={handleAddAppointment} 
+        <AIAppointmentModal
+          onClose={() => setIsModalOpen(false)}
+          onSchedule={handleAddAppointment}
         />
+      )}
+
+      {notice && (
+        <div className={`p-3 mx-6 mt-3 rounded-lg text-[12px] font-medium flex items-center justify-between ${notice.type === "error" ? "bg-red-50 text-red-800 border border-red-200" : notice.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}>
+          <span>{notice.message}</span>
+          <button className="underline" onClick={() => setNotice(null)}>Dismiss</button>
+        </div>
       )}
 
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-gray-900">Appointments</h1>
-          <p className="text-[11.5px] text-[#64748B]">{appointments.length} appointments today · Aug 23, 2026</p>
+          <p className="text-[11.5px] text-[#64748B]">{loading ? "Loading…" : `${appointments.length} appointments on record`}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex border border-[#DDE2EC] rounded overflow-hidden">
@@ -273,19 +353,23 @@ export default function Appointments({ onSelect }: { onSelect?: () => void }) {
               </button>
             ))}
           </div>
-          <Btn variant="primary" size="sm" onClick={() => setIsModalOpen(true)}>
+          <Btn variant="primary" size="sm" onClick={() => setIsModalOpen(true)} disabled={scheduling}>
             <Icon.Plus /> New Appointment (AI)
           </Btn>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-2.5 flex items-center gap-6 text-[12.5px]">
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-2.5 flex items-center gap-6 text-[12.5px] flex-wrap">
         <span><span className="font-mono font-semibold text-[#16A34A]">{completed}</span> Completed</span>
         <span><span className="font-mono font-semibold text-[#0284C7]">{inProgress}</span> In Progress</span>
         <span><span className="font-mono font-semibold text-[#D97706]">{pending}</span> Remaining</span>
-        <span className="text-[#64748B]">·</span>
-        <span className="text-[#64748B]">Providers: Dr. Adams, Dr. Lee, Dr. Patel, Dr. Anderson, Dr. Park, Dr. Chen</span>
+        {providers.length > 0 && (
+          <>
+            <span className="text-[#64748B]">·</span>
+            <span className="text-[#64748B]">Providers: {providers.join(", ")}</span>
+          </>
+        )}
       </div>
 
       <div className="p-5">
@@ -293,17 +377,17 @@ export default function Appointments({ onSelect }: { onSelect?: () => void }) {
           <div className="bg-white border border-[#DDE2EC] rounded overflow-hidden mb-4">
             <div className="grid border-b border-[#DDE2EC]" style={{ gridTemplateColumns: "80px repeat(7, 1fr)" }}>
               <div className="bg-[#F8FAFC] border-r border-[#DDE2EC]" />
-              {DAYS.map((d, i) => (
-                <button key={i} onClick={() => { setActiveDay(i); setView("day"); }}
+              {days.map((d, i) => (
+                <button key={d.iso} onClick={() => { setActiveDay(i); setView("day"); }}
                   className={`px-2 py-2.5 text-center border-r border-[#DDE2EC] last:border-r-0 transition-colors
                     ${i === activeDay ? "bg-[#EFF6FF] text-[#1B4FD8]" : "hover:bg-[#F8FAFC] text-[#64748B]"}`}>
-                  <div className="text-[11px] font-semibold whitespace-pre-line">{d}</div>
-                  {i === SELECTED_DAY && <div className="w-1.5 h-1.5 bg-[#1B4FD8] rounded-full mx-auto mt-1" />}
+                  <div className="text-[11px] font-semibold whitespace-pre-line">{d.label}</div>
+                  {i === 6 && <div className="w-1.5 h-1.5 bg-[#1B4FD8] rounded-full mx-auto mt-1" />}
                 </button>
               ))}
             </div>
-            <div className="h-48 flex items-center justify-center text-[#94A3B8] text-[12px]">
-              Weekly calendar grid — Click a day to view appointments
+            <div className="h-24 flex items-center justify-center text-[#94A3B8] text-[12px]">
+              Click a day to filter, then switch to Day view
             </div>
           </div>
         )}
@@ -311,31 +395,37 @@ export default function Appointments({ onSelect }: { onSelect?: () => void }) {
         {(view === "day" || view === "week") && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
-              <Card title={`Aug 23, 2026 — All Appointments (${appointments.length})`} actions={
-                <div className="flex gap-2">
-                  <Btn variant="ghost" size="xs"><Icon.Filter /> Filter</Btn>
-                  <Btn variant="ghost" size="xs">Provider</Btn>
-                </div>
-              }>
+              <Card title={`All Appointments (${appointments.length})`}>
                 <div className="space-y-1">
-                  {appointments.map((a, i) => (
-                    <div key={i} className={`flex items-center gap-3 p-2.5 rounded border transition-colors cursor-pointer
-                      ${a.status === "In Progress" ? "border-[#BFDBFE] bg-[#EFF6FF]" : a.status === "Completed" ? "border-transparent bg-[#F8FAFC]" : "border-[#F1F5F9] hover:border-[#DDE2EC] hover:bg-[#F8FAFC]"}`}
+                  {!loading && appointments.length === 0 && (
+                    <div className="text-center py-8 text-[12.5px] text-[#94A3B8]">No appointments yet. Schedule one to get started.</div>
+                  )}
+                  {appointments.map((a) => (
+                    <div key={a.id} className={`flex items-center gap-3 p-2.5 rounded border transition-colors cursor-pointer
+                      ${a.status === "in_consultation" ? "border-[#BFDBFE] bg-[#EFF6FF]" : a.status === "completed" ? "border-transparent bg-[#F8FAFC]" : "border-[#F1F5F9] hover:border-[#DDE2EC] hover:bg-[#F8FAFC]"}`}
                       onClick={onSelect}>
-                      <span className="font-mono text-[11px] text-[#94A3B8] w-10 flex-shrink-0">{a.time}</span>
+                      <span className="font-mono text-[11px] text-[#94A3B8] w-14 flex-shrink-0">
+                        {new Date(a.appointment_date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                      </span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-[12.5px] font-semibold text-gray-800">{a.patient}</span>
-                          <span className="text-[11px] text-[#94A3B8]">{a.age}y</span>
-                          <span className={`text-[11px] font-medium ${a.type.includes("New") ? "text-[#7C3AED]" : "text-[#64748B]"}`}>{a.type}</span>
+                          <span className="text-[12.5px] font-semibold text-gray-800">{a.patient_name}</span>
+                          {a.patient_age != null && <span className="text-[11px] text-[#94A3B8]">{a.patient_age}y</span>}
+                          <span className="text-[11px] font-medium text-[#64748B]">{a.chief_complaint || a.visit_type}</span>
                         </div>
-                        <div className="text-[11.5px] text-[#64748B]">{a.provider} · Room {a.room} · {a.duration}</div>
+                        <div className="text-[11.5px] text-[#64748B]">
+                          {a.doctor_name || "Unassigned"} · {a.department || "No department"} · Token #{a.token_no ?? "—"}
+                        </div>
                       </div>
-                      <StatusBadge status={a.status} />
-                      <div className="flex gap-1">
-                        {a.status === "Pending" && <Btn variant="primary" size="xs" onClick={(e) => { e.stopPropagation(); }}>Check In</Btn>}
-                        {a.status === "Checked In" && <Btn variant="primary" size="xs" onClick={(e) => { e.stopPropagation(); }}>Start Visit</Btn>}
-                        <Btn variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); }}>More</Btn>
+                      <StatusBadge status={statusLabel(a.status)} />
+                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                        {a.status === "scheduled" && (
+                          <Btn variant="primary" size="xs" onClick={() => void updateStatus(a.id, "checked_in")}>Check In</Btn>
+                        )}
+                        {a.status === "checked_in" && (
+                          <Btn variant="primary" size="xs" onClick={() => void updateStatus(a.id, "in_consultation")}>Start Visit</Btn>
+                        )}
+                        <Btn variant="ghost" size="xs" onClick={() => onSelect?.()}>Chart</Btn>
                       </div>
                     </div>
                   ))}
@@ -344,68 +434,49 @@ export default function Appointments({ onSelect }: { onSelect?: () => void }) {
             </div>
             <div className="space-y-4">
               <Card title="Waiting Room">
-                {appointments.filter(a => a.status === "Checked In").map((a, i) => (
-                  <div key={i} className="flex items-center gap-2.5 py-2 border-b border-[#F1F5F9] last:border-0">
+                {appointments.filter(a => a.status === "checked_in").map((a) => (
+                  <div key={a.id} className="flex items-center gap-2.5 py-2 border-b border-[#F1F5F9] last:border-0">
                     <div className="w-7 h-7 rounded-full bg-[#E0F2FE] flex items-center justify-center text-[10px] font-bold text-[#0284C7]">
-                      {a.patient.split(" ").map(n => n[0]).join("")}
+                      {a.patient_name.split(" ").map(n => n[0]).join("").slice(0, 2)}
                     </div>
                     <div>
-                      <div className="text-[12px] font-medium text-gray-800">{a.patient}</div>
-                      <div className="text-[11px] text-[#64748B]">{a.time} · {a.provider}</div>
+                      <div className="text-[12px] font-medium text-gray-800">{a.patient_name}</div>
+                      <div className="text-[11px] text-[#64748B]">
+                        {new Date(a.appointment_date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })} · {a.doctor_name || "Unassigned"}
+                      </div>
                     </div>
-                    <Btn variant="primary" size="xs" className="ml-auto">Start</Btn>
+                    <Btn variant="primary" size="xs" className="ml-auto" onClick={() => void updateStatus(a.id, "in_consultation")}>Start</Btn>
                   </div>
                 ))}
-                {appointments.filter(a => a.status === "Checked In").length === 0 && (
+                {appointments.filter(a => a.status === "checked_in").length === 0 && (
                   <div className="text-center py-4 text-[12px] text-[#94A3B8]">No patients currently waiting</div>
                 )}
-              </Card>
-              <Card title="Unscheduled Requests">
-                <div className="space-y-2 text-[12px]">
-                  {[
-                    { patient: "New referral from Dr. Wong", type: "Cardiology", urgency: "Routine" },
-                    { patient: "Walk-in: sore throat", type: "Urgent Care", urgency: "Same Day" },
-                    { patient: "Callback: prescription refill ×2", type: "Phone", urgency: "Today" },
-                  ].map((r, i) => (
-                    <div key={i} className="flex items-center justify-between py-1.5 border-b border-[#F1F5F9] last:border-0">
-                      <div>
-                        <div className="font-medium text-gray-700">{r.patient}</div>
-                        <div className="text-[11px] text-[#64748B]">{r.type}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-[#D97706] font-medium">{r.urgency}</span>
-                        <Btn variant="outline" size="xs">Schedule</Btn>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </Card>
             </div>
           </div>
         )}
 
         {view === "list" && (
-          <Card title="All Appointments — Aug 23, 2026" actions={<Btn variant="ghost" size="xs"><Icon.Download /> Export</Btn>}>
-            <Table headers={["Time", "Patient", "MRN", "Type", "Provider", "Room", "Duration", "Status", ""]}>
-              {appointments.map((a, i) => (
-                <TR key={i} onClick={onSelect}>
-                  <TD><span className="font-mono text-[11.5px]">{a.time}</span></TD>
-                  <TD><span className="font-semibold text-gray-800">{a.patient}</span></TD>
-                  <TD><span className="font-mono text-[11.5px] text-[#64748B]">{a.mrn}</span></TD>
-                  <TD>{a.type}</TD>
-                  <TD><span className="text-[#64748B]">{a.provider}</span></TD>
-                  <TD><span className="font-mono text-[11.5px]">{a.room}</span></TD>
-                  <TD><span className="text-[#64748B]">{a.duration}</span></TD>
-                  <TD><StatusBadge status={a.status} /></TD>
+          <Card title="All Appointments" actions={<Btn variant="ghost" size="xs"><Icon.Download /> Export</Btn>}>
+            <Table headers={["Date/Time", "Patient", "Patient ID", "Type", "Provider", "Department", "Token", "Status", ""]}>
+              {appointments.map((a) => (
+                <TR key={a.id} onClick={onSelect}>
+                  <TD><span className="font-mono text-[11.5px]">{new Date(a.appointment_date).toLocaleString()}</span></TD>
+                  <TD><span className="font-semibold text-gray-800">{a.patient_name}</span></TD>
+                  <TD><span className="font-mono text-[11.5px] text-[#64748B]">{a.patient_id || "—"}</span></TD>
+                  <TD>{a.chief_complaint || a.visit_type}</TD>
+                  <TD><span className="text-[#64748B]">{a.doctor_name || "Unassigned"}</span></TD>
+                  <TD><span className="text-[#64748B]">{a.department || "—"}</span></TD>
+                  <TD><span className="font-mono text-[11.5px]">{a.token_no ?? "—"}</span></TD>
+                  <TD><StatusBadge status={statusLabel(a.status)} /></TD>
                   <TD>
-                    <div className="flex gap-1.5">
-                      <Btn variant="outline" size="xs" onClick={(e) => {
-                        e.stopPropagation();
-                        if (onSelect) onSelect();
-                      }}>
-                        Check-in OP ➔
-                      </Btn>
-                      <Btn variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); }}>Chart</Btn>
+                    <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {a.status === "scheduled" && (
+                        <Btn variant="outline" size="xs" onClick={() => void updateStatus(a.id, "checked_in")}>
+                          Check-in OP ➔
+                        </Btn>
+                      )}
+                      <Btn variant="ghost" size="xs" onClick={() => onSelect?.()}>Chart</Btn>
                     </div>
                   </TD>
                 </TR>
