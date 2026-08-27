@@ -1,6 +1,7 @@
 import { API_BASE } from "./constants";
 import type { Notice } from "../types";
 import { ErDatabase } from "../services/erDb";
+import { BedDatabase } from "../services/bedDb";
 
 const HOSPITAL_CODE_KEY = "hospai_hospital_code";
 const DEFAULT_HOSPITAL_CODE = "hosp-default";
@@ -191,12 +192,135 @@ function handleLocalErMock<T = any>(path: string, options: RequestInit = {}): T 
     return { disposition: d } as T;
   }
 
-  // POST /api/er/visits/:id/close or preview
-  const closeMatch = pathname.match(/^\/api\/er\/visits\/(\d+)\/close$/);
-  if (closeMatch && method === "POST") {
-    const visitId = parseInt(closeMatch[1]);
-    const res = ErDatabase.closeVisit(visitId, body.total || body.consultation_fee);
-    return res as T;
+  // GET /api/er/bed-requests
+  if (pathname === "/api/er/bed-requests" && method === "GET") {
+    const status = url.searchParams.get("status") || undefined;
+    const reqs = ErDatabase.getBedRequests(status);
+    return { bed_requests: reqs } as T;
+  }
+
+  // POST /api/er/bed-requests/:id/allocate
+  const allocReqMatch = pathname.match(/^\/api\/er\/bed-requests\/(\d+)\/allocate$/);
+  if (allocReqMatch && method === "POST") {
+    const reqId = parseInt(allocReqMatch[1]);
+    const { bed_id, notes } = body;
+    BedDatabase.allocateBedFromEr(bed_id, reqId, notes);
+    ErDatabase.allocateBedRequest(reqId, bed_id, notes);
+    return { success: true } as T;
+  }
+
+  // POST /api/er/bed-requests/:id/lama
+  const lamaReqMatch = pathname.match(/^\/api\/er\/bed-requests\/(\d+)\/lama$/);
+  if (lamaReqMatch && method === "POST") {
+    const reqId = parseInt(lamaReqMatch[1]);
+    ErDatabase.cancelBedRequest(reqId, body.reason);
+    return { success: true } as T;
+  }
+
+  // GET /api/beds
+  if (pathname === "/api/beds" && method === "GET") {
+    const beds = BedDatabase.getBeds();
+    const summary = BedDatabase.getSummary();
+    return { beds, summary } as T;
+  }
+
+  // POST /api/beds/bulk
+  if (pathname === "/api/beds/bulk" && method === "POST") {
+    const created = BedDatabase.createBedsBulk(body);
+    return { created_count: created.length, beds: created } as T;
+  }
+
+  // POST /api/beds/:id/assign
+  const assignBedMatch = pathname.match(/^\/api\/beds\/(\d+)\/assign$/);
+  if (assignBedMatch && method === "POST") {
+    const bedId = parseInt(assignBedMatch[1]);
+    const bed = BedDatabase.assignBed(bedId, body.patient || body, body.notes, body.expected_los_days);
+    return { bed } as T;
+  }
+
+  // POST /api/beds/:id/transfer
+  const transferBedMatch = pathname.match(/^\/api\/beds\/(\d+)\/transfer$/);
+  if (transferBedMatch && method === "POST") {
+    const fromBedId = parseInt(transferBedMatch[1]);
+    const targetBedId = body.to_bed_id || body.target_bed_id || body.toBedId;
+    const bed = BedDatabase.transferBed(fromBedId, targetBedId, body.reason);
+    return { bed } as T;
+  }
+
+  // POST /api/beds/:id/release
+  const releaseBedMatch = pathname.match(/^\/api\/beds\/(\d+)\/release$/);
+  if (releaseBedMatch && method === "POST") {
+    const bedId = parseInt(releaseBedMatch[1]);
+    const bed = BedDatabase.releaseBed(bedId, body.discharge_override_reason || body.reason, body.room_charge_total);
+    return { bed } as T;
+  }
+
+  // GET /api/beds/discharged
+  if (pathname === "/api/beds/discharged" && method === "GET") {
+    const list = BedDatabase.getDischargedPatients();
+    return { discharged_patients: list } as T;
+  }
+
+  // GET /api/beds/:id/discharge-checklist
+  const checklistMatch = pathname.match(/^\/api\/beds\/(\d+)\/discharge-checklist$/);
+  if (checklistMatch && method === "GET") {
+    const bedId = parseInt(checklistMatch[1]);
+    const bed = BedDatabase.getBed(bedId);
+    return {
+      billing: { ok: true, pending_invoices: [] },
+      prescriptions: { ok: true, pending_count: 0 },
+      documents: { count: 2 },
+      room_charges: {
+        segments: [
+          {
+            ward: bed?.ward || "3N Medical",
+            room_no: bed?.room_no || "204",
+            bed_no: bed?.bed_no || "204-A",
+            days: 3,
+            daily_rate: bed?.daily_rate || 2500,
+            amount: (bed?.daily_rate || 2500) * 3,
+          },
+        ],
+        total: (bed?.daily_rate || 2500) * 3,
+      },
+      clear: true,
+    } as T;
+  }
+
+  // POST /api/beds/:id (Edit/Update) & DELETE
+  const updateBedMatch = pathname.match(/^\/api\/beds\/(\d+)$/);
+  if (updateBedMatch && (method === "POST" || method === "PUT")) {
+    const bedId = parseInt(updateBedMatch[1]);
+    const bed = BedDatabase.updateBed(bedId, body);
+    return { bed } as T;
+  }
+  if (updateBedMatch && method === "DELETE") {
+    return { success: true } as T;
+  }
+
+  // POST /api/er/consents/:id/document (Document upload simulation)
+  const consentDocMatch = pathname.match(/^\/api\/er\/consents\/(\d+)\/document$/);
+  if (consentDocMatch && method === "POST") {
+    return { success: true, message: "Document uploaded successfully" } as T;
+  }
+
+  // GET /api/auth/session
+  if (pathname === "/api/auth/session" && method === "GET") {
+    return { authenticated: true, user: { id: "ADM-001", role: "admin", name: "Administrator" } } as T;
+  }
+
+  // GET /api/doctors & /api/doctors/directory & /api/op/doctors
+  if ((pathname === "/api/doctors" || pathname === "/api/doctors/directory" || pathname === "/api/op/doctors") && method === "GET") {
+    return {
+      doctors: [
+        { id: "DOC-4401", doctor_name: "Dr. Vikram Seth", name: "Dr. Vikram Seth", department: "Cardiology", specialty: "Cardiology", available: true },
+        { id: "DOC-4402", doctor_name: "Dr. Anita Roy", name: "Dr. Anita Roy", department: "Emergency Medicine", specialty: "Emergency Medicine", available: true },
+        { id: "DOC-4404", doctor_name: "Dr. Rajesh Sharma", name: "Dr. Rajesh Sharma", department: "General Medicine", specialty: "General Medicine", available: true },
+        { id: "DOC-4405", doctor_name: "Dr. Sanjay Gupta", name: "Dr. Sanjay Gupta", department: "Orthopedics / Trauma", specialty: "Orthopedics", available: true },
+        { id: "DOC-4406", doctor_name: "Dr. Meenakshi Rao", name: "Dr. Meenakshi Rao", department: "Neurology", specialty: "Neurology", available: true },
+        { id: "DOC-4407", doctor_name: "Dr. Priya Deshmukh", name: "Dr. Priya Deshmukh", department: "General Surgery", specialty: "General Surgery", available: true },
+      ],
+    } as T;
   }
 
   // GET /api/patients
@@ -223,18 +347,12 @@ function handleLocalErMock<T = any>(path: string, options: RequestInit = {}): T 
     } as T;
   }
 
-  // GET /api/op/doctors
-  if (pathname === "/api/op/doctors" && method === "GET") {
-    return {
-      doctors: [
-        { doctor_name: "Dr. Vikram Seth", department: "Cardiology" },
-        { doctor_name: "Dr. Anita Roy", department: "Emergency Medicine" },
-        { doctor_name: "Dr. Rajesh Sharma", department: "General Medicine" },
-        { doctor_name: "Dr. Sanjay Gupta", department: "Orthopedics / Trauma" },
-        { doctor_name: "Dr. Meenakshi Rao", department: "Neurology" },
-        { doctor_name: "Dr. Priya Deshmukh", department: "General Surgery" },
-      ],
-    } as T;
+  // POST /api/er/visits/:id/close or preview
+  const closeMatch = pathname.match(/^\/api\/er\/visits\/(\d+)\/close$/);
+  if (closeMatch && method === "POST") {
+    const visitId = parseInt(closeMatch[1]);
+    const res = ErDatabase.closeVisit(visitId, body.total || body.consultation_fee);
+    return res as T;
   }
 
   // POST /api/symptom-ai/triage

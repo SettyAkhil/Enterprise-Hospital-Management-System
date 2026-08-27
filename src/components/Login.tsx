@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 
-interface LoginProps { onLogin: () => void; }
+interface LoginProps {
+  onLogin: (userData: { user: string; role: string; staffId: string }) => void;
+}
 
 export default function Login({ onLogin }: LoginProps) {
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
-  const [role, setRole] = useState("rn");
+  const [user, setUser] = useState("admin@generalhospital.org");
+  const [pass, setPass] = useState("password123");
+  const [role, setRole] = useState("admin");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -14,7 +16,13 @@ export default function Login({ onLogin }: LoginProps) {
     if (!user || !pass) { setError("Please enter your credentials."); return; }
     setError("");
     setLoading(true);
-    setTimeout(() => { setLoading(false); onLogin(); }, 900);
+
+    const staffId = role === "admin" ? "ADM-001" : role === "rn" ? "RN-8821" : "DOC-4401";
+
+    setTimeout(() => {
+      setLoading(false);
+      onLogin({ user: user.trim(), role, staffId });
+    }, 300);
   };
 
   const ROLES = [

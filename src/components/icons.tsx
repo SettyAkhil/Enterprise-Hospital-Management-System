@@ -110,4 +110,7 @@ export const Icon = {
   Minimize: () => (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M5 3v2H3M10 3v2h2M5 12v-2H3M10 12v-2h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
   ),
+  Heart: () => (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 11.5L1.5 6.5C0.3 5.3 0.3 3.3 1.5 2.1C2.7 0.9 4.7 0.9 5.9 2.1L6.5 2.7L7.1 2.1C8.3 0.9 10.3 0.9 11.5 2.1C12.7 3.3 12.7 5.3 11.5 6.5L6.5 11.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+  ),
 };
