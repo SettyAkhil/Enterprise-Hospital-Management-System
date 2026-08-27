@@ -57,6 +57,15 @@ export async function apiFetch<T = any>(
   return response.json();
 }
 
+export function withAuthHeaders(headers: Record<string, string> = {}, method = "GET"): HeadersInit {
+  const csrfToken = getCsrfToken();
+  return {
+    "X-Hospital-Code": getHospitalCode(),
+    ...(csrfToken && method !== "GET" && method !== "HEAD" ? { "X-CSRF-Token": csrfToken } : {}),
+    ...headers,
+  };
+}
+
 export function reportError(
   setNotice?: (notice: Notice | null) => void,
   error?: { status?: number; message?: string },

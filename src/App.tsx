@@ -4,7 +4,7 @@ import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
 import PatientSearch from "./components/PatientSearch";
 import PatientChart from "./components/PatientChart";
-import ErPage from "./pages/ErPage";
+import Emergency from "./components/Emergency";
 import type { Notice } from "./types";
 import Laboratory from "./components/Laboratory";
 import Pharmacy from "./components/Pharmacy";
@@ -29,6 +29,7 @@ import ClinicalRAG from "./components/ClinicalRAG";
 import ClinicalSummaries from "./components/ClinicalSummaries";
 import BulkAI from "./components/BulkAI";
 import NLFiltering from "./components/NLFiltering";
+import IntelligenceHub from "./components/IntelligenceHub";
 import QueueManagement from "./components/QueueManagement";
 import OPManagement from "./components/OPManagement";
 import DoctorWorkflow from "./components/DoctorWorkflow";
@@ -438,7 +439,13 @@ export default function App() {
                         onClick={() => {
                           if (item.children) {
                             toggleExpand(item.key);
-                            if (!expanded.includes(item.key)) setModule(item.children[0].key);
+                            if (!expanded.includes(item.key)) {
+                              if (item.key === "intelligence") {
+                                setModule("intelligence");
+                              } else {
+                                setModule(item.children[0].key);
+                              }
+                            }
                           }
                           else setModule(item.key);
                         }}>
@@ -533,7 +540,7 @@ export default function App() {
                 />
               )}
               {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
-              {module === "emergency" && <ErPage setNotice={setNotice} />}
+              {module === "emergency" && <Emergency onSelect={() => setModule("chart")} />}
               {module === "inpatient" && <Inpatient />}
               {module === "nursing" && <NursingDashboard />}
               {module === "laboratory" && <Laboratory />}
@@ -572,6 +579,7 @@ export default function App() {
               {module === "clinical_summaries" && <ClinicalSummaries />}
               {module === "bulk_ai" && <BulkAI />}
               {module === "nl_filtering" && <NLFiltering />}
+              {module === "intelligence" && <IntelligenceHub navigate={navigate} />}
             </main>
           </div>
 
