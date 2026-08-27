@@ -53,17 +53,26 @@ export default function Dashboard({ navigate }: { navigate: (m: string, s?: stri
       <div className="p-5 space-y-4">
         {/* Alerts */}
         <div className="space-y-2">
-          {ALERTS.map((a, i) => <AlertBanner key={i} {...a} />)}
+          {ALERTS.map((a, i) => (
+            <AlertBanner
+              key={i}
+              {...a}
+              onAction={() => {
+                if (a.action === "View ED") navigate("emergency");
+                else if (a.action === "Review Now") navigate("laboratory");
+              }}
+            />
+          ))}
         </div>
 
         {/* Key Metrics */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          <MetricCard label="Patients Today" value="428" sub="↑ 12 from yesterday" trend="↑12" action="View All" />
-          <MetricCard label="Appointments" value="126" sub="14 remaining today" action="Schedule" />
-          <MetricCard label="Admissions" value="38" sub="7 pending bed assignment" trend="↑3" action="Bed Board" />
-          <MetricCard label="Discharges" value="31" sub="6 ready to discharge" action="View" />
-          <MetricCard label="ED Waiting" value="8" sub="3 ESI-1 or ESI-2" color="#DC2626" trend="↑4" action="View ED" />
-          <MetricCard label="Critical Alerts" value="7" sub="2 unacknowledged" color="#DC2626" action="Review" />
+          <MetricCard label="Patients Today" value="428" sub="↑ 12 from yesterday" trend="↑12" action="View All" onClick={() => navigate("patients")} />
+          <MetricCard label="Appointments" value="126" sub="14 remaining today" action="Schedule" onClick={() => navigate("appointments")} />
+          <MetricCard label="Admissions" value="38" sub="7 pending bed assignment" trend="↑3" action="Bed Board" onClick={() => navigate("inpatient")} />
+          <MetricCard label="Discharges" value="31" sub="6 ready to discharge" action="View" onClick={() => navigate("discharge")} />
+          <MetricCard label="ED Waiting" value="8" sub="3 ESI-1 or ESI-2" color="#DC2626" trend="↑4" action="View ED" onClick={() => navigate("emergency")} />
+          <MetricCard label="Critical Alerts" value="7" sub="2 unacknowledged" color="#DC2626" action="Review" onClick={() => navigate("emergency")} />
         </div>
 
         {/* Department Status + Appointments */}

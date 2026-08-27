@@ -5,6 +5,7 @@ import Dashboard from "./components/Dashboard";
 import PatientSearch from "./components/PatientSearch";
 import PatientChart from "./components/PatientChart";
 import ErPage from "./pages/ErPage";
+import BedManagementPage from "./pages/BedManagementPage";
 import type { Notice } from "./types";
 import Laboratory from "./components/Laboratory";
 import Pharmacy from "./components/Pharmacy";
@@ -53,7 +54,8 @@ type Module =
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
   | "hrms" | "employees" | "patient_exp"
-  | "intelligence" | "ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering";
+  | "intelligence" | "ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering"
+  | "beds";
 
 interface NavItem {
   key: Module;
@@ -102,6 +104,7 @@ const NAV: NavItem[] = [
     key: "inpatient", label: "Inpatient", Icon: Icon.Bed,
     children: [
       { key: "inpatient", label: "Bed Board" },
+      { key: "beds", label: "Bed Management" },
       { key: "admissions", label: "Admissions" },
       { key: "readmission", label: "Readmission" },
       { key: "icu", label: "ICU" },
@@ -535,6 +538,7 @@ export default function App() {
               {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
               {module === "emergency" && <ErPage setNotice={setNotice} />}
               {module === "inpatient" && <Inpatient />}
+              {module === "beds" && <BedManagementPage setNotice={setNotice} />}
               {module === "nursing" && <NursingDashboard />}
               {module === "laboratory" && <Laboratory />}
               {module === "pharmacy" && <Pharmacy />}
