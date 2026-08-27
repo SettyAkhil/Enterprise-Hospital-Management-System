@@ -63,11 +63,19 @@ const ORDERS = [
 export default function PatientChart({ onBack, openOrder }: { onBack: () => void; openOrder: () => void }) {
   const [tab, setTab] = useState("Summary");
   const [timelineFilter, setTimelineFilter] = useState("All");
+  const [chartNoteModalOpen, setChartNoteModalOpen] = useState(false);
+  const [chartMessageModalOpen, setChartMessageModalOpen] = useState(false);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Patient Banner */}
-      <PatientBanner onAction={(a) => { if (a === "order") openOrder(); }} />
+      <PatientBanner
+        onAction={(a) => {
+          if (a === "order") openOrder();
+          if (a === "note") setChartNoteModalOpen(true);
+          if (a === "message") setChartMessageModalOpen(true);
+        }}
+      />
       {/* Tab Bar */}
       <TabBar tabs={TABS} active={tab} onChange={setTab} />
 
@@ -377,13 +385,208 @@ export default function PatientChart({ onBack, openOrder }: { onBack: () => void
           </Card>
         )}
 
-        {(tab !== "Summary" && tab !== "Timeline" && tab !== "Problems" && tab !== "Medications" && tab !== "Labs" && tab !== "Orders") && (
+        {tab === "Notes" && (
+          <div className="max-w-4xl mx-auto space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Clinical Nurse Progress Notes Timeline</h3>
+                <p className="text-[11.5px] text-[#64748B]">Audited nursing observations for John Smith (MRN: 100245 · Bed 204-A)</p>
+              </div>
+              <Btn variant="primary" size="sm" onClick={() => setChartNoteModalOpen(true)}>+ Add Nurse Note</Btn>
+            </div>
+
+            <div className="space-y-4">
+              {NursingDatabase.getNotes("P-100245").map((note) => (
+                <div key={note.id} className={`bg-white border rounded-lg p-4 shadow-sm ${note.isAddendum ? "border-l-4 border-l-[#7C3AED] bg-[#FCFAFF]" : "border-[#DDE2EC]"}`}>
+                  <div className="flex items-start justify-between border-b border-[#F1F5F9] pb-2 mb-2.5 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[11px] font-bold bg-[#EFF6FF] text-[#1B4FD8] px-2 py-0.5 rounded border border-[#BFDBFE]">
+                        {note.id}
+                      </span>
+                      <span className="text-[12px] font-bold px-2 py-0.5 bg-[#F1F5F9] text-gray-800 rounded">
+                        {note.noteType}
+                      </span>
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${note.patientCondition === "Stable" ? "bg-[#DCFCE7] text-[#15803D]" : "bg-[#FEE2E2] text-[#B91C1C]"}`}>
+                        Condition: {note.patientCondition}
+                      </span>
+                    </div>
+                    <div className="text-right text-[11px]">
+                      <span className="font-bold text-gray-900">{note.nurseName}</span>
+                      <span className="text-[#64748B] font-mono ml-2">
+                        {new Date(note.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} · {note.shift}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-[12px]">
+                    <div>
+                      <strong className="text-[11px] uppercase tracking-wide text-gray-700 block mb-0.5">👁 Observations:</strong>
+                      <p className="text-gray-800 bg-[#F8FAFC] p-2.5 rounded border border-[#F1F5F9]">{note.clinicalObservations}</p>
+                    </div>
+
+                    {note.vitalSigns && note.vitalSigns.bp && (
+                      <div className="flex items-center gap-3 bg-[#EFF6FF] p-2 rounded text-[11px] font-mono flex-wrap">
+                        <span className="font-bold text-[#1E3A8A]">Vitals:</span>
+                        <span>BP: {note.vitalSigns.bp}</span>
+                        <span>HR: {note.vitalSigns.hr} bpm</span>
+                        <span>SpO₂: {note.vitalSigns.spo2}%</span>
+                        <span>Temp: {note.vitalSigns.temp}</span>
+                      </div>
+                    )}
+
+                    <div>
+                      <strong className="text-[11px] uppercase tracking-wide text-gray-700 block mb-0.5">💉 Interventions Performed:</strong>
+                      <p className="text-gray-800">{note.interventions}</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-[#F1F5F9] text-[11.5px]">
+                      <div><strong>Patient Response:</strong> {note.patientResponse}</div>
+                      <div><strong>Follow-up Plan:</strong> {note.followUpPlan}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(tab !== "Summary" && tab !== "Timeline" && tab !== "Problems" && tab !== "Medications" && tab !== "Labs" && tab !== "Orders" && tab !== "Notes") && (
           <div className="bg-white border border-[#DDE2EC] rounded p-12 text-center">
             <div className="text-[#94A3B8] text-3xl mb-2">📋</div>
             <div className="text-sm font-semibold text-gray-700 mb-1">{tab}</div>
             <div className="text-[12px] text-[#64748B]">Content for this section is available in the full implementation.</div>
           </div>
         )}
+      </div>
+
+      {/* Chart Nurse Note Modal */}
+      {chartNoteModalOpen && (
+        <ChartNoteQuickModal
+          onClose={() => setChartNoteModalOpen(false)}
+          onSaved={() => setChartNoteModalOpen(false)}
+        />
+      )}
+
+      {/* Care Team Message Modal */}
+      {chartMessageModalOpen && (
+        <CareTeamMessageModal
+          onClose={() => setChartMessageModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ChartNoteQuickModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [noteType, setNoteType] = useState<any>("Shift Assessment");
+  const [obs, setObs] = useState("");
+  const [interventions, setInterventions] = useState("");
+  const currentStaff = NursingDatabase.getAuthenticatedStaff();
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!obs.trim() || !interventions.trim()) {
+      alert("Please provide Observations and Interventions.");
+      return;
+    }
+    NursingDatabase.addNote("P-100245", {
+      noteType: noteType,
+      clinicalObservations: obs.trim(),
+      patientCondition: "Stable",
+      interventions: interventions.trim(),
+      patientResponse: "Patient resting comfortably.",
+      followUpPlan: "Continue scheduled monitoring.",
+    });
+    onSaved();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl border border-[#DDE2EC] w-full max-w-lg overflow-hidden">
+        <div className="bg-[#1B4FD8] text-white px-5 py-3.5 flex justify-between items-center">
+          <div>
+            <h3 className="font-bold text-[14px]">Chart Clinical Note — John Smith (Rm 204)</h3>
+            <p className="text-[11px] text-white/80">Author: {currentStaff.name} ({currentStaff.activeShift})</p>
+          </div>
+          <button onClick={onClose} className="text-white/80 hover:text-white text-lg">✕</button>
+        </div>
+        <form onSubmit={handleSave} className="p-5 space-y-3 text-[12px]">
+          <div>
+            <label className="font-bold block mb-1">Note Type</label>
+            <select value={noteType} onChange={(e) => setNoteType(e.target.value)} className="w-full border p-2 rounded bg-white">
+              <option value="Shift Assessment">Shift Assessment</option>
+              <option value="Vital Sign Observation">Vital Sign Observation</option>
+              <option value="Medication Administration">Medication Administration</option>
+              <option value="Critical Condition Change">Critical Condition Change</option>
+            </select>
+          </div>
+          <div>
+            <label className="font-bold block mb-1">Clinical Observations *</label>
+            <textarea rows={3} placeholder="Enter clinical assessment..." value={obs} onChange={(e) => setObs(e.target.value)} className="w-full border p-2 rounded" required />
+          </div>
+          <div>
+            <label className="font-bold block mb-1">Interventions Performed *</label>
+            <textarea rows={2} placeholder="Enter nursing interventions..." value={interventions} onChange={(e) => setInterventions(e.target.value)} className="w-full border p-2 rounded" required />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 border rounded">Cancel</button>
+            <button type="submit" className="px-4 py-1.5 bg-[#1B4FD8] text-white font-bold rounded">✓ Save to Chart</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function CareTeamMessageModal({ onClose }: { onClose: () => void }) {
+  const [msg, setMsg] = useState("");
+  const [isUrgent, setIsUrgent] = useState(false);
+  const currentStaff = NursingDatabase.getAuthenticatedStaff();
+  const msgs = NursingDatabase.getMessages("P-100245");
+
+  const send = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!msg.trim()) return;
+    NursingDatabase.sendMessage("P-100245", msg.trim(), "Clinical Update", isUrgent);
+    setMsg("");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl border border-[#DDE2EC] w-full max-w-lg h-[500px] flex flex-col overflow-hidden">
+        <div className="bg-[#0C1524] text-white px-5 py-3.5 flex justify-between items-center">
+          <div>
+            <h3 className="font-bold text-[14px]">Care Team Intercom — John Smith (Rm 204)</h3>
+            <p className="text-[11px] text-[#94A3B8]">Connected: Dr. M. Anderson ↔ Jessica Carter, RN</p>
+          </div>
+          <button onClick={onClose} className="text-[#94A3B8] hover:text-white text-lg">✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-2.5 bg-[#F8FAFC]">
+          {msgs.map((m) => (
+            <div key={m.id} className={`p-2.5 rounded-lg text-[12px] ${m.senderRole === "Doctor" ? "bg-white border text-gray-900 mr-8" : "bg-[#EFF6FF] border border-[#BFDBFE] text-gray-900 ml-8"}`}>
+              <div className="flex justify-between font-bold text-[11px] mb-1">
+                <span>{m.senderName} ({m.senderRole})</span>
+                <span className="text-[#94A3B8] font-mono">{new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+              <p>{m.messageText}</p>
+            </div>
+          ))}
+        </div>
+
+        <form onSubmit={send} className="p-3 border-t bg-white flex flex-col gap-2">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-bold text-gray-700">Sending as: {currentStaff.name}</span>
+            <label className="text-[#DC2626] font-bold flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} className="accent-[#DC2626]" />
+              ⚠ Urgent
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <input type="text" placeholder="Type care team message..." value={msg} onChange={(e) => setMsg(e.target.value)} className="flex-1 border p-2 rounded text-[12px]" />
+            <button type="submit" className="px-4 py-2 bg-[#1B4FD8] text-white font-bold rounded text-[12px]">Send</button>
+          </div>
+        </form>
       </div>
     </div>
   );

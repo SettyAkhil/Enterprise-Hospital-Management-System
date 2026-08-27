@@ -113,24 +113,49 @@ export default function DoctorWorkflow() {
                 </div>
               </div>
 
-              <div className="flex-1 flex flex-col gap-2">
-                 <h3 className="text-[12px] font-bold text-gray-900">Clinical Note (SOAP)</h3>
-                 <textarea 
-                   className="w-full flex-1 border border-[#DDE2EC] rounded-lg p-3 text-[13.5px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] resize-none font-serif"
-                   placeholder="Start typing subjective notes... Or use AI Dictation."
-                   defaultValue="Subjective: Patient presents with palpitations...&#10;Objective: ...&#10;Assessment: ...&#10;Plan: ..."
-                 ></textarea>
-                 <div className="flex justify-between items-center mt-1">
-                   <button className="text-[11.5px] font-medium text-[#1B4FD8] hover:underline flex items-center gap-1">
-                     <Icon.Cmd /> Generate Note with AI
-                   </button>
-                   <div className="flex gap-2">
-                     <button className="px-3 py-1.5 border border-[#DDE2EC] rounded text-[12px] font-medium text-gray-700 hover:bg-[#F8FAFC]">Rx Prescription</button>
-                     <button className="px-3 py-1.5 border border-[#DDE2EC] rounded text-[12px] font-medium text-gray-700 hover:bg-[#F8FAFC]">Lab Orders</button>
-                     <button className="px-3 py-1.5 bg-[#1B4FD8] rounded text-[12px] font-medium text-white hover:bg-[#1740B4]">Sign & Complete</button>
-                   </div>
-                 </div>
-              </div>
+                  <div className="border border-[#DDE2EC] rounded-lg p-3 bg-[#FAFBFF]">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-[12px] font-bold text-gray-900 flex items-center gap-1.5">
+                        📋 Inpatient Nurse Notes & Instructions
+                      </h3>
+                      <span className="text-[10.5px] font-bold bg-[#EFF6FF] text-[#1B4FD8] px-2 py-0.5 rounded">
+                        Unit: 3N Medical · Rm 204
+                      </span>
+                    </div>
+                    <div className="text-[11.5px] text-gray-700 bg-white p-2.5 rounded border border-[#E2E8F0] space-y-1 mb-2">
+                      <div className="flex justify-between font-semibold text-gray-900">
+                        <span>Latest RN Note (RN Jessica Carter):</span>
+                        <span className="text-[#64748B] font-mono text-[10.5px]">Today · 10:30 AM</span>
+                      </div>
+                      <p className="text-gray-800">
+                        "Patient on continuous ECG telemetry. Held scheduled ACE-inhibitor pending physician review for K+ 6.2. Calcium Gluconate prepared."
+                      </p>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <span className="text-[11px] text-[#16A34A] font-semibold flex items-center gap-1">
+                        ✓ Primary Nurse Connected (RN Jessica Carter)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 flex flex-col gap-2">
+                    <h3 className="text-[12px] font-bold text-gray-900">Clinical Note (SOAP)</h3>
+                    <textarea 
+                      className="w-full flex-1 border border-[#DDE2EC] rounded-lg p-3 text-[13.5px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] resize-none font-serif"
+                      placeholder="Start typing subjective notes... Or use AI Dictation."
+                      defaultValue="Subjective: Patient presents with palpitations...&#10;Objective: ...&#10;Assessment: ...&#10;Plan: ..."
+                    ></textarea>
+                    <div className="flex justify-between items-center mt-1">
+                      <button className="text-[11.5px] font-medium text-[#1B4FD8] hover:underline flex items-center gap-1">
+                        <Icon.Cmd /> Generate Note with AI
+                      </button>
+                      <div className="flex gap-2">
+                        <button className="px-3 py-1.5 border border-[#DDE2EC] rounded text-[12px] font-medium text-gray-700 hover:bg-[#F8FAFC]">Rx Prescription</button>
+                        <button className="px-3 py-1.5 border border-[#DDE2EC] rounded text-[12px] font-medium text-gray-700 hover:bg-[#F8FAFC]">Lab Orders</button>
+                        <button className="px-3 py-1.5 bg-[#1B4FD8] rounded text-[12px] font-medium text-white hover:bg-[#1740B4]">Sign & Complete</button>
+                      </div>
+                    </div>
+                  </div>
 
             </div>
           </div>

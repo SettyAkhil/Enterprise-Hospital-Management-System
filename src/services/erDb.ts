@@ -801,20 +801,111 @@ export class ErDatabase {
   static recordDisposition(visitId: number, data: any): ErDispositionItem {
     const visit = this.getVisit(visitId);
     if (!visit) throw new Error("Visit not found");
+    const outcome = data.outcome || "discharge";
+    const isAdmission =
+      outcome.includes("admit") ||
+      outcome.includes("icu") ||
+      outcome.includes("ward") ||
+      outcome === "admit_inpatient" ||
+      outcome === "admit_icu";
+
+    const isIcu = outcome.includes("icu") || (data.required_specialty || "").toLowerCase().includes("icu");
+    const reqLoc = isIcu ? "ICU" : data.required_specialty || "General Ward";
+
     const disp: ErDispositionItem = {
-      outcome: data.outcome || "discharge",
-      required_specialty: data.required_specialty || null,
-      clinical_reason: data.clinical_reason || "Patient stabilized and cleared for discharge.",
+      outcome: outcome,
+      required_specialty: data.required_specialty || (isIcu ? "Intensive Care Unit (ICU)" : "General Medicine"),
+      clinical_reason: data.clinical_reason || (isIcu ? "Critical patient admitted to ICU for intensive telemetry & monitoring." : "Patient stabilized and admitted to inpatient care."),
       decided_by: data.decided_by || visit.assigned_doctor_name || "Attending Physician",
       decided_at: new Date().toISOString(),
-      priority: data.priority || "Routine",
+      priority: data.priority || (isIcu ? "Stat / Emergency" : "Routine"),
     };
+
+    // Auto-create or ensure bed request when disposition is admission or ICU
+    if (isAdmission) {
+      const existingPendingReq = (visit.bed_requests || []).find((r) => r.status === "pending");
+      if (!existingPendingReq) {
+        const newReq: ErBedRequestItem = {
+          id: (visit.bed_requests || []).length + 1,
+          status: "pending",
+          requested_level_of_care: reqLoc,
+          requested_specialty: data.required_specialty || (isIcu ? "ICU (Intensive Care Unit)" : visit.assigned_specialty || "General Medicine"),
+          requested_at: new Date().toISOString(),
+          allocated_bed_id: null,
+          allocated_admission_id: null,
+          allocated_at: null,
+        };
+        visit.bed_requests = [...(visit.bed_requests || []), newReq];
+      }
+    }
+
+    const newStatus = isAdmission ? "bed_requested" : outcome === "discharge" || outcome === "death" ? "closed" : "awaiting_disposition";
+
     this.updateVisit(visitId, {
       disposition: disp,
-      status: data.outcome === "discharge" || data.outcome === "death" ? "closed" : "awaiting_disposition",
-      closed_at: data.outcome === "discharge" || data.outcome === "death" ? new Date().toISOString() : null,
+      bed_requests: visit.bed_requests,
+      status: newStatus,
+      closed_at: outcome === "discharge" || outcome === "death" ? new Date().toISOString() : null,
     });
     return disp;
+  }
+
+  static getBedRequests(statusFilter?: string): any[] {
+    const visits = this.getVisits("all");
+    const results: any[] = [];
+    for (const v of visits) {
+      if (!v.bed_requests || v.bed_requests.length === 0) continue;
+      for (const r of v.bed_requests) {
+        if (statusFilter && r.status !== statusFilter) continue;
+        results.push({
+          id: r.id,
+          er_visit_id: v.id,
+          visit_no: v.visit_no,
+          patient_id: v.patient_id,
+          patient_name: v.patient_name || (v.is_unknown_patient ? v.unknown_patient_label : "Patient"),
+          patient_last_name: v.patient_last_name || "",
+          is_unknown_patient: v.is_unknown_patient,
+          unknown_patient_label: v.unknown_patient_label,
+          requested_level_of_care: r.requested_level_of_care,
+          requested_specialty: r.requested_specialty,
+          requested_at: r.requested_at,
+          status: r.status,
+        });
+      }
+    }
+    return results;
+  }
+
+  static allocateBedRequest(bedRequestId: number, bedId: number, notes?: string): void {
+    const visits = this.getVisits("all");
+    for (const v of visits) {
+      const req = (v.bed_requests || []).find((r) => r.id === bedRequestId);
+      if (req) {
+        req.status = "allocated";
+        req.allocated_bed_id = bedId;
+        req.allocated_at = new Date().toISOString();
+        this.updateVisit(v.id, {
+          bed_requests: v.bed_requests,
+          status: "closed",
+          closed_at: new Date().toISOString(),
+        });
+        break;
+      }
+    }
+  }
+
+  static cancelBedRequest(bedRequestId: number, reason?: string): void {
+    const visits = this.getVisits("all");
+    for (const v of visits) {
+      const req = (v.bed_requests || []).find((r) => r.id === bedRequestId);
+      if (req) {
+        req.status = "cancelled";
+        this.updateVisit(v.id, {
+          bed_requests: v.bed_requests,
+        });
+        break;
+      }
+    }
   }
 
   static closeVisit(visitId: number, consultationFee?: number): { invoice_id: number; total: number } {
