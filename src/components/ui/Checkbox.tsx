@@ -1,20 +1,20 @@
 import * as React from "react";
 import { cn } from "../../lib/cn";
 
-const Input = React.forwardRef<
+const Checkbox = React.forwardRef<
   HTMLInputElement,
   React.InputHTMLAttributes<HTMLInputElement>
->(({ className, type = "text", ...props }, ref) => {
+>(({ className, ...props }, ref) => {
   return (
     <input
       ref={ref}
-      type={type}
-      className={cn("ui-input", className)}
+      type="checkbox"
+      className={cn("ui-checkbox", className)}
       {...props}
     />
   );
 });
 
-Input.displayName = "Input";
+Checkbox.displayName = "Checkbox";
 
-export default Input;
+export default Checkbox;

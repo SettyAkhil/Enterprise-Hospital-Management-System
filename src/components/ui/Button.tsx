@@ -1,7 +1,8 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "../../lib/cn";
 
-type ButtonVariant = "default" | "primary" | "secondary" | "ghost" | "destructive";
+type ButtonVariant =
+  "default" | "primary" | "secondary" | "ghost" | "destructive";
 type ButtonSize = "default" | "sm" | "lg";
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -24,9 +25,23 @@ const sizeClassMap: Record<ButtonSize, string> = {
   lg: "ui-button-lg",
 };
 
-export default function Button({ children, variant = "secondary", size = "default", className, ...props }: Props) {
+export default function Button({
+  children,
+  variant = "secondary",
+  size = "default",
+  className,
+  ...props
+}: Props) {
   return (
-    <button {...props} className={cn("ui-button", variantClassMap[variant], sizeClassMap[size], className)}>
+    <button
+      {...props}
+      className={cn(
+        "ui-button",
+        variantClassMap[variant],
+        sizeClassMap[size],
+        className,
+      )}
+    >
       {children}
     </button>
   );

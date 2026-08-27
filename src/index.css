@@ -29,6 +29,42 @@
   --radius: 3px;
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', monospace;
+
+  /* New Design Tokens */
+  --color-primary-blue: #3B6FF5;
+  --color-primary-violet: #7C3AED;
+  --color-ai-purple: #8B5CF6;
+  
+  --color-bg-main: #F5F7FB;
+  --color-bg-secondary: #F8FAFC;
+  --color-bg-card: #FFFFFF;
+  --color-bg-ai: #F5F3FF;
+  
+  --color-text-primary: #172033;
+  --color-text-heading: #1E293B;
+  --color-text-body: #334155;
+  --color-text-secondary: #64748B;
+  --color-text-muted: #94A3B8;
+  --color-text-disabled: #CBD5E1;
+  
+  --color-border-main: #E2E8F0;
+  --color-border-light: #EDF1F7;
+  --color-border-active: #818CF8;
+  
+  --color-status-success: #16A34A;
+  --color-status-success-bg: #DCFCE7;
+  --color-status-warning: #F59E0B;
+  --color-status-warning-bg: #FEF3C7;
+  --color-status-error: #EF4444;
+  --color-status-error-bg: #FEE2E2;
+  --color-status-info: #2563EB;
+  --color-status-info-bg: #DBEAFE;
+  
+  --radius-xl: 22px;
+  --radius-lg: 18px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --radius-button: 12px;
 }
 
 * {
@@ -43,8 +79,8 @@ html, body, #root {
 
 body {
   font-family: var(--font-sans);
-  background-color: #F0F2F5;
-  color: #0F1624;
+  background-color: var(--color-bg-main);
+  color: var(--color-text-body);
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
