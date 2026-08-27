@@ -68,10 +68,10 @@ export function SectionHeader({ title, actions }: { title: string; actions?: Rea
 
 // ─── Metric Card ──────────────────────────────────────────────────────────────
 export function MetricCard({
-  label, value, sub, trend, color, action
-}: { label: string; value: string | number; sub?: string; trend?: string; color?: string; action?: string }) {
+  label, value, sub, trend, color, action, onClick
+}: { label: string; value: string | number; sub?: string; trend?: string; color?: string; action?: string; onClick?: () => void }) {
   return (
-    <div className="bg-white border border-[#DDE2EC] rounded p-3.5 hover:border-[#1B4FD8] transition-colors cursor-pointer">
+    <div onClick={onClick} className="bg-white border border-[#DDE2EC] rounded p-3.5 hover:border-[#1B4FD8] transition-colors cursor-pointer">
       <div className="text-[11px] font-medium text-[#64748B] uppercase tracking-wider mb-1">{label}</div>
       <div className="flex items-end gap-2">
         <span className="text-2xl font-semibold leading-none" style={{ color: color || "#0F1624" }}>{value}</span>
@@ -176,8 +176,8 @@ export function Input({ placeholder, value, onChange, icon, className }: {
 }
 
 // ─── Alert Banner ─────────────────────────────────────────────────────────────
-export function AlertBanner({ type, title, body, action }: {
-  type: "info" | "warning" | "critical"; title: string; body?: string; action?: string;
+export function AlertBanner({ type, title, body, action, onAction }: {
+  type: "info" | "warning" | "critical"; title: string; body?: string; action?: string; onAction?: () => void;
 }) {
   const map = {
     info: { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF", icon: "ℹ" },
@@ -193,7 +193,7 @@ export function AlertBanner({ type, title, body, action }: {
         <div className="font-semibold text-xs">{title}</div>
         {body && <div className="text-[11.5px] mt-0.5 opacity-80">{body}</div>}
       </div>
-      {action && <button className="text-[11px] font-semibold underline underline-offset-2 whitespace-nowrap">{action}</button>}
+      {action && <button onClick={onAction} className="text-[11px] font-semibold underline underline-offset-2 whitespace-nowrap">{action}</button>}
     </div>
   );
 }
