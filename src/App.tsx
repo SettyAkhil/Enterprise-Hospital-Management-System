@@ -4,7 +4,7 @@ import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
 import PatientSearch from "./components/PatientSearch";
 import PatientChart from "./components/PatientChart";
-import Emergency from "./components/Emergency";
+
 import ErPage from "./pages/ErPage";
 import BedManagementPage from "./pages/BedManagementPage";
 import type { Notice } from "./types";
@@ -544,7 +544,7 @@ export default function App() {
                 />
               )}
               {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
-              {module === "emergency" && <Emergency onSelect={() => setModule("chart")} />}
+              {module === "emergency" && <ErPage setNotice={setNotice} onNavigate={(m) => setModule(m as any)} />}
               {module === "inpatient" && <Inpatient />}
               {module === "beds" && <BedManagementPage setNotice={setNotice} />}
               {module === "nursing" && <NursingDashboard />}
@@ -578,8 +578,8 @@ export default function App() {
               {module === "revenue_reports" && <RevenueReports />}
               {module === "hrms" && <HRMS />}
               {module === "employees" && <Employees />}
-              {module === "ocr" && <SmartOCR />}
-              {module === "symptom_ai" && <SymptomAI />}
+              {module === "ocr" && <SmartOCR setNotice={setNotice} />}
+              {module === "symptom_ai" && <SymptomAI setNotice={setNotice} />}
               {module === "clinical_rag" && <ClinicalRAG />}
               {module === "clinical_summaries" && <ClinicalSummaries />}
               {module === "bulk_ai" && <BulkAI />}
