@@ -137,7 +137,7 @@ export default function DoctorScheduling() {
         <div className="flex-1 bg-white border border-[#DDE2EC] rounded-xl shadow-sm flex flex-col overflow-hidden">
           <div className="px-5 py-4 border-b border-[#DDE2EC] flex justify-between items-center bg-[#F8FAFC]">
             <div className="flex items-center gap-4">
-              <button className="text-[#64748B] hover:text-gray-900"><Icon.ChevronRight className="rotate-180" /></button>
+              <button className="text-[#64748B] hover:text-gray-900"><span className="inline-block rotate-180"><Icon.ChevronRight /></span></button>
               <h2 className="text-[15px] font-bold text-gray-900">August 24 - August 30, 2026</h2>
               <button className="text-[#64748B] hover:text-gray-900"><Icon.ChevronRight /></button>
             </div>

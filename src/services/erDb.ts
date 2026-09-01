@@ -504,7 +504,7 @@ export class ErDatabase {
     return v || null;
   }
 
-  static createVisit(visitData: {
+  static async createVisit(visitData: {
     patientId?: string;
     patientDetails?: Partial<ErPatient>;
     isUnknown?: boolean;
@@ -515,7 +515,7 @@ export class ErDatabase {
     complaintText?: string;
     caseCategory?: string;
     vitals?: Partial<ErVitalsItem>;
-  }): { visit: ErVisitRecord; patient: ErPatient | null } {
+  }): Promise<{ visit: ErVisitRecord; patient: ErPatient | null }> {
     let patient: ErPatient | null = null;
 
     if (visitData.patientDetails && (visitData.patientDetails.name || visitData.patientDetails.phone)) {
@@ -563,8 +563,8 @@ export class ErDatabase {
       });
     }
 
-    // Run smart clinical triage logic
-    const triageCalc = this.evaluateClinicalTriage(visitData.complaintText || "", visitData.vitals || {});
+    // Run smart clinical triage logic using Qwen / fallback to rules
+    const triageCalc = await this.evaluateClinicalTriage(visitData.complaintText || "", visitData.vitals || {});
 
     const newRecord: ErVisitRecord = {
       id: nextId,
@@ -830,11 +830,11 @@ export class ErDatabase {
     return { invoice_id: 1000 + visitId, total };
   }
 
-  // Clinical Rule-Based Smart AI Triage Engine
-  static evaluateClinicalTriage(
+  // Clinical Rule-Based Smart AI Triage Engine with Qwen Integration
+  static async evaluateClinicalTriage(
     complaints: string,
     vitals: Partial<ErVitalsItem>
-  ): {
+  ): Promise<{
     categoryCode: string;
     urgency: string;
     reasoning: string;
@@ -842,9 +842,12 @@ export class ErDatabase {
     suggestedDoctor: string;
     triageBedLabel: string;
     suggestedTreatments: { intervention_type: string; description: string }[];
-  } {
+  }> {
     const c = (complaints || "").toLowerCase();
-    const hr = vitals.heart_rate || 0;
+    
+    // Fallback rule-based logic function
+    const runRuleBasedFallback = () => {
+      const hr = vitals.heart_rate || 0;
     const sys = vitals.bp_systolic || 0;
     const dia = vitals.bp_diastolic || 0;
     const spo2 = vitals.spo2 || 100;
@@ -947,17 +950,96 @@ export class ErDatabase {
       };
     }
 
-    // Standard / Low (B4 - Green)
-    return {
-      categoryCode: "B4",
-      urgency: "Low / Less Urgent",
-      reasoning: "Hemodynamically stable presentation. Routine emergency care and outpatient/day-care management indicated.",
-      suggestedDepartment: "General Medicine",
-      suggestedDoctor: "Dr. Rajesh Sharma (General Medicine)",
-      triageBedLabel: "ER Bed 08 (Green Zone - Ambulatory)",
-      suggestedTreatments: [
-        { intervention_type: "Clinical Evaluation & Basic Vitals Review", description: "Standard clinical evaluation and vitals monitoring" },
-      ],
+      return {
+        categoryCode: "B4",
+        urgency: "Low / Less Urgent",
+        reasoning: "Hemodynamically stable presentation. Routine emergency care and outpatient/day-care management indicated.",
+        suggestedDepartment: "General Medicine",
+        suggestedDoctor: "Dr. Rajesh Sharma (General Medicine)",
+        triageBedLabel: "ER Bed 08 (Green Zone - Ambulatory)",
+        suggestedTreatments: [
+          { intervention_type: "Clinical Evaluation & Basic Vitals Review", description: "Standard clinical evaluation and vitals monitoring" },
+        ],
+      };
     };
+
+    // Attempt to use Qwen LLM
+    try {
+      const apiUrl = (import.meta as any).env?.VITE_QWEN_API_URL || "http://localhost:11434/v1/chat/completions";
+      const apiKey = (import.meta as any).env?.VITE_QWEN_API_KEY || "ollama";
+      
+      const prompt = `You are an AI Triage Assistant in an Emergency Room.
+Based on the patient's symptoms and vitals, evaluate the clinical triage.
+Symptoms: ${complaints}
+Vitals: ${JSON.stringify(vitals)}
+
+Available Departments: Emergency Medicine, Cardiology, Pulmonology, General Medicine, General Surgery, Orthopedics / Trauma, Neurology, Pediatrics, Obstetrics & Gynecology
+Available Doctors: Dr. Vikram Seth (Cardiology), Dr. Anita Roy (Emergency Medicine), Dr. Rajesh Sharma (General Medicine), Dr. Sanjay Gupta (Orthopedics / Trauma), Dr. Meenakshi Rao (Neurology), Dr. Priya Deshmukh (General Surgery)
+
+Respond ONLY with a valid JSON object matching this schema:
+{
+  "categoryCode": "B1" | "B2" | "B3" | "B4" | "B5",
+  "urgency": "Immediate / Resuscitation" | "High / Emergent" | "Moderate / Urgent" | "Low / Less Urgent" | "Non-Urgent",
+  "reasoning": "string explaining reasoning",
+  "suggestedDepartment": "string from available departments",
+  "suggestedDoctor": "string from available doctors or empty if none",
+  "triageBedLabel": "string describing bed assignment (e.g. ER Bed 01 (Red Zone))",
+  "suggestedTreatments": [
+    { "intervention_type": "string", "description": "string" }
+  ]
+}`;
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "qwen",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.1,
+          response_format: { type: "json_object" }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("LLM API returned an error");
+      }
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      const parsed = JSON.parse(content);
+      
+      // Basic validation
+      if (!parsed.categoryCode || !parsed.suggestedDepartment) {
+        throw new Error("Invalid schema returned by LLM");
+      }
+      
+      // Fallback logic for hallucinations
+      const validDepts = ["Emergency Medicine", "Cardiology", "Pulmonology", "General Medicine", "General Surgery", "Orthopedics / Trauma", "Neurology", "Pediatrics", "Obstetrics & Gynecology"];
+      if (!validDepts.includes(parsed.suggestedDepartment)) {
+        parsed.suggestedDepartment = "General Medicine";
+      }
+      
+      if (!parsed.suggestedDoctor || !parsed.suggestedDoctor.includes(parsed.suggestedDepartment)) {
+        // Deterministic fallback to a doctor in the department
+        const docMap: Record<string, string> = {
+          "Cardiology": "Dr. Vikram Seth (Cardiology)",
+          "Emergency Medicine": "Dr. Anita Roy (Emergency Medicine)",
+          "General Medicine": "Dr. Rajesh Sharma (General Medicine)",
+          "Orthopedics / Trauma": "Dr. Sanjay Gupta (Orthopedics / Trauma)",
+          "Neurology": "Dr. Meenakshi Rao (Neurology)",
+          "General Surgery": "Dr. Priya Deshmukh (General Surgery)"
+        };
+        parsed.suggestedDoctor = docMap[parsed.suggestedDepartment] || "Dr. Rajesh Sharma (General Medicine)";
+      }
+
+      return parsed;
+
+    } catch (err) {
+      console.warn("AI Triage via Qwen failed, falling back to rule-based engine:", err);
+      return runRuleBasedFallback();
+    }
   }
 }

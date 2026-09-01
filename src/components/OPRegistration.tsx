@@ -50,7 +50,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
   useEffect(() => {
     refreshFromDb();
     const unsubscribe = db.subscribe(refreshFromDb);
-    return () => unsubscribe();
+    return () => { unsubscribe(); };
   }, []);
 
   // Form State: First Name, Middle Name (optional), Last Name, DOB, Age (locked), Gender, Phone
@@ -270,7 +270,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     value={formData.firstName}
                     onChange={v => setFormData({ ...formData, firstName: v })}
                     placeholder="e.g. John"
-                    required
+
                   />
                 </div>
                 <div>
@@ -291,7 +291,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     value={formData.lastName}
                     onChange={v => setFormData({ ...formData, lastName: v })}
                     placeholder="e.g. Smith"
-                    required
+
                   />
                 </div>
               </div>
@@ -355,7 +355,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     value={formData.phone}
                     onChange={v => setFormData({ ...formData, phone: v })}
                     placeholder="e.g. (617) 555-0192"
-                    required
+
                   />
                 </div>
               </div>

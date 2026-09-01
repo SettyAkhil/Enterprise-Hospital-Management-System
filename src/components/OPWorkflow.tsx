@@ -89,7 +89,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
   useEffect(() => {
     refreshDbPatients();
     const unsub = db.subscribe(refreshDbPatients);
-    return () => unsub();
+    return () => { unsub(); };
   }, []);
   
   // Accurate age calculation from DOB
@@ -375,7 +375,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
         timestamps: { ...patient.timestamps, symptoms: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
       };
 
-      setPatient(nextPatientState);
+      setPatient(nextPatientState as OPPatient);
 
       if (patient.id) {
         try {
@@ -565,7 +565,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               <button
                 type="button"
                 onClick={() => {
-                  setNewPatientForm({ ...newPatientForm, name: searchQuery });
+                  setNewPatientForm({ ...newPatientForm, firstName: searchQuery });
                   setShowNewPatientModal(true);
                 }}
                 className="px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
@@ -674,7 +674,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                       value={newPatientForm.firstName}
                       onChange={v => setNewPatientForm({ ...newPatientForm, firstName: v })}
                       placeholder="e.g. John"
-                      required
+
                     />
                   </div>
                   <div>
@@ -691,7 +691,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                       value={newPatientForm.lastName}
                       onChange={v => setNewPatientForm({ ...newPatientForm, lastName: v })}
                       placeholder="e.g. Smith"
-                      required
+
                     />
                   </div>
                 </div>
@@ -741,7 +741,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                       value={newPatientForm.phone}
                       onChange={v => setNewPatientForm({ ...newPatientForm, phone: v })}
                       placeholder="e.g. (617) 555-0192"
-                      required
+
                     />
                   </div>
                 </div>

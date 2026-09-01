@@ -26,7 +26,7 @@ export function getCsrfToken(): string | undefined {
 /**
  * Robust mock handler for ER & Hospital data when backend is in standalone mode
  */
-function handleLocalErMock<T = any>(path: string, options: RequestInit = {}): T | null {
+async function handleLocalErMock<T = any>(path: string, options: RequestInit = {}): Promise<T | null> {
   const method = (options.method || "GET").toUpperCase();
   const url = new URL(path, "http://localhost");
   const pathname = url.pathname;
@@ -63,7 +63,7 @@ function handleLocalErMock<T = any>(path: string, options: RequestInit = {}): T 
   // POST /api/er/register-patient (Direct ER Patient Registration)
   if (pathname === "/api/er/register-patient" && method === "POST") {
     const { patient: pData, visit: vData, complaint: cData, vitals: vtData } = body;
-    const res = ErDatabase.createVisit({
+    const res = await ErDatabase.createVisit({
       patientDetails: pData,
       arrivalMode: vData?.arrival_mode,
       conditionAtArrival: vData?.condition_at_arrival,
@@ -81,7 +81,7 @@ function handleLocalErMock<T = any>(path: string, options: RequestInit = {}): T 
 
   // POST /api/er/visits (Existing or Unknown Patient)
   if (pathname === "/api/er/visits" && method === "POST") {
-    const res = ErDatabase.createVisit({
+    const res = await ErDatabase.createVisit({
       patientId: body.patient_id,
       isUnknown: body.is_unknown_patient,
       unknownLabel: body.unknown_patient_label,
@@ -240,7 +240,7 @@ function handleLocalErMock<T = any>(path: string, options: RequestInit = {}): T 
   // POST /api/symptom-ai/triage
   if (pathname === "/api/symptom-ai/triage" && method === "POST") {
     const symptoms = body.symptoms || "";
-    const evalRes = ErDatabase.evaluateClinicalTriage(symptoms, {});
+    const evalRes = await ErDatabase.evaluateClinicalTriage(symptoms, {});
     return {
       department: evalRes.suggestedDepartment,
       urgency: evalRes.urgency,
@@ -287,8 +287,8 @@ export async function apiFetch<T = any>(
         window.dispatchEvent(new Event("app:unauthorized"));
       }
       // If endpoint not implemented or error on backend, fallback to local ER store
-      const localResult = handleLocalErMock<T>(path, options);
-      if (localResult !== null) return localResult;
+      const localResult = await handleLocalErMock<T>(path, options);
+      if (localResult !== null) return localResult as T;
 
       const message = payload.error || payload.message || "Request failed";
       const error = new Error(message) as Error & { payload?: any; status?: number };
@@ -300,9 +300,9 @@ export async function apiFetch<T = any>(
     return response.json();
   } catch (err: any) {
     // Graceful offline fallback to Local ER Store
-    const localResult = handleLocalErMock<T>(path, options);
+    const localResult = await handleLocalErMock<T>(path, options);
     if (localResult !== null) {
-      return localResult;
+      return localResult as T;
     }
     throw err;
   }

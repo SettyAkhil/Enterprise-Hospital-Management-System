@@ -25,12 +25,21 @@ const splitTableCells = (line: string) => {
 const isTableSeparator = (line: string) =>
   /^\s*\|?[\s:-]+\|[\s|:-]*$/.test(line);
 
+// Handles **bold** and single-*emphasis* (the model uses both inconsistently
+// for the same thing -- a leading "**Label**:" bullet phrase -- and single
+// asterisks left unhandled just showed up as stray literal "*" characters
+// in the rendered text instead of being stripped or styled).
 const renderInline = (text: string, keyPrefix: string) => {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
       return (
         <strong key={`${keyPrefix}-b-${index}`}>{part.slice(2, -2)}</strong>
+      );
+    }
+    if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+      return (
+        <strong key={`${keyPrefix}-i-${index}`}>{part.slice(1, -1)}</strong>
       );
     }
     return (
@@ -214,7 +223,12 @@ export default function MarkdownReport({ text }: Props) {
   let activeSection: { title: string; body: Block[] } | null = null;
 
   blocks.forEach((block) => {
-    if (block.type === "heading" && block.level === 3) {
+    // The AI is prompted to use ### for section headers but doesn't always
+    // hold that depth exactly -- # and ## show up in practice too, so any
+    // top-level heading is treated as a new section rather than losing the
+    // grouping (and the "wellness-section" card styling that comes with it)
+    // to LLM formatting drift.
+    if (block.type === "heading" && block.level <= 3) {
       activeSection = { title: block.text, body: [] };
       sections.push(activeSection);
       return;
@@ -232,7 +246,10 @@ export default function MarkdownReport({ text }: Props) {
     <div className="markdown-report">
       {leadBlocks.map((block, index) => renderBlock(block, `lead-${index}`))}
       {sections.map((section, sectionIndex) => (
-        <section key={`section-${sectionIndex}`} className="wellness-section">
+        <section
+          key={`section-${sectionIndex}`}
+          className={`wellness-section wellness-section--${sectionTone(section.title)}`}
+        >
           <h3 className="wellness-section-title">
             {renderInline(section.title, `section-title-${sectionIndex}`)}
           </h3>
@@ -245,4 +262,16 @@ export default function MarkdownReport({ text }: Props) {
       ))}
     </div>
   );
+}
+
+// Color-codes each section by what kind of information it holds, so a
+// reader can tell "read this now" (red-flag emergency signs) apart from
+// "background info" (possible conditions) apart from "here's what to do"
+// (precautions) at a glance, instead of every section looking identical.
+function sectionTone(title: string): "danger" | "success" | "neutral" | "info" {
+  const t = title.toLowerCase();
+  if (t.includes("emergency")) return "danger";
+  if (t.includes("precaution") || t.includes("self-care") || t.includes("self care")) return "success";
+  if (t.includes("disclaimer")) return "neutral";
+  return "info";
 }

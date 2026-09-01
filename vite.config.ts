@@ -16,6 +16,23 @@ export default defineConfig({
     port: parseInt(process.env.PORT || '8443'),
     strictPort: true,
     watch: { ignored: ['**/hospital-backend/**', '**/archive/**'] },
+    proxy: {
+      // Keppler OCR (dpi-ocr) is embedded via iframe (src/components/DpiOcrPortal.tsx)
+      // and runs as its own Vite dev server (dpi-ocr-frontend/, port 3000) that
+      // isn't reachable from outside this sandbox — only $PORT (8443) is
+      // forwarded to the browser. Proxying it through this same dev server
+      // means the iframe only ever needs same-origin, forwarded port 8443.
+      // dpi-ocr-frontend/vite.config.ts sets base: '/keppler-ocr/' so its own
+      // asset/HMR URLs already carry this prefix; ws:true carries its HMR
+      // websocket through too. It proxies /api/* to the OCR backend (7620)
+      // itself, so that alone is forwarded here unprefixed.
+      '/keppler-ocr': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/api': { target: 'http://localhost:3000', changeOrigin: true },
+    },
   },
   preview: {
     host: '0.0.0.0',

@@ -195,3 +195,122 @@ textarea:focus-visible {
 .critical-pulse {
   animation: critical-pulse 1.5s ease-in-out infinite;
 }
+
+/* AI insight reports (MarkdownReport.tsx) -- Symptom AI, Clinical RAG,
+   Clinical Summaries, etc. all render model output through this. None of
+   these classes had any CSS at all before, and the "prose" wrapper classes
+   used alongside them assume @tailwindcss/typography, which isn't installed
+   -- so every AI report in the app was rendering as unstyled, bullet-less,
+   heading-less plain text regardless of how well-structured the model's
+   markdown was. */
+.markdown-report {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--color-text-body);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+.markdown-report p {
+  margin: 0;
+}
+.markdown-h1, .markdown-h2, .markdown-h3, .markdown-h4, .markdown-h5, .markdown-h6 {
+  margin: 4px 0 2px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+  line-height: 1.35;
+}
+.markdown-h1 { font-size: 20px; }
+.markdown-h2 { font-size: 16px; color: var(--color-primary); }
+.markdown-h3 { font-size: 14.5px; }
+.markdown-h4, .markdown-h5, .markdown-h6 { font-size: 13.5px; }
+.markdown-list {
+  margin: 0;
+  padding-left: 20px;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.markdown-list li {
+  padding-left: 2px;
+}
+.markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 4px 0;
+  border: 1px solid var(--color-border-main);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.markdown-table th, .markdown-table td {
+  border: 1px solid var(--color-border-main);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.markdown-table th {
+  background: var(--color-bg-secondary);
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+.markdown-table tr:nth-child(even) td {
+  background: #FAFBFD;
+}
+
+/* Each "### Section Title" block in an AI report becomes one of these --
+   a distinct card instead of a heading that blends into the paragraph
+   above/below it. */
+.wellness-section {
+  border: 1px solid var(--color-border-main);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 4px;
+  background: var(--color-bg-secondary);
+  padding: 12px 14px;
+}
+.wellness-section + .wellness-section {
+  margin-top: 0;
+}
+.wellness-section-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+/* Tone variants (MarkdownReport.tsx's sectionTone) -- danger for red-flag
+   emergency guidance, success for actionable self-care, neutral for the
+   disclaimer; everything else stays the default info/blue above. */
+.wellness-section--danger {
+  border-left-color: var(--color-status-error);
+  background: var(--color-status-error-bg);
+}
+.wellness-section--danger .wellness-section-title {
+  color: var(--color-status-error);
+}
+.wellness-section--success {
+  border-left-color: var(--color-status-success);
+  background: var(--color-status-success-bg);
+}
+.wellness-section--success .wellness-section-title {
+  color: #15803D;
+}
+.wellness-section--neutral {
+  border-left-color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+}
+.wellness-section--neutral .wellness-section-title {
+  color: var(--color-text-secondary);
+}
+.wellness-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wellness-section-body .markdown-h1,
+.wellness-section-body .markdown-h2,
+.wellness-section-body .markdown-h3 {
+  font-size: 13.5px;
+  color: var(--color-text-heading);
+  margin: 0;
+}
