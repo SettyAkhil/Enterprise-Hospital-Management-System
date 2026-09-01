@@ -270,6 +270,7 @@ interface StaffProfile {
   role: string;
   title: string;
   department: string;
+  activeShift?: string;
 }
 
 const DEFAULT_STAFF: StaffProfile = {
@@ -460,14 +461,14 @@ export default function App() {
                 />
               </div>
               <div className="flex-1 py-2 px-2">
-                {(isNurse
+                {((isNurse
                   ? [
                       { key: "dashboard" as Module, label: "Nurse Dashboard", Icon: Icon.Dashboard },
                       { key: "nursing" as Module, label: "Nursing & My Patients", Icon: Icon.Nursing },
                       { key: "chart" as Module, label: "Patient Chart", Icon: Icon.Clinical },
                     ]
                   : NAV
-                ).map((item) => {
+                ) as NavItem[]).map((item) => {
                   const isActive = module === item.key || (item.children?.some(c => c.key === module));
                   const isExpanded = expanded.includes(item.key);
 
@@ -609,8 +610,47 @@ export default function App() {
               {module === "admin" && <PlaceholderModule title="Administration" sub="Users, roles, departments, and system configuration" />}
 
               {/* New modules */}
-              {module === "queue" && <QueueManagement />}
-              {module === "op_management" && <OPManagement />}
+              {module === "queue" && (
+                <QueueManagement
+                  onNavigateToOPWorkflow={(encId, step) => {
+                    if (encId) setSelectedWorkflowEncounterId(encId);
+                    if (step !== undefined) setWorkflowInitialStep(step);
+                    setModule("op_workflow");
+                  }}
+                  onNavigateToDoctorWorkflow={(encId) => {
+                    if (encId) setSelectedWorkflowEncounterId(encId);
+                    setModule("doctor_workflow");
+                  }}
+                  onNavigateToOPRegistration={() => {
+                    setModule("op_registration");
+                  }}
+                />
+              )}
+              {module === "op_management" && (
+                <OPManagement
+                  onNavigateToOPWorkflow={(encId, step) => {
+                    if (encId) setSelectedWorkflowEncounterId(encId);
+                    if (step !== undefined) setWorkflowInitialStep(step);
+                    setModule("op_workflow");
+                  }}
+                  onNavigateToDoctorWorkflow={(encId) => {
+                    if (encId) setSelectedWorkflowEncounterId(encId);
+                    setModule("doctor_workflow");
+                  }}
+                  onNavigateToQueue={() => {
+                    setModule("queue");
+                  }}
+                  onNavigateToOPRegistration={() => {
+                    setModule("op_registration");
+                  }}
+                  onNavigateToPharmacy={() => {
+                    setModule("pharmacy");
+                  }}
+                  onNavigateToBilling={() => {
+                    setModule("billing");
+                  }}
+                />
+              )}
               {module === "op_workflow" && (
                 <OPWorkflow
                   initialStep={workflowInitialStep}
@@ -639,8 +679,8 @@ export default function App() {
               {module === "revenue_reports" && <RevenueReports />}
               {module === "hrms" && <HRMS />}
               {module === "employees" && <Employees />}
-              {module === "ocr" && <SmartOCR />}
-              {module === "symptom_ai" && <SymptomAI />}
+              {module === "ocr" && <SmartOCR setNotice={setNotice} />}
+              {module === "symptom_ai" && <SymptomAI setNotice={setNotice} />}
               {module === "clinical_rag" && <ClinicalRAG />}
               {module === "clinical_summaries" && <ClinicalSummaries />}
               {module === "bulk_ai" && <BulkAI />}

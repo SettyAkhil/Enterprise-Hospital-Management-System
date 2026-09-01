@@ -58,7 +58,9 @@ export default function Registration({
   useEffect(() => {
     refreshFromDb();
     const unsubscribe = db.subscribe(refreshFromDb);
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Form State
@@ -295,11 +297,11 @@ export default function Registration({
 
         {/* ── TAB 1: REGISTRATION FLOW (NAME SEARCH -> EXISTING VS NEW RESOLUTION -> NEXT STEP) ── */}
         {activeTab === "new" && (
-          <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded p-7 shadow-md space-y-6">
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
               <div>
                 <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">1</span>
+                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">1</span>
                   Patient Registration &amp; Identity Verification
                 </h2>
                 <p className="text-[12px] text-[#64748B] mt-0.5">
@@ -356,10 +358,10 @@ export default function Registration({
                   <div className="mt-2">
                     {/* CASE 1: ALL DETAILS MATCH EXACTLY -> EXISTING PATIENT (YES BRANCH) */}
                     {matchingExistingPatient && mismatches.length === 0 ? (
-                      <div className="bg-[#EFF6FF] border-2 border-[#3B82F6] rounded-2xl p-5 shadow-md space-y-4 animate-in fade-in">
+                      <div className="bg-[#EFF6FF] border-2 border-[#3B82F6] rounded p-5 shadow-md space-y-4 animate-in fade-in">
                         <div className="flex items-start justify-between gap-3 flex-wrap border-b border-blue-200/80 pb-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-[#1B4FD8] text-white flex items-center justify-center text-lg font-bold shadow-xs">
+                            <div className="w-10 h-10 rounded bg-[#1B4FD8] text-white flex items-center justify-center text-lg font-bold shadow-xs">
                               👤
                             </div>
                             <div>
@@ -627,7 +629,7 @@ export default function Registration({
 
         {/* ── TAB 2: EXISTING PATIENT REVISIT ─────────────────────────── */}
         {activeTab === "revisit" && (
-          <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded p-7 shadow-md space-y-6">
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
               <div>
                 <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
@@ -646,7 +648,7 @@ export default function Registration({
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search by UMR (e.g. UMR10001), patient name, or phone number..."
-                className="w-full border-2 border-[#94A3B8] rounded-xl px-4 py-2.5 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900 placeholder:text-gray-400"
+                className="w-full border-2 border-[#94A3B8] rounded px-4 py-2.5 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900 placeholder:text-gray-400"
               />
               <span className="absolute right-3.5 top-2.5 text-gray-400 text-sm">🔍</span>
             </div>
@@ -661,7 +663,7 @@ export default function Registration({
                 filteredPatients.map(p => {
                   const pEncounters = db.getEncountersForPatient(p.umr);
                   return (
-                    <div key={p.umr} className="border-2 border-[#E2E8F0] hover:border-[#1B4FD8] rounded-xl p-4.5 bg-white shadow-sm transition-all flex flex-col justify-between">
+                    <div key={p.umr} className="border-2 border-[#E2E8F0] hover:border-[#1B4FD8] rounded p-4.5 bg-white shadow-sm transition-all flex flex-col justify-between">
                       <div>
                         <div className="flex justify-between items-start mb-2">
                           <div>
@@ -674,7 +676,7 @@ export default function Registration({
                         </div>
 
                         {/* Past Visits history preview */}
-                        <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-2.5 my-2.5 text-[11.5px] space-y-1">
+                        <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded p-2.5 my-2.5 text-[11.5px] space-y-1">
                           <div className="font-semibold text-gray-700 flex justify-between">
                             <span>Past OP Visits On Record:</span>
                             <span className="font-mono text-[#D97706]">{pEncounters.length} Visits in Database</span>
@@ -693,12 +695,12 @@ export default function Registration({
                       </div>
 
                       <div className="flex justify-between items-center pt-2 border-t border-[#F1F5F9] mt-2">
-                        <span className="text-[11.5px] text-[#16A34A] font-semibold">
+                        <span className="text-[11.5px] text-[#166534] font-semibold">
                           ✓ Retain {p.umr}
                         </span>
                         <button
                           onClick={() => handleCreateRevisitEncounter(p)}
-                          className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-semibold rounded transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
                         >
                           <span>🔄</span> Generate New Visit OP Number ➔
                         </button>
@@ -716,7 +718,7 @@ export default function Registration({
           <div className="space-y-6">
             {/* OP Book Card Preview */}
             {selectedEncounter && (
-              <div ref={cardPreviewRef} className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-6 shadow-xl space-y-4 ring-1 ring-slate-900/5">
+              <div ref={cardPreviewRef} className="bg-white border-2 border-[#CBD5E1] rounded p-6 shadow-md space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2 border-b border-[#E2E8F0] pb-3">
                   <div>
                     <h3 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
@@ -730,7 +732,7 @@ export default function Registration({
                     <button
                       type="button"
                       onClick={() => setActiveTab("new")}
-                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[12px] font-semibold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[12px] font-semibold rounded transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       <span>+</span> New Registration
                     </button>
@@ -741,7 +743,7 @@ export default function Registration({
                       <button
                         type="button"
                         onClick={() => onProceedToQueue(selectedEncounter)}
-                        className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                        className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                       >
                         <span>✨</span> Proceed to Symptoms &amp; AI Triage →
                       </button>
@@ -749,7 +751,7 @@ export default function Registration({
                   </div>
                 </div>
 
-                <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded-2xl p-6 shadow-2xl relative overflow-hidden ring-2 ring-blue-500/10">
+                <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded p-6 shadow-lg relative overflow-hidden">
                   {/* Top Header Accent Strip */}
                   <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
 
@@ -780,11 +782,11 @@ export default function Registration({
                     </div>
                     <div className="text-right">
                       <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent UMR (Lifetime)</div>
-                      <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200 inline-block mt-0.5">
+                      <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200 inline-block mt-0.5">
                         {selectedEncounter.umr}
                       </div>
                       <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider mt-2.5">Current Visit OP Number</div>
-                      <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
+                      <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
                         {selectedEncounter.opNumber}
                       </div>
                     </div>
@@ -799,7 +801,7 @@ export default function Registration({
             )}
 
             {/* Today's Registration Log Table */}
-            <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl shadow-xl overflow-hidden ring-1 ring-slate-900/5">
+            <div className="bg-white border-2 border-[#CBD5E1] rounded shadow-md overflow-hidden">
               <div className="px-5 py-3 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
                 <div>
                   <h3 className="text-[13.5px] font-bold text-gray-900">Database Encounter Registry</h3>

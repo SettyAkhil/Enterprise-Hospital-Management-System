@@ -325,6 +325,13 @@ export default function OPWorkflow({
   const currentPosition = youQueueIdx >= 0 ? youQueueIdx + 1 : 1;
   const isYourTurn = currentPosition === 1 || activeQueue[youQueueIdx]?.status === "Called" || activeQueue[youQueueIdx]?.status === "YOUR TURN";
 
+  // Check if Doctor has already finished consultation
+  const hasDoctorConsulted = (
+    patient.status === "Consultation Completed" ||
+    patient.status === "OP Completed" ||
+    patient.status === "Awaiting Billing"
+  ) && ((patient.prescription && patient.prescription.length > 0) || Boolean(patient.diagnosis));
+
   // Doctor calls next patient handler
   const handleDoctorCallNext = () => {
     setDoctorQueue(prev => {
@@ -395,7 +402,9 @@ export default function OPWorkflow({
         }
       }
     });
-    return () => unsub();
+    return () => {
+      unsub();
+    };
   }, [initialEncounterId, patient.id]);
 
   const isFemaleGender = (sex?: string) => {
@@ -712,7 +721,7 @@ export default function OPWorkflow({
 
         {/* Quick Patient Selector from Database */}
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2 bg-[#F8FAFC] border border-[#E2E8F0] px-3.5 py-1.5 rounded-lg text-[12px] shadow-xs">
+          <div className="flex items-center gap-2 bg-[#F8FAFC] border border-[#E2E8F0] px-3.5 py-1.5 rounded text-[12px]">
             <span className="text-[#64748B] font-medium whitespace-nowrap">Active Encounter:</span>
             <select
               value={patient.id || ""}
@@ -749,7 +758,7 @@ export default function OPWorkflow({
                   }`}
                 >
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold font-mono transition-colors ${
+                    className={`w-6 h-6 rounded flex items-center justify-center text-[11px] font-bold font-mono transition-colors ${
                       isCurrent
                         ? "bg-[#1B59F8] text-white ring-2 ring-blue-400/50"
                         : isCompleted
@@ -776,15 +785,15 @@ export default function OPWorkflow({
           {activeNotifications.map((notif) => (
             <div
               key={notif.id}
-              className={`p-4 rounded-2xl shadow-2xl border-2 pointer-events-auto transition-all duration-300 ${
+              className={`p-4 rounded shadow-xl border-2 pointer-events-auto transition-all duration-300 ${
                 notif.type === "doctor"
-                  ? "bg-[#0F172A] border-[#3B82F6] text-white ring-4 ring-blue-500/20"
-                  : "bg-[#064E3B] border-[#10B981] text-white ring-4 ring-emerald-500/20"
+                  ? "bg-[#0F172A] border-[#3B82F6] text-white ring-2 ring-blue-500/20"
+                  : "bg-[#064E3B] border-[#10B981] text-white ring-2 ring-emerald-500/20"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold shadow-xs ${
+                  <div className={`w-9 h-9 rounded flex items-center justify-center text-base font-bold shadow-xs ${
                     notif.type === "doctor" ? "bg-[#2563EB] text-white" : "bg-[#059669] text-white"
                   }`}>
                     {notif.type === "doctor" ? "👨‍⚕️" : "📱"}
@@ -801,7 +810,7 @@ export default function OPWorkflow({
                     <div className="text-[11px] text-slate-300 mt-0.5 font-medium">
                       Recipient: <strong className="text-white">{notif.recipient}</strong>
                     </div>
-                    <div className="text-[12px] text-slate-100 mt-2 bg-white/10 p-2.5 rounded-lg leading-relaxed border border-white/10">
+                    <div className="text-[12px] text-slate-100 mt-2 bg-white/10 p-2.5 rounded leading-relaxed border border-white/10">
                       {notif.message}
                     </div>
                     <div className="text-[10.5px] text-slate-400 mt-2 flex items-center justify-between">
@@ -816,7 +825,7 @@ export default function OPWorkflow({
                 <button
                   type="button"
                   onClick={() => setActiveNotifications(prev => prev.filter(n => n.id !== notif.id))}
-                  className="text-slate-400 hover:text-white p-1 rounded-md transition-colors cursor-pointer"
+                  className="text-slate-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
                 >
                   ✕
                 </button>
@@ -831,7 +840,7 @@ export default function OPWorkflow({
 
         {/* ── STEP 1: DIGITAL OP BOOK & PASS ─────────────────────────── */}
         {currentStep === 1 && (
-          <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
+          <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
@@ -845,14 +854,14 @@ export default function OPWorkflow({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="px-4 py-2 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[12.5px] font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+                className="px-4 py-2 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[12.5px] font-semibold rounded shadow-xs transition-colors flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
               >
                 <Icon.Download /> Print OP Pass
               </button>
             </div>
 
             {/* OP Book Digital Card (White Color with Shadows and Crisp Border) */}
-            <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#CBD5E1] text-gray-900 rounded-2xl p-6 shadow-xl relative overflow-hidden ring-1 ring-black/5">
+            <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#CBD5E1] text-gray-900 rounded p-6 shadow-md relative overflow-hidden">
               {/* Top Accent Strip */}
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
 
@@ -878,11 +887,11 @@ export default function OPWorkflow({
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent UMR</div>
-                  <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200 inline-block mt-0.5">
+                  <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200 inline-block mt-0.5">
                     {patient.umr}
                   </div>
                   <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider mt-2">Visit OP Number</div>
-                  <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
+                  <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
                     {patient.opNumber}
                   </div>
                 </div>
@@ -890,7 +899,7 @@ export default function OPWorkflow({
 
               {/* Previous visits chip */}
               {patient.previousVisits && patient.previousVisits.length > 0 && (
-                <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-2.5 mb-4 text-[11px]">
+                <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded p-2.5 mb-4 text-[11px]">
                   <div className="text-[#64748B] font-bold mb-1">Previous OP History Associated with {patient.umr}:</div>
                   <div className="space-y-1">
                     {patient.previousVisits.map((pv, i) => (
@@ -912,7 +921,7 @@ export default function OPWorkflow({
             <div className="flex justify-end items-center pt-2">
               <button
                 onClick={() => setCurrentStep(2)}
-                className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
                 Proceed to Clinical Triage &amp; AI Analysis →
               </button>
@@ -922,7 +931,7 @@ export default function OPWorkflow({
 
         {/* ── STEP 2: SYMPTOM CAPTURE & AI SPECIALTY MATCH ─────────────── */}
         {currentStep === 2 && (
-          <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
+          <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6">
             <div>
               <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
                 <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">2</span>
@@ -942,7 +951,7 @@ export default function OPWorkflow({
                 value={patient.chiefComplaint}
                 onChange={e => setPatient({ ...patient, chiefComplaint: e.target.value })}
                 placeholder="e.g. Patient complaining of severe chest tightness and shortness of breath since yesterday morning..."
-                className="w-full h-20 border border-[#DDE2EC] rounded-lg p-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]"
+                className="w-full h-20 border border-[#DDE2EC] rounded p-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]"
               />
             </div>
 
@@ -963,7 +972,7 @@ export default function OPWorkflow({
                       key={sym}
                       type="button"
                       onClick={() => toggleSymptom(sym)}
-                      className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors cursor-pointer ${
+                      className={`px-3 py-1.5 rounded text-[12px] font-medium border transition-colors cursor-pointer ${
                         active
                           ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-xs"
                           : "bg-white text-gray-700 border-[#DDE2EC] hover:bg-[#F8FAFC]"
@@ -977,7 +986,7 @@ export default function OPWorkflow({
             </div>
 
             {/* Autonomous AI Patient Profile Bar */}
-            <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-blue-100 text-[#1B4FD8] flex items-center justify-center font-bold text-[14px]">
                   {patient.name.charAt(0).toUpperCase()}
@@ -998,7 +1007,7 @@ export default function OPWorkflow({
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg self-start sm:self-auto">
+              <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded self-start sm:self-auto">
                 <span className="text-[12px]">✨</span>
                 <span className="text-[11.5px] font-semibold text-[#1B4FD8]">AI Autonomous Triage</span>
               </div>
@@ -1009,7 +1018,7 @@ export default function OPWorkflow({
               <button
                 onClick={runAiSymptomAnalysis}
                 disabled={aiAnalyzing || (patient.symptoms.length === 0 && !patient.chiefComplaint)}
-                className="px-7 py-3 bg-gradient-to-r from-[#1E3A8A] to-[#1B4FD8] hover:from-[#1E40AF] hover:to-[#2563EB] text-white text-[13px] font-semibold rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                className="px-7 py-3 bg-gradient-to-r from-[#1E3A8A] to-[#1B4FD8] hover:from-[#1E40AF] hover:to-[#2563EB] text-white text-[13px] font-semibold rounded shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {aiAnalyzing ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1024,10 +1033,10 @@ export default function OPWorkflow({
             {patient.status !== "Registered" && patient.aiDoctor && (
               <div className="space-y-4 animate-in fade-in">
                 {/* 1. Appointment Booked & Queue Success Banner */}
-                <div className="bg-[#F0FDF4] border-2 border-[#86EFAC] rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="bg-[#F0FDF4] border-2 border-[#86EFAC] rounded p-5 shadow-sm space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-green-200/80 pb-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[#16A34A] text-white flex items-center justify-center text-lg font-bold shadow-xs">
+                      <div className="w-10 h-10 rounded bg-[#16A34A] text-white flex items-center justify-center text-lg font-bold shadow-xs">
                         ✓
                       </div>
                       <div>
@@ -1047,7 +1056,7 @@ export default function OPWorkflow({
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         onClick={() => setCurrentStep(3)}
-                        className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                        className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold rounded shadow-md transition-all flex items-center gap-2 cursor-pointer"
                       >
                         <span>👩‍⚕️</span> Proceed to Step 3: Nurse Triage &amp; Vitals Station →
                       </button>
@@ -1055,7 +1064,7 @@ export default function OPWorkflow({
                   </div>
 
                   {/* Live Queue Ticket Card with Dynamic Queue Estimation */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3.5 rounded-xl border border-green-200 text-[12px]">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3.5 rounded border border-green-200 text-[12px]">
                     <div>
                       <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Queue Token</span>
                       <span className="font-mono font-bold text-[16px] text-[#1B4FD8]">{patient.queueToken}</span>
@@ -1077,7 +1086,7 @@ export default function OPWorkflow({
                     </div>
                   </div>
 
-                  <div className="bg-[#F8FAFC] border border-green-200/80 px-3.5 py-2 rounded-xl text-[11.5px] text-[#166534] flex items-center justify-between">
+                  <div className="bg-[#F8FAFC] border border-green-200/80 px-3.5 py-2 rounded text-[11.5px] text-[#166534] flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <span>📱</span>
                       <span><strong>Automated Patient Alert:</strong> A "Get ready — You are UP NEXT" SMS will be sent to <strong>{patient.phone || "registered mobile"}</strong> 2-3 minutes before your turn.</span>
@@ -1089,10 +1098,10 @@ export default function OPWorkflow({
                 </div>
 
                 {/* 2. Clinical AI Triage & Specialty Recommendation Cards */}
-                <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded p-5 shadow-xs space-y-4">
                   <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-[11px] font-bold uppercase tracking-wider bg-[#1D4ED8] text-white px-2.5 py-1 rounded-md">
+                      <span className="text-[11px] font-bold uppercase tracking-wider bg-[#1D4ED8] text-white px-2.5 py-1 rounded">
                         ✨ Clinical AI Triage &amp; Load Analysis
                       </span>
                       <span className="text-[12px] font-semibold text-[#1E3A8A] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
@@ -1103,7 +1112,7 @@ export default function OPWorkflow({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Department & Specialty Rationale */}
-                    <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] space-y-1.5">
+                    <div className="bg-white p-4 rounded border border-[#E2E8F0] space-y-1.5">
                       <div className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
                         <span>🏥</span> Recommended Department
                       </div>
@@ -1116,7 +1125,7 @@ export default function OPWorkflow({
                     </div>
 
                     {/* Doctor Match & Availability Rationale */}
-                    <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] space-y-1.5">
+                    <div className="bg-white p-4 rounded border border-[#E2E8F0] space-y-1.5">
                       <div className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
                         <span>👨‍⚕️</span> Matched Physician &amp; Queue Rationale
                       </div>
@@ -1136,7 +1145,7 @@ export default function OPWorkflow({
 
         {/* ── STEP 3: PRE-CONSULTATION NURSE TRIAGE & VITALS STATION ── */}
         {currentStep === 3 && (
-          <div className="bg-white border border-[#DDE2EC] rounded-2xl p-6 shadow-xs space-y-6 max-w-5xl mx-auto">
+          <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6 max-w-5xl mx-auto">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
               <div>
@@ -1148,112 +1157,9 @@ export default function OPWorkflow({
                   Staff Nurse Jessica Carter records baseline physiological vitals and triage observations before patient enters doctor consultation.
                 </p>
               </div>
-              <span className="text-[11px] font-mono font-bold bg-blue-50 text-[#1B4FD8] border border-blue-200 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+              <span className="text-[11px] font-mono font-bold bg-blue-50 text-[#1B4FD8] border border-blue-200 px-2.5 py-1 rounded self-start sm:self-auto">
                 👩‍⚕️ Nurse Station · 3N Triage
               </span>
-            </div>
-
-            {/* Quick 1-Click Vitals Presets */}
-            <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded-xl space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
-                  <span>⚡</span> 1-Click Clinical Vitals Presets (Triage Quick-Fill):
-                </span>
-                <span className="text-[11px] text-[#64748B] italic">Click to populate baseline vitals</span>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPatient(prev => ({
-                      ...prev,
-                      vitals: {
-                        bp: "120/80 mmHg",
-                        pulse: "76 bpm",
-                        temp: "98.6 °F",
-                        spo2: "99%",
-                        weight: "74 kg",
-                        notes: "Alert and oriented. Vitals within normal baseline limits."
-                      }
-                    }));
-                  }}
-                  className="p-2.5 bg-white border border-[#CBD5E1] hover:border-[#16A34A] rounded-xl text-left text-[11.5px] transition-all hover:bg-green-50/40 cursor-pointer shadow-2xs group"
-                >
-                  <div className="font-bold text-[#166534] flex items-center gap-1">
-                    <span>🟢</span> Normal Baseline
-                  </div>
-                  <div className="text-[10.5px] text-[#64748B] mt-0.5">BP 120/80 · Pulse 76 · Temp 98.6°F · SpO2 99%</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPatient(prev => ({
-                      ...prev,
-                      vitals: {
-                        bp: "152/94 mmHg",
-                        pulse: "84 bpm",
-                        temp: "98.4 °F",
-                        spo2: "98%",
-                        weight: "78 kg",
-                        notes: "Stage 2 Elevated BP. Patient denies acute chest pressure. Alert."
-                      }
-                    }));
-                  }}
-                  className="p-2.5 bg-white border border-[#CBD5E1] hover:border-[#D97706] rounded-xl text-left text-[11.5px] transition-all hover:bg-amber-50/40 cursor-pointer shadow-2xs group"
-                >
-                  <div className="font-bold text-[#B45309] flex items-center gap-1">
-                    <span>🟡</span> Elevated BP / HTN
-                  </div>
-                  <div className="text-[10.5px] text-[#64748B] mt-0.5">BP 152/94 · Pulse 84 · Temp 98.4°F · SpO2 98%</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPatient(prev => ({
-                      ...prev,
-                      vitals: {
-                        bp: "118/76 mmHg",
-                        pulse: "98 bpm",
-                        temp: "101.8 °F",
-                        spo2: "97%",
-                        weight: "68 kg",
-                        notes: "Febrile and flushed. Elevated body temperature and tachycardia on triage."
-                      }
-                    }));
-                  }}
-                  className="p-2.5 bg-white border border-[#CBD5E1] hover:border-[#DC2626] rounded-xl text-left text-[11.5px] transition-all hover:bg-red-50/40 cursor-pointer shadow-2xs group"
-                >
-                  <div className="font-bold text-[#B91C1C] flex items-center gap-1">
-                    <span>🔴</span> Febrile / High Fever
-                  </div>
-                  <div className="text-[10.5px] text-[#64748B] mt-0.5">BP 118/76 · Pulse 98 · Temp 101.8°F · SpO2 97%</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPatient(prev => ({
-                      ...prev,
-                      vitals: {
-                        bp: "134/86 mmHg",
-                        pulse: "92 bpm",
-                        temp: "99.1 °F",
-                        spo2: "94%",
-                        weight: "75 kg",
-                        notes: "Mild dyspnea on exertion. SpO2 94% on ambient air. No stridor."
-                      }
-                    }));
-                  }}
-                  className="p-2.5 bg-white border border-[#CBD5E1] hover:border-[#2563EB] rounded-xl text-left text-[11.5px] transition-all hover:bg-blue-50/40 cursor-pointer shadow-2xs group"
-                >
-                  <div className="font-bold text-[#1D4ED8] flex items-center gap-1">
-                    <span>🔵</span> Respiratory / Dyspnea
-                  </div>
-                  <div className="text-[10.5px] text-[#64748B] mt-0.5">BP 134/86 · Pulse 92 · Temp 99.1°F · SpO2 94%</div>
-                </button>
-              </div>
             </div>
 
             {/* Vitals Form Grid */}
@@ -1290,7 +1196,7 @@ export default function OPWorkflow({
                 value={patient.vitals.notes}
                 onChange={e => setPatient({ ...patient, vitals: { ...patient.vitals, notes: e.target.value } })}
                 placeholder="Enter nursing triage assessment (e.g. Patient conscious, alert, baseline vitals within normal parameters, cleared for physician consultation)..."
-                className="w-full border border-[#CBD5E1] rounded-xl p-3 text-[12.5px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
+                className="w-full border border-[#CBD5E1] rounded p-3 text-[12.5px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
               />
             </div>
 
@@ -1328,7 +1234,7 @@ export default function OPWorkflow({
 
                   setCurrentStep(4);
                 }}
-                className="px-6 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white text-[13px] font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                className="px-6 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white text-[13px] font-bold rounded shadow-md transition-all flex items-center gap-2 cursor-pointer"
               >
                 <span>✓</span> Save &amp; Submit Vitals to Doctor Queue (Step 4) →
               </button>
@@ -1338,13 +1244,13 @@ export default function OPWorkflow({
 
         {/* ── STEP 4: DOCTOR & LIVE QUEUE ALLOCATION ─────────────────── */}
         {currentStep === 4 && (
-          <div className="bg-white border border-[#DDE2EC] rounded-2xl p-6 shadow-sm space-y-6 max-w-4xl mx-auto">
+          <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6 max-w-4xl mx-auto">
             
             {/* 1. Header & Assigned Doctor Card */}
-            <div className="bg-[#F8FAFC] border-2 border-[#CBD5E1] rounded-2xl p-5 shadow-xs">
+            <div className="bg-[#F8FAFC] border-2 border-[#CBD5E1] rounded p-5 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#1E3A8A] to-[#1B4FD8] text-white flex items-center justify-center text-xl font-bold shadow-sm">
+                  <div className="w-12 h-12 rounded bg-gradient-to-tr from-[#1E3A8A] to-[#1B4FD8] text-white flex items-center justify-center text-xl font-bold shadow-sm">
                     👨‍⚕️
                   </div>
                   <div>
@@ -1378,7 +1284,7 @@ export default function OPWorkflow({
                         }));
                       }
                     }}
-                    className="text-[11.5px] font-semibold text-gray-700 bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                    className="text-[11.5px] font-semibold text-gray-700 bg-white border border-[#CBD5E1] rounded px-2.5 py-1.5 focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
                   >
                     {INITIAL_DOCTORS.filter(d => d.specialty === patient.aiSpecialty).map(d => (
                       <option key={d.id} value={d.name}>
@@ -1391,7 +1297,7 @@ export default function OPWorkflow({
             </div>
 
             {/* Verified Nurse Vitals Snapshot Card */}
-            <div className="bg-[#F0FDF4] border border-green-200 p-3.5 rounded-xl text-[12px] space-y-1.5 shadow-2xs">
+            <div className="bg-[#F0FDF4] border border-green-200 p-3.5 rounded text-[12px] space-y-1.5 shadow-2xs">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#166534] flex items-center gap-1.5">
                   <span>✓</span> Nurse-Recorded Vital Signs (Attached to Queue)
@@ -1409,10 +1315,47 @@ export default function OPWorkflow({
               </div>
             </div>
 
-            {/* 2. "YOUR TURN" Banner (When patient reaches position #1) */}
-            {isYourTurn ? (
-              <div className="bg-[#F0FDF4] border-2 border-[#16A34A] rounded-2xl p-6 text-center space-y-4 shadow-md animate-in zoom-in-95 duration-200">
-                <div className="inline-flex items-center gap-2 bg-[#16A34A] text-white text-[12px] font-mono font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+            {/* Check if Doctor has already finished consultation */}
+            {hasDoctorConsulted ? (
+              <div className="bg-[#F0FDF4] border-2 border-[#16A34A] rounded p-6 text-center space-y-3.5 shadow-xs animate-in zoom-in-95 duration-200">
+                <div className="inline-flex items-center gap-2 bg-[#16A34A] text-white text-[12px] font-mono font-bold px-3 py-1 rounded uppercase tracking-wider">
+                  <span>✓</span> DOCTOR CONSULTATION COMPLETED
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-[20px] font-bold text-gray-900">
+                    Checked by {patient.assignedDoctor}
+                  </div>
+                  <div className="text-[13px] text-[#166534] font-medium">
+                    Clinical Examination Completed · Official Prescription Issued ({patient.prescription?.length || 0} Medications)
+                  </div>
+                  {patient.diagnosis && (
+                    <div className="text-[12.5px] text-gray-800 font-semibold bg-white border border-green-200 p-2.5 rounded max-w-lg mx-auto mt-2">
+                      <span className="text-[#64748B] text-[11px] block uppercase font-bold">Confirmed Clinical Diagnosis:</span>
+                      {patient.diagnosis} {patient.icd10 ? `(${patient.icd10})` : ''}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row justify-center gap-3">
+                  <button
+                    onClick={() => setCurrentStep(5)}
+                    className="px-6 py-2.5 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[13px] font-bold rounded shadow-2xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>📋</span> View Clinical Prescription Pad (Step 5) →
+                  </button>
+                  <button
+                    onClick={() => setCurrentStep(6)}
+                    className="px-6 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded shadow-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>💳</span> Proceed Directly to Billing Settlement (Step 6) →
+                  </button>
+                </div>
+              </div>
+            ) : isYourTurn ? (
+              /* 2. "YOUR TURN" Banner (When patient reaches position #1) */
+              <div className="bg-[#F0FDF4] border-2 border-[#16A34A] rounded p-6 text-center space-y-4 shadow-md animate-in zoom-in-95 duration-200">
+                <div className="inline-flex items-center gap-2 bg-[#16A34A] text-white text-[12px] font-mono font-bold px-3 py-1 rounded uppercase tracking-wider">
                   <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
                   🔔 YOUR TURN
                 </div>
@@ -1432,7 +1375,7 @@ export default function OPWorkflow({
                 <div className="pt-2">
                   <button
                     onClick={() => setCurrentStep(5)}
-                    className="px-8 py-3.5 bg-[#16A34A] hover:bg-[#15803D] text-white text-[14px] font-bold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center gap-2 mx-auto cursor-pointer"
+                    className="px-8 py-3.5 bg-[#16A34A] hover:bg-[#15803D] text-white text-[14px] font-bold rounded shadow-lg hover:shadow-xl transition-all flex items-center gap-2 mx-auto cursor-pointer"
                   >
                     <span>👨‍⚕️</span> ENTER DOCTOR CONSULTATION (STEP 5) →
                   </button>
@@ -1440,7 +1383,7 @@ export default function OPWorkflow({
               </div>
             ) : (
               /* 3. YOUR QUEUE STATUS Card (When Waiting) */
-              <div className="bg-white border-2 border-[#93C5FD] rounded-2xl p-5 shadow-xs space-y-4">
+              <div className="bg-white border-2 border-[#93C5FD] rounded p-5 shadow-xs space-y-4">
                 <div className="text-center border-b border-[#E2E8F0] pb-3">
                   <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">YOUR QUEUE STATUS</div>
                   <div className="text-[28px] font-black font-mono text-[#1B4FD8] mt-0.5">
@@ -1449,15 +1392,15 @@ export default function OPWorkflow({
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E8F0]">
+                  <div className="bg-[#F8FAFC] p-3 rounded border border-[#E2E8F0]">
                     <div className="text-[10.5px] font-bold uppercase text-[#64748B]">Patients Ahead</div>
                     <div className="text-[20px] font-black font-mono text-gray-900 mt-0.5">{patientsAhead}</div>
                   </div>
-                  <div className="bg-[#EFF6FF] p-3 rounded-xl border border-blue-200">
+                  <div className="bg-[#EFF6FF] p-3 rounded border border-blue-200">
                     <div className="text-[10.5px] font-bold uppercase text-[#1B4FD8]">Your Position</div>
                     <div className="text-[20px] font-black font-mono text-[#1B4FD8] mt-0.5">#{currentPosition}</div>
                   </div>
-                  <div className="bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E8F0]">
+                  <div className="bg-[#F8FAFC] p-3 rounded border border-[#E2E8F0]">
                     <div className="text-[10.5px] font-bold uppercase text-[#64748B]">Est. Wait</div>
                     <div className="text-[20px] font-black font-mono text-[#D97706] mt-0.5">
                       ~{patientsAhead * 5 + 5}m
@@ -1468,7 +1411,7 @@ export default function OPWorkflow({
                 <div className="flex justify-center pt-2">
                   <button
                     onClick={() => setCurrentStep(5)}
-                    className="px-6 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold rounded-xl shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
+                    className="px-6 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold rounded shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
                   >
                     <span>🩺</span> Proceed to Doctor Consultation Workspace (Step 5) →
                   </button>
@@ -1477,7 +1420,7 @@ export default function OPWorkflow({
             )}
 
             {/* Queue Controls */}
-            <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setCurrentStep(3)}
@@ -1490,14 +1433,14 @@ export default function OPWorkflow({
                 <button
                   type="button"
                   onClick={handleDoctorCallNext}
-                  className="px-3 py-1.5 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[11.5px] font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1.5 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[11.5px] font-semibold rounded shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <span>📢</span> Doctor: Call Next Patient
                 </button>
                 <button
                   type="button"
                   onClick={handleSkipToMyTurn}
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[#065F46] text-[11.5px] font-semibold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[#065F46] text-[11.5px] font-semibold rounded transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <span>⚡</span> Advance to My Turn
                 </button>
@@ -1508,14 +1451,8 @@ export default function OPWorkflow({
 
         {/* ── STEP 5: PHYSICIAN CONSULTATION & SUBMITTED CLINICAL SUMMARY ── */}
         {currentStep === 5 && (() => {
-          const hasDoctorConsulted = (
-            patient.status === "Consultation Completed" ||
-            patient.status === "OP Completed" ||
-            patient.status === "Awaiting Billing"
-          ) && ((patient.prescription && patient.prescription.length > 0) || Boolean(patient.diagnosis));
-
           return (
-            <div className="bg-white border border-[#DDE2EC] rounded-2xl p-6 shadow-xs space-y-6 max-w-5xl mx-auto">
+            <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6 max-w-5xl mx-auto">
               {/* Header with Doctor & Patient Meta */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
                 <div>
@@ -1529,7 +1466,7 @@ export default function OPWorkflow({
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <span className={`text-[11.5px] font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5 ${
+                  <span className={`text-[11.5px] font-bold px-3 py-1.5 rounded border flex items-center gap-1.5 ${
                     hasDoctorConsulted
                       ? "bg-green-50 text-[#166534] border-green-200"
                       : "bg-amber-50 text-[#B45309] border-amber-200"
@@ -1547,10 +1484,10 @@ export default function OPWorkflow({
               </div>
 
               {/* Pre-Consultation Nurse-Recorded Vitals Card */}
-              <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded-2xl p-4.5 space-y-2.5 shadow-2xs">
+              <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded p-4.5 space-y-2.5 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-lg bg-blue-100 text-[#1B4FD8] flex items-center justify-center font-bold text-sm">
+                    <span className="w-7 h-7 rounded bg-blue-100 text-[#1B4FD8] flex items-center justify-center font-bold text-sm">
                       🩺
                     </span>
                     <div>
@@ -1568,30 +1505,30 @@ export default function OPWorkflow({
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[12px]">
-                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded">
                     <span className="text-[#64748B] block text-[10px] uppercase font-bold">Blood Pressure</span>
                     <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.bp || "120/80 mmHg"}</span>
                   </div>
-                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded">
                     <span className="text-[#64748B] block text-[10px] uppercase font-bold">Heart Rate / Pulse</span>
                     <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.pulse || "76 bpm"}</span>
                   </div>
-                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded">
                     <span className="text-[#64748B] block text-[10px] uppercase font-bold">Temperature</span>
                     <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.temp || "98.6 °F"}</span>
                   </div>
-                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded">
                     <span className="text-[#64748B] block text-[10px] uppercase font-bold">Oxygen SpO2</span>
                     <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.spo2 || "99%"}</span>
                   </div>
-                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded">
                     <span className="text-[#64748B] block text-[10px] uppercase font-bold">Body Weight</span>
                     <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.weight || "74 kg"}</span>
                   </div>
                 </div>
 
                 {patient.vitals?.notes && (
-                  <div className="bg-white border border-green-200 p-2.5 rounded-lg text-[11.5px] text-[#166534] flex items-center gap-1.5">
+                  <div className="bg-white border border-green-200 p-2.5 rounded text-[11.5px] text-[#166534] flex items-center gap-1.5">
                     <span className="font-bold">Nurse Observation:</span>
                     <span>{patient.vitals.notes}</span>
                   </div>
@@ -1601,8 +1538,8 @@ export default function OPWorkflow({
               {/* STATE A: Awaiting Consultation Submission from Doctor Portal */}
               {!hasDoctorConsulted ? (
                 <div className="space-y-6">
-                  <div className="bg-[#EFF6FF] border-2 border-[#93C5FD] rounded-2xl p-6 text-center space-y-4 shadow-xs animate-in fade-in">
-                    <div className="w-12 h-12 rounded-2xl bg-[#1B4FD8] text-white flex items-center justify-center text-2xl mx-auto shadow-sm">
+                  <div className="bg-[#EFF6FF] border-2 border-[#93C5FD] rounded p-6 text-center space-y-4 shadow-xs animate-in fade-in">
+                    <div className="w-12 h-12 rounded bg-[#1B4FD8] text-white flex items-center justify-center text-2xl mx-auto shadow-sm">
                       🩺
                     </div>
                     <div className="space-y-1">
@@ -1614,7 +1551,7 @@ export default function OPWorkflow({
                       </p>
                     </div>
 
-                    <div className="pt-2 flex justify-center gap-3">
+                    <div className="pt-2 flex flex-wrap justify-center gap-3">
                       <button
                         type="button"
                         onClick={() => {
@@ -1622,9 +1559,86 @@ export default function OPWorkflow({
                             onOpenDoctorPortal(patient.id);
                           }
                         }}
-                        className="px-6 py-3 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                        className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded shadow-md transition-all flex items-center gap-2 cursor-pointer"
                       >
-                        <span>🩺</span> Open Doctor Portal to Perform Consultation →
+                        <span>🩺</span> Open Doctor Portal Workspace →
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          let diag = "Acute Outpatient Clinical Evaluation";
+                          let icd = "Z00.0";
+                          let rx = [
+                            { medicine: "Paracetamol 650mg", dosage: "1 tab", frequency: "TDS (Thrice Daily)", duration: "5 days" },
+                            { medicine: "Pantoprazole 40mg", dosage: "1 tab", frequency: "OD (Before Food)", duration: "7 days" }
+                          ];
+                          let inv = ["Complete Blood Count (CBC)", "Basic Metabolic Panel"];
+                          let adv = "Take prescribed medications after meals. Maintain adequate hydration and follow up in 1 week.";
+
+                          if (patient.aiSpecialty === "Cardiology") {
+                            diag = "Acute Coronary Syndrome Rule-Out / Stable Angina";
+                            icd = "I20.9";
+                            rx = [
+                              { medicine: "Aspirin 81mg", dosage: "1 tab", frequency: "OD (Once Daily)", duration: "30 days" },
+                              { medicine: "Atorvastatin 40mg", dosage: "1 tab", frequency: "HS (Bedtime)", duration: "30 days" },
+                              { medicine: "Metoprolol 25mg", dosage: "1 tab", frequency: "OD (Once Daily)", duration: "30 days" }
+                            ];
+                            inv = ["ECG 12-Lead", "Serum Troponin I", "Lipid Profile"];
+                            adv = "Avoid heavy physical exertion. Follow low-sodium diet and return immediately if chest pain recurs.";
+                          } else if (patient.aiSpecialty === "Orthopedics") {
+                            diag = "Acute Musculoskeletal Lumbar Strain & Joint Inflammation";
+                            icd = "M54.5";
+                            rx = [
+                              { medicine: "Aceclofenac 100mg + Paracetamol 325mg", dosage: "1 tab", frequency: "BD (Twice Daily)", duration: "5 days" },
+                              { medicine: "Thiocolchicoside 4mg", dosage: "1 cap", frequency: "BD (Twice Daily)", duration: "5 days" },
+                              { medicine: "Pantoprazole 40mg", dosage: "1 tab", frequency: "OD (Before Food)", duration: "7 days" }
+                            ];
+                            inv = ["X-Ray Joint / Spine", "Serum Uric Acid"];
+                            adv = "Hot fermentation twice daily. Avoid lifting heavy objects.";
+                          }
+
+                          const updatedPatient = {
+                            ...patient,
+                            diagnosis: diag,
+                            icd10: icd,
+                            prescription: rx,
+                            investigations: inv,
+                            advice: adv,
+                            status: "Consultation Completed" as const,
+                            timestamps: {
+                              ...patient.timestamps,
+                              consultationStart: patient.timestamps.consultationStart || nowTime,
+                              consultationEnd: nowTime
+                            }
+                          };
+
+                          setPatient(updatedPatient);
+
+                          if (patient.id) {
+                            try {
+                              db.updateEncounter(patient.id, {
+                                diagnosis: diag,
+                                icd10: icd,
+                                prescription: rx,
+                                investigations: inv,
+                                advice: adv,
+                                status: "Consultation Completed",
+                                timestamps: {
+                                  ...patient.timestamps,
+                                  consultationStart: patient.timestamps.consultationStart || nowTime,
+                                  consultationEnd: nowTime
+                                }
+                              });
+                            } catch (err) {
+                              console.warn("DB update failed:", err);
+                            }
+                          }
+                        }}
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-bold rounded shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                      >
+                        <span>⚡</span> Complete Consultation &amp; Issue Prescription Now →
                       </button>
                     </div>
                   </div>
@@ -1643,7 +1657,7 @@ export default function OPWorkflow({
                 /* STATE B: Doctor has Submitted -> Render Confirmed Prescriptions, Diagnosis & Orders */
                 <div className="space-y-5 animate-in fade-in">
                   {/* Doctor & Encounter Meta Strip */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded-xl text-[12px]">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded text-[12px]">
                     <div>
                       <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Attending Doctor</span>
                       <span className="font-bold text-gray-900">{patient.assignedDoctor}</span>
@@ -1667,22 +1681,22 @@ export default function OPWorkflow({
                   </div>
 
                   {/* Clinical Assessment */}
-                  <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-1 shadow-2xs">
+                  <div className="bg-white border border-[#CBD5E1] rounded p-4 space-y-1 shadow-2xs">
                     <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Clinical Assessment &amp; Notes</div>
-                    <div className="text-[13px] text-gray-800 leading-relaxed font-medium bg-[#F8FAFC] p-3 rounded-lg border border-[#E2E8F0]">
+                    <div className="text-[13px] text-gray-800 leading-relaxed font-medium bg-[#F8FAFC] p-3 rounded border border-[#E2E8F0]">
                       {patient.assessment || `Patient presents with ${patient.chiefComplaint || (patient.symptoms && patient.symptoms.join(", ")) || "presenting symptoms"}. Baseline vitals recorded by triage nurse: BP ${patient.vitals?.bp}, Pulse ${patient.vitals?.pulse}. Examination completed.`}
                     </div>
                   </div>
 
                   {/* Diagnosis & ICD-10 Code */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-1 shadow-2xs">
+                    <div className="bg-white border border-[#CBD5E1] rounded p-4 space-y-1 shadow-2xs">
                       <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Confirmed Clinical Diagnosis</div>
                       <div className="text-[15px] font-bold text-[#1B4FD8]">
                         {patient.diagnosis || "Acute Coronary Syndrome Rule-Out / Stable Angina"}
                       </div>
                     </div>
-                    <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-1 shadow-2xs">
+                    <div className="bg-white border border-[#CBD5E1] rounded p-4 space-y-1 shadow-2xs">
                       <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">ICD-10 Diagnostic Code</div>
                       <div className="text-[15px] font-mono font-bold text-gray-900">
                         {patient.icd10 || "I20.9 (Angina Pectoris, Unspecified)"}
@@ -1691,14 +1705,14 @@ export default function OPWorkflow({
                   </div>
 
                   {/* Prescribed Medications Table */}
-                  <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-2.5 shadow-2xs">
+                  <div className="bg-white border border-[#CBD5E1] rounded p-4 space-y-2.5 shadow-2xs">
                     <div className="flex justify-between items-center">
                       <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Prescribed Medications (Rx Pad)</div>
                       <span className="text-[10px] font-mono font-bold bg-blue-50 text-[#1B4FD8] px-2 py-0.5 rounded border border-blue-200 uppercase">
                         ✓ Locked / Official Rx
                       </span>
                     </div>
-                    <div className="divide-y divide-[#E2E8F0] border border-[#E2E8F0] rounded-lg overflow-hidden text-[12.5px]">
+                    <div className="divide-y divide-[#E2E8F0] border border-[#E2E8F0] rounded overflow-hidden text-[12.5px]">
                       <div className="grid grid-cols-4 bg-[#F8FAFC] p-2.5 font-bold text-gray-700 text-[11px] uppercase">
                         <span>Medicine</span>
                         <span>Dosage</span>
@@ -1721,7 +1735,7 @@ export default function OPWorkflow({
                   </div>
 
                   {/* Investigations Ordered */}
-                  <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-2.5 shadow-2xs">
+                  <div className="bg-white border border-[#CBD5E1] rounded p-4 space-y-2.5 shadow-2xs">
                     <div className="flex justify-between items-center">
                       <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Diagnostic Investigations &amp; Lab Orders</div>
                       <span className="text-[10.5px] font-mono font-bold bg-amber-50 text-[#B45309] px-2 py-0.5 rounded border border-amber-200">
@@ -1733,7 +1747,7 @@ export default function OPWorkflow({
                         patient.investigations.map((test) => (
                           <span
                             key={test}
-                            className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-blue-50 text-[#1B4FD8] border border-blue-200 flex items-center gap-1.5 shadow-2xs"
+                            className="px-3 py-1.5 rounded text-[12px] font-semibold bg-blue-50 text-[#1B4FD8] border border-blue-200 flex items-center gap-1.5 shadow-2xs"
                           >
                             <span>✓</span> {test}
                           </span>
@@ -1745,9 +1759,9 @@ export default function OPWorkflow({
                   </div>
 
                   {/* Doctor Advice & Instructions */}
-                  <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-1 shadow-2xs">
+                  <div className="bg-white border border-[#CBD5E1] rounded p-4 space-y-1 shadow-2xs">
                     <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Doctor Advice &amp; Instructions</div>
-                    <div className="text-[12.5px] text-gray-800 leading-relaxed bg-[#F8FAFC] p-3 rounded-lg border border-[#E2E8F0]">
+                    <div className="text-[12.5px] text-gray-800 leading-relaxed bg-[#F8FAFC] p-3 rounded border border-[#E2E8F0]">
                       {patient.advice || "Adequate hydration, follow prescribed medication, return for review as advised."}
                     </div>
                   </div>
@@ -1783,7 +1797,7 @@ export default function OPWorkflow({
                         }
                         setCurrentStep(6);
                       }}
-                      className="px-6 py-3 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                      className="px-6 py-3 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded shadow-md transition-all flex items-center gap-2 cursor-pointer"
                     >
                       <span>💳</span> Proceed to Billing &amp; Encounter Completion (Step 6) →
                     </button>
@@ -1868,7 +1882,7 @@ export default function OPWorkflow({
           return (
             <div className="space-y-6 max-w-5xl mx-auto">
               {/* Header */}
-              <div className="bg-white border border-[#DDE2EC] rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="bg-white border border-[#DDE2EC] rounded p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
                     <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">6</span>
@@ -1879,7 +1893,7 @@ export default function OPWorkflow({
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-[11.5px] font-bold px-3 py-1 rounded-lg border flex items-center gap-1.5 ${
+                  <span className={`text-[11.5px] font-bold px-3 py-1 rounded border flex items-center gap-1.5 ${
                     isPaid ? "bg-green-100 text-[#15803D] border-green-300" : "bg-amber-50 text-[#B45309] border-amber-200"
                   }`}>
                     <span>{isPaid ? "✓ PAID & SETTLED" : "⏳ PAYMENT PENDING"}</span>
@@ -1889,7 +1903,7 @@ export default function OPWorkflow({
 
               {/* SMS Notification Banner if triggered */}
               {smsSentNotice && (
-                <div className="bg-[#F0FDF4] border border-green-300 p-3 rounded-xl text-[12px] text-[#166534] flex items-center justify-between animate-in fade-in">
+                <div className="bg-[#F0FDF4] border border-green-300 p-3 rounded text-[12px] text-[#166534] flex items-center justify-between animate-in fade-in">
                   <div className="flex items-center gap-2">
                     <span>📱</span>
                     <span>Official Tax Receipt &amp; Discharge Summary SMS sent to <strong>{patient.phone || "patient mobile"}</strong>.</span>
@@ -1898,213 +1912,100 @@ export default function OPWorkflow({
                 </div>
               )}
 
-              {/* Main Settlement Grid: Left Invoice Summary, Right Payment Gateway */}
+              {/* Main Settlement Worksheet */}
               {!isPaid ? (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* Left Column: Itemized Worksheet (7 cols) */}
-                  <div className="lg:col-span-7 bg-white border border-[#CBD5E1] rounded-2xl p-5 space-y-4 shadow-xs">
-                    <div className="border-b border-[#E2E8F0] pb-3 flex justify-between items-center">
-                      <div>
-                        <div className="text-[14px] font-bold text-gray-900">Itemized Clinical Charges</div>
-                        <div className="text-[11px] text-[#64748B]">Encounter No: <strong className="font-mono text-gray-800">{patient.opNumber}</strong> · Permanent UMR: <strong className="font-mono text-gray-800">{patient.umr}</strong></div>
-                      </div>
-                      <span className="text-[11px] font-mono font-bold bg-blue-50 text-[#1B4FD8] px-2 py-0.5 rounded">
-                        Fee Worksheet
-                      </span>
+                <div className="max-w-3xl mx-auto bg-white border border-[#CBD5E1] rounded p-6 space-y-5 shadow-xs">
+                  <div className="border-b border-[#E2E8F0] pb-3 flex justify-between items-center">
+                    <div>
+                      <div className="text-[15px] font-bold text-gray-900">Itemized Clinical Charges</div>
+                      <div className="text-[11.5px] text-[#64748B]">Encounter No: <strong className="font-mono text-gray-800">{patient.opNumber}</strong> · Permanent UMR: <strong className="font-mono text-gray-800">{patient.umr}</strong></div>
                     </div>
-
-                    <div className="divide-y divide-[#E2E8F0] text-[12.5px]">
-                      {/* 1. Consultation */}
-                      <div className="py-2.5 flex justify-between items-start">
-                        <div>
-                          <div className="font-semibold text-gray-900">1. Physician Consultation Fee</div>
-                          <div className="text-[11px] text-[#64748B]">Attending: {patient.assignedDoctor} ({patient.aiSpecialty})</div>
-                        </div>
-                        <span className="font-mono font-bold text-gray-900">${consultFee}.00</span>
-                      </div>
-
-                      {/* 2. Nursing & Triage Fee */}
-                      <div className="py-2.5 flex justify-between items-start">
-                        <div>
-                          <div className="font-semibold text-gray-900">2. Pre-Consultation Nursing &amp; Vitals Triage</div>
-                          <div className="text-[11px] text-[#64748B]">BP: {patient.vitals?.bp} · Pulse: {patient.vitals?.pulse} · Temp: {patient.vitals?.temp}</div>
-                        </div>
-                        <span className="font-mono font-bold text-gray-900">${nursingFee}.00</span>
-                      </div>
-
-                      {/* 3. Prescription Medications */}
-                      <div className="py-2.5 space-y-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-semibold text-gray-900">3. Prescribed Pharmacy Medications (Rx Pad)</div>
-                            <div className="text-[11px] text-[#64748B]">{rxItems.length} items prescribed</div>
-                          </div>
-                          <span className="font-mono font-bold text-gray-900">${rxTotal}.00</span>
-                        </div>
-                        {rxItems.map((rx, idx) => (
-                          <div key={idx} className="pl-3 text-[11.5px] text-gray-600 flex justify-between">
-                            <span>• {rx.medicine} ({rx.dosage} · {rx.frequency})</span>
-                            <span className="font-mono">$15.00</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* 4. Diagnostic Investigations */}
-                      <div className="py-2.5 space-y-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-semibold text-gray-900">4. Diagnostic Laboratory &amp; Imaging Orders</div>
-                            <div className="text-[11px] text-[#64748B]">{labItems.length} investigations requested</div>
-                          </div>
-                          <span className="font-mono font-bold text-gray-900">${labTotal}.00</span>
-                        </div>
-                        {labItems.map((test, idx) => (
-                          <div key={idx} className="pl-3 text-[11.5px] text-gray-600 flex justify-between">
-                            <span>• {test}</span>
-                            <span className="font-mono">$35.00</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Subtotals & Discounts */}
-                    <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded-xl space-y-1.5 text-[12.5px]">
-                      <div className="flex justify-between text-gray-600">
-                        <span>Gross Subtotal:</span>
-                        <span className="font-mono font-bold">${grossSubtotal}.00</span>
-                      </div>
-                      {isInsurance && (
-                        <div className="flex justify-between text-[#16A34A] font-semibold">
-                          <span>Insurance Cashless Coverage (80%):</span>
-                          <span className="font-mono">-${insuranceCoverage}.00</span>
-                        </div>
-                      )}
-                      <div className="border-t border-[#E2E8F0] pt-1.5 flex justify-between text-[15px] font-black text-gray-900">
-                        <span>Net Payable Amount:</span>
-                        <span className="text-[#16A34A] font-mono">${netTotalPayable}.00</span>
-                      </div>
-                    </div>
+                    <span className="text-[11px] font-mono font-bold bg-blue-50 text-[#1B4FD8] px-2.5 py-1 rounded border border-blue-200">
+                      Fee Worksheet
+                    </span>
                   </div>
 
-                  {/* Right Column: Payment Settlement Desk (5 cols) */}
-                  <div className="lg:col-span-5 bg-white border-2 border-[#93C5FD] rounded-2xl p-5 space-y-4 shadow-sm">
-                    <div className="border-b border-[#E2E8F0] pb-2.5">
-                      <div className="text-[14px] font-bold text-gray-900 flex items-center gap-2">
-                        <span>💳</span> Select Payment Method
+                  <div className="divide-y divide-[#E2E8F0] text-[12.5px]">
+                    {/* 1. Consultation */}
+                    <div className="py-2.5 flex justify-between items-start">
+                      <div>
+                        <div className="font-semibold text-gray-900">1. Physician Consultation Fee</div>
+                        <div className="text-[11px] text-[#64748B]">Attending: {patient.assignedDoctor} ({patient.aiSpecialty})</div>
                       </div>
-                      <div className="text-[11px] text-[#64748B]">Choose customer's preferred settlement channel</div>
+                      <span className="font-mono font-bold text-gray-900">${consultFee}.00</span>
                     </div>
 
-                    {/* Mode Buttons */}
-                    <div className="grid grid-cols-2 gap-2">
-                      {(["Card", "Cash", "UPI / Digital", "Insurance Co-Pay"] as const).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setPatient({ ...patient, billing: { ...patient.billing, mode: m } })}
-                          className={`p-2.5 rounded-xl text-[12px] font-bold border transition-all text-center cursor-pointer ${
-                            patient.billing.mode === m
-                              ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-xs"
-                              : "bg-white text-gray-700 border-[#CBD5E1] hover:bg-[#F8FAFC]"
-                          }`}
-                        >
-                          {m === "Card" && "💳 "}
-                          {m === "Cash" && "💵 "}
-                          {m === "UPI / Digital" && "📱 "}
-                          {m === "Insurance Co-Pay" && "🛡️ "}
-                          {m}
-                        </button>
+                    {/* 2. Nursing & Triage Fee */}
+                    <div className="py-2.5 flex justify-between items-start">
+                      <div>
+                        <div className="font-semibold text-gray-900">2. Pre-Consultation Nursing &amp; Vitals Triage</div>
+                        <div className="text-[11px] text-[#64748B]">BP: {patient.vitals?.bp} · Pulse: {patient.vitals?.pulse} · Temp: {patient.vitals?.temp}</div>
+                      </div>
+                      <span className="font-mono font-bold text-gray-900">${nursingFee}.00</span>
+                    </div>
+
+                    {/* 3. Prescription Medications */}
+                    <div className="py-2.5 space-y-1">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-semibold text-gray-900">3. Prescribed Pharmacy Medications (Rx Pad)</div>
+                          <div className="text-[11px] text-[#64748B]">{rxItems.length} items prescribed</div>
+                        </div>
+                        <span className="font-mono font-bold text-gray-900">${rxTotal}.00</span>
+                      </div>
+                      {rxItems.map((rx, idx) => (
+                        <div key={idx} className="pl-3 text-[11.5px] text-gray-600 flex justify-between">
+                          <span>• {rx.medicine} ({rx.dosage} · {rx.frequency})</span>
+                          <span className="font-mono">$15.00</span>
+                        </div>
                       ))}
                     </div>
 
-                    {/* Dynamic Channel Input Fields */}
-                    <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded-xl space-y-2.5 text-[12px]">
-                      {patient.billing.mode === "Card" && (
-                        <div className="space-y-2">
-                          <div>
-                            <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">Card Number</label>
-                            <input
-                              type="text"
-                              value={cardNumber}
-                              onChange={e => setCardNumber(e.target.value)}
-                              className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[12px] focus:outline-none focus:border-[#1B4FD8]"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">Expiry</label>
-                              <input
-                                type="text"
-                                value={cardExpiry}
-                                onChange={e => setCardExpiry(e.target.value)}
-                                className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[12px] focus:outline-none focus:border-[#1B4FD8]"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">CVV</label>
-                              <input
-                                type="password"
-                                value={cardCvv}
-                                onChange={e => setCardCvv(e.target.value)}
-                                className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[12px] focus:outline-none focus:border-[#1B4FD8]"
-                              />
-                            </div>
-                          </div>
+                    {/* 4. Diagnostic Investigations */}
+                    <div className="py-2.5 space-y-1">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-semibold text-gray-900">4. Diagnostic Laboratory &amp; Imaging Orders</div>
+                          <div className="text-[11px] text-[#64748B]">{labItems.length} investigations requested</div>
                         </div>
-                      )}
-
-                      {patient.billing.mode === "Cash" && (
-                        <div className="space-y-2">
-                          <div>
-                            <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">Cash Received ($)</label>
-                            <input
-                              type="number"
-                              value={cashTendered}
-                              onChange={e => setCashTendered(e.target.value)}
-                              className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[14px] font-bold text-gray-900 focus:outline-none focus:border-[#1B4FD8]"
-                            />
-                          </div>
-                          <div className="p-2.5 bg-green-50 rounded-lg border border-green-200 flex justify-between items-center text-[12px]">
-                            <span className="text-[#166534] font-semibold">Change to Return:</span>
-                            <span className="font-mono font-bold text-[#15803D] text-[14px]">${changeDue.toFixed(2)}</span>
-                          </div>
+                        <span className="font-mono font-bold text-gray-900">${labTotal}.00</span>
+                      </div>
+                      {labItems.map((test, idx) => (
+                        <div key={idx} className="pl-3 text-[11.5px] text-gray-600 flex justify-between">
+                          <span>• {test}</span>
+                          <span className="font-mono">$35.00</span>
                         </div>
-                      )}
-
-                      {patient.billing.mode === "UPI / Digital" && (
-                        <div className="text-center p-3 space-y-2">
-                          <div className="w-24 h-24 mx-auto bg-white border-2 border-dashed border-[#1B4FD8] rounded-xl flex items-center justify-center text-4xl shadow-2xs">
-                            📲
-                          </div>
-                          <div className="text-[11.5px] font-bold text-gray-900">Scan QR via Hospital UPI / Banking App</div>
-                          <div className="text-[10px] text-[#64748B] font-mono">Dynamic VPA: hospai.settle@axisbank</div>
-                        </div>
-                      )}
-
-                      {patient.billing.mode === "Insurance Co-Pay" && (
-                        <div className="space-y-2">
-                          <div>
-                            <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">Insurance Policy / Member ID</label>
-                            <input
-                              type="text"
-                              value={insuranceMemberId}
-                              onChange={e => setInsuranceMemberId(e.target.value)}
-                              className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[12px] focus:outline-none focus:border-[#1B4FD8]"
-                            />
-                          </div>
-                          <div className="text-[11px] text-[#15803D] bg-green-50 p-2 rounded-lg border border-green-200">
-                            ✓ 80% cashless approved by BlueCross BlueShield PPO. Co-pay payable at desk: <strong>${netTotalPayable}.00</strong>
-                          </div>
-                        </div>
-                      )}
+                      ))}
                     </div>
+                  </div>
 
-                    {/* Pay Button */}
+                  {/* Subtotals & Net Amount */}
+                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded space-y-2 text-[13px]">
+                    <div className="flex justify-between text-gray-600">
+                      <span>Gross Subtotal:</span>
+                      <span className="font-mono font-bold">${grossSubtotal}.00</span>
+                    </div>
+                    <div className="border-t border-[#E2E8F0] pt-2 flex justify-between text-[16px] font-black text-gray-900">
+                      <span>Total Amount Due:</span>
+                      <span className="text-[#16A34A] font-mono">${grossSubtotal}.00</span>
+                    </div>
+                  </div>
+
+                  {/* Complete Payment Settlement Action Button */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(5)}
+                      className="text-[12.5px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
+                    >
+                      ← Back to Consultation Summary (Step 5)
+                    </button>
+
                     <button
                       type="button"
                       disabled={paymentProcessing}
                       onClick={handleProcessPayment}
-                      className="w-full py-3.5 bg-gradient-to-r from-[#16A34A] to-[#15803D] hover:from-[#15803D] hover:to-[#166534] text-white text-[14px] font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      className="px-8 py-3.5 bg-gradient-to-r from-[#16A34A] to-[#15803D] hover:from-[#15803D] hover:to-[#166534] text-white text-[14px] font-bold rounded shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
                       {paymentProcessing ? (
                         <>
@@ -2114,24 +2015,16 @@ export default function OPWorkflow({
                       ) : (
                         <>
                           <span>💳</span>
-                          <span>Process Payment &amp; Settle Invoice (${netTotalPayable}.00)</span>
+                          <span>Mark OP Visit Completed &amp; Settle Invoice (${grossSubtotal}.00)</span>
                         </>
                       )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setCurrentStep(5)}
-                      className="w-full text-center text-[12px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
-                    >
-                      ← Back to Consultation Summary (Step 5)
                     </button>
                   </div>
                 </div>
               ) : (
                 /* OFFICIAL PRINTABLE DISCHARGE & PAYMENT RECEIPT */
                 <div className="space-y-5">
-                  <div className="printable-card bg-white border-2 border-[#CBD5E1] text-gray-900 rounded-2xl p-6 shadow-xl relative overflow-hidden ring-1 ring-black/5 max-w-3xl mx-auto space-y-4">
+                  <div className="printable-card bg-white border-2 border-[#CBD5E1] text-gray-900 rounded p-6 shadow-xl relative overflow-hidden ring-1 ring-black/5 max-w-3xl mx-auto space-y-4">
                     {/* Top Accent Strip */}
                     <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#16A34A] via-[#1B4FD8] to-[#16A34A]"></div>
 
@@ -2153,7 +2046,7 @@ export default function OPWorkflow({
                     </div>
 
                     {/* Patient & Doctor Meta Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded-xl text-[12px]">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded text-[12px]">
                       <div>
                         <span className="text-[#64748B] text-[10px] uppercase font-bold block">Patient Name</span>
                         <span className="font-bold text-gray-900 text-[13px]">{patient.name}</span>
@@ -2177,7 +2070,7 @@ export default function OPWorkflow({
                     </div>
 
                     {/* Clinical Summary Bar */}
-                    <div className="bg-[#EFF6FF] border border-blue-200 p-3 rounded-xl text-[12px] space-y-1">
+                    <div className="bg-[#EFF6FF] border border-blue-200 p-3 rounded text-[12px] space-y-1">
                       <div className="flex justify-between items-center">
                         <span className="text-[#1E40AF] font-bold">Confirmed Clinical Diagnosis:</span>
                         <span className="font-mono font-bold text-[#1B4FD8]">{patient.icd10}</span>
@@ -2193,7 +2086,7 @@ export default function OPWorkflow({
                     </div>
 
                     {/* Itemized Table */}
-                    <div className="border border-[#CBD5E1] rounded-xl overflow-hidden text-[12px]">
+                    <div className="border border-[#CBD5E1] rounded overflow-hidden text-[12px]">
                       <div className="grid grid-cols-12 bg-[#F1F5F9] p-2.5 font-bold text-gray-700 text-[11px] uppercase border-b border-[#CBD5E1]">
                         <span className="col-span-8">Description of Service / Medication / Investigation</span>
                         <span className="col-span-2 text-center">Type</span>
@@ -2262,14 +2155,14 @@ export default function OPWorkflow({
                     <button
                       type="button"
                       onClick={() => window.print()}
-                      className="px-5 py-2.5 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[13px] font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      className="px-5 py-2.5 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[13px] font-bold rounded shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <Icon.Download /> Print Tax Invoice &amp; OP Summary
                     </button>
                     <button
                       type="button"
                       onClick={() => setSmsSentNotice(true)}
-                      className="px-5 py-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#1B4FD8] text-[13px] font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      className="px-5 py-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#1B4FD8] text-[13px] font-bold rounded shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <span>📱</span> Send SMS Receipt to Patient
                     </button>
@@ -2278,7 +2171,7 @@ export default function OPWorkflow({
                       onClick={() => {
                         setCurrentStep(1);
                       }}
-                      className="px-6 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded-xl shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+                      className="px-6 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <span>➕</span> Register / Start Next Outpatient Patient →
                     </button>
