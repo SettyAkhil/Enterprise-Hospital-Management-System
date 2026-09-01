@@ -1,322 +1,881 @@
-import React, { useState } from "react";
-import { Btn, Input, AlertBanner } from "./shared";
+import React, { useState, useEffect, useRef } from "react";
 import { Icon } from "./icons";
+import { Btn, Input } from "./shared";
+import { db, DBPatient, DBOPEncounter, findMatchingPatient } from "../services/db";
 
-const STEPS = ["Patient Info", "Insurance", "Appointment", "Confirmation"];
+// Accurate age calculation from Date of Birth
+const calculateAge = (dobString: string): number => {
+  if (!dobString) return 0;
+  const birthDate = new Date(dobString);
+  if (isNaN(birthDate.getTime())) return 0;
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return Math.max(0, age);
+};
 
-function StepIndicator({ steps, current }: { steps: string[]; current: number }) {
+export default function Registration({
+  onProceedToQueue,
+  onComplete,
+  onBack
+}: {
+  onProceedToQueue?: (patient: DBOPEncounter) => void;
+  onComplete?: () => void;
+  onBack?: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<"new" | "revisit" | "records">("new");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Database live state
+  const [patients, setPatients] = useState<DBPatient[]>([]);
+  const [encounters, setEncounters] = useState<DBOPEncounter[]>([]);
+  const [selectedEncounter, setSelectedEncounter] = useState<DBOPEncounter | null>(null);
+
+  // Generation Audit alert state
+  const [generationAlert, setGenerationAlert] = useState<{
+    type: "new" | "revisit";
+    umr: string;
+    opNumber: string;
+    name: string;
+    age: number;
+    phone: string;
+  } | null>(null);
+
+  // Sync with DB
+  const refreshFromDb = () => {
+    const allPatients = db.getPatients();
+    const allEncounters = db.getEncounters();
+    setPatients(allPatients);
+    setEncounters(allEncounters);
+    if (!selectedEncounter && allEncounters.length > 0) {
+      setSelectedEncounter(allEncounters[0]);
+    }
+  };
+
+  useEffect(() => {
+    refreshFromDb();
+    const unsubscribe = db.subscribe(refreshFromDb);
+    return () => unsubscribe();
+  }, []);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    // Personal Information
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    dob: "",
+    age: 0,
+    sex: "" as "Male" | "Female" | "Other" | "",
+    // Contact Information
+    phone: "",
+    email: "",
+    address: "",
+    // Emergency Contact
+    emergencyName: "",
+    emergencyRelationship: "Spouse",
+    emergencyPhone: "",
+  });
+
+  const cardPreviewRef = useRef<HTMLDivElement>(null);
+
+  // Handle DOB Change -> Dynamically updates Age
+  const handleDobChange = (newDob: string) => {
+    const computedAge = calculateAge(newDob);
+    setFormData(prev => ({
+      ...prev,
+      dob: newDob,
+      age: computedAge
+    }));
+  };
+
+  // Duplicate / Existing Patient Check via Matching Logic
+  const enteredFullName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(" ").trim();
+  const matchResult = findMatchingPatient(patients, {
+    fullName: enteredFullName,
+    dob: formData.dob || undefined,
+    age: formData.dob ? formData.age : undefined,
+    sex: formData.sex || undefined,
+    phone: formData.phone.trim() || undefined,
+  });
+
+  const matchingExistingPatient = matchResult.match;
+  const candidatePatient = matchResult.nameMatchedPatient;
+  const mismatches = matchResult.mismatches;
+
+  // 1. Handle New Patient Registration Flow -> Creates Record -> Generates Patient ID (UMR) & OP No -> Next Step
+  const handleRegisterNewPatient = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.dob) return;
+
+    // If ALL entered details match an existing record -> Route through Revisit under existing UMR
+    if (matchingExistingPatient) {
+      handleCreateRevisitEncounter(matchingExistingPatient);
+      resetForm();
+      return;
+    }
+
+    const computedAge = calculateAge(formData.dob);
+
+    const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
+      firstName: formData.firstName.trim(),
+      middleName: formData.middleName.trim() || undefined,
+      lastName: formData.lastName.trim(),
+      dob: formData.dob,
+      age: computedAge,
+      sex: (formData.sex as "Male" | "Female" | "Other") || "Male",
+      phone: formData.phone.trim() || "(617) 555-0199",
+      address: formData.address.trim() || "Boston, MA",
+    });
+
+    setSelectedEncounter(createdEncounter);
+    setGenerationAlert({
+      type: "new",
+      umr: createdPatient.umr,
+      opNumber: createdEncounter.opNumber,
+      name: createdPatient.name,
+      age: computedAge,
+      phone: createdPatient.phone
+    });
+
+    // Directly display the Digital Card / OP Pass of the newly registered patient
+    setActiveTab("records");
+    setTimeout(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+
+    resetForm();
+  };
+
+  const resetForm = () => {
+    setFormData({
+      firstName: "",
+      middleName: "",
+      lastName: "",
+      dob: "",
+      age: 0,
+      sex: "",
+      phone: "",
+      email: "",
+      address: "",
+      emergencyName: "",
+      emergencyRelationship: "Spouse",
+      emergencyPhone: "",
+    });
+  };
+
+  // 2. Handle Existing Patient Workflow -> View Record -> Generate Visit Pass -> Show Digital Card
+  const handleCreateRevisitEncounter = (p: DBPatient) => {
+    const newEncounter = db.createRevisitEncounter(p.umr);
+
+    setSelectedEncounter(newEncounter);
+    setGenerationAlert({
+      type: "revisit",
+      umr: p.umr,
+      opNumber: newEncounter.opNumber,
+      name: p.name,
+      age: p.age,
+      phone: p.phone
+    });
+
+    // Directly display the Digital Card / OP Pass of the existing patient
+    setActiveTab("records");
+    setTimeout(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
+
+  const handleViewOpBook = (encounter: DBOPEncounter) => {
+    setSelectedEncounter(encounter);
+    setActiveTab("records");
+    setTimeout(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
+
+  // Filtered patients for revisit search tab
+  const filteredPatients = db.searchPatients(searchQuery);
+
   return (
-    <div className="flex items-center gap-0">
-      {steps.map((s, i) => (
-        <React.Fragment key={i}>
-          <div className="flex flex-col items-center">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold border-2 transition-colors
-              ${i < current ? "bg-[#16A34A] border-[#16A34A] text-white"
-                : i === current ? "bg-[#1B4FD8] border-[#1B4FD8] text-white"
-                : "bg-white border-[#DDE2EC] text-[#94A3B8]"}`}>
-              {i < current ? "✓" : i + 1}
-            </div>
-            <span className={`text-[10.5px] font-medium mt-1 ${i === current ? "text-[#1B4FD8]" : i < current ? "text-[#16A34A]" : "text-[#94A3B8]"}`}>{s}</span>
-          </div>
-          {i < steps.length - 1 && (
-            <div className={`h-0.5 flex-1 mx-2 ${i < current ? "bg-[#16A34A]" : "bg-[#DDE2EC]"}`} />
+    <div className="flex-1 flex flex-col h-full bg-[#F0F2F5] overflow-hidden">
+      {/* Top Header */}
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3.5 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button onClick={onBack} className="text-[#64748B] hover:text-gray-900 transition-colors rotate-180 cursor-pointer">
+              <Icon.ChevronRight />
+            </button>
           )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
+          <div>
+            <h1 className="text-base font-semibold text-gray-900">Patient Registration Desk</h1>
+            <p className="text-[11.5px] text-[#64748B]">Register new patients, issue permanent UMR &amp; OP passes, or manage return revisits.</p>
+          </div>
+        </div>
 
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-5">
-      <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-3 pb-2 border-b border-[#DDE2EC]">{title}</div>
-      <div className="grid grid-cols-2 gap-3">{children}</div>
-    </div>
-  );
-}
-
-function Field({ label, required, children, full }: { label: string; required?: boolean; children: React.ReactNode; full?: boolean }) {
-  return (
-    <div className={full ? "col-span-2" : ""}>
-      <label className="block text-[11.5px] font-medium text-[#374151] mb-1">
-        {label}{required && <span className="text-[#DC2626] ml-0.5">*</span>}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-export default function Registration({ onComplete, onBack }: { onComplete: () => void; onBack: () => void }) {
-  const [step, setStep] = useState(0);
-
-  const next = () => { if (step < STEPS.length - 1) setStep(s => s + 1); else onComplete(); };
-  const prev = () => { if (step > 0) setStep(s => s - 1); else onBack(); };
-
-  return (
-    <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center gap-3">
-        <button onClick={onBack} className="text-[#64748B] hover:text-gray-900 transition-colors rotate-180">
-          <Icon.ChevronRight />
-        </button>
-        <div>
-          <h1 className="text-base font-semibold text-gray-900">New Patient Registration</h1>
-          <p className="text-[11.5px] text-[#64748B]">Step {step + 1} of {STEPS.length}</p>
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-[#DDE2EC]">
+            <button
+              onClick={() => setActiveTab("new")}
+              className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
+                activeTab === "new" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              + Registration
+            </button>
+            <button
+              onClick={() => setActiveTab("revisit")}
+              className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
+                activeTab === "revisit" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              🔄 Existing Patient Revisit
+            </button>
+            <button
+              onClick={() => setActiveTab("records")}
+              className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
+                activeTab === "records" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              📋 OP Book &amp; Registry ({encounters.length})
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto p-6">
-        {/* Stepper */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-4 mb-5">
-          <StepIndicator steps={STEPS} current={step} />
-        </div>
+      {/* Main Workspace */}
+      <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-6">
 
-        {/* Step 1: Patient Info */}
-        {step === 0 && (
-          <div className="bg-white border border-[#DDE2EC] rounded p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4">Patient Information</h2>
+        {/* ── GENERATION AUDIT BANNER ─────────────────────────────────── */}
+        {generationAlert && (
+          <div className={`p-4 rounded-xl border flex items-center justify-between shadow-xs animate-in fade-in ${
+            generationAlert.type === "new"
+              ? "bg-[#F0FDF4] border-[#86EFAC] text-[#166534]"
+              : "bg-[#EFF6FF] border-[#BFDBFE] text-[#1E3A8A]"
+          }`}>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-base font-bold">
+                  {generationAlert.type === "new" ? "🎉 Patient Registration Completed" : "🔄 Revisit Encounter Generated"}
+                </span>
+                <span className="text-[11px] font-mono uppercase px-2 py-0.5 rounded bg-white/80 border font-bold">
+                  {generationAlert.name} ({generationAlert.age} yrs)
+                </span>
+              </div>
+              <div className="text-[12px] flex items-center gap-3">
+                <span>Permanent UMR: <strong className="font-mono text-[#1B4FD8]">{generationAlert.umr}</strong></span>
+                <span>·</span>
+                <span>Visit OP Number: <strong className="font-mono text-[#D97706]">{generationAlert.opNumber}</strong></span>
+                <span>·</span>
+                <span>Phone: <strong>{generationAlert.phone}</strong></span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {onProceedToQueue && selectedEncounter && (
+                <button
+                  type="button"
+                  onClick={() => onProceedToQueue(selectedEncounter)}
+                  className="text-xs px-3.5 py-1.5 rounded-lg bg-[#1B4FD8] hover:bg-[#1740B4] text-white font-semibold shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  Proceed to Symptoms &amp; AI Triage →
+                </button>
+              )}
+              <button
+                onClick={() => setGenerationAlert(null)}
+                className="text-xs px-2.5 py-1.5 rounded bg-white/80 hover:bg-white border font-semibold cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
-            <FormSection title="Personal Information">
-              <Field label="First Name" required>
-                <Input placeholder="Given name" />
-              </Field>
-              <Field label="Last Name" required>
-                <Input placeholder="Family name" />
-              </Field>
-              <Field label="Date of Birth" required>
-                <Input placeholder="MM/DD/YYYY" />
-              </Field>
-              <Field label="Sex at Birth" required>
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option value="">Select...</option>
-                  <option>Male</option>
-                  <option>Female</option>
-                  <option>Unknown</option>
-                </select>
-              </Field>
-              <Field label="Social Security Number">
-                <Input placeholder="XXX-XX-XXXX" />
-              </Field>
-              <Field label="Race / Ethnicity">
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option value="">Select...</option>
-                  <option>White</option>
-                  <option>Black or African American</option>
-                  <option>Hispanic / Latino</option>
-                  <option>Asian</option>
-                  <option>Native American</option>
-                  <option>Pacific Islander</option>
-                  <option>Prefer not to say</option>
-                </select>
-              </Field>
-            </FormSection>
+        {/* ── TAB 1: REGISTRATION FLOW (NAME SEARCH -> EXISTING VS NEW RESOLUTION -> NEXT STEP) ── */}
+        {activeTab === "new" && (
+          <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
+              <div>
+                <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">1</span>
+                  Patient Registration &amp; Identity Verification
+                </h2>
+                <p className="text-[12px] text-[#64748B] mt-0.5">
+                  Enter patient name. The database automatically checks if the patient already exists or is a new patient.
+                </p>
+              </div>
+            </div>
 
-            <FormSection title="Contact Information">
-              <Field label="Mobile Phone" required>
-                <Input placeholder="(617) 555-XXXX" />
-              </Field>
-              <Field label="Home Phone">
-                <Input placeholder="(617) 555-XXXX" />
-              </Field>
-              <Field label="Email Address">
-                <Input placeholder="patient@example.com" />
-              </Field>
-              <Field label="Preferred Contact Method">
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option>Mobile Phone</option>
-                  <option>Home Phone</option>
-                  <option>Email</option>
-                  <option>Text Message</option>
-                </select>
-              </Field>
-              <Field label="Address" full>
-                <Input placeholder="Street address" />
-              </Field>
-              <Field label="City">
-                <Input placeholder="City" />
-              </Field>
-              <Field label="State / ZIP">
-                <div className="flex gap-2">
-                  <Input placeholder="MA" className="w-14" />
-                  <Input placeholder="02101" />
+            <form onSubmit={handleRegisterNewPatient} className="space-y-6">
+
+              {/* 1. ENTER PATIENT NAME & AUTO SEARCH DATABASE */}
+              <div className="space-y-4">
+                <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider pb-1 border-b border-[#E2E8F0]">
+                  1. Enter Patient Name
                 </div>
-              </Field>
-            </FormSection>
 
-            <FormSection title="Emergency Contact">
-              <Field label="Contact Name">
-                <Input placeholder="Full name" />
-              </Field>
-              <Field label="Relationship">
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option>Spouse</option>
-                  <option>Parent</option>
-                  <option>Child</option>
-                  <option>Sibling</option>
-                  <option>Other</option>
-                </select>
-              </Field>
-              <Field label="Phone" full>
-                <Input placeholder="(617) 555-XXXX" />
-              </Field>
-            </FormSection>
-          </div>
-        )}
-
-        {/* Step 2: Insurance */}
-        {step === 1 && (
-          <div className="bg-white border border-[#DDE2EC] rounded p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4">Insurance Information</h2>
-
-            <FormSection title="Primary Insurance">
-              <Field label="Insurance Company" required>
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option value="">Select payer...</option>
-                  <option>BlueCross BlueShield PPO</option>
-                  <option>Aetna HMO</option>
-                  <option>United Healthcare PPO</option>
-                  <option>Cigna PPO</option>
-                  <option>Medicare</option>
-                  <option>Medicaid</option>
-                  <option>Self-Pay</option>
-                </select>
-              </Field>
-              <Field label="Plan Name">
-                <Input placeholder="e.g., BlueCross PPO" />
-              </Field>
-              <Field label="Member ID" required>
-                <Input placeholder="Insurance member ID" />
-              </Field>
-              <Field label="Group Number">
-                <Input placeholder="Group number" />
-              </Field>
-              <Field label="Subscriber Name">
-                <Input placeholder="If different from patient" />
-              </Field>
-              <Field label="Subscriber DOB">
-                <Input placeholder="MM/DD/YYYY" />
-              </Field>
-            </FormSection>
-
-            <FormSection title="Secondary Insurance">
-              <Field label="Insurance Company" full>
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option value="">None (optional)</option>
-                  <option>Medicare Part B</option>
-                  <option>Medicaid</option>
-                  <option>Other</option>
-                </select>
-              </Field>
-            </FormSection>
-
-            <AlertBanner type="info" title="Insurance Verification"
-              body="Real-time eligibility check will be performed upon saving. Ensure member ID is accurate." />
-          </div>
-        )}
-
-        {/* Step 3: Appointment */}
-        {step === 2 && (
-          <div className="bg-white border border-[#DDE2EC] rounded p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4">Schedule Initial Appointment</h2>
-
-            <FormSection title="Appointment Details">
-              <Field label="Visit Type" required>
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option>New Patient Visit</option>
-                  <option>Follow-up</option>
-                  <option>Annual Physical</option>
-                  <option>Urgent Visit</option>
-                  <option>Telehealth</option>
-                </select>
-              </Field>
-              <Field label="Department" required>
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option>Internal Medicine</option>
-                  <option>Cardiology</option>
-                  <option>Oncology</option>
-                  <option>Orthopedics</option>
-                  <option>Surgery</option>
-                  <option>Emergency</option>
-                </select>
-              </Field>
-              <Field label="Provider">
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option>Dr. Anderson</option>
-                  <option>Dr. Lee</option>
-                  <option>Dr. Adams</option>
-                  <option>Dr. Patel</option>
-                  <option>Dr. Chen</option>
-                </select>
-              </Field>
-              <Field label="Date">
-                <Input placeholder="MM/DD/YYYY" />
-              </Field>
-              <Field label="Time">
-                <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                  <option>09:00 AM</option>
-                  <option>09:30 AM</option>
-                  <option>10:00 AM</option>
-                  <option>10:30 AM</option>
-                  <option>11:00 AM</option>
-                  <option>02:00 PM</option>
-                  <option>02:30 PM</option>
-                  <option>03:00 PM</option>
-                </select>
-              </Field>
-              <Field label="Chief Complaint" full>
-                <textarea rows={3} placeholder="Reason for visit..."
-                  className="w-full border border-[#DDE2EC] rounded text-[12.5px] px-3 py-2 focus:outline-none focus:border-[#1B4FD8] resize-none" />
-              </Field>
-            </FormSection>
-          </div>
-        )}
-
-        {/* Step 4: Confirmation */}
-        {step === 3 && (
-          <div className="space-y-4">
-            <div className="bg-white border border-[#DDE2EC] rounded p-5">
-              <h2 className="text-sm font-semibold text-gray-900 mb-4">Confirm Registration</h2>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-[12.5px]">
-                {[
-                  { l: "Patient Name", v: "Jane Doe" },
-                  { l: "Date of Birth", v: "03/15/1990 · 36 yrs" },
-                  { l: "Sex at Birth", v: "Female" },
-                  { l: "MRN (Generated)", v: "100612" },
-                  { l: "Primary Insurance", v: "BlueCross PPO" },
-                  { l: "Member ID", v: "BCB-99012847" },
-                  { l: "Appointment", v: "Sep 01, 2026 · 09:30 AM" },
-                  { l: "Provider", v: "Dr. Anderson — Internal Med" },
-                  { l: "Visit Type", v: "New Patient Visit" },
-                ].map(({ l, v }) => (
-                  <div key={l} className="flex justify-between border-b border-[#F8FAFC] py-1.5">
-                    <span className="text-[#64748B]">{l}</span>
-                    <span className="font-medium text-gray-800">{v}</span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      First Name <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      value={formData.firstName}
+                      onChange={v => setFormData({ ...formData, firstName: v })}
+                      placeholder="Given name"
+                      required
+                    />
                   </div>
-                ))}
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Middle Name <span className="text-[11px] text-[#64748B] font-normal">(Optional)</span>
+                    </label>
+                    <Input
+                      value={formData.middleName}
+                      onChange={v => setFormData({ ...formData, middleName: v })}
+                      placeholder="e.g. Robert"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Last Name <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      value={formData.lastName}
+                      onChange={v => setFormData({ ...formData, lastName: v })}
+                      placeholder="Family name"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* ── FLOW BRANCH: SEARCH PATIENT DATABASE ── */}
+                {enteredFullName.length >= 2 && (
+                  <div className="mt-2">
+                    {/* CASE 1: ALL DETAILS MATCH EXACTLY -> EXISTING PATIENT (YES BRANCH) */}
+                    {matchingExistingPatient && mismatches.length === 0 ? (
+                      <div className="bg-[#EFF6FF] border-2 border-[#3B82F6] rounded-2xl p-5 shadow-md space-y-4 animate-in fade-in">
+                        <div className="flex items-start justify-between gap-3 flex-wrap border-b border-blue-200/80 pb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-[#1B4FD8] text-white flex items-center justify-center text-lg font-bold shadow-xs">
+                              👤
+                            </div>
+                            <div>
+                              <div className="font-bold text-[15px] text-[#1E3A8A] flex items-center gap-2">
+                                <span>Patient Already Exists in Database</span>
+                                <span className="text-[11.5px] font-mono font-bold bg-[#1B4FD8] text-white px-2 py-0.5 rounded">
+                                  {matchingExistingPatient.umr}
+                                </span>
+                              </div>
+                              <div className="text-[12px] text-[#2563EB] font-medium mt-0.5">
+                                Verified Existing Patient: <strong>{matchingExistingPatient.name}</strong> ({matchingExistingPatient.age} yrs · {matchingExistingPatient.sex} · {matchingExistingPatient.phone})
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Existing Patient Workflow -> Next Step Action */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleCreateRevisitEncounter(matchingExistingPatient);
+                              resetForm();
+                            }}
+                            className="px-5 py-2.5 bg-gradient-to-r from-[#1E3A8A] to-[#1B4FD8] hover:from-[#1E40AF] hover:to-[#2563EB] text-white text-[13px] font-semibold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                          >
+                            <span>🔄</span> Continue with Existing Patient ({matchingExistingPatient.umr}) ➔ Proceed to Next Step
+                          </button>
+                        </div>
+
+                        {/* View Existing Patient Record Details */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 rounded-xl border border-blue-200 text-[12px]">
+                          <div>
+                            <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Permanent ID (UMR)</span>
+                            <span className="font-mono font-bold text-[#1B4FD8]">{matchingExistingPatient.umr}</span>
+                          </div>
+                          <div>
+                            <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Phone Number</span>
+                            <span className="font-semibold text-gray-900">{matchingExistingPatient.phone}</span>
+                          </div>
+                          <div>
+                            <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Demographics</span>
+                            <span className="font-semibold text-gray-900">{matchingExistingPatient.age} yrs · {matchingExistingPatient.sex}</span>
+                          </div>
+                          <div>
+                            <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Address</span>
+                            <span className="font-semibold text-gray-900 truncate block">{matchingExistingPatient.address}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-[11.5px] text-[#64748B]">
+                          All details match registered record. Click above to issue an OP visit pass for this patient.
+                        </div>
+                      </div>
+                    ) : candidatePatient && mismatches.length > 0 ? (
+                      /* CASE 2: NAME MATCHES BUT DETAILS (AGE/DOB/PHONE/GENDER) DIFFER -> COMPACT NEW PATIENT BADGE */
+                      <div className="bg-[#F0FDF4] border border-[#86EFAC] px-3.5 py-2 rounded-xl text-[12px] text-[#166534] flex items-center justify-between shadow-2xs animate-in fade-in">
+                        <div className="flex items-center gap-2">
+                          <span>✨</span>
+                          <span><strong>New Patient:</strong> ({mismatches.join(", ")}) — Will be registered with a new Patient ID (UMR).</span>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold bg-green-100 text-green-800 border border-green-300 px-2 py-0.5 rounded">
+                          NEW PATIENT
+                        </span>
+                      </div>
+                    ) : candidatePatient && !formData.dob && !formData.phone.trim() ? (
+                      /* CASE 3: NAME MATCHES, BUT OTHER DETAILS NOT YET ENTERED */
+                      <div className="bg-[#EFF6FF] border border-[#93C5FD] rounded-xl p-3 shadow-2xs space-y-2 animate-in fade-in">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div>
+                            <div className="font-bold text-[12.5px] text-[#1E3A8A] flex items-center gap-2">
+                              <span>⚠️ Patient Name "{candidatePatient.name}" on File</span>
+                              <span className="text-[10.5px] font-mono font-bold bg-[#1B4FD8] text-white px-1.5 py-0.5 rounded">
+                                {candidatePatient.umr}
+                              </span>
+                            </div>
+                            <div className="text-[11.5px] text-[#2563EB] mt-0.5">
+                              {candidatePatient.age} yrs · {candidatePatient.sex} · {candidatePatient.phone}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleCreateRevisitEncounter(candidatePatient);
+                              resetForm();
+                            }}
+                            className="px-3 py-1 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[11.5px] font-semibold rounded-lg shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <span>🔄</span> Use Existing Record ({candidatePatient.umr}) →
+                          </button>
+                        </div>
+                      </div>
+                    ) : enteredFullName.length >= 3 ? (
+                      /* CASE 4: PURE NEW PATIENT (NAME NOT IN DB) */
+                      <div className="bg-[#F0FDF4] border border-[#86EFAC] px-3.5 py-2 rounded-xl text-[12px] text-[#166534] flex items-center justify-between shadow-2xs animate-in fade-in">
+                        <div className="flex items-center gap-2">
+                          <span>✓</span>
+                          <span><strong>New Patient:</strong> No existing record found for "{enteredFullName}".</span>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold bg-green-100 text-green-800 border border-green-300 px-2 py-0.5 rounded">
+                          NEW PATIENT
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. ENTER PATIENT DETAILS (DOB, AGE, GENDER) */}
+              <div className="space-y-4">
+                <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider pb-1 border-b border-[#E2E8F0]">
+                  2. Patient Details
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Date of Birth (DOB) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.dob}
+                      onChange={e => handleDobChange(e.target.value)}
+                      max={new Date().toISOString().split("T")[0]}
+                      className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Age
+                    </label>
+                    <div className="w-full border border-[#E2E8F0] bg-[#F8FAFC] rounded-lg px-3 py-2 text-[13px] font-bold text-[#1B4FD8] flex items-center justify-between">
+                      <span>{formData.age > 0 ? `${formData.age} yrs` : "—"}</span>
+                      {formData.age > 0 && formData.age < 18 && (
+                        <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">Pediatric</span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Sex at Birth <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.sex}
+                      onChange={e => setFormData({ ...formData, sex: e.target.value as any })}
+                      className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900"
+                      required
+                    >
+                      <option value="">Select...</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. CONTACT INFORMATION */}
+              <div className="space-y-4">
+                <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider pb-1 border-b border-[#E2E8F0]">
+                  3. Contact Information
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Mobile Phone <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      value={formData.phone}
+                      onChange={v => setFormData({ ...formData, phone: v })}
+                      placeholder="(617) 555-XXXX"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Email Address <span className="text-[11px] text-[#64748B] font-normal">(Optional)</span>
+                    </label>
+                    <Input
+                      type="email"
+                      value={formData.email}
+                      onChange={v => setFormData({ ...formData, email: v })}
+                      placeholder="patient@example.com"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                    Address / City <span className="text-[11px] text-[#64748B] font-normal">(Street address, City)</span>
+                  </label>
+                  <Input
+                    value={formData.address}
+                    onChange={v => setFormData({ ...formData, address: v })}
+                    placeholder="e.g. 24 Park Avenue, Boston, MA"
+                  />
+                </div>
+              </div>
+
+              {/* 4. EMERGENCY CONTACT */}
+              <div className="space-y-4">
+                <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider pb-1 border-b border-[#E2E8F0]">
+                  4. Emergency Contact
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Contact Name
+                    </label>
+                    <Input
+                      value={formData.emergencyName}
+                      onChange={v => setFormData({ ...formData, emergencyName: v })}
+                      placeholder="Full name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Relationship
+                    </label>
+                    <select
+                      value={formData.emergencyRelationship}
+                      onChange={e => setFormData({ ...formData, emergencyRelationship: e.target.value })}
+                      className="w-full border border-[#94A3B8] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900"
+                    >
+                      <option value="Spouse">Spouse</option>
+                      <option value="Parent">Parent</option>
+                      <option value="Child">Child</option>
+                      <option value="Sibling">Sibling</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-gray-800 block mb-1.5">
+                      Emergency Phone
+                    </label>
+                    <Input
+                      value={formData.emergencyPhone}
+                      onChange={v => setFormData({ ...formData, emergencyPhone: v })}
+                      placeholder="(617) 555-XXXX"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons (New Patient Flow -> Generate Patient ID & Proceed to Next Step) */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-[#E2E8F0]">
+                {onBack && (
+                  <Btn variant="outline" type="button" onClick={onBack}>
+                    Cancel
+                  </Btn>
+                )}
+                <Btn
+                  variant="primary"
+                  type="submit"
+                  disabled={!formData.firstName.trim() || !formData.lastName.trim() || !formData.dob || !formData.sex || !formData.phone.trim()}
+                >
+                  <span>✓</span> Create Patient Record, Generate Patient ID &amp; Proceed to Next Step →
+                </Btn>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ── TAB 2: EXISTING PATIENT REVISIT ─────────────────────────── */}
+        {activeTab === "revisit" && (
+          <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
+              <div>
+                <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
+                  <span>🔄</span> Existing Patient Revisit Search
+                </h2>
+                <p className="text-[12px] text-[#64748B] mt-0.5">
+                  Search by permanent UMR, Patient Name, or Phone to create a new visit encounter while retaining their lifetime UMR.
+                </p>
               </div>
             </div>
 
-            <AlertBanner type="info" title="Next Steps"
-              body="After registration, the patient will receive a confirmation email with appointment details and a link to complete pre-visit forms online." />
+            {/* Search Input */}
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search by UMR (e.g. UMR10001), patient name, or phone number..."
+                className="w-full border-2 border-[#94A3B8] rounded-xl px-4 py-2.5 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900 placeholder:text-gray-400"
+              />
+              <span className="absolute right-3.5 top-2.5 text-gray-400 text-sm">🔍</span>
+            </div>
 
-            <div className="bg-white border border-[#DDE2EC] rounded p-4 flex items-start gap-2.5">
-              <input type="checkbox" className="mt-0.5 w-4 h-4 accent-[#1B4FD8]" defaultChecked />
-              <div className="text-[12.5px] text-gray-700">
-                I verify that I have obtained and confirmed the patient's consent for treatment, insurance assignment, and release of medical information as required.
-              </div>
+            {/* Results Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredPatients.length === 0 ? (
+                <div className="col-span-2 text-center py-10 text-gray-500 text-[13px]">
+                  No registered patients matched your search. Switch to <strong>Registration</strong> to add them.
+                </div>
+              ) : (
+                filteredPatients.map(p => {
+                  const pEncounters = db.getEncountersForPatient(p.umr);
+                  return (
+                    <div key={p.umr} className="border-2 border-[#E2E8F0] hover:border-[#1B4FD8] rounded-xl p-4.5 bg-white shadow-sm transition-all flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <div className="font-bold text-[14.5px] text-gray-900">{p.name}</div>
+                            <div className="text-[11.5px] text-[#64748B]">{p.age} yrs · {p.sex} · {p.phone}</div>
+                          </div>
+                          <span className="font-mono text-[12.5px] font-bold text-[#1B4FD8] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                            {p.umr}
+                          </span>
+                        </div>
+
+                        {/* Past Visits history preview */}
+                        <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-2.5 my-2.5 text-[11.5px] space-y-1">
+                          <div className="font-semibold text-gray-700 flex justify-between">
+                            <span>Past OP Visits On Record:</span>
+                            <span className="font-mono text-[#D97706]">{pEncounters.length} Visits in Database</span>
+                          </div>
+                          {pEncounters.length > 0 ? (
+                            pEncounters.slice(0, 3).map(pv => (
+                              <div key={pv.id} className="flex justify-between text-[#475569]">
+                                <span>• {pv.opNumber} ({pv.registrationTime})</span>
+                                <span className="text-[#64748B]">{pv.dept}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-gray-400 italic">No past encounters</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-2 border-t border-[#F1F5F9] mt-2">
+                        <span className="text-[11.5px] text-[#16A34A] font-semibold">
+                          ✓ Retain {p.umr}
+                        </span>
+                        <button
+                          onClick={() => handleCreateRevisitEncounter(p)}
+                          className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          <span>🔄</span> Generate New Visit OP Number ➔
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         )}
 
-        {/* Navigation */}
-        <div className="flex justify-between mt-5">
-          <Btn variant="outline" size="md" onClick={prev}>
-            {step === 0 ? "Cancel" : "← Back"}
-          </Btn>
-          <Btn variant="primary" size="md" onClick={next}>
-            {step === STEPS.length - 1 ? "Complete Registration" : "Continue →"}
-          </Btn>
-        </div>
+        {/* ── TAB 3: DIGITAL OP BOOK & TODAYS REGISTRATIONS ───────────── */}
+        {activeTab === "records" && (
+          <div className="space-y-6">
+            {/* OP Book Card Preview */}
+            {selectedEncounter && (
+              <div ref={cardPreviewRef} className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-6 shadow-xl space-y-4 ring-1 ring-slate-900/5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2 border-b border-[#E2E8F0] pb-3">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
+                      <span>📖</span> Official Digital Outpatient (OP) Pass
+                    </h3>
+                    <p className="text-[11.5px] text-[#64748B]">
+                      Lifetime UMR &amp; active visit OP number pass issued and saved to database.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("new")}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[12px] font-semibold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>+</span> New Registration
+                    </button>
+                    <Btn variant="outline" size="sm" onClick={() => window.print()}>
+                      <Icon.Download /> Print OP Pass
+                    </Btn>
+                    {onProceedToQueue && (
+                      <button
+                        type="button"
+                        onClick={() => onProceedToQueue(selectedEncounter)}
+                        className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>✨</span> Proceed to Symptoms &amp; AI Triage →
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded-2xl p-6 shadow-2xl relative overflow-hidden ring-2 ring-blue-500/10">
+                  {/* Top Header Accent Strip */}
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
+
+                  <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-3.5 mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <img src="/logo.png" alt="HospAI" className="w-8 h-8 object-contain" />
+                      <div>
+                        <div className="font-bold text-[14px] text-gray-900">HospAI General Hospital</div>
+                        <div className="text-[10px] text-[#64748B]">Official Outpatient (OP) Record Pass</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase font-bold text-[#64748B]">Registration Date</div>
+                      <div className="text-[12px] font-mono font-bold text-gray-900">{selectedEncounter.registrationTime}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-[12.5px] mb-4">
+                    <div>
+                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Patient Name</div>
+                      <div className="text-[16px] font-bold text-gray-900 mt-0.5">{selectedEncounter.patientName}</div>
+                      <div className="text-[11.5px] text-gray-600 mt-0.5 font-medium">Age: <strong>{selectedEncounter.age} yrs</strong> · Sex: <strong>{selectedEncounter.sex}</strong> · Phone: <strong>{selectedEncounter.phone}</strong></div>
+                      <div className="text-[11px] font-semibold mt-1">
+                        Dept: <span className={selectedEncounter.dept && selectedEncounter.dept !== "Awaiting Triage" ? "text-[#1B4FD8]" : "text-amber-600"}>
+                          {selectedEncounter.dept || "Awaiting AI Triage"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent UMR (Lifetime)</div>
+                      <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200 inline-block mt-0.5">
+                        {selectedEncounter.umr}
+                      </div>
+                      <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider mt-2.5">Current Visit OP Number</div>
+                      <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
+                        {selectedEncounter.opNumber}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-3 border-t border-[#E2E8F0] text-[11px] text-[#64748B]">
+                    <span>Status: <strong className="text-[#166534] font-mono font-bold bg-green-50 px-2 py-0.5 rounded border border-green-200">{selectedEncounter.status}</strong></span>
+                    <span className="font-mono text-gray-900 font-bold tracking-wider text-[12px]">Barcode: |||| ||| ||||| |||</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Today's Registration Log Table */}
+            <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl shadow-xl overflow-hidden ring-1 ring-slate-900/5">
+              <div className="px-5 py-3 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
+                <div>
+                  <h3 className="text-[13.5px] font-bold text-gray-900">Database Encounter Registry</h3>
+                  <p className="text-[11px] text-[#64748B]">All registered outpatients with permanent UMR and visit OP numbers.</p>
+                </div>
+                <span className="text-[11.5px] text-[#64748B]">Total: {encounters.length} Records</span>
+              </div>
+              <table className="w-full text-left">
+                <thead className="border-b border-[#DDE2EC] bg-[#FAFAFA]">
+                  <tr>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Permanent UMR</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Current OP No</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Patient Name</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Age</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Phone</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Type</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Time</th>
+                    <th className="px-4 py-2.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
+                  {encounters.map((e) => (
+                    <tr
+                      key={e.id}
+                      onClick={() => handleViewOpBook(e)}
+                      className={`hover:bg-[#F8FAFC] cursor-pointer transition-colors ${
+                        selectedEncounter?.id === e.id ? "bg-[#EFF6FF]" : ""
+                      }`}
+                    >
+                      <td className="px-4 py-3 font-mono font-bold text-[#1B4FD8]">{e.umr}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-[#D97706]">{e.opNumber}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">{e.patientName}</td>
+                      <td className="px-4 py-3 font-mono text-gray-700">{e.age} yrs</td>
+                      <td className="px-4 py-3 text-gray-700">{e.phone}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold ${
+                          e.isNew ? "bg-[#DCFCE7] text-[#15803D]" : "bg-[#FEF3C7] text-[#B45309]"
+                        }`}>
+                          {e.isNew ? "New Patient" : "Revisit Encounter"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-gray-500">{e.registrationTime}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              handleViewOpBook(e);
+                            }}
+                            className="px-2.5 py-1 bg-blue-50 text-[#1B4FD8] hover:bg-blue-100 rounded text-[11.5px] font-semibold border border-blue-200 transition-colors"
+                          >
+                            View OP Book
+                          </button>
+                          <button
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              if (window.confirm(`Delete patient record and encounter for ${e.patientName} (${e.umr})?`)) {
+                                db.deletePatientByUmr(e.umr);
+                                refreshFromDb();
+                              }
+                            }}
+                            className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-[11px] font-semibold border border-red-200 transition-colors"
+                            title="Delete patient and encounter from database"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

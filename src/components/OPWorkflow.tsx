@@ -27,6 +27,7 @@ export interface OPPatient {
   queueToken: string;
   queuePosition: number;
   room: string;
+  assessment?: string;
   diagnosis: string;
   icd10: string;
   prescription: { medicine: string; dosage: string; frequency: string; duration: string }[];
@@ -63,79 +64,139 @@ export interface OPPatient {
 }
 
 const INITIAL_DOCTORS = [
-  { id: "D1", name: "Dr. Sarah Jenkins", specialty: "Cardiology", gender: "Female", status: "Available", room: "Room 102", workload: 2 },
-  { id: "D2", name: "Dr. Rajesh Sharma", specialty: "Cardiology", gender: "Male", status: "Available", room: "Room 104", workload: 3 },
-  { id: "D3", name: "Dr. Michael Chen", specialty: "Pulmonology", gender: "Male", status: "Available", room: "Room 108", workload: 2 },
-  { id: "D4", name: "Dr. Maya Lin", specialty: "Pulmonology", gender: "Female", status: "Available", room: "Room 109", workload: 1 },
-  { id: "D5", name: "Dr. Anita Desai", specialty: "General Medicine", gender: "Female", status: "Available", room: "Room 101", workload: 3 },
-  { id: "D6", name: "Dr. Ramesh Kumar", specialty: "General Medicine", gender: "Male", status: "Available", room: "Room 103", workload: 4 },
-  { id: "D7", name: "Dr. David Anderson", specialty: "Orthopedics", gender: "Male", status: "Available", room: "Room 112", workload: 2 },
-  { id: "D8", name: "Dr. Elena Vance", specialty: "Orthopedics", gender: "Female", status: "Available", room: "Room 114", workload: 1 },
-  { id: "D9", name: "Dr. Priya Patel", specialty: "Pediatrics", gender: "Female", status: "Available", room: "Room 105", workload: 1 },
-  { id: "D10", name: "Dr. Amit Verma", specialty: "Pediatrics", gender: "Male", status: "Available", room: "Room 106", workload: 2 },
+  // General Medicine
+  { id: "D2", name: "Dr. Vikram Malhotra", specialty: "General Medicine", gender: "Male", status: "Available", room: "Room 111", workload: 1 },
+  { id: "D1", name: "Dr. Ramesh Kumar", specialty: "General Medicine", gender: "Male", status: "Available", room: "Room 103", workload: 4 },
+  { id: "D4", name: "Dr. Sunita Rao", specialty: "General Medicine", gender: "Female", status: "Available", room: "Room 115", workload: 1 },
+  { id: "D3", name: "Dr. Anita Desai", specialty: "General Medicine", gender: "Female", status: "Available", room: "Room 101", workload: 3 },
+  
+  // Orthopedics
+  { id: "D6", name: "Dr. Sanjay Kapoor", specialty: "Orthopedics", gender: "Male", status: "Available", room: "Room 116", workload: 1 },
+  { id: "D5", name: "Dr. David Anderson", specialty: "Orthopedics", gender: "Male", status: "Available", room: "Room 112", workload: 3 },
+  { id: "D8", name: "Dr. Pooja Menon", specialty: "Orthopedics", gender: "Female", status: "Available", room: "Room 118", workload: 1 },
+  { id: "D7", name: "Dr. Elena Vance", specialty: "Orthopedics", gender: "Female", status: "Available", room: "Room 114", workload: 2 },
+
+  // Cardiology
+  { id: "D10", name: "Dr. Arjun Mehta", specialty: "Cardiology", gender: "Male", status: "Available", room: "Room 107", workload: 1 },
+  { id: "D9", name: "Dr. Rajesh Sharma", specialty: "Cardiology", gender: "Male", status: "Available", room: "Room 104", workload: 3 },
+  { id: "D12", name: "Dr. Ananya Roy", specialty: "Cardiology", gender: "Female", status: "Available", room: "Room 110", workload: 1 },
+  { id: "D11", name: "Dr. Sarah Jenkins", specialty: "Cardiology", gender: "Female", status: "Available", room: "Room 102", workload: 2 },
+
+  // Pulmonology
+  { id: "D14", name: "Dr. Rohan Joshi", specialty: "Pulmonology", gender: "Male", status: "Available", room: "Room 120", workload: 1 },
+  { id: "D13", name: "Dr. Michael Chen", specialty: "Pulmonology", gender: "Male", status: "Available", room: "Room 108", workload: 3 },
+  { id: "D16", name: "Dr. Neha Gupta", specialty: "Pulmonology", gender: "Female", status: "Available", room: "Room 122", workload: 1 },
+  { id: "D15", name: "Dr. Maya Lin", specialty: "Pulmonology", gender: "Female", status: "Available", room: "Room 109", workload: 2 },
+
+  // Pediatrics
+  { id: "D18", name: "Dr. Siddharth Sen", specialty: "Pediatrics", gender: "Male", status: "Available", room: "Room 124", workload: 1 },
+  { id: "D17", name: "Dr. Amit Verma", specialty: "Pediatrics", gender: "Male", status: "Available", room: "Room 106", workload: 2 },
+  { id: "D20", name: "Dr. Kavita Reddy", specialty: "Pediatrics", gender: "Female", status: "Available", room: "Room 126", workload: 1 },
+  { id: "D19", name: "Dr. Priya Patel", specialty: "Pediatrics", gender: "Female", status: "Available", room: "Room 105", workload: 2 },
 ];
 
-export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) {
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showNewPatientModal, setShowNewPatientModal] = useState(false);
-  const [dbPatients, setDbPatients] = useState<DBPatient[]>([]);
+const DOCTOR_WAITING_QUEUES: Record<string, { name: string; age: number; sex: string; umr: string; token: string; complaint: string; status: string }[]> = {
+  "Dr. Sanjay Kapoor": [
+    { name: "Rahul Roy", age: 34, sex: "Male", umr: "UMR10042", token: "O-OP094", complaint: "Acute knee joint strain & swelling", status: "Waiting in Lobby" }
+  ],
+  "Dr. David Anderson": [
+    { name: "Vikram Seth", age: 45, sex: "Male", umr: "UMR10038", token: "O-OP088", complaint: "Shoulder impingement follow-up", status: "Waiting in Lobby" },
+    { name: "Manoj Tiwari", age: 52, sex: "Male", umr: "UMR10031", token: "O-OP079", complaint: "Lumbar disc stiffness", status: "Waiting in Lobby" }
+  ],
+  "Dr. Pooja Menon": [
+    { name: "Sneha Nair", age: 29, sex: "Female", umr: "UMR10046", token: "O-OP096", complaint: "Ankle ligament sprain", status: "Waiting in Lobby" }
+  ],
+  "Dr. Elena Vance": [
+    { name: "Meera Sen", age: 41, sex: "Female", umr: "UMR10035", token: "O-OP082", complaint: "Cervical spine discomfort", status: "Waiting in Lobby" }
+  ],
+  "Dr. Vikram Malhotra": [
+    { name: "Suresh Nair", age: 41, sex: "Male", umr: "UMR10055", token: "G-OP055", complaint: "Persistent high-grade fever & headache", status: "Waiting in Lobby" }
+  ],
+  "Dr. Ramesh Kumar": [
+    { name: "Arun Verma", age: 49, sex: "Male", umr: "UMR10022", token: "G-OP041", complaint: "Abdominal cramping & nausea", status: "Waiting in Lobby" },
+    { name: "Gopal Rao", age: 58, sex: "Male", umr: "UMR10018", token: "G-OP033", complaint: "Chronic fatigue & weakness", status: "Waiting in Lobby" },
+    { name: "Harish Iyer", age: 62, sex: "Male", umr: "UMR10012", token: "G-OP028", complaint: "Gastric reflux & dizziness", status: "Waiting in Lobby" }
+  ],
+  "Dr. Sunita Rao": [
+    { name: "Pooja Das", age: 33, sex: "Female", umr: "UMR10050", token: "G-OP064", complaint: "Migraine & recurring nausea", status: "Waiting in Lobby" }
+  ],
+  "Dr. Anita Desai": [
+    { name: "Geeta Sharma", age: 46, sex: "Female", umr: "UMR10028", token: "G-OP048", complaint: "Severe headache & body aches", status: "Waiting in Lobby" },
+    { name: "Lakshmi Bai", age: 54, sex: "Female", umr: "UMR10019", token: "G-OP036", complaint: "Joint stiffness & general weakness", status: "Waiting in Lobby" }
+  ],
+  "Dr. Arjun Mehta": [
+    { name: "Anil Kapoor", age: 52, sex: "Male", umr: "UMR10071", token: "C-OP071", complaint: "Hypertension check & intermittent palpitations", status: "Waiting in Lobby" }
+  ],
+  "Dr. Rajesh Sharma": [
+    { name: "Kishore Kumar", age: 61, sex: "Male", umr: "UMR10060", token: "C-OP068", complaint: "Exertional chest tightness", status: "Waiting in Lobby" },
+    { name: "Devendra Pal", age: 55, sex: "Male", umr: "UMR10052", token: "C-OP058", complaint: "Post-angioplasty routine check", status: "Waiting in Lobby" }
+  ],
+  "Dr. Ananya Roy": [
+    { name: "Sunanda Sen", age: 50, sex: "Female", umr: "UMR10067", token: "C-OP074", complaint: "Mild exertional breathlessness", status: "Waiting in Lobby" }
+  ],
+  "Dr. Sarah Jenkins": [
+    { name: "Rohini Gupta", age: 48, sex: "Female", umr: "UMR10058", token: "C-OP062", complaint: "Tachycardia & dizziness episodes", status: "Waiting in Lobby" }
+  ],
+  "Dr. Rohan Joshi": [
+    { name: "Karthik Menon", age: 29, sex: "Male", umr: "UMR10042", token: "P-OP042", complaint: "Chronic dry cough & wheezing", status: "Waiting in Lobby" }
+  ],
+  "Dr. Michael Chen": [
+    { name: "Deepak Chawla", age: 53, sex: "Male", umr: "UMR10037", token: "P-OP038", complaint: "Shortness of breath on mild exertion", status: "Waiting in Lobby" },
+    { name: "Nitin Joshi", age: 44, sex: "Male", umr: "UMR10029", token: "P-OP030", complaint: "Productive morning cough & sputum", status: "Waiting in Lobby" }
+  ],
+  "Dr. Neha Gupta": [
+    { name: "Swati Bose", age: 36, sex: "Female", umr: "UMR10045", token: "P-OP046", complaint: "Bronchial asthma seasonal flare", status: "Waiting in Lobby" }
+  ],
+  "Dr. Maya Lin": [
+    { name: "Rita Ghosh", age: 42, sex: "Female", umr: "UMR10039", token: "P-OP040", complaint: "Persistent allergic bronchitis", status: "Waiting in Lobby" }
+  ],
+  "Dr. Siddharth Sen": [
+    { name: "Master Aarav", age: 6, sex: "Male", umr: "UMR10019", token: "PED-OP019", complaint: "High-grade fever & throat pain", status: "Waiting in Lobby" }
+  ],
+  "Dr. Amit Verma": [
+    { name: "Baby Reyansh", age: 2, sex: "Male", umr: "UMR10015", token: "PED-OP015", complaint: "Stridor and nighttime barking cough", status: "Waiting in Lobby" }
+  ],
+  "Dr. Kavita Reddy": [
+    { name: "Baby Ananya", age: 4, sex: "Female", umr: "UMR10024", token: "PED-OP024", complaint: "Seasonal allergic rhinitis & sneezing", status: "Waiting in Lobby" }
+  ],
+  "Dr. Priya Patel": [
+    { name: "Baby Diya", age: 3, sex: "Female", umr: "UMR10017", token: "PED-OP017", complaint: "Viral fever & mild vomiting", status: "Waiting in Lobby" }
+  ]
+};
 
-  // Load patients from DB
-  const refreshDbPatients = () => {
-    setDbPatients(db.getPatients());
-  };
+export default function OPWorkflow({
+  onComplete,
+  onNavigateToRegistration,
+  onOpenDoctorPortal,
+  initialStep = 2,
+  initialEncounterId
+}: {
+  onComplete?: () => void;
+  onNavigateToRegistration?: () => void;
+  onOpenDoctorPortal?: (encounterId?: string) => void;
+  initialStep?: number;
+  initialEncounterId?: string;
+}) {
+  const [currentStep, setCurrentStep] = useState<number>(initialStep || 2);
+  const [dbEncounters, setDbEncounters] = useState<DBOPEncounter[]>([]);
 
-  useEffect(() => {
-    refreshDbPatients();
-    const unsub = db.subscribe(refreshDbPatients);
-    return () => unsub();
-  }, []);
-  
-  // Accurate age calculation from DOB
-  const calculateAge = (dobString: string): number => {
-    if (!dobString) return 0;
-    const birthDate = new Date(dobString);
-    if (isNaN(birthDate.getTime())) return 0;
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return Math.max(0, age);
-  };
-
-  // New Patient Form State
-  const [newPatientForm, setNewPatientForm] = useState({
-    firstName: "",
-    middleName: "",
-    lastName: "",
-    dob: "1996-05-20",
-    age: calculateAge("1996-05-20"),
-    sex: "" as "Male" | "Female" | "Other" | "",
-    phone: "",
-  });
-
-  const handleDobChange = (newDob: string) => {
-    const age = calculateAge(newDob);
-    setNewPatientForm(prev => ({
-      ...prev,
-      dob: newDob,
-      age: age
-    }));
+  // Load encounters from DB
+  const refreshDb = () => {
+    const encs = db.getEncounters();
+    setDbEncounters(encs);
+    return encs;
   };
 
   // Patient workflow state
   const [patient, setPatient] = useState<OPPatient>({
-    umr: "",
-    opNumber: "",
-    name: "",
-    age: 35,
+    umr: "UMR10064",
+    opNumber: "OP108",
+    name: "zoro roronoa",
+    age: 23,
     sex: "Male",
-    phone: "",
-    address: "",
-    isNew: true,
+    phone: "1111111111",
+    address: "Greenwood Sector 4",
+    isNew: false,
     previousVisits: [],
     symptoms: ["Chest pain", "Breathing difficulty"],
     chiefComplaint: "Patient complaining of chest tightness and shortness of breath.",
@@ -145,255 +206,445 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
     doctorGenderPref: "Any",
     assignedDoctor: "Dr. Rajesh Sharma",
     doctorStatus: "Available",
-    queueToken: "C-OP001",
+    queueToken: "C-OP108",
     queuePosition: 1,
     room: "Room 104",
-    diagnosis: "Acute Coronary Syndrome Rule-Out / Stable Angina",
-    icd10: "I20.9",
-    prescription: [
-      { medicine: "Aspirin 81mg", dosage: "1 tab", frequency: "OD (Once Daily)", duration: "30 days" },
-      { medicine: "Atorvastatin 40mg", dosage: "1 tab", frequency: "HS (Bedtime)", duration: "30 days" }
-    ],
-    investigations: ["ECG 12-Lead", "Serum Troponin I", "Lipid Profile"],
-    advice: "Avoid strenuous exertion. Return immediately if chest pain worsens. Follow low-sodium diet.",
+    diagnosis: "",
+    icd10: "",
+    prescription: [],
+    investigations: [],
+    advice: "",
     vitals: { bp: "135/85 mmHg", pulse: "78 bpm", temp: "98.6 °F", spo2: "98%", weight: "74 kg", notes: "Patient alert and oriented. Mild diaphoresis on arrival." },
-    billing: { consultationFee: 50, labFee: 40, total: 90, status: "Pending", mode: "Card" },
+    billing: { consultationFee: 50, labFee: 0, total: 60, status: "Pending", mode: "Card" },
     furtherAction: "None",
-    status: "Registered",
+    status: "In Queue",
     timestamps: {
       arrival: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   });
 
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [smsSentNotice, setSmsSentNotice] = useState(false);
+  const [cashTendered, setCashTendered] = useState<string>("150");
+  const [cardNumber, setCardNumber] = useState<string>("4532 •••• •••• 8842");
+  const [cardExpiry, setCardExpiry] = useState<string>("09/29");
+  const [cardCvv, setCardCvv] = useState<string>("731");
+  const [insuranceMemberId, setInsuranceMemberId] = useState<string>("BCBS-9041284-A");
 
-  // Handlers for Step 1: Patient Identification with Database Sync
-  const handleSelectExistingPatient = (existing: DBPatient) => {
-    const previousEncounters = db.getEncountersForPatient(existing.umr);
-    const newEncounter = db.createRevisitEncounter(existing.umr, {
-      dept: patient.aiSpecialty || "General Medicine"
+  // Real-time Clinical & Patient Notifications
+  interface ActiveNotification {
+    id: string;
+    type: "doctor" | "patient";
+    title: string;
+    recipient: string;
+    message: string;
+    timestamp: string;
+    token?: string;
+  }
+
+  const [activeNotifications, setActiveNotifications] = useState<ActiveNotification[]>([]);
+
+  const triggerDoctorNotification = (docName: string, room: string, patientName: string, token: string, complaint: string) => {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const notif: ActiveNotification = {
+      id: `doc-${Date.now()}`,
+      type: "doctor",
+      title: `🔔 Doctor EMR Alert: Next Patient Queued`,
+      recipient: `${docName} (${room})`,
+      message: `Incoming OP Patient: ${patientName} (Token: ${token}) is waiting in your queue for consultation. Chief Complaint: ${complaint || "Clinical evaluation"}`,
+      timestamp: time,
+      token: token
+    };
+    setActiveNotifications(prev => [notif, ...prev.filter(n => n.id !== notif.id)]);
+  };
+
+  const triggerPatientNotification = (patientName: string, phone: string, docName: string, room: string, token: string) => {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const notif: ActiveNotification = {
+      id: `pat-${Date.now()}`,
+      type: "patient",
+      title: `📱 Patient SMS Alert: Get Ready!`,
+      recipient: `${patientName} (${phone})`,
+      message: `🔔 Get ready! You are UP NEXT with ${docName} in ${room}. Token: ${token}. Please proceed to Door ${room}.`,
+      timestamp: time,
+      token: token
+    };
+    setActiveNotifications(prev => [notif, ...prev.filter(n => n.id !== notif.id)]);
+  };
+
+  // Step 3: Doctor Queue State & Live Queue Position
+  interface QueueItem {
+    id: string;
+    name: string;
+    umr: string;
+    token: string;
+    status: "Waiting" | "Called" | "Under Consultation" | "Completed" | "No Show" | "YOUR TURN";
+    isYou?: boolean;
+  }
+
+  const [doctorQueue, setDoctorQueue] = useState<QueueItem[]>([
+    { id: "q1", name: "Ravi Kumar", umr: "UMR10038", token: "C-OP0098", status: "Waiting" },
+    { id: "q2", name: "Suresh Reddy", umr: "UMR10045", token: "C-OP0104", status: "Waiting" },
+    { id: "q3", name: "Anjali Sharma", umr: "UMR10052", token: "C-OP0112", status: "Waiting" },
+    { id: "q4", name: "zoro roronoa", umr: "UMR10064", token: "C-OP108", status: "Waiting", isYou: true },
+    { id: "q5", name: "Deepak Verma", umr: "UMR10061", token: "C-OP0130", status: "Waiting" },
+  ]);
+
+  // Keep queue synced with active patient details
+  useEffect(() => {
+    setDoctorQueue(prev => {
+      const exists = prev.some(item => item.isYou);
+      if (exists) {
+        return prev.map(item => item.isYou ? {
+          ...item,
+          name: patient.name || "Current Patient",
+          umr: patient.umr,
+          token: patient.queueToken
+        } : item);
+      } else {
+        return [
+          ...prev,
+          {
+            id: `q-you`,
+            name: patient.name || "Current Patient",
+            umr: patient.umr,
+            token: patient.queueToken,
+            status: "Waiting",
+            isYou: true
+          }
+        ];
+      }
     });
+  }, [patient.name, patient.umr, patient.queueToken]);
+
+  // Calculate live position and patients ahead
+  const activeQueue = doctorQueue.filter(item => item.status !== "Completed" && item.status !== "No Show");
+  const youQueueIdx = activeQueue.findIndex(item => item.isYou);
+  const patientsAhead = youQueueIdx >= 0 ? youQueueIdx : 0;
+  const currentPosition = youQueueIdx >= 0 ? youQueueIdx + 1 : 1;
+  const isYourTurn = currentPosition === 1 || activeQueue[youQueueIdx]?.status === "Called" || activeQueue[youQueueIdx]?.status === "YOUR TURN";
+
+  // Doctor calls next patient handler
+  const handleDoctorCallNext = () => {
+    setDoctorQueue(prev => {
+      const activeIdx = prev.findIndex(item => item.status === "Waiting" || item.status === "Called" || item.status === "Under Consultation");
+      if (activeIdx === -1) return prev;
+
+      const updated = [...prev];
+      const currentActive = updated[activeIdx];
+
+      if (currentActive.isYou) {
+        currentActive.status = "YOUR TURN";
+        triggerDoctorNotification(patient.assignedDoctor, patient.room, patient.name, patient.queueToken, "Patient called into consultation room");
+        triggerPatientNotification(patient.name, patient.phone, patient.assignedDoctor, patient.room, patient.queueToken);
+      } else {
+        currentActive.status = "Completed";
+        const nextIdx = updated.findIndex((item, idx) => idx > activeIdx && item.status === "Waiting");
+        if (nextIdx !== -1 && updated[nextIdx].isYou) {
+          updated[nextIdx].status = "YOUR TURN";
+          triggerDoctorNotification(patient.assignedDoctor, patient.room, patient.name, patient.queueToken, "Patient Ready — Please attend patient");
+          triggerPatientNotification(patient.name, patient.phone, patient.assignedDoctor, patient.room, patient.queueToken);
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Skip / advance queue directly to patient's turn
+  const handleSkipToMyTurn = () => {
+    setDoctorQueue(prev => {
+      return prev.map(item => {
+        if (item.isYou) {
+          return { ...item, status: "YOUR TURN" };
+        } else if (prev.indexOf(item) < prev.findIndex(p => p.isYou)) {
+          return { ...item, status: "Completed" };
+        }
+        return item;
+      });
+    });
+    triggerDoctorNotification(patient.assignedDoctor, patient.room, patient.name, patient.queueToken, "Patient Ready — Please attend patient");
+    triggerPatientNotification(patient.name, patient.phone, patient.assignedDoctor, patient.room, patient.queueToken);
+  };
+
+  // Sync step if initialStep prop changes
+  useEffect(() => {
+    if (initialStep) {
+      setCurrentStep(initialStep);
+    }
+  }, [initialStep]);
+
+  // Load active encounter on mount or when initialEncounterId changes
+  useEffect(() => {
+    const encs = refreshDb();
+    if (encs.length > 0) {
+      const active = initialEncounterId
+        ? encs.find((e) => e.id === initialEncounterId) || encs[0]
+        : encs[0];
+      loadEncounterIntoWorkflow(active);
+    }
+    const unsub = db.subscribe(() => {
+      const latestEncs = refreshDb();
+      if (latestEncs.length > 0) {
+        const targetId = initialEncounterId || patient.id;
+        const active = targetId
+          ? latestEncs.find((e) => e.id === targetId) || latestEncs[0]
+          : latestEncs[0];
+        if (active) {
+          loadEncounterIntoWorkflow(active);
+        }
+      }
+    });
+    return () => unsub();
+  }, [initialEncounterId, patient.id]);
+
+  const isFemaleGender = (sex?: string) => {
+    const s = String(sex || "").toLowerCase().trim();
+    return s === "female" || s === "girl" || s === "f" || s === "woman";
+  };
+
+  const getTargetDoctorGender = (currentPatient: OPPatient): "Female" | "Male" => {
+    if (currentPatient.doctorGenderPref === "Female") return "Female";
+    if (currentPatient.doctorGenderPref === "Male") return "Male";
+    return isFemaleGender(currentPatient.sex) ? "Female" : "Male";
+  };
+
+  const loadEncounterIntoWorkflow = (enc: DBOPEncounter) => {
+    const previousEncounters = db.getEncountersForPatient(enc.umr);
+    const isFemalePatient = isFemaleGender(enc.sex);
+    const patientGender: "Female" | "Male" = isFemalePatient ? "Female" : "Male";
+    const dept = enc.dept && enc.dept !== "Awaiting Triage" ? enc.dept : "General Medicine";
+
+    // Auto-match same-gender doctor with shortest queue
+    const targetGender = enc.doctorGenderPref === "Female" ? "Female" : enc.doctorGenderPref === "Male" ? "Male" : patientGender;
+    const candidateDocs = INITIAL_DOCTORS.filter(d => d.specialty === dept && d.gender === targetGender);
+    candidateDocs.sort((a, b) => a.workload - b.workload);
+
+    const matchedDoctor = candidateDocs[0] ||
+                          INITIAL_DOCTORS.find(d => d.specialty === dept) ||
+                          INITIAL_DOCTORS.find(d => d.gender === targetGender) ||
+                          INITIAL_DOCTORS[0];
+
+    const currentAssignedDoc = enc.assignedDoctor || matchedDoctor.name;
+    const currentDocObj = INITIAL_DOCTORS.find(d => d.name === currentAssignedDoc) || matchedDoctor;
 
     setPatient({
-      ...patient,
-      id: newEncounter.id,
-      umr: existing.umr, // STRICTLY KEPT UNCHANGED
-      opNumber: newEncounter.opNumber, // BRAND NEW VISIT OP NUMBER
-      name: existing.name,
-      age: existing.age,
-      sex: existing.sex,
-      phone: existing.phone,
-      address: existing.address,
-      isNew: false,
-      previousVisits: previousEncounters.map(e => ({
+      id: enc.id,
+      umr: enc.umr,
+      opNumber: enc.opNumber,
+      name: enc.patientName,
+      age: enc.age,
+      sex: enc.sex as any,
+      phone: enc.phone,
+      address: "General Ward / OP Desk",
+      isNew: enc.isNew,
+      previousVisits: previousEncounters.filter(e => e.id !== enc.id).map(e => ({
         opNumber: e.opNumber,
         date: e.registrationTime,
         doctor: e.assignedDoctor,
         diagnosis: e.diagnosis || e.chiefComplaint
       })),
-      status: "Registered",
-      timestamps: { ...patient.timestamps, registration: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-    });
-  };
-
-  const handleRegisterNewPatientSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPatientForm.firstName.trim() || !newPatientForm.lastName.trim() || !newPatientForm.dob) return;
-
-    // Check if patient already exists
-    const modalFullName = [newPatientForm.firstName, newPatientForm.middleName, newPatientForm.lastName].filter(Boolean).join(" ").trim().toLowerCase();
-    const modalExistingPatient = modalFullName.length >= 3 
-      ? db.getPatients().find(p => p.name.toLowerCase() === modalFullName || (newPatientForm.phone.trim().length >= 7 && p.phone === newPatientForm.phone.trim()))
-      : undefined;
-
-    if (modalExistingPatient) {
-      handleSelectExistingPatient(modalExistingPatient);
-      setShowNewPatientModal(false);
-      return;
-    }
-
-    const computedAge = calculateAge(newPatientForm.dob);
-
-    const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
-      firstName: newPatientForm.firstName.trim(),
-      middleName: newPatientForm.middleName.trim() || undefined,
-      lastName: newPatientForm.lastName.trim(),
-      dob: newPatientForm.dob,
-      age: computedAge,
-      sex: (newPatientForm.sex as "Male" | "Female" | "Other") || "Male",
-      phone: newPatientForm.phone || "(617) 555-0192",
-      dept: patient.aiSpecialty || "General Medicine",
-      chiefComplaint: patient.chiefComplaint
-    });
-
-    setPatient({
-      ...patient,
-      id: createdEncounter.id,
-      umr: createdPatient.umr,
-      opNumber: createdEncounter.opNumber,
-      name: createdPatient.name,
-      age: computedAge,
-      sex: createdPatient.sex,
-      phone: createdPatient.phone,
-      isNew: true,
-      previousVisits: [],
-      status: "Registered",
-      timestamps: { ...patient.timestamps, registration: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-    });
-
-    setShowNewPatientModal(false);
-  };
-
-  // Quick preset loader with DB sync
-  const loadPreset = (type: "new" | "revisit") => {
-    if (type === "new") {
-      const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
-        firstName: "David",
-        lastName: "Miller",
-        age: 29,
-        sex: "Male",
-        phone: "(617) 555-8831",
-        address: "50 Commonwealth Ave, Boston, MA",
-        bloodGroup: "A+",
-        dept: "Cardiology",
-        chiefComplaint: "Severe chest pain and palpitations"
-      });
-
-      setPatient({
-        ...patient,
-        id: createdEncounter.id,
-        umr: createdPatient.umr,
-        opNumber: createdEncounter.opNumber,
-        name: createdPatient.name,
-        age: createdPatient.age,
-        sex: createdPatient.sex,
-        phone: createdPatient.phone,
-        address: createdPatient.address,
-        isNew: true,
-        previousVisits: [],
-        status: "Registered",
-        timestamps: { ...patient.timestamps, registration: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-      });
-    } else {
-      const firstPatient = db.getPatients()[0];
-      if (firstPatient) {
-        handleSelectExistingPatient(firstPatient);
+      symptoms: enc.symptoms || ["Chest pain", "Breathing difficulty"],
+      chiefComplaint: enc.chiefComplaint || "Patient presenting for clinical evaluation.",
+      aiSpecialty: dept,
+      aiDoctor: enc.aiDoctor || currentAssignedDoc,
+      aiConfidence: enc.aiConfidence || 95,
+      doctorGenderPref: (enc.doctorGenderPref as any) || "Any",
+      assignedDoctor: currentAssignedDoc,
+      doctorStatus: enc.doctorStatus || (currentDocObj.status as any),
+      queueToken: enc.queueToken || `${dept.substring(0, 1)}-${enc.opNumber}`,
+      queuePosition: enc.queuePosition || 1,
+      room: enc.room || currentDocObj.room,
+      assessment: enc.assessment || "",
+      diagnosis: enc.diagnosis || "",
+      icd10: enc.icd10 || "",
+      prescription: enc.prescription || [],
+      investigations: enc.investigations || [],
+      advice: enc.advice || "",
+      vitals: enc.vitals || { bp: "135/85 mmHg", pulse: "78 bpm", temp: "98.6 °F", spo2: "98%", weight: "74 kg", notes: "Patient alert and oriented." },
+      billing: enc.billing || { consultationFee: 50, labFee: 0, total: 60, status: "Pending", mode: "Card" },
+      furtherAction: enc.furtherAction || "None",
+      status: (enc.status as any) || "Registered",
+      timestamps: enc.timestamps || {
+        arrival: enc.registrationTime,
+        registration: enc.registrationTime
       }
-    }
+    });
   };
 
-  // Symptom Analysis
+  // Symptom toggling
   const toggleSymptom = (sym: string) => {
-    const nextSymptoms = patient.symptoms.includes(sym)
-      ? patient.symptoms.filter(s => s !== sym)
-      : [...patient.symptoms, sym];
-    
-    setPatient({ ...patient, symptoms: nextSymptoms });
+    setPatient(prev => ({
+      ...prev,
+      symptoms: prev.symptoms.includes(sym)
+        ? prev.symptoms.filter(s => s !== sym)
+        : [...prev.symptoms, sym]
+    }));
   };
 
+  // AI Specialty Recommendation & Doctor Assignment
   const runAiSymptomAnalysis = () => {
     setAiAnalyzing(true);
     setTimeout(() => {
+      const isFemalePatient = isFemaleGender(patient.sex);
+      const patientGender: "Female" | "Male" = isFemalePatient ? "Female" : "Male";
+
       let specialty = "General Medicine";
-      let recommendedDoc = "";
-      let conf = 95;
-      let aiReasoning = "";
-      let aiDoctorRationale = "";
+      let confidence = 88;
+      let rationale = "General clinical assessment and systemic evaluation based on primary presenting symptoms.";
 
-      // Same-gender clinical assignment:
-      const patientGender = patient.sex === "Female" ? "Female" : "Male";
-      const symText = (patient.symptoms.join(" ") + " " + patient.chiefComplaint).toLowerCase();
+      const complaintText = (patient.chiefComplaint || "").toLowerCase();
+      const symptomsStr = (patient.symptoms.join(" ") + " " + complaintText).toLowerCase();
 
-      if (symText.includes("chest") || symText.includes("breath") || symText.includes("sweat") || symText.includes("palpitat") || symText.includes("heart")) {
-        specialty = "Cardiology";
-        conf = 98;
-        aiReasoning = "Acute thoracic complaints (chest discomfort, shortness of breath, palpitations) represent significant cardiovascular risk. Immediate Cardiology assessment is indicated for acute coronary syndrome (ACS) rule-out, 12-lead ECG, and cardiac biomarker evaluation.";
-        if (patientGender === "Female") {
-          recommendedDoc = "Dr. Sarah Jenkins";
-          aiDoctorRationale = "Dr. Sarah Jenkins (Cardiology · Room 102) is on active duty with specialized expertise in non-invasive cardiac evaluation, telemetry, and shortest OPD wait time (8 min).";
-        } else {
-          recommendedDoc = "Dr. Rajesh Sharma";
-          aiDoctorRationale = "Dr. Rajesh Sharma (Lead Cardiologist · Room 104) is on active duty with direct access to emergency ECG review, catheterization lab standby, and optimal OPD queue capacity.";
-        }
-      } else if (symText.includes("cough") || symText.includes("wheez") || symText.includes("asthma") || symText.includes("lung")) {
-        specialty = "Pulmonology";
-        conf = 94;
-        aiReasoning = "Persistent respiratory symptoms with cough/wheezing indicate lower airway bronchospasm or respiratory tract infection requiring Pulmonology diagnostic correlation.";
-        if (patientGender === "Female") {
-          recommendedDoc = "Dr. Maya Lin";
-          aiDoctorRationale = "Dr. Maya Lin (Pulmonologist · Room 109) has active OPD slots and specialized expertise in bronchial asthma and pulmonary function triage.";
-        } else {
-          recommendedDoc = "Dr. Michael Chen";
-          aiDoctorRationale = "Dr. Michael Chen (Pulmonologist · Room 108) is available with immediate spirometry and nebulization unit access.";
-        }
-      } else if (symText.includes("joint") || symText.includes("back") || symText.includes("fracture") || symText.includes("bone") || symText.includes("knee")) {
-        specialty = "Orthopedics";
-        conf = 96;
-        aiReasoning = "Localized musculoskeletal pain, joint swelling, or spinal discomfort warrants Orthopedic examination and digital radiologic correlation.";
-        if (patientGender === "Female") {
-          recommendedDoc = "Dr. Elena Vance";
-          aiDoctorRationale = "Dr. Elena Vance (Orthopedic Specialist · Room 114) is on duty with immediate joint assessment capacity.";
-        } else {
-          recommendedDoc = "Dr. David Anderson";
-          aiDoctorRationale = "Dr. David Anderson (Orthopedic Surgeon · Room 112) is available with digital X-ray correlation and open OPD consultation slots.";
-        }
-      } else if (symText.includes("child") || symText.includes("baby") || symText.includes("pediatric") || patient.age < 16) {
+      // Check Pediatric conditions first (if age < 18 or pediatric clinical keywords in complaint)
+      const isPediatricPatient = (patient.age > 0 && patient.age < 18) || 
+                                 symptomsStr.includes("child") || 
+                                 symptomsStr.includes("infant") || 
+                                 symptomsStr.includes("baby") || 
+                                 symptomsStr.includes("toddler") || 
+                                 symptomsStr.includes("pediatric");
+
+      if (isPediatricPatient) {
         specialty = "Pediatrics";
-        conf = 95;
-        aiReasoning = "Pediatric profile and presenting symptoms require specialized developmental and child-care medical assessment.";
-        if (patientGender === "Female") {
-          recommendedDoc = "Dr. Priya Patel";
-          aiDoctorRationale = "Dr. Priya Patel (Pediatrician · Room 105) has active OPD consultation availability with specialized child wellness care.";
-        } else {
-          recommendedDoc = "Dr. Amit Verma";
-          aiDoctorRationale = "Dr. Amit Verma (Pediatrician · Room 106) has open OPD queue slots and immediate pediatric triage availability.";
-        }
-      } else {
-        // High Fever / Severe Headache / General Medicine
+        confidence = 96;
+        rationale = `Patient profile (${patient.age > 0 ? `${patient.age} yrs` : "Pediatric"}) and presenting narrative indicate dedicated care pathway in Pediatrics.`;
+      } else if (
+        symptomsStr.includes("chest") || 
+        symptomsStr.includes("breath") || 
+        symptomsStr.includes("heart") || 
+        symptomsStr.includes("tightness") || 
+        symptomsStr.includes("palpitation") ||
+        symptomsStr.includes("angina") ||
+        symptomsStr.includes("bp high") ||
+        symptomsStr.includes("hypertension")
+      ) {
+        specialty = "Cardiology";
+        confidence = 97;
+        rationale = "Symptoms of chest discomfort, cardiac risk indicators, or shortness of breath require immediate clinical assessment by Cardiology.";
+      } else if (
+        symptomsStr.includes("cough") || 
+        symptomsStr.includes("wheezing") || 
+        symptomsStr.includes("lung") || 
+        symptomsStr.includes("asthma") || 
+        symptomsStr.includes("sputum") ||
+        symptomsStr.includes("phlegm") ||
+        symptomsStr.includes("respiratory") ||
+        symptomsStr.includes("bronch")
+      ) {
+        specialty = "Pulmonology";
+        confidence = 94;
+        rationale = "Respiratory symptoms require pulmonary evaluation for airway obstruction, asthma, or lower respiratory tract assessment.";
+      } else if (
+        symptomsStr.includes("joint") || 
+        symptomsStr.includes("bone") || 
+        symptomsStr.includes("back pain") || 
+        symptomsStr.includes("fracture") || 
+        symptomsStr.includes("sprain") || 
+        symptomsStr.includes("knee") || 
+        symptomsStr.includes("swelling") ||
+        symptomsStr.includes("ankle") ||
+        symptomsStr.includes("ligament")
+      ) {
+        specialty = "Orthopedics";
+        confidence = 93;
+        rationale = "Musculoskeletal symptoms or mechanical trauma necessitate orthopedic physical evaluation and imaging review.";
+      } else if (
+        symptomsStr.includes("fever") || 
+        symptomsStr.includes("headache") || 
+        symptomsStr.includes("abdominal") || 
+        symptomsStr.includes("stomach") || 
+        symptomsStr.includes("vomiting") || 
+        symptomsStr.includes("dizziness") || 
+        symptomsStr.includes("fatigue") ||
+        symptomsStr.includes("body pain") ||
+        symptomsStr.includes("chills") ||
+        symptomsStr.includes("weakness")
+      ) {
         specialty = "General Medicine";
-        conf = 96;
-        aiReasoning = "Presenting acute febrile presentation accompanied by severe headache over the past 2 days indicates an acute systemic febrile syndrome (screening required for viral pyrexia, tropical infection, or CNS/meningeal signs), requiring comprehensive internal medicine evaluation.";
-        if (patientGender === "Female") {
-          recommendedDoc = "Dr. Anita Desai";
-          aiDoctorRationale = "Dr. Anita Desai (Senior Consultant, General Medicine · Room 101) is recommended due to clinical specialization in acute febrile illnesses and infectious triage, immediate room availability, and shortest queue wait time.";
-        } else {
-          recommendedDoc = "Dr. Ramesh Kumar";
-          aiDoctorRationale = "Dr. Ramesh Kumar (Senior Physician, General Medicine · Room 103) is recommended due to clinical specialization in acute febrile illnesses and infectious workups, immediate room availability, and lowest active queue load (avg 12 min turnaround).";
-        }
+        confidence = 92;
+        rationale = "Acute systemic presentation (fever, headache, general malaise, or abdominal discomfort) warrants comprehensive internal medicine evaluation.";
       }
 
-      const nextPatientState = {
-        ...patient,
-        doctorGenderPref: patientGender,
-        aiSpecialty: specialty,
-        aiDoctor: recommendedDoc,
-        aiConfidence: conf,
-        aiReasoning: aiReasoning,
-        aiDoctorRationale: aiDoctorRationale,
-        assignedDoctor: recommendedDoc,
-        status: "AI Recommended" as const,
-        timestamps: { ...patient.timestamps, symptoms: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-      };
+      // Find matching doctors for recommended specialty and patient gender
+      const eligibleDoctors = INITIAL_DOCTORS.filter(
+        d => d.specialty === specialty && d.gender === patientGender
+      );
 
-      setPatient(nextPatientState);
+      // AI Autonomous Queue Load Balancing: Sort by lowest active queue workload
+      eligibleDoctors.sort((a, b) => a.workload - b.workload);
+
+      const matchedDoctorObj = eligibleDoctors[0] || 
+                               INITIAL_DOCTORS.find(d => d.gender === patientGender) || 
+                               INITIAL_DOCTORS[0];
+
+      const otherDoctorsInDept = eligibleDoctors.filter(d => d.id !== matchedDoctorObj.id);
+
+      const assignedDoc = matchedDoctorObj.name;
+      const assignedRoom = matchedDoctorObj.room;
+      const docRationale = otherDoctorsInDept.length > 0 
+        ? `Auto-assigned ${matchedDoctorObj.name} (${matchedDoctorObj.workload} in queue) over ${otherDoctorsInDept.map(d => `${d.name} (${d.workload} in queue)`).join(", ")} due to shortest queue wait time.`
+        : `Directly assigned attending specialist in ${specialty}.`;
+      const queueToken = `${specialty.substring(0, 1)}-${patient.opNumber}`;
+      const queuePosition = 1;
+
+      setPatient(prev => ({
+        ...prev,
+        aiSpecialty: specialty,
+        aiDoctor: assignedDoc,
+        assignedDoctor: assignedDoc,
+        room: assignedRoom,
+        doctorStatus: matchedDoctorObj.status as any,
+        queueToken: queueToken,
+        queuePosition: queuePosition,
+        aiConfidence: confidence,
+        aiReasoning: rationale,
+        aiDoctorRationale: docRationale,
+        status: "Doctor Assigned" as const,
+        timestamps: {
+          ...prev.timestamps,
+          symptoms: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          doctorAssigned: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      }));
 
       if (patient.id) {
         try {
           db.updateEncounter(patient.id, {
-            symptoms: patient.symptoms,
+            dept: specialty,
+            assignedDoctor: assignedDoc,
+            room: assignedRoom,
+            doctorStatus: matchedDoctorObj.status as any,
+            queueToken: queueToken,
+            queuePosition: queuePosition,
             chiefComplaint: patient.chiefComplaint,
-            aiSpecialty: specialty,
-            aiDoctor: recommendedDoc,
-            aiConfidence: conf,
-            aiReasoning: aiReasoning,
-            aiDoctorRationale: aiDoctorRationale,
-            doctorGenderPref: patientGender,
-            assignedDoctor: recommendedDoc,
-            status: "AI Recommended"
+            symptoms: patient.symptoms,
+            status: "Doctor Assigned"
           });
         } catch (e) {
           console.warn("DB update failed:", e);
         }
+      }
+
+      // 1. Dispatch real-time notification to the Doctor Portal immediately upon booking
+      triggerDoctorNotification(
+        assignedDoc,
+        assignedRoom,
+        patient.name,
+        queueToken,
+        patient.chiefComplaint || patient.symptoms.join(", ")
+      );
+
+      // 2. Dispatch Patient SMS 2-3 minutes before turn (or immediately if next in line)
+      if (matchedDoctorObj.workload <= 1) {
+        setTimeout(() => {
+          triggerPatientNotification(
+            patient.name,
+            patient.phone,
+            assignedDoc,
+            assignedRoom,
+            queueToken
+          );
+        }, 1200);
       }
 
       setAiAnalyzing(false);
@@ -435,52 +686,51 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
   };
 
   const steps = [
-    { num: 1, label: "Identification & UMR" },
-    { num: 2, label: "OP Book" },
-    { num: 3, label: "Symptoms & AI Match" },
-    { num: 4, label: "Doctor & Queue" },
-    { num: 5, label: "Consultation" },
-    { num: 6, label: "Nurse Vitals" },
-    { num: 7, label: "Billing & Completion" },
+    { num: 1, label: "Digital OP Pass", shortLabel: "OP Pass" },
+    { num: 2, label: "Symptoms & AI Triage", shortLabel: "AI Triage" },
+    { num: 3, label: "Nurse Triage & Vitals Check", shortLabel: "Nurse Vitals" },
+    { num: 4, label: "Doctor & Queue Allocation", shortLabel: "Doctor Queue" },
+    { num: 5, label: "Physician Consultation", shortLabel: "Consultation" },
+    { num: 6, label: "Billing & Completion", shortLabel: "Billing & Exit" },
   ];
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#F0F2F5]">
-      {/* Header */}
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between flex-shrink-0">
+      {/* Clinical Workflow Header */}
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 flex-shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold text-gray-900">OP Management — Clinical Patient Journey</h1>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE] font-mono">
-              Keppler OP Specification v1.0
+            <h1 className="text-base font-semibold text-gray-900">Outpatient Clinical Journey</h1>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-[#1B4FD8] border border-blue-200">
+              Active OP Pathway
             </span>
           </div>
           <p className="text-[11.5px] text-[#64748B]">
-            Unified 11-stage outpatient workflow from arrival, UMR/OP generation, AI doctor matching, consultation to billing.
+            Unified outpatient care pathway: Digital Pass, Clinical Triage, AI Doctor Match, Consultation, Vitals &amp; Checkout.
           </p>
         </div>
+
+        {/* Quick Patient Selector from Database */}
         <div className="flex items-center gap-2.5">
-          {patient.umr ? (
-            <div className="flex items-center gap-2 bg-[#F8FAFC] border border-[#E2E8F0] px-3 py-1 rounded text-[12px]">
-              <span className="text-[#64748B]">Active Patient:</span>
-              <span className="font-mono font-bold text-[#1B4FD8]">{patient.umr}</span>
-              <span className="text-gray-300">|</span>
-              <span className="font-mono font-bold text-[#D97706]">{patient.opNumber}</span>
-              <span className="text-gray-300">|</span>
-              <span className="font-semibold text-gray-800">{patient.name}</span>
-            </div>
-          ) : (
-            <div className="text-[12px] text-[#64748B] italic">No active patient loaded</div>
-          )}
-          <button
-            onClick={() => {
-              setPatient({ ...patient, umr: "", opNumber: "", name: "" });
-              setCurrentStep(1);
-            }}
-            className="px-3 py-1 bg-white border border-[#DDE2EC] text-[#1B4FD8] hover:bg-[#F8FAFC] rounded text-[12px] font-medium transition-colors"
-          >
-            Reset
-          </button>
+          <div className="flex items-center gap-2 bg-[#F8FAFC] border border-[#E2E8F0] px-3.5 py-1.5 rounded-lg text-[12px] shadow-xs">
+            <span className="text-[#64748B] font-medium whitespace-nowrap">Active Encounter:</span>
+            <select
+              value={patient.id || ""}
+              onChange={(e) => {
+                const found = dbEncounters.find(enc => enc.id === e.target.value);
+                if (found) {
+                  loadEncounterIntoWorkflow(found);
+                }
+              }}
+              className="font-semibold text-gray-900 bg-transparent border-none focus:outline-none cursor-pointer text-[12.5px]"
+            >
+              {dbEncounters.map(enc => (
+                <option key={enc.id} value={enc.id}>
+                  {enc.patientName} ({enc.umr} · {enc.opNumber})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -520,298 +770,89 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
         </div>
       </div>
 
-      {/* Main Step Workspace */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full space-y-6">
-
-        {/* ── STEP 1: PATIENT IDENTIFICATION & UMR GENERATION ──────────── */}
-        {currentStep === 1 && (
-          <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">1</span>
-                  Patient Identification &amp; UMR Check (FR-001 – FR-006)
-                </h2>
-                <p className="text-[12px] text-[#64748B] mt-0.5">
-                  Search hospital database by Patient Name, Phone, or UMR. If found, retrieve existing UMR and generate new OP number. If new, register and generate a new UMR.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => loadPreset("new")}
-                  className="px-2.5 py-1 bg-[#EFF6FF] border border-[#BFDBFE] text-[#1D4ED8] text-[11px] font-bold rounded hover:bg-[#DBEAFE] transition-colors"
-                >
-                  ⚡ Load Demo New Patient
-                </button>
-                <button
-                  onClick={() => loadPreset("revisit")}
-                  className="px-2.5 py-1 bg-[#FEF3C7] border border-[#FDE68A] text-[#92400E] text-[11px] font-bold rounded hover:bg-[#FDE68A] transition-colors"
-                >
-                  ⚡ Load Demo Revisit Patient
-                </button>
-              </div>
-            </div>
-
-            {/* Search Input & Action */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Input
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  placeholder="Search existing patients by Name, UMR (e.g. UMR10001), or Phone..."
-                  icon={<Icon.Search />}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setNewPatientForm({ ...newPatientForm, name: searchQuery });
-                  setShowNewPatientModal(true);
-                }}
-                className="px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
-              >
-                <Icon.Plus /> Register New Patient
-              </button>
-            </div>
-
-            {/* Existing Records Suggestions */}
-            <div>
-              <div className="text-[11.5px] font-semibold text-[#64748B] uppercase tracking-wider mb-2">
-                Existing Patient Database (Click to Select for Revisit)
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {dbPatients.filter(p =>
-                  searchQuery === "" ||
-                  p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  p.umr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  p.phone.includes(searchQuery)
-                ).map((p) => {
-                  const pEncounters = db.getEncountersForPatient(p.umr);
-                  return (
-                    <div
-                      key={p.umr}
-                      onClick={() => handleSelectExistingPatient(p)}
-                      className={`p-3.5 border rounded-lg cursor-pointer transition-all ${
-                        patient.umr === p.umr
-                          ? "border-[#1B4FD8] bg-[#EFF6FF] ring-2 ring-blue-500/20"
-                          : "border-[#DDE2EC] bg-white hover:border-[#94A3B8] hover:bg-[#F8FAFC]"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-[13px] text-gray-900">{p.name}</span>
-                        <span className="font-mono font-bold text-[11px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
-                          {p.umr}
-                        </span>
-                      </div>
-                      <div className="text-[11.5px] text-[#64748B]">{p.age} yrs · {p.sex} · {p.phone}</div>
-                      <div className="text-[11px] text-[#16A34A] font-medium mt-1">
-                        {pEncounters.length} Previous OP Visits In Database
-                      </div>
+      {/* ── FLOATING LIVE DUAL-CHANNEL NOTIFICATION TOASTS ── */}
+      {activeNotifications.length > 0 && (
+        <div className="fixed top-20 right-6 z-50 flex flex-col gap-3 max-w-md w-full pointer-events-none animate-in fade-in">
+          {activeNotifications.map((notif) => (
+            <div
+              key={notif.id}
+              className={`p-4 rounded-2xl shadow-2xl border-2 pointer-events-auto transition-all duration-300 ${
+                notif.type === "doctor"
+                  ? "bg-[#0F172A] border-[#3B82F6] text-white ring-4 ring-blue-500/20"
+                  : "bg-[#064E3B] border-[#10B981] text-white ring-4 ring-emerald-500/20"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold shadow-xs ${
+                    notif.type === "doctor" ? "bg-[#2563EB] text-white" : "bg-[#059669] text-white"
+                  }`}>
+                    {notif.type === "doctor" ? "👨‍⚕️" : "📱"}
+                  </div>
+                  <div>
+                    <div className="font-bold text-[13px] flex items-center gap-2">
+                      <span>{notif.title}</span>
+                      <span className={`text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded uppercase ${
+                        notif.type === "doctor" ? "bg-blue-800 text-blue-200" : "bg-emerald-800 text-emerald-200"
+                      }`}>
+                        {notif.type === "doctor" ? "DOCTOR TERMINAL" : "PATIENT SMS"}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Identification Confirmation Banner */}
-            {patient.umr && (
-              <div className="p-4 bg-[#F0FDF4] border border-[#BBF7D0] rounded-xl flex items-center justify-between shadow-xs">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">✓</span>
-                    <span className="font-bold text-[13.5px] text-[#166534]">
-                      {patient.isNew ? "New Patient Identity Created" : "Existing Patient Identified (Revisit Mode)"}
-                    </span>
-                  </div>
-                  <div className="text-[12px] text-[#15803D] flex items-center gap-3">
-                    <span>
-                      <strong>1. Permanent UMR:</strong>{" "}
-                      <span className="font-mono font-bold text-[#166534]">{patient.umr}</span>{" "}
-                      {patient.isNew ? "(Newly Generated)" : "(Retained Old Record)"}
-                    </span>
-                    <span>➔</span>
-                    <span>
-                      <strong>2. Visit OP Number:</strong>{" "}
-                      <span className="font-mono font-bold text-[#D97706]">{patient.opNumber}</span>{" "}
-                      {patient.isNew ? "(1st Visit OP-001)" : "(New Encounter Assigned)"}
-                    </span>
-                    <span>· Patient: <strong>{patient.name}</strong> ({patient.age} yrs, {patient.sex})</span>
+                    <div className="text-[11px] text-slate-300 mt-0.5 font-medium">
+                      Recipient: <strong className="text-white">{notif.recipient}</strong>
+                    </div>
+                    <div className="text-[12px] text-slate-100 mt-2 bg-white/10 p-2.5 rounded-lg leading-relaxed border border-white/10">
+                      {notif.message}
+                    </div>
+                    <div className="text-[10.5px] text-slate-400 mt-2 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Dispatched at {notif.timestamp}
+                      </span>
+                      {notif.token && <span className="font-mono text-white font-bold">{notif.token}</span>}
+                    </div>
                   </div>
                 </div>
                 <button
-                  onClick={() => setCurrentStep(2)}
-                  className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-                >
-                  Generate OP Book &amp; Continue →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── NEW PATIENT REGISTRATION MODAL ─────────────────────────── */}
-        {showNewPatientModal && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#DDE2EC] animate-in fade-in">
-              <div className="px-6 py-4 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
-                <div>
-                  <h3 className="text-base font-bold text-gray-900">Register New OP Patient</h3>
-                  <p className="text-[11.5px] text-[#64748B]">Creates a new permanent UMR and initial OP visit encounter.</p>
-                </div>
-                <button
-                  onClick={() => setShowNewPatientModal(false)}
-                  className="text-gray-400 hover:text-gray-700 text-lg font-bold"
+                  type="button"
+                  onClick={() => setActiveNotifications(prev => prev.filter(n => n.id !== notif.id))}
+                  className="text-slate-400 hover:text-white p-1 rounded-md transition-colors cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
-
-              <form onSubmit={handleRegisterNewPatientSubmit} className="p-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">First Name *</label>
-                    <Input
-                      value={newPatientForm.firstName}
-                      onChange={v => setNewPatientForm({ ...newPatientForm, firstName: v })}
-                      placeholder="e.g. John"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Middle Name</label>
-                    <Input
-                      value={newPatientForm.middleName}
-                      onChange={v => setNewPatientForm({ ...newPatientForm, middleName: v })}
-                      placeholder="e.g. Robert (Optional)"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Last Name *</label>
-                    <Input
-                      value={newPatientForm.lastName}
-                      onChange={v => setNewPatientForm({ ...newPatientForm, lastName: v })}
-                      placeholder="e.g. Smith"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Date of Birth (DOB) *</label>
-                    <input
-                      type="date"
-                      value={newPatientForm.dob}
-                      onChange={e => handleDobChange(e.target.value)}
-                      max={new Date().toISOString().split("T")[0]}
-                      className="w-full border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] bg-white focus:outline-none focus:border-[#1B4FD8]"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Age (Years)</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={newPatientForm.age}
-                        readOnly
-                        disabled
-                        className="w-full border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] bg-[#F1F5F9] text-gray-800 font-bold font-mono cursor-not-allowed"
-                      />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">yrs</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Gender *</label>
-                    <select
-                      value={newPatientForm.sex}
-                      onChange={e => setNewPatientForm({ ...newPatientForm, sex: e.target.value as "Male" | "Female" | "Other" })}
-                      className="w-full border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] bg-white focus:outline-none focus:border-[#1B4FD8] text-gray-900 font-medium"
-                      required
-                    >
-                      <option value="" disabled>Select</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Phone Number *</label>
-                    <Input
-                      value={newPatientForm.phone}
-                      onChange={v => setNewPatientForm({ ...newPatientForm, phone: v })}
-                      placeholder="e.g. (617) 555-0192"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Duplicate / New Patient Status in Modal */}
-                {(() => {
-                  const modalFullName = [newPatientForm.firstName, newPatientForm.middleName, newPatientForm.lastName].filter(Boolean).join(" ").trim().toLowerCase();
-                  const modalExistingPatient = modalFullName.length >= 3 
-                    ? db.getPatients().find(p => p.name.toLowerCase() === modalFullName || (newPatientForm.phone.trim().length >= 7 && p.phone === newPatientForm.phone.trim()))
-                    : undefined;
-
-                  if (modalExistingPatient) {
-                    return (
-                      <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-[12px] space-y-1 animate-in fade-in">
-                        <div className="flex items-center gap-1.5 font-bold text-amber-950">
-                          <span>⚠️</span> Patient Already Exists! (Permanent UMR: {modalExistingPatient.umr})
-                        </div>
-                        <div>Found active record for <strong>{modalExistingPatient.name}</strong> ({modalExistingPatient.age} yrs · Phone: {modalExistingPatient.phone}).</div>
-                        <div className="text-[11px] text-amber-800 font-medium">Submitting will automatically create a Revisit Encounter with the next continuous OP number.</div>
-                      </div>
-                    );
-                  } else if (newPatientForm.firstName.trim().length >= 2 && newPatientForm.lastName.trim().length >= 2) {
-                    return (
-                      <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-lg text-emerald-900 text-[11.5px] flex items-center justify-between animate-in fade-in">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-emerald-600 font-bold">✓</span>
-                          <span><strong>New Patient:</strong> Will be registered with a new permanent UMR and initial OP number.</span>
-                        </div>
-                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">New</span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                <div className="pt-3 border-t border-[#E2E8F0] flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPatientModal(false)}
-                    className="px-4 py-2 text-[12.5px] text-gray-600 hover:bg-gray-100 rounded-lg"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white font-semibold text-[12.5px] rounded-lg shadow-sm"
-                  >
-                    Register OP &amp; Generate UMR
-                  </button>
-                </div>
-              </form>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+      )}
 
-        {/* ── STEP 2: DIGITAL OP BOOK & RECORD ─────────────────────────── */}
-        {currentStep === 2 && (
+      {/* Main Step Workspace */}
+      <div className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full space-y-6">
+
+        {/* ── STEP 1: DIGITAL OP BOOK & PASS ─────────────────────────── */}
+        {currentStep === 1 && (
           <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
-            <div>
-              <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">2</span>
-                OP Book / OP Record Generation (FR-007)
-              </h2>
-              <p className="text-[12px] text-[#64748B] mt-0.5">
-                The OP Book is given to the patient and links their permanent UMR with this specific outpatient visit.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">1</span>
+                  Digital Outpatient (OP) Book &amp; Pass
+                </h2>
+                <p className="text-[12px] text-[#64748B] mt-0.5">
+                  Official hospital pass linking permanent lifetime UMR <strong>{patient.umr}</strong> with visit encounter <strong>{patient.opNumber}</strong>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[12.5px] font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+              >
+                <Icon.Download /> Print OP Pass
+              </button>
             </div>
 
             {/* OP Book Digital Card (White Color with Shadows and Crisp Border) */}
-            <div className="max-w-xl mx-auto bg-white border-2 border-[#CBD5E1] text-gray-900 rounded-2xl p-6 shadow-xl relative overflow-hidden ring-1 ring-black/5">
+            <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#CBD5E1] text-gray-900 rounded-2xl p-6 shadow-xl relative overflow-hidden ring-1 ring-black/5">
               {/* Top Accent Strip */}
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
 
@@ -868,30 +909,27 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </div>
             </div>
 
-            <div className="flex justify-between items-center pt-2">
-              <button onClick={() => setCurrentStep(1)} className="text-[12px] text-[#64748B] hover:text-gray-900 font-medium">
-                ← Back to Identification
-              </button>
+            <div className="flex justify-end items-center pt-2">
               <button
-                onClick={() => setCurrentStep(3)}
-                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                onClick={() => setCurrentStep(2)}
+                className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
-                Proceed to Symptom Capture &amp; AI Analysis →
+                Proceed to Clinical Triage &amp; AI Analysis →
               </button>
             </div>
           </div>
         )}
 
-        {/* ── STEP 3: SYMPTOM CAPTURE & AI SPECIALTY MATCH ─────────────── */}
-        {currentStep === 3 && (
+        {/* ── STEP 2: SYMPTOM CAPTURE & AI SPECIALTY MATCH ─────────────── */}
+        {currentStep === 2 && (
           <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
             <div>
               <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">3</span>
-                Patient Symptoms &amp; AI Doctor Recommendation (FR-008, FR-009, FR-010)
+                <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">2</span>
+                Clinical Triage &amp; AI Specialty Recommendation
               </h2>
               <p className="text-[12px] text-[#64748B] mt-0.5">
-                Capture the patient's complaints. The AI component assists authorized staff in recommending the right medical specialty based on symptom patterns.
+                Capture the patient's complaints. The Clinical AI Engine assists staff in analyzing symptom patterns and recommending the right medical department.
               </p>
             </div>
 
@@ -925,7 +963,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                       key={sym}
                       type="button"
                       onClick={() => toggleSymptom(sym)}
-                      className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${
+                      className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors cursor-pointer ${
                         active
                           ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-xs"
                           : "bg-white text-gray-700 border-[#DDE2EC] hover:bg-[#F8FAFC]"
@@ -938,12 +976,40 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </div>
             </div>
 
+            {/* Autonomous AI Patient Profile Bar */}
+            <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-blue-100 text-[#1B4FD8] flex items-center justify-center font-bold text-[14px]">
+                  {patient.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="text-[12.5px] font-bold text-gray-900 flex items-center gap-2">
+                    <span>{patient.name}</span>
+                    <span className="text-[#64748B] font-medium text-[11.5px]">({patient.age} yrs)</span>
+                    <span className={`font-mono text-[11px] px-2 py-0.5 rounded border font-bold ${
+                      isFemaleGender(patient.sex) ? "bg-pink-50 text-pink-700 border-pink-200" : "bg-blue-50 text-[#1B4FD8] border-blue-200"
+                    }`}>
+                      {patient.sex}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#64748B] mt-0.5 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse"></span>
+                    <span>AI Autonomous Triage Protocol: Analyzes chief complaint narrative and auto-assigns matching attending doctor.</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg self-start sm:self-auto">
+                <span className="text-[12px]">✨</span>
+                <span className="text-[11.5px] font-semibold text-[#1B4FD8]">AI Autonomous Triage</span>
+              </div>
+            </div>
+
             {/* Run AI Analysis Button */}
             <div className="flex justify-center pt-2">
               <button
                 onClick={runAiSymptomAnalysis}
                 disabled={aiAnalyzing || (patient.symptoms.length === 0 && !patient.chiefComplaint)}
-                className="px-7 py-3 bg-gradient-to-r from-[#1E3A8A] to-[#1B4FD8] hover:from-[#1E40AF] hover:to-[#2563EB] text-white text-[13px] font-semibold rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                className="px-7 py-3 bg-gradient-to-r from-[#1E3A8A] to-[#1B4FD8] hover:from-[#1E40AF] hover:to-[#2563EB] text-white text-[13px] font-semibold rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {aiAnalyzing ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -954,319 +1020,295 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
               </button>
             </div>
 
-            {/* AI Recommendation Result Box */}
+            {/* AI Recommendation & Booked Appointment Result Box */}
             {patient.status !== "Registered" && patient.aiDoctor && (
-              <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in">
-                <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider bg-[#1D4ED8] text-white px-2.5 py-1 rounded-md">
-                      ✨ Clinical AI Recommendation
-                    </span>
-                    <span className="text-[12px] font-semibold text-[#1E3A8A] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                      Confidence: {patient.aiConfidence}%
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setCurrentStep(4)}
-                    className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-                  >
-                    Check Availability &amp; Queue →
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Department & Specialty Rationale */}
-                  <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] space-y-1.5">
-                    <div className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
-                      <span>🏥</span> Recommended Department
-                    </div>
-                    <div className="text-[16px] font-bold text-[#1B4FD8]">
-                      {patient.aiSpecialty}
-                    </div>
-                    <div className="text-[12px] text-gray-700 leading-relaxed pt-1">
-                      {patient.aiReasoning || "Symptom presentation correlates with internal clinical pathways requiring diagnostic workup."}
-                    </div>
-                  </div>
-
-                  {/* Doctor Match & Availability Rationale */}
-                  <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] space-y-1.5">
-                    <div className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
-                      <span>👨‍⚕️</span> Matched Physician &amp; Rationale
-                    </div>
-                    <div className="text-[16px] font-bold text-gray-900">
-                      {patient.aiDoctor}
-                    </div>
-                    <div className="text-[12px] text-gray-700 leading-relaxed pt-1">
-                      {patient.aiDoctorRationale || `Attending specialist on active duty with optimal room availability and shortest queue wait time.`}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── STEP 4: DOCTOR AVAILABILITY & QUEUE PLACEMENT ───────────── */}
-        {currentStep === 4 && (
-          <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
-            <div>
-              <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">4</span>
-                Doctor Availability &amp; Real-time Queue (FR-011, FR-012, FR-013, FR-014)
-              </h2>
-              <p className="text-[12px] text-[#64748B] mt-0.5">
-                Check live doctor roster. Filtered to <strong>{patient.sex === "Female" ? "Female" : "Male"}</strong> doctors matching the patient's gender.
-              </p>
-            </div>
-
-            {/* Doctor Roster Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              {INITIAL_DOCTORS.filter(d =>
-                (d.specialty === patient.aiSpecialty || patient.aiSpecialty === "General Medicine") &&
-                (d.gender === (patient.sex === "Female" ? "Female" : "Male"))
-              ).map((doc) => {
-                const isSelected = patient.assignedDoctor === doc.name;
-                return (
-                  <div
-                    key={doc.id}
-                    onClick={() => assignDoctorAndQueue(doc)}
-                    className={`p-4 border rounded-xl cursor-pointer transition-all ${
-                      isSelected
-                        ? "border-[#1B4FD8] bg-[#EFF6FF] ring-2 ring-blue-500/20"
-                        : "border-[#DDE2EC] bg-white hover:border-[#94A3B8]"
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <div className="font-bold text-[13.5px] text-gray-900">{doc.name}</div>
-                        <div className="text-[11.5px] text-[#64748B]">{doc.specialty} · {doc.room}</div>
+              <div className="space-y-4 animate-in fade-in">
+                {/* 1. Appointment Booked & Queue Success Banner */}
+                <div className="bg-[#F0FDF4] border-2 border-[#86EFAC] rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-green-200/80 pb-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#16A34A] text-white flex items-center justify-center text-lg font-bold shadow-xs">
+                        ✓
                       </div>
-                      <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded uppercase ${
-                        doc.status === "Available"
-                          ? "bg-[#DCFCE7] text-[#15803D]"
-                          : "bg-[#FEF3C7] text-[#B45309]"
-                      }`}>
-                        {doc.status}
+                      <div>
+                        <div className="font-bold text-[15px] text-[#166534] flex items-center gap-2">
+                          <span>Doctor Appointment Successfully Booked!</span>
+                          <span className="text-[10.5px] font-mono font-bold bg-[#16A34A] text-white px-2 py-0.5 rounded">
+                            CONFIRMED &amp; QUEUED
+                          </span>
+                        </div>
+                        <div className="text-[12.5px] text-[#15803D] mt-0.5">
+                          Appointment confirmed with <strong>{patient.assignedDoctor}</strong> ({patient.room}) in <strong>{patient.aiSpecialty}</strong>.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Direct Action: Proceed to Nurse Vitals Station */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => setCurrentStep(3)}
+                        className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                      >
+                        <span>👩‍⚕️</span> Proceed to Step 3: Nurse Triage &amp; Vitals Station →
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Live Queue Ticket Card with Dynamic Queue Estimation */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3.5 rounded-xl border border-green-200 text-[12px]">
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Queue Token</span>
+                      <span className="font-mono font-bold text-[16px] text-[#1B4FD8]">{patient.queueToken}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Live Queue Position</span>
+                      <span className="font-bold text-[15px] text-[#D97706]">Position #{patient.queuePosition}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Assigned Room</span>
+                      <span className="font-bold text-[14px] text-gray-900">{patient.room}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Estimated Queue Time</span>
+                      <span className="font-semibold text-[#16A34A] flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        ~5-10 mins (Calculated from Queue)
                       </span>
                     </div>
-                    <div className="text-[11.5px] text-[#475569] flex justify-between pt-2 border-t border-[#F1F5F9]">
-                      <span>Workload: <strong>{doc.workload} active patients</strong></span>
-                      <span>Gender: {doc.gender}</span>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
 
-            {/* Queue Assignment Summary */}
-            {patient.assignedDoctor && (
-              <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl flex items-center justify-between">
-                <div>
-                  <div className="text-[12px] font-bold text-gray-900">
-                    Assignment: {patient.assignedDoctor} ({patient.room})
-                  </div>
-                  <div className="text-[11.5px] text-[#64748B] mt-0.5">
-                    Token: <strong className="font-mono text-[#1B4FD8]">{patient.queueToken}</strong> · Queue Position: <strong className="text-[#D97706]">#{patient.queuePosition}</strong> · Doctor Notified: <span className="text-[#16A34A]">✓ Sent</span>
+                  <div className="bg-[#F8FAFC] border border-green-200/80 px-3.5 py-2 rounded-xl text-[11.5px] text-[#166534] flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span>📱</span>
+                      <span><strong>Automated Patient Alert:</strong> A "Get ready — You are UP NEXT" SMS will be sent to <strong>{patient.phone || "registered mobile"}</strong> 2-3 minutes before your turn.</span>
+                    </span>
+                    <span className="text-[10px] font-mono font-bold bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                      AUTO-DISPATCH READY
+                    </span>
                   </div>
                 </div>
-                <button
-                  onClick={() => setCurrentStep(5)}
-                  className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-                >
-                  Enter Doctor Consultation Workspace →
-                </button>
+
+                {/* 2. Clinical AI Triage & Specialty Recommendation Cards */}
+                <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded-2xl p-5 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider bg-[#1D4ED8] text-white px-2.5 py-1 rounded-md">
+                        ✨ Clinical AI Triage &amp; Load Analysis
+                      </span>
+                      <span className="text-[12px] font-semibold text-[#1E3A8A] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                        Confidence: {patient.aiConfidence}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Department & Specialty Rationale */}
+                    <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] space-y-1.5">
+                      <div className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
+                        <span>🏥</span> Recommended Department
+                      </div>
+                      <div className="text-[16px] font-bold text-[#1B4FD8]">
+                        {patient.aiSpecialty}
+                      </div>
+                      <div className="text-[12px] text-gray-700 leading-relaxed pt-1">
+                        {patient.aiReasoning || "Symptom presentation correlates with internal clinical pathways requiring diagnostic workup."}
+                      </div>
+                    </div>
+
+                    {/* Doctor Match & Availability Rationale */}
+                    <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] space-y-1.5">
+                      <div className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
+                        <span>👨‍⚕️</span> Matched Physician &amp; Queue Rationale
+                      </div>
+                      <div className="text-[16px] font-bold text-gray-900">
+                        {patient.aiDoctor}
+                      </div>
+                      <div className="text-[12px] text-gray-700 leading-relaxed pt-1">
+                        {patient.aiDoctorRationale || `Attending specialist assigned with shortest queue wait time.`}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {/* ── STEP 5: DOCTOR CONSULTATION ─────────────────────────────── */}
-        {currentStep === 5 && (
-          <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
-            <div className="flex justify-between items-start">
+        {/* ── STEP 3: PRE-CONSULTATION NURSE TRIAGE & VITALS STATION ── */}
+        {currentStep === 3 && (
+          <div className="bg-white border border-[#DDE2EC] rounded-2xl p-6 shadow-xs space-y-6 max-w-5xl mx-auto">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
               <div>
-                <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">5</span>
-                  Doctor Consultation &amp; Clinical Orders (FR-015 – FR-019)
+                <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">3</span>
+                  Pre-Consultation Nursing Triage &amp; Vital Signs Station
                 </h2>
-                <p className="text-[12px] text-[#64748B] mt-0.5">
-                  Doctor reviews patient history, records clinical assessment, prescribes medications, and orders investigations.
+                <p className="text-[12.5px] text-[#64748B] mt-0.5">
+                  Staff Nurse Jessica Carter records baseline physiological vitals and triage observations before patient enters doctor consultation.
                 </p>
               </div>
-              <span className="font-mono text-[11px] bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold">
-                Consulting: {patient.assignedDoctor}
+              <span className="text-[11px] font-mono font-bold bg-blue-50 text-[#1B4FD8] border border-blue-200 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                👩‍⚕️ Nurse Station · 3N Triage
               </span>
             </div>
 
-            {/* Diagnosis and ICD-10 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Clinical Diagnosis</label>
-                <Input
-                  value={patient.diagnosis || "Acute Coronary Syndrome Rule-Out / Stable Angina"}
-                  onChange={v => setPatient({ ...patient, diagnosis: v })}
-                  placeholder="Enter diagnosis..."
-                />
+            {/* Quick 1-Click Vitals Presets */}
+            <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider flex items-center gap-1.5">
+                  <span>⚡</span> 1-Click Clinical Vitals Presets (Triage Quick-Fill):
+                </span>
+                <span className="text-[11px] text-[#64748B] italic">Click to populate baseline vitals</span>
               </div>
-              <div>
-                <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">ICD-10 Code</label>
-                <Input
-                  value={patient.icd10 || "I20.9 (Angina Pectoris)"}
-                  onChange={v => setPatient({ ...patient, icd10: v })}
-                  placeholder="e.g. I20.9"
-                />
-              </div>
-            </div>
-
-            {/* Prescriptions */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-[11.5px] font-semibold text-gray-700">Prescribed Medications</label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <button
                   type="button"
-                  onClick={() => setPatient({
-                    ...patient,
-                    prescription: [
-                      ...patient.prescription,
-                      { medicine: "Aspirin 81mg", dosage: "1 tab", frequency: "OD (Once Daily)", duration: "30 days" }
-                    ]
-                  })}
-                  className="text-[11.5px] font-medium text-[#1B4FD8] hover:underline"
+                  onClick={() => {
+                    setPatient(prev => ({
+                      ...prev,
+                      vitals: {
+                        bp: "120/80 mmHg",
+                        pulse: "76 bpm",
+                        temp: "98.6 °F",
+                        spo2: "99%",
+                        weight: "74 kg",
+                        notes: "Alert and oriented. Vitals within normal baseline limits."
+                      }
+                    }));
+                  }}
+                  className="p-2.5 bg-white border border-[#CBD5E1] hover:border-[#16A34A] rounded-xl text-left text-[11.5px] transition-all hover:bg-green-50/40 cursor-pointer shadow-2xs group"
                 >
-                  + Add Medication
+                  <div className="font-bold text-[#166534] flex items-center gap-1">
+                    <span>🟢</span> Normal Baseline
+                  </div>
+                  <div className="text-[10.5px] text-[#64748B] mt-0.5">BP 120/80 · Pulse 76 · Temp 98.6°F · SpO2 99%</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPatient(prev => ({
+                      ...prev,
+                      vitals: {
+                        bp: "152/94 mmHg",
+                        pulse: "84 bpm",
+                        temp: "98.4 °F",
+                        spo2: "98%",
+                        weight: "78 kg",
+                        notes: "Stage 2 Elevated BP. Patient denies acute chest pressure. Alert."
+                      }
+                    }));
+                  }}
+                  className="p-2.5 bg-white border border-[#CBD5E1] hover:border-[#D97706] rounded-xl text-left text-[11.5px] transition-all hover:bg-amber-50/40 cursor-pointer shadow-2xs group"
+                >
+                  <div className="font-bold text-[#B45309] flex items-center gap-1">
+                    <span>🟡</span> Elevated BP / HTN
+                  </div>
+                  <div className="text-[10.5px] text-[#64748B] mt-0.5">BP 152/94 · Pulse 84 · Temp 98.4°F · SpO2 98%</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPatient(prev => ({
+                      ...prev,
+                      vitals: {
+                        bp: "118/76 mmHg",
+                        pulse: "98 bpm",
+                        temp: "101.8 °F",
+                        spo2: "97%",
+                        weight: "68 kg",
+                        notes: "Febrile and flushed. Elevated body temperature and tachycardia on triage."
+                      }
+                    }));
+                  }}
+                  className="p-2.5 bg-white border border-[#CBD5E1] hover:border-[#DC2626] rounded-xl text-left text-[11.5px] transition-all hover:bg-red-50/40 cursor-pointer shadow-2xs group"
+                >
+                  <div className="font-bold text-[#B91C1C] flex items-center gap-1">
+                    <span>🔴</span> Febrile / High Fever
+                  </div>
+                  <div className="text-[10.5px] text-[#64748B] mt-0.5">BP 118/76 · Pulse 98 · Temp 101.8°F · SpO2 97%</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPatient(prev => ({
+                      ...prev,
+                      vitals: {
+                        bp: "134/86 mmHg",
+                        pulse: "92 bpm",
+                        temp: "99.1 °F",
+                        spo2: "94%",
+                        weight: "75 kg",
+                        notes: "Mild dyspnea on exertion. SpO2 94% on ambient air. No stridor."
+                      }
+                    }));
+                  }}
+                  className="p-2.5 bg-white border border-[#CBD5E1] hover:border-[#2563EB] rounded-xl text-left text-[11.5px] transition-all hover:bg-blue-50/40 cursor-pointer shadow-2xs group"
+                >
+                  <div className="font-bold text-[#1D4ED8] flex items-center gap-1">
+                    <span>🔵</span> Respiratory / Dyspnea
+                  </div>
+                  <div className="text-[10.5px] text-[#64748B] mt-0.5">BP 134/86 · Pulse 92 · Temp 99.1°F · SpO2 94%</div>
                 </button>
               </div>
-              <div className="space-y-2">
-                {patient.prescription.map((rx, idx) => (
-                  <div key={idx} className="grid grid-cols-4 gap-2 bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0] text-[12px]">
-                    <span className="font-semibold text-gray-900">{rx.medicine}</span>
-                    <span className="text-gray-600">{rx.dosage}</span>
-                    <span className="text-gray-600">{rx.frequency}</span>
-                    <span className="text-gray-600">{rx.duration}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Clinical Advice */}
-            <div>
-              <label className="text-[11.5px] font-semibold text-gray-700 block mb-1">Doctor Advice &amp; Instructions</label>
-              <textarea
-                value={patient.advice}
-                onChange={e => setPatient({ ...patient, advice: e.target.value })}
-                className="w-full h-16 border border-[#DDE2EC] rounded-lg p-2.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
-              />
-            </div>
-
-            <div className="flex justify-between items-center pt-2">
-              <button onClick={() => setCurrentStep(4)} className="text-[12px] text-[#64748B] hover:text-gray-900 font-medium">
-                ← Back to Queue
-              </button>
-              <button
-                onClick={() => {
-                  const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                  const nextState = {
-                    ...patient,
-                    status: "Consultation Completed" as const,
-                    timestamps: { ...patient.timestamps, consultationEnd: nowTime }
-                  };
-                  setPatient(nextState);
-
-                  if (patient.id) {
-                    try {
-                      db.updateEncounter(patient.id, {
-                        diagnosis: patient.diagnosis,
-                        icd10: patient.icd10,
-                        prescription: patient.prescription,
-                        advice: patient.advice,
-                        status: "Consultation Completed",
-                        timestamps: { ...patient.timestamps, consultationEnd: nowTime }
-                      });
-                    } catch (e) {
-                      console.warn("DB update failed:", e);
-                    }
-                  }
-
-                  setCurrentStep(6);
-                }}
-                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-              >
-                Complete Consultation ➔ Send to Post-Consult Vitals →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── STEP 6: POST-CONSULTATION NURSE VITALS ─────────────────── */}
-        {currentStep === 6 && (
-          <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
-            <div>
-              <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">6</span>
-                Post-Consultation Processing &amp; Staff Vitals Check (FR-020)
-              </h2>
-              <p className="text-[12px] text-[#64748B] mt-0.5">
-                Staff / Nurse records baseline physiological parameters and observations linked directly to this OP encounter.
-              </p>
             </div>
 
             {/* Vitals Form Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
               <div>
-                <label className="text-[11px] font-semibold text-gray-700 block mb-1">Blood Pressure</label>
-                <Input value={patient.vitals.bp} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, bp: v } })} />
+                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Blood Pressure (BP)</label>
+                <Input value={patient.vitals.bp} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, bp: v } })} placeholder="120/80 mmHg" />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-gray-700 block mb-1">Heart Rate / Pulse</label>
-                <Input value={patient.vitals.pulse} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, pulse: v } })} />
+                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Heart Rate / Pulse</label>
+                <Input value={patient.vitals.pulse} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, pulse: v } })} placeholder="76 bpm" />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-gray-700 block mb-1">Temperature</label>
-                <Input value={patient.vitals.temp} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, temp: v } })} />
+                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Temperature</label>
+                <Input value={patient.vitals.temp} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, temp: v } })} placeholder="98.6 °F" />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-gray-700 block mb-1">Oxygen SpO2</label>
-                <Input value={patient.vitals.spo2} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, spo2: v } })} />
+                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Oxygen SpO2</label>
+                <Input value={patient.vitals.spo2} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, spo2: v } })} placeholder="99%" />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-gray-700 block mb-1">Weight</label>
-                <Input value={patient.vitals.weight} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, weight: v } })} />
+                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Body Weight</label>
+                <Input value={patient.vitals.weight} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, weight: v } })} placeholder="74 kg" />
               </div>
             </div>
 
-            {/* Further Action Selection */}
+            {/* Nurse Clinical Assessment Notes */}
             <div>
-              <label className="text-[11.5px] font-semibold text-gray-700 block mb-1.5">
-                Further Action / Department Routing (FR-022)
+              <label className="text-[12px] font-bold text-gray-800 block mb-1">
+                Nurse Triage Clinical Observation &amp; Baseline Notes
               </label>
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                {(["None", "Laboratory", "Pharmacy", "Radiology", "Admission", "Referral"] as const).map((act) => (
-                  <button
-                    key={act}
-                    type="button"
-                    onClick={() => setPatient({ ...patient, furtherAction: act })}
-                    className={`py-2 px-3 rounded-lg text-[12px] font-semibold border transition-all ${
-                      patient.furtherAction === act
-                        ? "bg-[#1B4FD8] text-white border-[#1B4FD8]"
-                        : "bg-white text-gray-700 border-[#DDE2EC] hover:bg-[#F8FAFC]"
-                    }`}
-                  >
-                    {act}
-                  </button>
-                ))}
-              </div>
+              <textarea
+                rows={2}
+                value={patient.vitals.notes}
+                onChange={e => setPatient({ ...patient, vitals: { ...patient.vitals, notes: e.target.value } })}
+                placeholder="Enter nursing triage assessment (e.g. Patient conscious, alert, baseline vitals within normal parameters, cleared for physician consultation)..."
+                className="w-full border border-[#CBD5E1] rounded-xl p-3 text-[12.5px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
+              />
             </div>
 
-            <div className="flex justify-between items-center pt-2">
-              <button onClick={() => setCurrentStep(5)} className="text-[12px] text-[#64748B] hover:text-gray-900 font-medium">
-                ← Back to Consultation
+            {/* Navigation and Save Actions */}
+            <div className="flex justify-between items-center pt-3 border-t border-[#E2E8F0]">
+              <button
+                onClick={() => setCurrentStep(2)}
+                className="text-[12.5px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
+              >
+                ← Back to Symptoms &amp; AI Triage
               </button>
+
               <button
                 onClick={() => {
                   const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                   const nextState = {
                     ...patient,
-                    status: "Awaiting Billing" as const,
+                    status: "In Queue" as const,
                     timestamps: { ...patient.timestamps, vitalsRecorded: nowTime }
                   };
                   setPatient(nextState);
@@ -1276,7 +1318,7 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                       db.updateEncounter(patient.id, {
                         vitals: patient.vitals,
                         furtherAction: patient.furtherAction,
-                        status: "Awaiting Billing",
+                        status: "In Queue",
                         timestamps: { ...patient.timestamps, vitalsRecorded: nowTime }
                       });
                     } catch (e) {
@@ -1284,134 +1326,968 @@ export default function OPWorkflow({ onComplete }: { onComplete?: () => void }) 
                     }
                   }
 
-                  setCurrentStep(7);
+                  setCurrentStep(4);
                 }}
-                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                className="px-6 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white text-[13px] font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
               >
-                Proceed to Billing &amp; Encounter Completion →
+                <span>✓</span> Save &amp; Submit Vitals to Doctor Queue (Step 4) →
               </button>
             </div>
           </div>
         )}
 
-        {/* ── STEP 7: BILLING & OP VISIT COMPLETION ───────────────────── */}
-        {currentStep === 7 && (
-          <div className="bg-white border border-[#DDE2EC] rounded-xl p-6 shadow-xs space-y-6">
-            <div>
-              <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">7</span>
-                OP Billing, Payment &amp; Visit Completion (FR-021, FR-023, FR-024)
-              </h2>
-              <p className="text-[12px] text-[#64748B] mt-0.5">
-                Record charges for OP consultation, collect payment, and finalize the outpatient encounter.
-              </p>
+        {/* ── STEP 4: DOCTOR & LIVE QUEUE ALLOCATION ─────────────────── */}
+        {currentStep === 4 && (
+          <div className="bg-white border border-[#DDE2EC] rounded-2xl p-6 shadow-sm space-y-6 max-w-4xl mx-auto">
+            
+            {/* 1. Header & Assigned Doctor Card */}
+            <div className="bg-[#F8FAFC] border-2 border-[#CBD5E1] rounded-2xl p-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#1E3A8A] to-[#1B4FD8] text-white flex items-center justify-center text-xl font-bold shadow-sm">
+                    👨‍⚕️
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Assigned Doctor</div>
+                    <div className="text-[18px] font-bold text-gray-900">{patient.assignedDoctor}</div>
+                    <div className="text-[12.5px] text-[#475569] font-medium mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-[#1B4FD8]">{patient.aiSpecialty}</span>
+                      <span>•</span>
+                      <span>{patient.room}</span>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-1 text-[#16A34A] font-semibold text-[11.5px]">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        Available &amp; In Clinic
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Automatic / Background Alternate Doctor Switch if required */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={patient.assignedDoctor}
+                    onChange={(e) => {
+                      const selectedDoc = INITIAL_DOCTORS.find(d => d.name === e.target.value);
+                      if (selectedDoc) {
+                        setPatient(prev => ({
+                          ...prev,
+                          assignedDoctor: selectedDoc.name,
+                          room: selectedDoc.room,
+                          doctorStatus: selectedDoc.status as any
+                        }));
+                      }
+                    }}
+                    className="text-[11.5px] font-semibold text-gray-700 bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                  >
+                    {INITIAL_DOCTORS.filter(d => d.specialty === patient.aiSpecialty).map(d => (
+                      <option key={d.id} value={d.name}>
+                        {d.name} ({d.room})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
 
-            {/* Billing Receipt Summary */}
-            <div className="max-w-md mx-auto bg-[#F8FAFC] border border-[#DDE2EC] rounded-xl p-5 space-y-3 shadow-xs">
-              <div className="text-[13px] font-bold text-gray-900 border-b border-[#E2E8F0] pb-2 flex justify-between">
-                <span>OP Consultation Invoice</span>
-                <span className="font-mono text-[#1B4FD8]">{patient.opNumber}</span>
+            {/* Verified Nurse Vitals Snapshot Card */}
+            <div className="bg-[#F0FDF4] border border-green-200 p-3.5 rounded-xl text-[12px] space-y-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#166534] flex items-center gap-1.5">
+                  <span>✓</span> Nurse-Recorded Vital Signs (Attached to Queue)
+                </span>
+                <span className="text-[10.5px] font-mono font-bold text-[#16A34A] bg-white px-2 py-0.5 rounded border border-green-200">
+                  Ready for Physician
+                </span>
               </div>
-              <div className="flex justify-between text-[12px] text-gray-700">
-                <span>OP Doctor Consultation Fee ({patient.assignedDoctor}):</span>
-                <span className="font-semibold">${patient.billing.consultationFee}.00</span>
-              </div>
-              <div className="flex justify-between text-[12px] text-gray-700">
-                <span>Service / Nursing Processing Charge:</span>
-                <span className="font-semibold">$0.00</span>
-              </div>
-              <div className="border-t border-[#E2E8F0] pt-2 flex justify-between text-[14px] font-bold text-gray-900">
-                <span>Total Amount Due:</span>
-                <span className="text-[#16A34A]">${patient.billing.total}.00</span>
-              </div>
-
-              {/* Payment Mode Selector */}
-              <div className="pt-2 border-t border-[#E2E8F0]">
-                <label className="text-[11px] font-semibold text-gray-700 block mb-1">Payment Method</label>
-                <select
-                  value={patient.billing.mode}
-                  onChange={e => setPatient({ ...patient, billing: { ...patient.billing, mode: e.target.value } })}
-                  className="w-full border border-[#DDE2EC] rounded text-[12px] p-2 bg-white"
-                >
-                  <option>Card</option>
-                  <option>Cash</option>
-                  <option>UPI / Digital</option>
-                  <option>Insurance Co-Pay</option>
-                </select>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 font-mono text-[12px] text-gray-800">
+                <div><span className="text-[#64748B] text-[10px] block">BP:</span> <strong>{patient.vitals.bp}</strong></div>
+                <div><span className="text-[#64748B] text-[10px] block">Pulse:</span> <strong>{patient.vitals.pulse}</strong></div>
+                <div><span className="text-[#64748B] text-[10px] block">Temp:</span> <strong>{patient.vitals.temp}</strong></div>
+                <div><span className="text-[#64748B] text-[10px] block">SpO2:</span> <strong>{patient.vitals.spo2}</strong></div>
+                <div><span className="text-[#64748B] text-[10px] block">Weight:</span> <strong>{patient.vitals.weight}</strong></div>
               </div>
             </div>
 
-            {/* Final Complete Action */}
-            <div className="flex justify-center">
+            {/* 2. "YOUR TURN" Banner (When patient reaches position #1) */}
+            {isYourTurn ? (
+              <div className="bg-[#F0FDF4] border-2 border-[#16A34A] rounded-2xl p-6 text-center space-y-4 shadow-md animate-in zoom-in-95 duration-200">
+                <div className="inline-flex items-center gap-2 bg-[#16A34A] text-white text-[12px] font-mono font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                  🔔 YOUR TURN
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-[26px] font-black font-mono text-[#15803D]">
+                    {patient.queueToken}
+                  </div>
+                  <div className="text-[15px] font-bold text-gray-900">
+                    Doctor: {patient.assignedDoctor} • {patient.room}
+                  </div>
+                  <p className="text-[13px] text-[#166534] font-medium">
+                    Please proceed to the consultation room immediately.
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => setCurrentStep(5)}
+                    className="px-8 py-3.5 bg-[#16A34A] hover:bg-[#15803D] text-white text-[14px] font-bold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center gap-2 mx-auto cursor-pointer"
+                  >
+                    <span>👨‍⚕️</span> ENTER DOCTOR CONSULTATION (STEP 5) →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* 3. YOUR QUEUE STATUS Card (When Waiting) */
+              <div className="bg-white border-2 border-[#93C5FD] rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="text-center border-b border-[#E2E8F0] pb-3">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">YOUR QUEUE STATUS</div>
+                  <div className="text-[28px] font-black font-mono text-[#1B4FD8] mt-0.5">
+                    {patient.queueToken}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E8F0]">
+                    <div className="text-[10.5px] font-bold uppercase text-[#64748B]">Patients Ahead</div>
+                    <div className="text-[20px] font-black font-mono text-gray-900 mt-0.5">{patientsAhead}</div>
+                  </div>
+                  <div className="bg-[#EFF6FF] p-3 rounded-xl border border-blue-200">
+                    <div className="text-[10.5px] font-bold uppercase text-[#1B4FD8]">Your Position</div>
+                    <div className="text-[20px] font-black font-mono text-[#1B4FD8] mt-0.5">#{currentPosition}</div>
+                  </div>
+                  <div className="bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E8F0]">
+                    <div className="text-[10.5px] font-bold uppercase text-[#64748B]">Est. Wait</div>
+                    <div className="text-[20px] font-black font-mono text-[#D97706] mt-0.5">
+                      ~{patientsAhead * 5 + 5}m
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-center pt-2">
+                  <button
+                    onClick={() => setCurrentStep(5)}
+                    className="px-6 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold rounded-xl shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <span>🩺</span> Proceed to Doctor Consultation Workspace (Step 5) →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Queue Controls */}
+            <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <button
-                onClick={() => {
-                  const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                  setPatient({
-                    ...patient,
+                type="button"
+                onClick={() => setCurrentStep(3)}
+                className="text-[12.5px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
+              >
+                ← Back to Nurse Vitals (Step 3)
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDoctorCallNext}
+                  className="px-3 py-1.5 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[11.5px] font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <span>📢</span> Doctor: Call Next Patient
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSkipToMyTurn}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[#065F46] text-[11.5px] font-semibold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <span>⚡</span> Advance to My Turn
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 5: PHYSICIAN CONSULTATION & SUBMITTED CLINICAL SUMMARY ── */}
+        {currentStep === 5 && (() => {
+          const hasDoctorConsulted = (
+            patient.status === "Consultation Completed" ||
+            patient.status === "OP Completed" ||
+            patient.status === "Awaiting Billing"
+          ) && ((patient.prescription && patient.prescription.length > 0) || Boolean(patient.diagnosis));
+
+          return (
+            <div className="bg-white border border-[#DDE2EC] rounded-2xl p-6 shadow-xs space-y-6 max-w-5xl mx-auto">
+              {/* Header with Doctor & Patient Meta */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
+                <div>
+                  <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">5</span>
+                    Physician Consultation Summary
+                  </h2>
+                  <p className="text-[12px] text-[#64748B] mt-0.5">
+                    Official clinical consultation record performed by <strong>{patient.assignedDoctor}</strong>. (Synced live from Doctor Portal).
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className={`text-[11.5px] font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5 ${
+                    hasDoctorConsulted
+                      ? "bg-green-50 text-[#166534] border-green-200"
+                      : "bg-amber-50 text-[#B45309] border-amber-200"
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${
+                      hasDoctorConsulted
+                        ? "bg-green-500"
+                        : "bg-amber-500 animate-pulse"
+                    }`}></span>
+                    {hasDoctorConsulted
+                      ? "✓ Consultation & Rx Completed"
+                      : "Awaiting Doctor Portal Submission"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Pre-Consultation Nurse-Recorded Vitals Card */}
+              <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded-2xl p-4.5 space-y-2.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-lg bg-blue-100 text-[#1B4FD8] flex items-center justify-center font-bold text-sm">
+                      🩺
+                    </span>
+                    <div>
+                      <h3 className="text-[13.5px] font-bold text-gray-900">
+                        Pre-Consultation Nurse Vital Signs
+                      </h3>
+                      <p className="text-[11px] text-[#64748B]">
+                        Recorded at Triage Station by RN Jessica Carter prior to physician examination.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10.5px] font-bold bg-green-50 text-[#166534] border border-green-200 px-2 py-0.5 rounded">
+                    ✓ Verified Triage Vitals
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[12px]">
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                    <span className="text-[#64748B] block text-[10px] uppercase font-bold">Blood Pressure</span>
+                    <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.bp || "120/80 mmHg"}</span>
+                  </div>
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                    <span className="text-[#64748B] block text-[10px] uppercase font-bold">Heart Rate / Pulse</span>
+                    <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.pulse || "76 bpm"}</span>
+                  </div>
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                    <span className="text-[#64748B] block text-[10px] uppercase font-bold">Temperature</span>
+                    <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.temp || "98.6 °F"}</span>
+                  </div>
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                    <span className="text-[#64748B] block text-[10px] uppercase font-bold">Oxygen SpO2</span>
+                    <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.spo2 || "99%"}</span>
+                  </div>
+                  <div className="bg-white border border-[#CBD5E1] p-2.5 rounded-xl">
+                    <span className="text-[#64748B] block text-[10px] uppercase font-bold">Body Weight</span>
+                    <span className="text-[15px] font-mono font-bold text-gray-900 block mt-0.5">{patient.vitals?.weight || "74 kg"}</span>
+                  </div>
+                </div>
+
+                {patient.vitals?.notes && (
+                  <div className="bg-white border border-green-200 p-2.5 rounded-lg text-[11.5px] text-[#166534] flex items-center gap-1.5">
+                    <span className="font-bold">Nurse Observation:</span>
+                    <span>{patient.vitals.notes}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* STATE A: Awaiting Consultation Submission from Doctor Portal */}
+              {!hasDoctorConsulted ? (
+                <div className="space-y-6">
+                  <div className="bg-[#EFF6FF] border-2 border-[#93C5FD] rounded-2xl p-6 text-center space-y-4 shadow-xs animate-in fade-in">
+                    <div className="w-12 h-12 rounded-2xl bg-[#1B4FD8] text-white flex items-center justify-center text-2xl mx-auto shadow-sm">
+                      🩺
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[16px] font-bold text-[#1E3A8A]">
+                        Awaiting Consultation Submission from Doctor Portal
+                      </div>
+                      <p className="text-[12.5px] text-[#2563EB] max-w-lg mx-auto">
+                        In compliance with clinical role separation, all diagnoses, prescriptions, and investigation orders must be recorded and submitted by <strong>{patient.assignedDoctor}</strong> from the Doctor Portal.
+                      </p>
+                    </div>
+
+                    <div className="pt-2 flex justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onOpenDoctorPortal) {
+                            onOpenDoctorPortal(patient.id);
+                          }
+                        }}
+                        className="px-6 py-3 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                      >
+                        <span>🩺</span> Open Doctor Portal to Perform Consultation →
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-start pt-2 border-t border-[#E2E8F0]">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(4)}
+                      className="text-[12.5px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
+                    >
+                      ← Back to Doctor Queue (Step 4)
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* STATE B: Doctor has Submitted -> Render Confirmed Prescriptions, Diagnosis & Orders */
+                <div className="space-y-5 animate-in fade-in">
+                  {/* Doctor & Encounter Meta Strip */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded-xl text-[12px]">
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Attending Doctor</span>
+                      <span className="font-bold text-gray-900">{patient.assignedDoctor}</span>
+                      <span className="text-[11px] text-[#64748B] block">{patient.aiSpecialty} · {patient.room}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Patient UMR</span>
+                      <span className="font-mono font-bold text-[#1B4FD8]">{patient.umr}</span>
+                      <span className="text-[11px] text-gray-700 block">{patient.name} ({patient.age}y, {patient.sex})</span>
+                    </div>
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Current OP Number</span>
+                      <span className="font-mono font-bold text-gray-900">{patient.opNumber}</span>
+                      <span className="text-[11px] text-[#64748B] block">Token: {patient.queueToken}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Consultation Time</span>
+                      <span className="font-mono font-semibold text-gray-900">{patient.timestamps?.consultationEnd || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-[10.5px] font-bold text-[#16A34A] block">✓ Verified Record</span>
+                    </div>
+                  </div>
+
+                  {/* Clinical Assessment */}
+                  <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-1 shadow-2xs">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Clinical Assessment &amp; Notes</div>
+                    <div className="text-[13px] text-gray-800 leading-relaxed font-medium bg-[#F8FAFC] p-3 rounded-lg border border-[#E2E8F0]">
+                      {patient.assessment || `Patient presents with ${patient.chiefComplaint || (patient.symptoms && patient.symptoms.join(", ")) || "presenting symptoms"}. Baseline vitals recorded by triage nurse: BP ${patient.vitals?.bp}, Pulse ${patient.vitals?.pulse}. Examination completed.`}
+                    </div>
+                  </div>
+
+                  {/* Diagnosis & ICD-10 Code */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-1 shadow-2xs">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Confirmed Clinical Diagnosis</div>
+                      <div className="text-[15px] font-bold text-[#1B4FD8]">
+                        {patient.diagnosis || "Acute Coronary Syndrome Rule-Out / Stable Angina"}
+                      </div>
+                    </div>
+                    <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-1 shadow-2xs">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">ICD-10 Diagnostic Code</div>
+                      <div className="text-[15px] font-mono font-bold text-gray-900">
+                        {patient.icd10 || "I20.9 (Angina Pectoris, Unspecified)"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Prescribed Medications Table */}
+                  <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-2.5 shadow-2xs">
+                    <div className="flex justify-between items-center">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Prescribed Medications (Rx Pad)</div>
+                      <span className="text-[10px] font-mono font-bold bg-blue-50 text-[#1B4FD8] px-2 py-0.5 rounded border border-blue-200 uppercase">
+                        ✓ Locked / Official Rx
+                      </span>
+                    </div>
+                    <div className="divide-y divide-[#E2E8F0] border border-[#E2E8F0] rounded-lg overflow-hidden text-[12.5px]">
+                      <div className="grid grid-cols-4 bg-[#F8FAFC] p-2.5 font-bold text-gray-700 text-[11px] uppercase">
+                        <span>Medicine</span>
+                        <span>Dosage</span>
+                        <span>Frequency</span>
+                        <span>Duration</span>
+                      </div>
+                      {patient.prescription && patient.prescription.length > 0 ? (
+                        patient.prescription.map((rx, idx) => (
+                          <div key={idx} className="grid grid-cols-4 p-2.5 bg-white font-medium text-gray-800 hover:bg-gray-50">
+                            <span className="font-bold text-gray-900">{rx.medicine}</span>
+                            <span>{rx.dosage}</span>
+                            <span>{rx.frequency}</span>
+                            <span className="text-gray-600">{rx.duration}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-3 text-[#64748B] italic">No medications prescribed.</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Investigations Ordered */}
+                  <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-2.5 shadow-2xs">
+                    <div className="flex justify-between items-center">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Diagnostic Investigations &amp; Lab Orders</div>
+                      <span className="text-[10.5px] font-mono font-bold bg-amber-50 text-[#B45309] px-2 py-0.5 rounded border border-amber-200">
+                        PENDING SAMPLE / IMAGING
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {patient.investigations && patient.investigations.length > 0 ? (
+                        patient.investigations.map((test) => (
+                          <span
+                            key={test}
+                            className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-blue-50 text-[#1B4FD8] border border-blue-200 flex items-center gap-1.5 shadow-2xs"
+                          >
+                            <span>✓</span> {test}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[12px] text-[#64748B] italic">No diagnostic orders requested.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Doctor Advice & Instructions */}
+                  <div className="bg-white border border-[#CBD5E1] rounded-xl p-4 space-y-1 shadow-2xs">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">Doctor Advice &amp; Instructions</div>
+                    <div className="text-[12.5px] text-gray-800 leading-relaxed bg-[#F8FAFC] p-3 rounded-lg border border-[#E2E8F0]">
+                      {patient.advice || "Adequate hydration, follow prescribed medication, return for review as advised."}
+                    </div>
+                  </div>
+
+                  {/* Navigation Actions */}
+                  <div className="flex justify-between items-center pt-3 border-t border-[#E2E8F0]">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(4)}
+                      className="text-[12px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
+                    >
+                      ← Back to Doctor Queue (Step 4)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        setPatient(prev => ({
+                          ...prev,
+                          status: "Awaiting Billing",
+                          timestamps: { ...prev.timestamps, consultationEnd: nowTime }
+                        }));
+                        if (patient.id) {
+                          try {
+                            db.updateEncounter(patient.id, {
+                              status: "Awaiting Billing",
+                              timestamps: { ...patient.timestamps, consultationEnd: nowTime }
+                            });
+                          } catch (e) {
+                            console.warn("DB update failed:", e);
+                          }
+                        }
+                        setCurrentStep(6);
+                      }}
+                      className="px-6 py-3 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>💳</span> Proceed to Billing &amp; Encounter Completion (Step 6) →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── STEP 6: BILLING & OP VISIT COMPLETION ───────────────────── */}
+        {currentStep === 6 && (() => {
+          const consultFee = patient.billing?.consultationFee || 50;
+          const labItems = patient.investigations || [];
+          const rxItems = patient.prescription || [];
+          const labTotal = labItems.length * 35;
+          const rxTotal = rxItems.length * 15;
+          const nursingFee = 10;
+          const grossSubtotal = consultFee + labTotal + rxTotal + nursingFee;
+          const isInsurance = patient.billing?.mode === "Insurance Co-Pay";
+          const insuranceCoverage = isInsurance ? Math.round(grossSubtotal * 0.8) : 0;
+          const netTotalPayable = grossSubtotal - insuranceCoverage;
+          const tenderedNum = parseFloat(cashTendered) || netTotalPayable;
+          const changeDue = Math.max(0, tenderedNum - netTotalPayable);
+          const isPaid = patient.status === "OP Completed" || patient.billing?.status === "Paid";
+
+          const handleProcessPayment = () => {
+            setPaymentProcessing(true);
+            const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            setTimeout(() => {
+              const updatedState = {
+                ...patient,
+                status: "OP Completed" as const,
+                billing: {
+                  ...patient.billing,
+                  consultationFee: consultFee,
+                  labFee: labTotal,
+                  total: netTotalPayable,
+                  status: "Paid" as const,
+                  mode: patient.billing.mode || "Card"
+                },
+                timestamps: {
+                  ...patient.timestamps,
+                  billingCompleted: nowTime,
+                  visitCompleted: nowTime
+                }
+              };
+              setPatient(updatedState);
+              setPaymentProcessing(false);
+
+              if (patient.id) {
+                try {
+                  db.updateEncounter(patient.id, {
+                    diagnosis: patient.diagnosis,
+                    icd10: patient.icd10,
+                    prescription: patient.prescription,
+                    investigations: patient.investigations,
+                    advice: patient.advice,
+                    vitals: patient.vitals,
                     status: "OP Completed",
-                    billing: { ...patient.billing, status: "Paid" },
+                    billing: {
+                      consultationFee: consultFee,
+                      labFee: labTotal,
+                      total: netTotalPayable,
+                      status: "Paid",
+                      mode: patient.billing.mode || "Card"
+                    },
                     timestamps: {
                       ...patient.timestamps,
                       billingCompleted: nowTime,
                       visitCompleted: nowTime
                     }
                   });
+                } catch (err) {
+                  console.warn("DB billing update:", err);
+                }
+              }
+            }, 500);
+          };
 
-                  if (patient.id) {
-                    try {
-                      db.updateEncounter(patient.id, {
-                        diagnosis: patient.diagnosis,
-                        icd10: patient.icd10,
-                        prescription: patient.prescription,
-                        investigations: patient.investigations,
-                        advice: patient.advice,
-                        vitals: patient.vitals,
-                        furtherAction: patient.furtherAction,
-                        status: "OP Completed",
-                        billing: { ...patient.billing, status: "Paid" },
-                        timestamps: {
-                          ...patient.timestamps,
-                          billingCompleted: nowTime,
-                          visitCompleted: nowTime
-                        }
-                      });
-                    } catch (err) {
-                      console.warn("DB update:", err);
-                    }
-                  }
-                }}
-                className="px-8 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white text-[14px] font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
-              >
-                <span>💾</span> Mark OP Visit Completed &amp; Save to Database
-              </button>
-            </div>
-
-            {/* Visit Completed Success Card */}
-            {patient.status === "OP Completed" && (
-              <div className="p-5 bg-[#F0FDF4] border border-[#86EFAC] rounded-xl text-center space-y-3">
-                <div className="text-3xl">🎉</div>
-                <div className="text-base font-bold text-[#166534]">
-                  Outpatient Encounter {patient.opNumber} Successfully Completed!
+          return (
+            <div className="space-y-6 max-w-5xl mx-auto">
+              {/* Header */}
+              <div className="bg-white border border-[#DDE2EC] rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">6</span>
+                    OP Billing, Payment &amp; Encounter Settlement
+                  </h2>
+                  <p className="text-[12px] text-[#64748B] mt-0.5">
+                    Official financial statement aggregating physician consultation, nursing triage, prescribed medications, and laboratory diagnostic tests.
+                  </p>
                 </div>
-                <p className="text-[12px] text-[#15803D] max-w-lg mx-auto">
-                  Patient <strong>{patient.name}</strong>'s complete OP record has been archived under permanent <strong>{patient.umr}</strong>. On future visits, this history will be retrieved automatically.
-                </p>
-                <div className="pt-2 flex justify-center gap-3">
-                  <Btn variant="outline" size="sm" onClick={() => window.print()}>
-                    <Icon.Download /> Print OP Summary Card
-                  </Btn>
-                  <Btn variant="primary" size="sm" onClick={() => {
-                    setPatient({ ...patient, umr: "", opNumber: "", name: "" });
-                    setCurrentStep(1);
-                  }}>
-                    Start Next OP Patient
-                  </Btn>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[11.5px] font-bold px-3 py-1 rounded-lg border flex items-center gap-1.5 ${
+                    isPaid ? "bg-green-100 text-[#15803D] border-green-300" : "bg-amber-50 text-[#B45309] border-amber-200"
+                  }`}>
+                    <span>{isPaid ? "✓ PAID & SETTLED" : "⏳ PAYMENT PENDING"}</span>
+                  </span>
                 </div>
               </div>
-            )}
-          </div>
-        )}
+
+              {/* SMS Notification Banner if triggered */}
+              {smsSentNotice && (
+                <div className="bg-[#F0FDF4] border border-green-300 p-3 rounded-xl text-[12px] text-[#166534] flex items-center justify-between animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <span>📱</span>
+                    <span>Official Tax Receipt &amp; Discharge Summary SMS sent to <strong>{patient.phone || "patient mobile"}</strong>.</span>
+                  </div>
+                  <button onClick={() => setSmsSentNotice(false)} className="text-green-700 hover:text-green-900 font-bold text-xs cursor-pointer">✕</button>
+                </div>
+              )}
+
+              {/* Main Settlement Grid: Left Invoice Summary, Right Payment Gateway */}
+              {!isPaid ? (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Left Column: Itemized Worksheet (7 cols) */}
+                  <div className="lg:col-span-7 bg-white border border-[#CBD5E1] rounded-2xl p-5 space-y-4 shadow-xs">
+                    <div className="border-b border-[#E2E8F0] pb-3 flex justify-between items-center">
+                      <div>
+                        <div className="text-[14px] font-bold text-gray-900">Itemized Clinical Charges</div>
+                        <div className="text-[11px] text-[#64748B]">Encounter No: <strong className="font-mono text-gray-800">{patient.opNumber}</strong> · Permanent UMR: <strong className="font-mono text-gray-800">{patient.umr}</strong></div>
+                      </div>
+                      <span className="text-[11px] font-mono font-bold bg-blue-50 text-[#1B4FD8] px-2 py-0.5 rounded">
+                        Fee Worksheet
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-[#E2E8F0] text-[12.5px]">
+                      {/* 1. Consultation */}
+                      <div className="py-2.5 flex justify-between items-start">
+                        <div>
+                          <div className="font-semibold text-gray-900">1. Physician Consultation Fee</div>
+                          <div className="text-[11px] text-[#64748B]">Attending: {patient.assignedDoctor} ({patient.aiSpecialty})</div>
+                        </div>
+                        <span className="font-mono font-bold text-gray-900">${consultFee}.00</span>
+                      </div>
+
+                      {/* 2. Nursing & Triage Fee */}
+                      <div className="py-2.5 flex justify-between items-start">
+                        <div>
+                          <div className="font-semibold text-gray-900">2. Pre-Consultation Nursing &amp; Vitals Triage</div>
+                          <div className="text-[11px] text-[#64748B]">BP: {patient.vitals?.bp} · Pulse: {patient.vitals?.pulse} · Temp: {patient.vitals?.temp}</div>
+                        </div>
+                        <span className="font-mono font-bold text-gray-900">${nursingFee}.00</span>
+                      </div>
+
+                      {/* 3. Prescription Medications */}
+                      <div className="py-2.5 space-y-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-semibold text-gray-900">3. Prescribed Pharmacy Medications (Rx Pad)</div>
+                            <div className="text-[11px] text-[#64748B]">{rxItems.length} items prescribed</div>
+                          </div>
+                          <span className="font-mono font-bold text-gray-900">${rxTotal}.00</span>
+                        </div>
+                        {rxItems.map((rx, idx) => (
+                          <div key={idx} className="pl-3 text-[11.5px] text-gray-600 flex justify-between">
+                            <span>• {rx.medicine} ({rx.dosage} · {rx.frequency})</span>
+                            <span className="font-mono">$15.00</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* 4. Diagnostic Investigations */}
+                      <div className="py-2.5 space-y-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-semibold text-gray-900">4. Diagnostic Laboratory &amp; Imaging Orders</div>
+                            <div className="text-[11px] text-[#64748B]">{labItems.length} investigations requested</div>
+                          </div>
+                          <span className="font-mono font-bold text-gray-900">${labTotal}.00</span>
+                        </div>
+                        {labItems.map((test, idx) => (
+                          <div key={idx} className="pl-3 text-[11.5px] text-gray-600 flex justify-between">
+                            <span>• {test}</span>
+                            <span className="font-mono">$35.00</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Subtotals & Discounts */}
+                    <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded-xl space-y-1.5 text-[12.5px]">
+                      <div className="flex justify-between text-gray-600">
+                        <span>Gross Subtotal:</span>
+                        <span className="font-mono font-bold">${grossSubtotal}.00</span>
+                      </div>
+                      {isInsurance && (
+                        <div className="flex justify-between text-[#16A34A] font-semibold">
+                          <span>Insurance Cashless Coverage (80%):</span>
+                          <span className="font-mono">-${insuranceCoverage}.00</span>
+                        </div>
+                      )}
+                      <div className="border-t border-[#E2E8F0] pt-1.5 flex justify-between text-[15px] font-black text-gray-900">
+                        <span>Net Payable Amount:</span>
+                        <span className="text-[#16A34A] font-mono">${netTotalPayable}.00</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Payment Settlement Desk (5 cols) */}
+                  <div className="lg:col-span-5 bg-white border-2 border-[#93C5FD] rounded-2xl p-5 space-y-4 shadow-sm">
+                    <div className="border-b border-[#E2E8F0] pb-2.5">
+                      <div className="text-[14px] font-bold text-gray-900 flex items-center gap-2">
+                        <span>💳</span> Select Payment Method
+                      </div>
+                      <div className="text-[11px] text-[#64748B]">Choose customer's preferred settlement channel</div>
+                    </div>
+
+                    {/* Mode Buttons */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["Card", "Cash", "UPI / Digital", "Insurance Co-Pay"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setPatient({ ...patient, billing: { ...patient.billing, mode: m } })}
+                          className={`p-2.5 rounded-xl text-[12px] font-bold border transition-all text-center cursor-pointer ${
+                            patient.billing.mode === m
+                              ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-xs"
+                              : "bg-white text-gray-700 border-[#CBD5E1] hover:bg-[#F8FAFC]"
+                          }`}
+                        >
+                          {m === "Card" && "💳 "}
+                          {m === "Cash" && "💵 "}
+                          {m === "UPI / Digital" && "📱 "}
+                          {m === "Insurance Co-Pay" && "🛡️ "}
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Dynamic Channel Input Fields */}
+                    <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded-xl space-y-2.5 text-[12px]">
+                      {patient.billing.mode === "Card" && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">Card Number</label>
+                            <input
+                              type="text"
+                              value={cardNumber}
+                              onChange={e => setCardNumber(e.target.value)}
+                              className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[12px] focus:outline-none focus:border-[#1B4FD8]"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">Expiry</label>
+                              <input
+                                type="text"
+                                value={cardExpiry}
+                                onChange={e => setCardExpiry(e.target.value)}
+                                className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[12px] focus:outline-none focus:border-[#1B4FD8]"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">CVV</label>
+                              <input
+                                type="password"
+                                value={cardCvv}
+                                onChange={e => setCardCvv(e.target.value)}
+                                className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[12px] focus:outline-none focus:border-[#1B4FD8]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {patient.billing.mode === "Cash" && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">Cash Received ($)</label>
+                            <input
+                              type="number"
+                              value={cashTendered}
+                              onChange={e => setCashTendered(e.target.value)}
+                              className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[14px] font-bold text-gray-900 focus:outline-none focus:border-[#1B4FD8]"
+                            />
+                          </div>
+                          <div className="p-2.5 bg-green-50 rounded-lg border border-green-200 flex justify-between items-center text-[12px]">
+                            <span className="text-[#166534] font-semibold">Change to Return:</span>
+                            <span className="font-mono font-bold text-[#15803D] text-[14px]">${changeDue.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {patient.billing.mode === "UPI / Digital" && (
+                        <div className="text-center p-3 space-y-2">
+                          <div className="w-24 h-24 mx-auto bg-white border-2 border-dashed border-[#1B4FD8] rounded-xl flex items-center justify-center text-4xl shadow-2xs">
+                            📲
+                          </div>
+                          <div className="text-[11.5px] font-bold text-gray-900">Scan QR via Hospital UPI / Banking App</div>
+                          <div className="text-[10px] text-[#64748B] font-mono">Dynamic VPA: hospai.settle@axisbank</div>
+                        </div>
+                      )}
+
+                      {patient.billing.mode === "Insurance Co-Pay" && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-[10.5px] font-bold uppercase text-[#64748B] block mb-1">Insurance Policy / Member ID</label>
+                            <input
+                              type="text"
+                              value={insuranceMemberId}
+                              onChange={e => setInsuranceMemberId(e.target.value)}
+                              className="w-full bg-white border border-[#CBD5E1] rounded-lg p-2 font-mono text-[12px] focus:outline-none focus:border-[#1B4FD8]"
+                            />
+                          </div>
+                          <div className="text-[11px] text-[#15803D] bg-green-50 p-2 rounded-lg border border-green-200">
+                            ✓ 80% cashless approved by BlueCross BlueShield PPO. Co-pay payable at desk: <strong>${netTotalPayable}.00</strong>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Pay Button */}
+                    <button
+                      type="button"
+                      disabled={paymentProcessing}
+                      onClick={handleProcessPayment}
+                      className="w-full py-3.5 bg-gradient-to-r from-[#16A34A] to-[#15803D] hover:from-[#15803D] hover:to-[#166534] text-white text-[14px] font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {paymentProcessing ? (
+                        <>
+                          <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
+                          <span>Processing Settlement...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>💳</span>
+                          <span>Process Payment &amp; Settle Invoice (${netTotalPayable}.00)</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(5)}
+                      className="w-full text-center text-[12px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
+                    >
+                      ← Back to Consultation Summary (Step 5)
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* OFFICIAL PRINTABLE DISCHARGE & PAYMENT RECEIPT */
+                <div className="space-y-5">
+                  <div className="printable-card bg-white border-2 border-[#CBD5E1] text-gray-900 rounded-2xl p-6 shadow-xl relative overflow-hidden ring-1 ring-black/5 max-w-3xl mx-auto space-y-4">
+                    {/* Top Accent Strip */}
+                    <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#16A34A] via-[#1B4FD8] to-[#16A34A]"></div>
+
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E2E8F0] pb-4 pt-1 gap-2">
+                      <div className="flex items-center gap-3">
+                        <img src="/logo.png" alt="HospAI" className="w-10 h-10 object-contain" />
+                        <div>
+                          <div className="font-bold text-[16px] text-gray-900">HospAI General Hospital</div>
+                          <div className="text-[11px] text-[#64748B]">Department of Outpatient Services · Official Tax Invoice &amp; Discharge Pass</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[11px] font-mono font-bold text-[#166534] bg-green-50 px-2.5 py-1 rounded border border-green-200 inline-block">
+                          ✓ PAID &amp; SETTLED
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-1 font-mono">Date: {new Date().toLocaleDateString()} · {patient.timestamps?.billingCompleted || "Now"}</div>
+                      </div>
+                    </div>
+
+                    {/* Patient & Doctor Meta Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 rounded-xl text-[12px]">
+                      <div>
+                        <span className="text-[#64748B] text-[10px] uppercase font-bold block">Patient Name</span>
+                        <span className="font-bold text-gray-900 text-[13px]">{patient.name}</span>
+                        <span className="text-[11px] text-gray-600 block">{patient.age} yrs · {patient.sex}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#64748B] text-[10px] uppercase font-bold block">Permanent UMR</span>
+                        <span className="font-mono font-bold text-[#1B4FD8] text-[13px]">{patient.umr}</span>
+                        <span className="text-[11px] text-gray-600 block">Token: {patient.queueToken}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#64748B] text-[10px] uppercase font-bold block">Visit OP Number</span>
+                        <span className="font-mono font-bold text-gray-900 text-[13px]">{patient.opNumber}</span>
+                        <span className="text-[11px] text-gray-600 block">{patient.aiSpecialty}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#64748B] text-[10px] uppercase font-bold block">Attending Doctor</span>
+                        <span className="font-bold text-gray-900 text-[13px]">{patient.assignedDoctor}</span>
+                        <span className="text-[11px] text-gray-600 block">{patient.room}</span>
+                      </div>
+                    </div>
+
+                    {/* Clinical Summary Bar */}
+                    <div className="bg-[#EFF6FF] border border-blue-200 p-3 rounded-xl text-[12px] space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[#1E40AF] font-bold">Confirmed Clinical Diagnosis:</span>
+                        <span className="font-mono font-bold text-[#1B4FD8]">{patient.icd10}</span>
+                      </div>
+                      <div className="text-gray-800 font-medium">{patient.diagnosis}</div>
+                      <div className="text-[11px] text-[#64748B] pt-0.5 flex gap-3 flex-wrap">
+                        <span>BP: <strong>{patient.vitals?.bp}</strong></span>
+                        <span>Pulse: <strong>{patient.vitals?.pulse}</strong></span>
+                        <span>Temp: <strong>{patient.vitals?.temp}</strong></span>
+                        <span>SpO2: <strong>{patient.vitals?.spo2}</strong></span>
+                        <span>Weight: <strong>{patient.vitals?.weight}</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Itemized Table */}
+                    <div className="border border-[#CBD5E1] rounded-xl overflow-hidden text-[12px]">
+                      <div className="grid grid-cols-12 bg-[#F1F5F9] p-2.5 font-bold text-gray-700 text-[11px] uppercase border-b border-[#CBD5E1]">
+                        <span className="col-span-8">Description of Service / Medication / Investigation</span>
+                        <span className="col-span-2 text-center">Type</span>
+                        <span className="col-span-2 text-right">Amount ($)</span>
+                      </div>
+                      <div className="divide-y divide-[#E2E8F0] p-1 text-gray-800">
+                        <div className="grid grid-cols-12 p-2">
+                          <span className="col-span-8 font-medium">Physician OP Consultation ({patient.assignedDoctor})</span>
+                          <span className="col-span-2 text-center text-[10.5px] text-[#64748B]">Consultation</span>
+                          <span className="col-span-2 text-right font-mono font-bold">${consultFee}.00</span>
+                        </div>
+                        <div className="grid grid-cols-12 p-2">
+                          <span className="col-span-8 font-medium">Pre-Consultation Nursing Triage Assessment</span>
+                          <span className="col-span-2 text-center text-[10.5px] text-[#64748B]">Nursing</span>
+                          <span className="col-span-2 text-right font-mono font-bold">${nursingFee}.00</span>
+                        </div>
+                        {rxItems.map((rx, idx) => (
+                          <div key={idx} className="grid grid-cols-12 p-2 bg-[#F8FAFC]">
+                            <span className="col-span-8 font-medium">Rx: {rx.medicine} ({rx.dosage} · {rx.frequency} · {rx.duration})</span>
+                            <span className="col-span-2 text-center text-[10.5px] text-[#64748B]">Pharmacy</span>
+                            <span className="col-span-2 text-right font-mono font-bold">$15.00</span>
+                          </div>
+                        ))}
+                        {labItems.map((test, idx) => (
+                          <div key={idx} className="grid grid-cols-12 p-2">
+                            <span className="col-span-8 font-medium">Lab/Diagnostic: {test}</span>
+                            <span className="col-span-2 text-center text-[10.5px] text-[#64748B]">Diagnostics</span>
+                            <span className="col-span-2 text-right font-mono font-bold">$35.00</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Total Bar */}
+                      <div className="bg-[#F8FAFC] border-t border-[#CBD5E1] p-3 space-y-1 text-[12.5px]">
+                        <div className="flex justify-between text-gray-600">
+                          <span>Gross Total:</span>
+                          <span className="font-mono font-bold">${grossSubtotal}.00</span>
+                        </div>
+                        {isInsurance && (
+                          <div className="flex justify-between text-[#16A34A] font-semibold">
+                            <span>Insurance Payer Settlement (80%):</span>
+                            <span className="font-mono">-${insuranceCoverage}.00</span>
+                          </div>
+                        )}
+                        <div className="border-t border-[#CBD5E1] pt-1 flex justify-between text-[15px] font-black text-gray-900">
+                          <span>Total Amount Settled ({patient.billing.mode}):</span>
+                          <span className="text-[#16A34A] font-mono">${netTotalPayable}.00</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-3 border-t border-[#E2E8F0] text-[11px] text-[#64748B] gap-2">
+                      <div>
+                        <span>Cashier / Desk: <strong>RN Jessica Carter (OP Desk 1)</strong></span>
+                        <span className="block mt-0.5">Receipt ID: <strong className="font-mono text-gray-900">RCP-{patient.opNumber}-{Date.now().toString().slice(-4)}</strong></span>
+                      </div>
+                      <div className="text-right font-mono font-bold text-gray-900 tracking-widest text-[12px]">
+                        ||||| | |||| ||| ||||
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap justify-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="px-5 py-2.5 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[13px] font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Icon.Download /> Print Tax Invoice &amp; OP Summary
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSmsSentNotice(true)}
+                      className="px-5 py-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#1B4FD8] text-[13px] font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>📱</span> Send SMS Receipt to Patient
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentStep(1);
+                      }}
+                      className="px-6 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded-xl shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>➕</span> Register / Start Next Outpatient Patient →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       </div>
     </div>

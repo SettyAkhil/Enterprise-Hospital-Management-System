@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Icon } from "./icons";
 import { StatusBadge, Btn, Input } from "./shared";
-import { db, DBPatient, DBOPEncounter } from "../services/db";
+import { db, DBPatient, DBOPEncounter, findMatchingPatient } from "../services/db";
 
 // Accurate age calculation from Date of Birth
 const calculateAge = (dobString: string): number => {
@@ -58,8 +58,8 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
     firstName: "",
     middleName: "",
     lastName: "",
-    dob: "1996-05-20",
-    age: calculateAge("1996-05-20"),
+    dob: "",
+    age: 0,
     sex: "" as "Male" | "Female" | "Other" | "",
     phone: "",
   });
@@ -76,11 +76,26 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
     }));
   };
 
+  // Duplicate / Existing Patient Check via Robust Matching Logic
+  const enteredFullName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(" ").trim();
+  const matchResult = findMatchingPatient(patients, {
+    fullName: enteredFullName,
+    dob: formData.dob || undefined,
+    age: formData.dob ? formData.age : undefined,
+    sex: formData.sex || undefined,
+    phone: formData.phone.trim() || undefined,
+  });
+
+  const matchingExistingPatient = matchResult.match;
+  const candidatePatient = matchResult.nameMatchedPatient;
+  const mismatches = matchResult.mismatches;
+
   // 1. Handle New Patient Registration -> Generates UMR -> then generates Global OP Number
   const handleRegisterNewPatient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.dob) return;
 
+    // If ALL entered details match an existing record with 0 mismatches -> Revisit under existing UMR
     if (matchingExistingPatient) {
       handleCreateRevisitEncounter(matchingExistingPatient);
       // Reset Form
@@ -88,14 +103,15 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
         firstName: "",
         middleName: "",
         lastName: "",
-        dob: "1996-05-20",
-        age: calculateAge("1996-05-20"),
+        dob: "",
+        age: 0,
         sex: "",
         phone: "",
       });
       return;
     }
 
+    // If new patient OR if ANY detail mismatches from database -> Register as a BRAND NEW patient with new permanent UMR
     const computedAge = calculateAge(formData.dob);
 
     const { patient: createdPatient, encounter: createdEncounter } = db.registerNewPatient({
@@ -127,8 +143,8 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       firstName: "",
       middleName: "",
       lastName: "",
-      dob: "1996-05-20",
-      age: calculateAge("1996-05-20"),
+      dob: "",
+      age: 0,
       sex: "",
       phone: "",
     });
@@ -160,12 +176,6 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
       cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
   };
-
-  // Duplicate / Existing Patient Check:
-  const enteredFullName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(" ").trim().toLowerCase();
-  const matchingExistingPatient = enteredFullName.length >= 3 
-    ? db.getPatients().find(p => p.name.toLowerCase() === enteredFullName || (formData.phone.trim().length >= 7 && p.phone === formData.phone.trim()))
-    : undefined;
 
   // Filtered patients for revisit search
   const filteredPatients = db.searchPatients(searchQuery);
@@ -237,12 +247,23 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                 <span>Phone: <strong>{generationAlert.phone}</strong></span>
               </div>
             </div>
-            <button
-              onClick={() => setGenerationAlert(null)}
-              className="text-xs px-2.5 py-1 rounded bg-white/80 hover:bg-white border font-semibold"
-            >
-              Dismiss
-            </button>
+            <div className="flex items-center gap-2">
+              {onProceedToQueue && selectedEncounter && (
+                <button
+                  type="button"
+                  onClick={() => onProceedToQueue(selectedEncounter)}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-[#1B4FD8] hover:bg-[#1740B4] text-white font-semibold shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  Proceed to Symptoms &amp; AI Triage →
+                </button>
+              )}
+              <button
+                onClick={() => setGenerationAlert(null)}
+                className="text-xs px-2.5 py-1.5 rounded bg-white/80 hover:bg-white border font-semibold cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
 
@@ -372,10 +393,10 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                       </span>
                     </div>
                     <div className="text-[12px] text-amber-900">
-                      Active record found for <strong>{matchingExistingPatient.name}</strong> ({matchingExistingPatient.age} yrs · {matchingExistingPatient.sex} · Phone: {matchingExistingPatient.phone}).
+                      All details match existing record for <strong>{matchingExistingPatient.name}</strong> ({matchingExistingPatient.age} yrs · {matchingExistingPatient.sex} · Phone: {matchingExistingPatient.phone}).
                     </div>
                     <div className="text-[11.5px] text-amber-800">
-                      To preserve lifetime medical history under <strong>{matchingExistingPatient.umr}</strong>, generate a <strong>Revisit OP Number</strong>.
+                      To preserve lifetime medical history under <strong>{matchingExistingPatient.umr}</strong>, submitting will generate a <strong>Revisit OP Number</strong>.
                     </div>
                   </div>
                   <button
@@ -387,11 +408,11 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                   </button>
                 </div>
               ) : (
-                formData.firstName.trim().length >= 2 && formData.lastName.trim().length >= 2 && (
+                enteredFullName.length >= 2 && (
                   <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between text-emerald-900 text-[12px] animate-in fade-in">
                     <div className="flex items-center gap-2">
                       <span className="text-emerald-600 font-bold text-sm">✓</span>
-                      <span><strong>New Patient:</strong> No existing record found for <strong>{formData.firstName} {formData.lastName}</strong>. System will issue a new permanent UMR &amp; visit OP Number.</span>
+                      <span><strong>New Patient:</strong> System will issue a new permanent UMR &amp; visit OP Number for <strong>{enteredFullName}</strong>.</span>
                     </div>
                     <span className="text-[10.5px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap">
                       ✨ New Patient
@@ -543,13 +564,13 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     </Btn>
                     {onProceedToQueue && (
                       <Btn variant="primary" size="sm" onClick={() => onProceedToQueue(selectedEncounter)}>
-                        Proceed to Queue &amp; Doctor Consultation →
+                        Proceed to Symptoms &amp; AI Triage →
                       </Btn>
                     )}
                   </div>
                 </div>
 
-                <div className="max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded-2xl p-6 shadow-2xl relative overflow-hidden ring-2 ring-blue-500/10">
+                <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded-2xl p-6 shadow-2xl relative overflow-hidden ring-2 ring-blue-500/10">
                   {/* Top Header Accent Strip */}
                   <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
 
@@ -643,15 +664,30 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                       </td>
                       <td className="px-4 py-3 font-mono text-gray-500">{e.registrationTime}</td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            handleViewOpBook(e);
-                          }}
-                          className="px-2.5 py-1 bg-blue-50 text-[#1B4FD8] hover:bg-blue-100 rounded text-[11.5px] font-semibold border border-blue-200 transition-colors"
-                        >
-                          View OP Book
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              handleViewOpBook(e);
+                            }}
+                            className="px-2.5 py-1 bg-blue-50 text-[#1B4FD8] hover:bg-blue-100 rounded text-[11.5px] font-semibold border border-blue-200 transition-colors"
+                          >
+                            View OP Book
+                          </button>
+                          <button
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              if (window.confirm(`Delete patient record and encounter for ${e.patientName} (${e.umr})?`)) {
+                                db.deletePatientByUmr(e.umr);
+                                refreshFromDb();
+                              }
+                            }}
+                            className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-[11px] font-semibold border border-red-200 transition-colors"
+                            title="Delete patient and encounter from database"
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

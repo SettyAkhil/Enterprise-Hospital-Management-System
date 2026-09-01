@@ -158,3 +158,42 @@ textarea:focus-visible {
 .critical-pulse {
   animation: critical-pulse 1.5s ease-in-out infinite;
 }
+
+/* Print Optimization for Hospital OP Pass and Documents */
+@media print {
+  html, body, #root {
+    height: auto !important;
+    background: #FFFFFF !important;
+    color: #000000 !important;
+  }
+
+  /* Hide all app chrome, sidebars, headers, buttons, notifications */
+  aside,
+  nav,
+  header,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Ensure card containers expand cleanly for the printer */
+  .overflow-y-auto,
+  .overflow-hidden,
+  .overflow-auto {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Target printable medical passes and records */
+  .printable-card {
+    border: 2px solid #1E293B !important;
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    page-break-inside: avoid !important;
+    border-radius: 12px !important;
+    padding: 24px !important;
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+  }
+}
+
