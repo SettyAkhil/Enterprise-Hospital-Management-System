@@ -24,7 +24,6 @@ import OrderDrawer from "./components/OrderDrawer";
 import CommandPalette from "./components/CommandPalette";
 import Registration from "./components/Registration";
 import OPWorkflow from "./components/OPWorkflow";
-import OPRegistration from "./components/OPRegistration";
 import SmartOCR from "./components/SmartOCR";
 import SymptomAI from "./components/SymptomAI";
 import ClinicalRAG from "./components/ClinicalRAG";
@@ -80,7 +79,6 @@ const NAV: NavItem[] = [
     key: "outpatient", label: "Outpatient", Icon: Icon.Stethoscope,
     children: [
       { key: "op_management", label: "OP Management" },
-      { key: "op_registration", label: "OP Registration" },
       { key: "op_workflow", label: "OP Clinical Journey" },
       { key: "appointments", label: "Appointments" },
       { key: "queue", label: "Queue Management" },
@@ -297,6 +295,8 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [workflowInitialStep, setWorkflowInitialStep] = useState<number>(2);
+  const [selectedWorkflowEncounterId, setSelectedWorkflowEncounterId] = useState<string | undefined>();
 
   const isNurse = userRole === "rn";
 
@@ -543,8 +543,7 @@ export default function App() {
                       module === "triage" ? "Triage" : module === "analytics" ? "Analytics" :
                         module === "radiology" ? "Radiology" :
                           module === "op_management" ? "OP Management" :
-                            module === "op_registration" ? "OP Registration" :
-                              module === "op_workflow" ? "OP Clinical Journey" :
+                            module === "op_workflow" ? "OP Clinical Journey" :
                                 module === "patient_exp" ? "Patient Experience" :
                                   module === "doctor_workflow" ? "Doctor Workflow" :
                                     module === "scheduling" ? "Doctor Scheduling" :
@@ -564,10 +563,22 @@ export default function App() {
                 <PatientSearch
                   onSelect={() => setModule("chart")}
                   onRegister={() => setModule("register")}
+                  onNavigateToWorkflow={(encounterId) => {
+                    setSelectedWorkflowEncounterId(encounterId);
+                    setWorkflowInitialStep(2);
+                    setModule("op_workflow");
+                  }}
                 />
               )}
               {module === "register" && (
                 <Registration
+                  onProceedToQueue={(patient) => {
+                    if (patient?.id) {
+                      setSelectedWorkflowEncounterId(patient.id);
+                    }
+                    setWorkflowInitialStep(2);
+                    setModule("op_workflow");
+                  }}
                   onComplete={() => setModule("patients")}
                   onBack={() => setModule("patients")}
                 />
@@ -600,12 +611,27 @@ export default function App() {
               {/* New modules */}
               {module === "queue" && <QueueManagement />}
               {module === "op_management" && <OPManagement />}
-              {module === "op_registration" && (
-                <OPRegistration onProceedToQueue={() => setModule("op_workflow")} />
+              {module === "op_workflow" && (
+                <OPWorkflow
+                  initialStep={workflowInitialStep}
+                  initialEncounterId={selectedWorkflowEncounterId}
+                  onComplete={() => setModule("op_management")}
+                  onOpenDoctorPortal={(encId) => {
+                    if (encId) setSelectedWorkflowEncounterId(encId);
+                    setModule("doctor_workflow");
+                  }}
+                />
               )}
-              {module === "op_workflow" && <OPWorkflow onComplete={() => setModule("op_management")} />}
               {module === "patient_exp" && <PatientExperience />}
-              {module === "doctor_workflow" && <DoctorWorkflow />}
+              {module === "doctor_workflow" && (
+                <DoctorWorkflow
+                  onNavigateToOPWorkflow={(encId) => {
+                    if (encId) setSelectedWorkflowEncounterId(encId);
+                    setWorkflowInitialStep(5);
+                    setModule("op_workflow");
+                  }}
+                />
+              )}
               {module === "scheduling" && <DoctorScheduling />}
               {module === "admissions" && <Admissions />}
               {module === "readmission" && <Readmission />}

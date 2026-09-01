@@ -7,6 +7,7 @@
 export interface DBPatient {
   umr: string; // Primary Key: e.g. UMR10001
   name: string;
+  dob?: string;
   age: number;
   sex: "Male" | "Female" | "Other";
   phone: string;
@@ -42,9 +43,10 @@ export interface DBOPEncounter {
   queueToken: string;
   queuePosition: number;
   room: string;
+  assessment?: string;
   diagnosis: string;
   icd10: string;
-  prescription: { medicine: string; dosage: string; frequency: string; duration: string }[];
+  prescription: { medicine: string; dosage: string; frequency: string; duration: string; instructions?: string }[];
   investigations: string[];
   advice: string;
   vitals: { bp: string; pulse: string; temp: string; spo2: string; weight: string; notes: string };
@@ -81,6 +83,7 @@ const INITIAL_SEED_PATIENTS: DBPatient[] = [
   {
     umr: "UMR10001",
     name: "Ravi Kumar",
+    dob: "1984-03-15",
     age: 42,
     sex: "Male",
     phone: "(617) 555-0192",
@@ -92,6 +95,7 @@ const INITIAL_SEED_PATIENTS: DBPatient[] = [
   {
     umr: "UMR10002",
     name: "Sunita Patel",
+    dob: "1988-07-22",
     age: 38,
     sex: "Female",
     phone: "(617) 555-0284",
@@ -103,6 +107,7 @@ const INITIAL_SEED_PATIENTS: DBPatient[] = [
   {
     umr: "UMR10048",
     name: "Alex Turner",
+    dob: "1998-08-25",
     age: 28,
     sex: "Male",
     phone: "(617) 555-9011",
@@ -110,44 +115,83 @@ const INITIAL_SEED_PATIENTS: DBPatient[] = [
     bloodGroup: "A+",
     createdAt: "2026-08-25T10:35:00.000Z",
     updatedAt: "2026-08-25T10:35:00.000Z"
+  },
+  {
+    umr: "UMR10067",
+    name: "Rana Dhaggubati",
+    dob: "1990-05-14",
+    age: 36,
+    sex: "Male",
+    phone: "(617) 555-4421",
+    address: "45 Commonwealth Ave, Boston, MA",
+    bloodGroup: "O+",
+    createdAt: "2026-08-31T09:00:00.000Z",
+    updatedAt: "2026-08-31T10:00:00.000Z"
+  },
+  {
+    umr: "UMR10042",
+    name: "Rahul Roy",
+    dob: "1992-11-10",
+    age: 34,
+    sex: "Male",
+    phone: "(617) 555-8833",
+    address: "12 Tremont St, Boston, MA",
+    bloodGroup: "A+",
+    createdAt: "2026-08-31T09:15:00.000Z",
+    updatedAt: "2026-08-31T10:00:00.000Z"
+  },
+  {
+    umr: "UMR10055",
+    name: "Suresh Nair",
+    dob: "1985-02-18",
+    age: 41,
+    sex: "Male",
+    phone: "(617) 555-6677",
+    address: "74 Harvard Ave, Boston, MA",
+    bloodGroup: "B+",
+    createdAt: "2026-08-31T09:30:00.000Z",
+    updatedAt: "2026-08-31T10:00:00.000Z"
   }
 ];
 
 const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
   {
-    id: "ENC-10001-1",
-    umr: "UMR10001",
-    opNumber: "OP001",
-    patientName: "Ravi Kumar",
-    age: 42,
+    id: "ENC-10067-1",
+    umr: "UMR10067",
+    opNumber: "OP123",
+    patientName: "Rana Dhaggubati",
+    age: 36,
     sex: "Male",
-    phone: "(617) 555-0192",
-    address: "24 Park Avenue, Boston, MA",
+    phone: "(617) 555-4421",
+    address: "45 Commonwealth Ave, Boston, MA",
     bloodGroup: "O+",
-    dept: "General Medicine",
+    dept: "Cardiology",
     isNew: true,
-    registrationTime: "12-Jan-2026 09:15 AM",
-    chiefComplaint: "Cough and mild fever",
-    symptoms: ["Cough", "Fever"],
-    aiSpecialty: "General Medicine",
-    aiDoctor: "Dr. Anita Desai",
-    aiConfidence: 94,
+    registrationTime: "10:15 AM",
+    chiefComplaint: "I have been experiencing chest pain since this morning.",
+    symptoms: ["Chest pain", "Breathing difficulty"],
+    aiSpecialty: "Cardiology",
+    aiDoctor: "Dr. Arjun Mehta",
+    aiConfidence: 98,
     doctorGenderPref: "Any",
-    assignedDoctor: "Dr. Anita Desai",
+    assignedDoctor: "Dr. Arjun Mehta",
     doctorStatus: "Available",
-    queueToken: "G-OP001",
+    queueToken: "C-OP123",
     queuePosition: 1,
-    room: "Room 101",
-    diagnosis: "Acute Bronchitis",
-    icd10: "J20.9",
-    prescription: [{ medicine: "Amoxicillin 500mg", dosage: "1 tab", frequency: "TID", duration: "5 days" }],
-    investigations: ["Chest X-Ray"],
-    advice: "Rest and steam inhalation.",
-    vitals: { bp: "120/80 mmHg", pulse: "76 bpm", temp: "99.1 °F", spo2: "98%", weight: "74 kg", notes: "Normal" },
-    billing: { consultationFee: 50, labFee: 30, total: 80, status: "Paid", mode: "Cash" },
+    room: "Room 107",
+    diagnosis: "Acute Coronary Syndrome Rule-Out / Stable Angina",
+    icd10: "I20.9",
+    prescription: [
+      { medicine: "Aspirin 81mg", dosage: "1 tab", frequency: "OD (Once Daily)", duration: "30 days", instructions: "Take after breakfast" },
+      { medicine: "Atorvastatin 40mg", dosage: "1 tab", frequency: "HS (Bedtime)", duration: "30 days", instructions: "Take at bedtime" }
+    ],
+    investigations: ["ECG 12-Lead", "Serum Troponin I"],
+    advice: "Avoid strenuous physical exertion. Follow low-sodium diet.",
+    vitals: { bp: "130/84 mmHg", pulse: "78 bpm", temp: "98.6 °F", spo2: "99%", weight: "82 kg", notes: "Stable" },
+    billing: { consultationFee: 50, labFee: 40, total: 90, status: "Pending", mode: "Card" },
     furtherAction: "None",
-    status: "OP Completed",
-    timestamps: { arrival: "09:00 AM", registration: "09:15 AM", visitCompleted: "10:00 AM" }
+    status: "Under Consultation",
+    timestamps: { arrival: "10:10 AM", registration: "10:15 AM" }
   },
   {
     id: "ENC-10001-2",
@@ -254,8 +298,113 @@ const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
     vitals: { bp: "122/78 mmHg", pulse: "72 bpm", temp: "98.6 °F", spo2: "99%", weight: "78 kg", notes: "Tender ankle" },
     billing: { consultationFee: 50, labFee: 35, total: 85, status: "Paid", mode: "UPI" },
     furtherAction: "Radiology",
-    status: "Registered",
+    status: "In Queue",
     timestamps: { arrival: "10:33 AM", registration: "10:35 AM" }
+  },
+  {
+    id: "ENC-10042-1",
+    umr: "UMR10042",
+    opNumber: "OP094",
+    patientName: "Rahul Roy",
+    age: 34,
+    sex: "Male",
+    phone: "(617) 555-8833",
+    address: "12 Tremont St, Boston, MA",
+    bloodGroup: "A+",
+    dept: "Orthopedics",
+    isNew: true,
+    registrationTime: "10:40 AM",
+    chiefComplaint: "Acute knee joint strain & swelling after heavy workout.",
+    symptoms: ["Joint swelling", "Severe Knee Pain"],
+    aiSpecialty: "Orthopedics",
+    aiDoctor: "Dr. Sanjay Kapoor",
+    aiConfidence: 96,
+    doctorGenderPref: "Any",
+    assignedDoctor: "Dr. Sanjay Kapoor",
+    doctorStatus: "Available",
+    queueToken: "O-OP094",
+    queuePosition: 1,
+    room: "Room 116",
+    diagnosis: "Patellar Tendonitis & Quadriceps Strain",
+    icd10: "M76.51",
+    prescription: [{ medicine: "Aceclofenac 100mg", dosage: "1 tab", frequency: "BD", duration: "5 days" }],
+    investigations: ["X-Ray Knee AP/Lateral"],
+    advice: "Knee brace support and rest for 1 week.",
+    vitals: { bp: "124/80 mmHg", pulse: "74 bpm", temp: "98.6 °F", spo2: "99%", weight: "76 kg", notes: "Mild knee effusion" },
+    billing: { consultationFee: 50, labFee: 35, total: 85, status: "Pending", mode: "Card" },
+    furtherAction: "Radiology",
+    status: "In Queue",
+    timestamps: { arrival: "10:38 AM", registration: "10:40 AM" }
+  },
+  {
+    id: "ENC-10055-1",
+    umr: "UMR10055",
+    opNumber: "OP055",
+    patientName: "Suresh Nair",
+    age: 41,
+    sex: "Male",
+    phone: "(617) 555-6677",
+    address: "74 Harvard Ave, Boston, MA",
+    bloodGroup: "B+",
+    dept: "General Medicine",
+    isNew: true,
+    registrationTime: "10:45 AM",
+    chiefComplaint: "Persistent high-grade fever & headache for 3 days.",
+    symptoms: ["Fever", "Headache", "Body aches"],
+    aiSpecialty: "General Medicine",
+    aiDoctor: "Dr. Vikram Malhotra",
+    aiConfidence: 95,
+    doctorGenderPref: "Any",
+    assignedDoctor: "Dr. Vikram Malhotra",
+    doctorStatus: "Available",
+    queueToken: "G-OP055",
+    queuePosition: 1,
+    room: "Room 111",
+    diagnosis: "Acute Viral Pyrexia with Cephalea",
+    icd10: "R50.9",
+    prescription: [{ medicine: "Paracetamol 650mg", dosage: "1 tab", frequency: "TID", duration: "5 days" }],
+    investigations: ["Complete Blood Count (CBC)", "CRP"],
+    advice: "Plenty of oral hydration and adequate bed rest.",
+    vitals: { bp: "118/76 mmHg", pulse: "84 bpm", temp: "101.2 °F", spo2: "98%", weight: "70 kg", notes: "Febrile" },
+    billing: { consultationFee: 50, labFee: 25, total: 75, status: "Paid", mode: "Cash" },
+    furtherAction: "Laboratory",
+    status: "In Queue",
+    timestamps: { arrival: "10:42 AM", registration: "10:45 AM" }
+  },
+  {
+    id: "ENC-10001-1",
+    umr: "UMR10001",
+    opNumber: "OP001",
+    patientName: "Ravi Kumar",
+    age: 42,
+    sex: "Male",
+    phone: "(617) 555-0192",
+    address: "24 Park Avenue, Boston, MA",
+    bloodGroup: "O+",
+    dept: "General Medicine",
+    isNew: true,
+    registrationTime: "12-Jan-2026 09:15 AM",
+    chiefComplaint: "Cough and mild fever",
+    symptoms: ["Cough", "Fever"],
+    aiSpecialty: "General Medicine",
+    aiDoctor: "Dr. Ramesh Kumar",
+    aiConfidence: 94,
+    doctorGenderPref: "Any",
+    assignedDoctor: "Dr. Ramesh Kumar",
+    doctorStatus: "Available",
+    queueToken: "G-OP001",
+    queuePosition: 1,
+    room: "Room 103",
+    diagnosis: "Acute Bronchitis",
+    icd10: "J20.9",
+    prescription: [{ medicine: "Amoxicillin 500mg", dosage: "1 tab", frequency: "TID", duration: "5 days" }],
+    investigations: ["Chest X-Ray"],
+    advice: "Rest and steam inhalation.",
+    vitals: { bp: "120/80 mmHg", pulse: "76 bpm", temp: "99.1 °F", spo2: "98%", weight: "74 kg", notes: "Normal" },
+    billing: { consultationFee: 50, labFee: 30, total: 80, status: "Paid", mode: "Cash" },
+    furtherAction: "None",
+    status: "OP Completed",
+    timestamps: { arrival: "09:00 AM", registration: "09:15 AM", visitCompleted: "10:00 AM" }
   }
 ];
 
@@ -286,6 +435,37 @@ class HospitalDatabase {
     }
     if (!localStorage.getItem(STORAGE_KEYS.OP_COUNTER)) {
       localStorage.setItem(STORAGE_KEYS.OP_COUNTER, "33");
+    }
+
+    // Clean up Mangapathi Bhupathi data and deduplicate redundant encounters
+    try {
+      const pData = localStorage.getItem(STORAGE_KEYS.PATIENTS);
+      if (pData) {
+        const parsed: DBPatient[] = JSON.parse(pData);
+        const filtered = parsed.filter(p => !p.name.toLowerCase().includes("mangapathi") && !p.name.toLowerCase().includes("bhupathi"));
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(filtered));
+        }
+      }
+      const eData = localStorage.getItem(STORAGE_KEYS.ENCOUNTERS);
+      if (eData) {
+        const parsedE: DBOPEncounter[] = JSON.parse(eData);
+        const seen = new Set<string>();
+        const filteredE = parsedE.filter(e => {
+          if (e.patientName.toLowerCase().includes("mangapathi") || e.patientName.toLowerCase().includes("bhupathi")) {
+            return false;
+          }
+          const key = `${e.umr}_${e.opNumber}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        if (filteredE.length !== parsedE.length) {
+          localStorage.setItem(STORAGE_KEYS.ENCOUNTERS, JSON.stringify(filteredE));
+        }
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -340,6 +520,23 @@ class HospitalDatabase {
     return this.getEncounters().find(e => e.id === id);
   }
 
+  // ── Patient Matching & Duplicate Verification ─────────────────────────────
+
+  /**
+   * Identifies if entered patient details match an existing patient in the database.
+   * If the name matches an existing record, but any detail (phone, age, sex) differs,
+   * it treats them as a NEW patient and reports the mismatches.
+   */
+  public findMatchingPatient(params: {
+    fullName: string;
+    dob?: string;
+    age?: number;
+    sex?: string;
+    phone?: string;
+  }): PatientMatchResult {
+    return findMatchingPatient(this.getPatients(), params);
+  }
+
   // ── High-Level OP Workflow Methods ────────────────────────────────────────
 
   /**
@@ -382,6 +579,7 @@ class HospitalDatabase {
     const newPatient: DBPatient = {
       umr: newUmr,
       name: fullName,
+      dob: data.dob,
       age: data.age,
       sex: data.sex || "Male",
       phone: data.phone || "(617) 555-0199",
@@ -523,6 +721,38 @@ class HospitalDatabase {
   }
 
   /**
+   * Delete patient and all their encounters by UMR
+   */
+  public deletePatientByUmr(umr: string): void {
+    const patients = this.getPatients().filter(p => p.umr.toUpperCase() !== umr.toUpperCase());
+    const encounters = this.getEncounters().filter(e => e.umr.toUpperCase() !== umr.toUpperCase());
+    localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(patients));
+    localStorage.setItem(STORAGE_KEYS.ENCOUNTERS, JSON.stringify(encounters));
+    this.notify();
+  }
+
+  /**
+   * Delete patient and all their encounters by Name
+   */
+  public deletePatientByName(name: string): void {
+    const cleanName = name.trim().toLowerCase();
+    const patients = this.getPatients().filter(p => !p.name.toLowerCase().includes(cleanName));
+    const encounters = this.getEncounters().filter(e => !e.patientName.toLowerCase().includes(cleanName));
+    localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(patients));
+    localStorage.setItem(STORAGE_KEYS.ENCOUNTERS, JSON.stringify(encounters));
+    this.notify();
+  }
+
+  /**
+   * Delete a single encounter by ID
+   */
+  public deleteEncounterById(id: string): void {
+    const encounters = this.getEncounters().filter(e => e.id !== id);
+    localStorage.setItem(STORAGE_KEYS.ENCOUNTERS, JSON.stringify(encounters));
+    this.notify();
+  }
+
+  /**
    * Reset database back to seed defaults
    */
   public resetDatabase() {
@@ -534,3 +764,109 @@ class HospitalDatabase {
 }
 
 export const db = new HospitalDatabase();
+
+export interface PatientMatchResult {
+  match: DBPatient | null; // Non-null ONLY if name matches AND all other details (phone, age, sex) do NOT conflict with the DB record
+  nameMatchedPatient: DBPatient | null; // Non-null if ANY patient in DB has the same name
+  mismatches: string[]; // List of specific mismatched fields
+}
+
+/**
+ * Robust matching logic:
+ * When a name is entered:
+ * - If name matches a patient in DB and all other entered details (phone, age, sex) match -> Existing Patient (match non-null)
+ * - If name matches, but ANY detail (phone, age, sex) mismatches -> New Patient (match is null, nameMatchedPatient is set, mismatches lists details)
+ * - If name does not match any patient in DB -> New Patient (match and nameMatchedPatient are null)
+ */
+export function findMatchingPatient(
+  patients: DBPatient[],
+  params: {
+    fullName: string;
+    dob?: string;
+    age?: number;
+    sex?: string;
+    phone?: string;
+  }
+): PatientMatchResult {
+  const cleanName = params.fullName.trim().toLowerCase();
+  if (cleanName.length < 2) {
+    return { match: null, nameMatchedPatient: null, mismatches: [] };
+  }
+
+  // Find all patients in DB with the exact same name (case-insensitive)
+  const candidates = patients.filter(p => p.name.trim().toLowerCase() === cleanName);
+  if (candidates.length === 0) {
+    return { match: null, nameMatchedPatient: null, mismatches: [] };
+  }
+
+  // Check each candidate for an exact non-conflicting match
+  for (const candidate of candidates) {
+    const candidateMismatches: string[] = [];
+
+    // 1. Exact Date of Birth (DOB) comparison
+    if (params.dob && candidate.dob) {
+      if (params.dob.trim() !== candidate.dob.trim()) {
+        candidateMismatches.push(`DOB differs (${params.dob} vs registered ${candidate.dob})`);
+      }
+    } else if (params.age !== undefined && params.age !== null && params.age > 0) {
+      // Fallback to age comparison if candidate record does not have explicit DOB stored
+      if (params.age !== candidate.age) {
+        candidateMismatches.push(`Age differs (${params.age} yrs vs registered ${candidate.age} yrs)`);
+      }
+    }
+
+    // 2. Phone number comparison (digits only, if phone has at least 4 digits)
+    if (params.phone && params.phone.trim().length >= 4) {
+      const inputDigits = params.phone.replace(/\D/g, "");
+      const dbDigits = candidate.phone.replace(/\D/g, "");
+      if (inputDigits && dbDigits && inputDigits !== dbDigits) {
+        candidateMismatches.push(`Phone number differs (${params.phone.trim()} vs ${candidate.phone})`);
+      }
+    }
+
+    // 3. Gender comparison (if sex is provided and not empty)
+    if (params.sex && params.sex.trim() !== "") {
+      if (params.sex.trim().toLowerCase() !== candidate.sex.trim().toLowerCase()) {
+        candidateMismatches.push(`Gender differs (${params.sex} vs ${candidate.sex})`);
+      }
+    }
+
+    // If zero mismatches, we found an exact match!
+    if (candidateMismatches.length === 0) {
+      return {
+        match: candidate,
+        nameMatchedPatient: candidate,
+        mismatches: []
+      };
+    }
+  }
+
+  // If no candidate matched without mismatches, collect the mismatches of the primary candidate
+  const primaryCandidate = candidates[0];
+  const detectedMismatches: string[] = [];
+
+  if (params.dob && primaryCandidate.dob) {
+    if (params.dob.trim() !== primaryCandidate.dob.trim()) {
+      detectedMismatches.push(`DOB differs: ${params.dob} vs registered ${primaryCandidate.dob}`);
+    }
+  } else if (params.age !== undefined && params.age !== null && params.age > 0 && params.age !== primaryCandidate.age) {
+    detectedMismatches.push(`Age differs: ${params.age} yrs vs registered ${primaryCandidate.age} yrs`);
+  }
+
+  if (params.phone && params.phone.trim().length >= 4) {
+    const inputDigits = params.phone.replace(/\D/g, "");
+    const dbDigits = primaryCandidate.phone.replace(/\D/g, "");
+    if (inputDigits && dbDigits && inputDigits !== dbDigits) {
+      detectedMismatches.push(`Phone number differs: "${params.phone.trim()}" vs registered "${primaryCandidate.phone}"`);
+    }
+  }
+  if (params.sex && params.sex.trim() !== "" && params.sex.trim().toLowerCase() !== primaryCandidate.sex.trim().toLowerCase()) {
+    detectedMismatches.push(`Gender differs: ${params.sex} vs registered ${primaryCandidate.sex}`);
+  }
+
+  return {
+    match: null,
+    nameMatchedPatient: primaryCandidate,
+    mismatches: detectedMismatches
+  };
+}

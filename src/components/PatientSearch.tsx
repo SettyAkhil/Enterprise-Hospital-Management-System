@@ -1,120 +1,334 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StatusBadge, Btn, Input } from "./shared";
 import { Icon } from "./icons";
+import { db, DBPatient, DBOPEncounter } from "../services/db";
 
-const PATIENTS = [
-  { initials: "JS", name: "John Smith", mrn: "100245", dob: "04/12/1985", age: 41, sex: "M", provider: "Dr. Anderson", status: "Inpatient", location: "Room 204", phone: "(617) 555-0182", ins: "BlueCross PPO", alerts: ["Allergy: Penicillin"] },
-  { initials: "MJ", name: "Mary Jones", mrn: "100246", dob: "09/30/1972", age: 53, sex: "F", provider: "Dr. Lee", status: "Inpatient", location: "Room 312", phone: "(617) 555-0291", ins: "Aetna HMO", alerts: [] },
-  { initials: "TR", name: "Thomas Reed", mrn: "100301", dob: "07/14/1958", age: 68, sex: "M", provider: "Dr. Patel", status: "Critical", location: "ICU Bed 3", phone: "(617) 555-0344", ins: "Medicare", alerts: ["Allergy: Sulfa", "DNR on file"] },
-  { initials: "SC", name: "Sarah Connelly", mrn: "100289", dob: "02/28/1991", age: 35, sex: "F", provider: "Dr. Adams", status: "Active", location: "Clinic 101", phone: "(617) 555-0118", ins: "United PPO", alerts: [] },
-  { initials: "EV", name: "Elena Vasquez", mrn: "100198", dob: "11/05/1968", age: 57, sex: "F", provider: "Dr. Chen", status: "Pending", location: "ED Bay 7", phone: "(617) 555-0227", ins: "Medicaid", alerts: ["Allergy: Latex"] },
-  { initials: "MK", name: "Marcus Kim", mrn: "100377", dob: "05/17/1983", age: 43, sex: "M", provider: "Dr. Park", status: "Inpatient", location: "Room 418", phone: "(617) 555-0461", ins: "Cigna PPO", alerts: [] },
-  { initials: "DW", name: "Diane Walsh", mrn: "100142", dob: "12/30/1945", age: 80, sex: "F", provider: "Dr. Anderson", status: "Active", location: "Clinic 203", phone: "(617) 555-0085", ins: "Medicare", alerts: ["Fall Risk"] },
-  { initials: "RG", name: "Robert Garcia", mrn: "100422", dob: "08/08/1997", age: 29, sex: "M", provider: "Dr. Lee", status: "Active", location: "Clinic 102", phone: "(617) 555-0539", ins: "BlueCross PPO", alerts: [] },
-];
-
-export default function PatientSearch({ onSelect, onRegister }: {
-  onSelect: (p: typeof PATIENTS[0]) => void;
+export default function PatientSearch({
+  onSelect,
+  onRegister,
+  onNavigateToWorkflow
+}: {
+  onSelect: (p: DBPatient) => void;
   onRegister: () => void;
+  onNavigateToWorkflow?: (encounterId: string) => void;
 }) {
   const [q, setQ] = useState("");
-  const filtered = q.length > 0
-    ? PATIENTS.filter(p =>
-        p.name.toLowerCase().includes(q.toLowerCase()) ||
-        p.mrn.includes(q) ||
-        p.dob.includes(q) ||
-        p.phone.includes(q)
-      )
-    : PATIENTS;
+  const [selectedDept, setSelectedDept] = useState("All");
+  const [selectedGender, setSelectedGender] = useState("All");
+  const [selectedType, setSelectedType] = useState("All");
+
+  const [patients, setPatients] = useState<DBPatient[]>([]);
+  const [encounters, setEncounters] = useState<DBOPEncounter[]>([]);
+
+  const refreshFromDb = () => {
+    setPatients(db.getPatients());
+    setEncounters(db.getEncounters());
+  };
+
+  useEffect(() => {
+    refreshFromDb();
+    const unsubscribe = db.subscribe(refreshFromDb);
+    return () => unsubscribe();
+  }, []);
+
+  // Filter patients live
+  const filtered = patients.filter(p => {
+    const pEncounters = encounters.filter(e => e.umr === p.umr);
+    const latestEncounter = pEncounters[0];
+
+    // Search query matching
+    if (q.trim()) {
+      const query = q.trim().toLowerCase();
+      const nameMatch = p.name.toLowerCase().includes(query);
+      const umrMatch = p.umr.toLowerCase().includes(query);
+      const phoneMatch = p.phone.toLowerCase().includes(query);
+      const opMatch = pEncounters.some(e => e.opNumber.toLowerCase().includes(query));
+      const deptMatch = pEncounters.some(e => e.dept.toLowerCase().includes(query));
+      const docMatch = pEncounters.some(e => (e.assignedDoctor || "").toLowerCase().includes(query));
+
+      if (!nameMatch && !umrMatch && !phoneMatch && !opMatch && !deptMatch && !docMatch) {
+        return false;
+      }
+    }
+
+    // Department filter
+    if (selectedDept !== "All") {
+      const hasDept = pEncounters.some(e => e.dept.toLowerCase() === selectedDept.toLowerCase());
+      if (!hasDept) return false;
+    }
+
+    // Gender filter
+    if (selectedGender !== "All") {
+      if (p.sex.toLowerCase() !== selectedGender.toLowerCase()) return false;
+    }
+
+    // Type filter
+    if (selectedType === "Pediatric" && p.age >= 18) return false;
+    if (selectedType === "Adult" && (p.age < 18 || p.age >= 60)) return false;
+    if (selectedType === "Senior" && p.age < 60) return false;
+
+    return true;
+  });
+
+  const getInitials = (name: string) => {
+    const parts = name.trim().split(" ").filter(Boolean);
+    if (parts.length === 0) return "PT";
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
+      {/* Header */}
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3.5 flex items-center justify-between">
         <div>
-          <h1 className="text-base font-semibold text-gray-900">Patient Search</h1>
-          <p className="text-[11.5px] text-[#64748B]">{PATIENTS.length} active records · Search by name, MRN, DOB, or phone</p>
+          <h1 className="text-base font-semibold text-gray-900">Patient Directory &amp; Master Search</h1>
+          <p className="text-[11.5px] text-[#64748B]">
+            {patients.length} registered patients in database · Search by patient name, permanent UMR, visit OP number, or phone
+          </p>
         </div>
-        <Btn variant="primary" size="sm" onClick={onRegister}><Icon.Plus /> New Patient</Btn>
+        <Btn variant="primary" size="sm" onClick={onRegister}>
+          <Icon.Plus /> + Register New Patient
+        </Btn>
       </div>
 
-      <div className="p-5 space-y-4">
-        {/* Search Bar */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="p-6 max-w-5xl mx-auto space-y-4">
+        {/* Search & Filter Bar */}
+        <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-5 shadow-sm space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+            {/* Query input */}
+            <div className="md:col-span-6">
+              <label className="text-[11px] font-bold text-[#64748B] uppercase tracking-wide block mb-1">
+                Search Patient (Name / UMR / OP No / Phone)
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={q}
+                  onChange={e => setQ(e.target.value)}
+                  placeholder="Type patient name (e.g. Zoro), UMR10049, OP034, or phone..."
+                  className="w-full border-2 border-[#94A3B8] rounded-xl px-3.5 py-2 text-[13px] bg-white focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 font-medium text-gray-900 placeholder:text-gray-400"
+                />
+                <span className="absolute right-3 top-2.5 text-gray-400 text-sm">🔍</span>
+              </div>
+            </div>
+
+            {/* Department Filter */}
             <div className="md:col-span-2">
-              <label className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wide block mb-1">Patient Name / MRN</label>
-              <Input value={q} onChange={setQ} placeholder="Search name, MRN, DOB, phone..." icon={<Icon.Search />} />
+              <label className="text-[11px] font-bold text-[#64748B] uppercase tracking-wide block mb-1">
+                Department
+              </label>
+              <select
+                value={selectedDept}
+                onChange={e => setSelectedDept(e.target.value)}
+                className="w-full border-2 border-[#94A3B8] rounded-xl px-3 py-2 text-[12.5px] text-gray-700 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
+              >
+                <option value="All">All Depts</option>
+                <option value="General Medicine">General Med</option>
+                <option value="Cardiology">Cardiology</option>
+                <option value="Pulmonology">Pulmonology</option>
+                <option value="Orthopedics">Orthopedics</option>
+                <option value="Pediatrics">Pediatrics</option>
+                <option value="Emergency">Emergency</option>
+              </select>
             </div>
-            <div>
-              <label className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wide block mb-1">Date of Birth</label>
-              <Input placeholder="MM/DD/YYYY" />
+
+            {/* Gender Filter */}
+            <div className="md:col-span-2">
+              <label className="text-[11px] font-bold text-[#64748B] uppercase tracking-wide block mb-1">
+                Gender
+              </label>
+              <select
+                value={selectedGender}
+                onChange={e => setSelectedGender(e.target.value)}
+                className="w-full border-2 border-[#94A3B8] rounded-xl px-3 py-2 text-[12.5px] text-gray-700 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
+              >
+                <option value="All">All Genders</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
-            <div>
-              <label className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wide block mb-1">Status</label>
-              <select className="w-full border border-[#DDE2EC] rounded text-[12.5px] text-gray-700 px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] bg-white">
-                <option>All Patients</option>
-                <option>Inpatient</option>
-                <option>Active</option>
-                <option>Pending</option>
-                <option>Discharged</option>
+
+            {/* Age Group Filter */}
+            <div className="md:col-span-2">
+              <label className="text-[11px] font-bold text-[#64748B] uppercase tracking-wide block mb-1">
+                Age Group
+              </label>
+              <select
+                value={selectedType}
+                onChange={e => setSelectedType(e.target.value)}
+                className="w-full border-2 border-[#94A3B8] rounded-xl px-3 py-2 text-[12.5px] text-gray-700 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
+              >
+                <option value="All">All Ages</option>
+                <option value="Pediatric">Pediatric (&lt;18)</option>
+                <option value="Adult">Adult (18-59)</option>
+                <option value="Senior">Senior (60+)</option>
               </select>
             </div>
           </div>
-          <div className="flex items-center gap-2 mt-3">
-            <Btn variant="primary" size="sm">Search</Btn>
-            <Btn variant="ghost" size="sm">Clear</Btn>
-            <span className="text-[11.5px] text-[#64748B] ml-2">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
+
+          <div className="flex items-center justify-between pt-1 border-t border-[#E2E8F0] text-[11.5px] text-[#64748B]">
+            <div className="flex items-center gap-2">
+              <span>Showing <strong>{filtered.length}</strong> of <strong>{patients.length}</strong> registered patient profiles</span>
+              {q && (
+                <button
+                  onClick={() => setQ("")}
+                  className="text-xs text-[#1B4FD8] hover:underline font-semibold ml-2 cursor-pointer"
+                >
+                  Clear Search
+                </button>
+              )}
+            </div>
+            <span className="text-[11px] text-[#94A3B8]">Database Live Sync Active ✓</span>
           </div>
         </div>
 
-        {/* Results */}
-        <div className="space-y-2">
-          {filtered.map((p, i) => (
-            <div key={i} className="bg-white border border-[#DDE2EC] rounded hover:border-[#1B4FD8] transition-colors">
-              <div className="p-4 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#1B4FD8] flex items-center justify-center text-white text-[13px] font-semibold flex-shrink-0">
-                  {p.initials}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[13.5px] font-semibold text-gray-900">{p.name}</span>
-                        {p.alerts.map((a, j) => (
-                          <span key={j} className="bg-[#FEF3C7] text-[#B45309] text-[11px] font-medium px-1.5 py-0.5 rounded border border-[#FDE68A]">
-                            ⚠ {a}
+        {/* Results List */}
+        <div className="space-y-3">
+          {filtered.map((p) => {
+            const pEncounters = encounters.filter(e => e.umr === p.umr);
+            const latestEncounter = pEncounters[0];
+            const isFemale = p.sex?.toLowerCase() === "female";
+
+            return (
+              <div
+                key={p.umr}
+                className="bg-white border-2 border-[#E2E8F0] hover:border-[#1B4FD8] rounded-2xl p-5 shadow-sm transition-all hover:shadow-md"
+              >
+                <div className="flex items-start gap-4">
+                  {/* Avatar */}
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-[15px] flex-shrink-0 shadow-xs ${
+                    isFemale
+                      ? "bg-pink-100 text-pink-700 border border-pink-200"
+                      : "bg-blue-100 text-[#1B4FD8] border border-blue-200"
+                  }`}>
+                    {getInitials(p.name)}
+                  </div>
+
+                  {/* Patient Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className="text-[15px] font-bold text-gray-900">{p.name}</span>
+                          <span className="font-mono text-[12px] font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200">
+                            {p.umr}
                           </span>
-                        ))}
+                          {p.age < 18 && (
+                            <span className="bg-amber-50 text-amber-800 text-[10.5px] font-bold px-2 py-0.5 rounded border border-amber-200">
+                              Pediatric
+                            </span>
+                          )}
+                          <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded border ${
+                            isFemale ? "bg-pink-50 text-pink-700 border-pink-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                          }`}>
+                            {p.sex}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 mt-1 text-[12px] text-[#64748B] flex-wrap">
+                          <span>Age: <strong className="text-gray-900">{p.age} yrs</strong></span>
+                          <span>·</span>
+                          <span>Phone: <strong className="text-gray-900">{p.phone}</strong></span>
+                          <span>·</span>
+                          <span>Address: <span className="text-gray-700">{p.address}</span></span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 mt-0.5 text-[11.5px] text-[#64748B] flex-wrap">
-                        <span className="font-mono text-[#374151]">MRN: {p.mrn}</span>
-                        <span>DOB: {p.dob} · {p.age} yrs · {p.sex === "M" ? "Male" : "Female"}</span>
-                        <span>{p.phone}</span>
-                        <span>{p.ins}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1 text-[11.5px] text-[#64748B]">
-                        <span>PCP: {p.provider}</span>
-                        <span>·</span>
-                        <span>{p.location}</span>
+
+                      {/* Status / Encounter Badge */}
+                      <div className="flex flex-col items-end gap-1">
+                        {latestEncounter && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] uppercase font-bold text-[#64748B]">Active OP:</span>
+                            <span className="font-mono text-[13px] font-bold text-[#D97706] bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              {latestEncounter.opNumber}
+                            </span>
+                            <StatusBadge status={latestEncounter.status || "Registered"} />
+                          </div>
+                        )}
+                        <span className="text-[11px] text-[#94A3B8]">
+                          {pEncounters.length} OP Encounter{pEncounters.length !== 1 ? "s" : ""} on Record
+                        </span>
                       </div>
                     </div>
-                    <StatusBadge status={p.status} />
+
+                    {/* Active Clinical Encounter Preview Strip */}
+                    {latestEncounter && (
+                      <div className="mt-3 pt-3 border-t border-[#F1F5F9] flex items-center justify-between flex-wrap gap-2 text-[12px] bg-[#F8FAFC] p-2.5 rounded-xl border border-[#E2E8F0]">
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <div>
+                            <span className="text-[#64748B] text-[11px]">Department: </span>
+                            <strong className="text-[#1B4FD8]">{latestEncounter.dept || "General Medicine"}</strong>
+                          </div>
+                          {latestEncounter.assignedDoctor && (
+                            <div>
+                              <span className="text-[#64748B] text-[11px]">Attending Doctor: </span>
+                              <strong className="text-gray-900">{latestEncounter.assignedDoctor}</strong>
+                              {latestEncounter.room && (
+                                <span className="text-[#64748B] font-mono text-[11px] ml-1">({latestEncounter.room})</span>
+                              )}
+                            </div>
+                          )}
+                          {latestEncounter.chiefComplaint && (
+                            <div className="max-w-xs truncate text-[#475569]">
+                              <span className="text-[#64748B] text-[11px]">Complaint: </span>
+                              "{latestEncounter.chiefComplaint}"
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Quick Clinical Journey Action */}
+                        {onNavigateToWorkflow && (
+                          <button
+                            onClick={() => onNavigateToWorkflow(latestEncounter.id)}
+                            className="px-3 py-1 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[11.5px] font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>✨</span> Clinical Triage &amp; Journey →
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Bottom Action Row */}
+                    <div className="flex justify-between items-center mt-3 pt-2">
+                      <div className="text-[11px] text-[#94A3B8]">
+                        Registered on: {new Date(p.createdAt).toLocaleDateString()}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Btn variant="outline" size="xs" onClick={() => onSelect(p)}>
+                          Open Chart
+                        </Btn>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Delete patient record and all history for ${p.name} (${p.umr})?`)) {
+                              db.deletePatientByUmr(p.umr);
+                              refreshFromDb();
+                            }
+                          }}
+                          className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-[11px] font-semibold border border-red-200 transition-colors cursor-pointer"
+                          title="Delete patient from database"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <Btn variant="primary" size="xs" onClick={() => onSelect(p)}>Open Chart</Btn>
-                  <Btn variant="outline" size="xs">New Encounter</Btn>
-                  <Btn variant="ghost" size="xs">More</Btn>
-                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+
           {filtered.length === 0 && (
-            <div className="bg-white border border-[#DDE2EC] rounded p-12 text-center">
+            <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-12 text-center shadow-sm">
               <div className="text-[#94A3B8] text-4xl mb-3">🔍</div>
-              <div className="text-sm font-semibold text-gray-700 mb-1">No patients found</div>
-              <div className="text-[12px] text-[#64748B] mb-4">Try searching by a different name, MRN, or date of birth.</div>
-              <Btn variant="primary" size="sm" onClick={onRegister}><Icon.Plus /> Register New Patient</Btn>
+              <div className="text-base font-bold text-gray-800 mb-1">No patients found</div>
+              <div className="text-[12.5px] text-[#64748B] mb-5">
+                {q ? `No registered patient matched "${q}".` : "No registered patients match the selected filters."}
+              </div>
+              <Btn variant="primary" size="sm" onClick={onRegister}>
+                <Icon.Plus /> Register New Patient
+              </Btn>
             </div>
           )}
         </div>
