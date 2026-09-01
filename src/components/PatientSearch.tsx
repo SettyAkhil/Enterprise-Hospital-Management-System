@@ -28,7 +28,9 @@ export default function PatientSearch({
   useEffect(() => {
     refreshFromDb();
     const unsubscribe = db.subscribe(refreshFromDb);
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Filter patients live

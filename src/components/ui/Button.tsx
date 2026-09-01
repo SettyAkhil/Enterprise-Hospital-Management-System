@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "../../lib/cn";
 
 type ButtonVariant =
-  "default" | "primary" | "secondary" | "ghost" | "destructive";
+  "default" | "primary" | "secondary" | "ghost" | "destructive" | "danger";
 type ButtonSize = "default" | "sm" | "lg";
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -17,6 +17,7 @@ const variantClassMap: Record<ButtonVariant, string> = {
   secondary: "secondary",
   ghost: "ghost",
   destructive: "destructive",
+  danger: "destructive",
 };
 
 const sizeClassMap: Record<ButtonSize, string> = {

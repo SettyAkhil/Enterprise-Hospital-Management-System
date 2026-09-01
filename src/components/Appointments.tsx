@@ -240,7 +240,9 @@ export default function Appointments({ onSelect }: { onSelect?: () => void }) {
     const unsub = db.subscribe(() => {
       syncWithDb();
     });
-    return () => unsub();
+    return () => {
+      unsub();
+    };
   }, []);
 
   const completed = appointments.filter(a => a.status === "Completed").length;

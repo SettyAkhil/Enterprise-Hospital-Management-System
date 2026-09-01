@@ -131,19 +131,21 @@ export function Card({ title, children, actions, className }: {
 }
 
 // ─── Btn ──────────────────────────────────────────────────────────────────────
-export function Btn({ children, variant = "primary", size = "sm", onClick, className }: {
+export function Btn({ children, variant = "primary", size = "sm", onClick, className, disabled, type = "button" }: {
   children: React.ReactNode;
   variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
   size?: "xs" | "sm" | "md";
   onClick?: () => void;
   className?: string;
+  disabled?: boolean;
+  type?: "button" | "submit" | "reset";
 }) {
   const variants = {
-    primary: "bg-[#1B4FD8] text-white hover:bg-[#1740B4] border border-[#1B4FD8]",
-    secondary: "bg-[#E8EDF5] text-[#1E3A6E] hover:bg-[#D5DFF0] border border-[#C7D2E7]",
-    ghost: "bg-transparent text-[#64748B] hover:bg-[#F1F5F9] border border-transparent",
-    danger: "bg-[#DC2626] text-white hover:bg-[#B91C1C] border border-[#DC2626]",
-    outline: "bg-white text-[#374151] hover:bg-[#F8FAFC] border border-[#DDE2EC]",
+    primary: "bg-[#1B4FD8] text-white hover:bg-[#1740B4] border border-[#1B4FD8] disabled:opacity-50 disabled:cursor-not-allowed",
+    secondary: "bg-[#E8EDF5] text-[#1E3A6E] hover:bg-[#D5DFF0] border border-[#C7D2E7] disabled:opacity-50 disabled:cursor-not-allowed",
+    ghost: "bg-transparent text-[#64748B] hover:bg-[#F1F5F9] border border-transparent disabled:opacity-50 disabled:cursor-not-allowed",
+    danger: "bg-[#DC2626] text-white hover:bg-[#B91C1C] border border-[#DC2626] disabled:opacity-50 disabled:cursor-not-allowed",
+    outline: "bg-white text-[#374151] hover:bg-[#F8FAFC] border border-[#DDE2EC] disabled:opacity-50 disabled:cursor-not-allowed",
   };
   const sizes = {
     xs: "px-2 py-1 text-[11px]",
@@ -151,7 +153,10 @@ export function Btn({ children, variant = "primary", size = "sm", onClick, class
     md: "px-4 py-2 text-[13px]",
   };
   return (
-    <button onClick={onClick}
+    <button
+      type={type}
+      disabled={disabled}
+      onClick={onClick}
       className={`${variants[variant]} ${sizes[size]} rounded font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${className || ""}`}>
       {children}
     </button>
@@ -159,13 +164,27 @@ export function Btn({ children, variant = "primary", size = "sm", onClick, class
 }
 
 // ─── Input ────────────────────────────────────────────────────────────────────
-export function Input({ placeholder, value, onChange, icon, className }: {
-  placeholder?: string; value?: string; onChange?: (v: string) => void; icon?: React.ReactNode; className?: string;
+export function Input({ placeholder, value, onChange, icon, className, type = "text", required, disabled, name, readOnly }: {
+  placeholder?: string;
+  value?: string;
+  onChange?: (v: string) => void;
+  icon?: React.ReactNode;
+  className?: string;
+  type?: string;
+  required?: boolean;
+  disabled?: boolean;
+  name?: string;
+  readOnly?: boolean;
 }) {
   return (
     <div className={`relative ${className || ""}`}>
       {icon && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8]">{icon}</span>}
       <input
+        type={type}
+        required={required}
+        disabled={disabled}
+        name={name}
+        readOnly={readOnly}
         value={value}
         onChange={e => onChange?.(e.target.value)}
         placeholder={placeholder}

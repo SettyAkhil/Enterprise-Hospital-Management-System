@@ -319,7 +319,7 @@ const INITIAL_DISCHARGED: DischargedPatientRecord[] = [
 ];
 
 export class BedDatabase {
-  private static load(): BedRecord[] {
+  static load(): BedRecord[] {
     if (typeof window === "undefined") return INITIAL_BEDS;
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);

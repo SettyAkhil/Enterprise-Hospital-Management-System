@@ -23,7 +23,7 @@ const DOCTORS_LIST: DoctorProfile[] = [
   { id: "all", name: "All Doctors (Combined Hospital Queue)", specialty: "All Departments", room: "All Rooms" },
 ];
 
-export const DUMMY_PRESCRIPTION_TEMPLATES = [
+const DUMMY_PRESCRIPTION_TEMPLATES = [
   {
     id: "cardio",
     name: "🫀 Cardiology / Angina",
@@ -168,7 +168,9 @@ export default function DoctorWorkflow({
     const unsub = db.subscribe(() => {
       refreshDb(false);
     });
-    return () => unsub();
+    return () => {
+      unsub();
+    };
   }, [selectedDoctor]);
 
   const loadEncounterData = (enc: DBOPEncounter) => {
@@ -339,7 +341,7 @@ export default function DoctorWorkflow({
       <div className="flex-1 overflow-hidden p-5 flex gap-5 max-w-7xl mx-auto w-full">
         {/* ── LEFT COLUMN: DOCTOR'S LIVE QUEUE ── */}
         <div className="w-80 flex flex-col gap-4 flex-shrink-0">
-          <div className="bg-white border border-[#DDE2EC] rounded-2xl shadow-xs flex flex-col h-full overflow-hidden">
+          <div className="bg-white border border-[#DDE2EC] rounded shadow-xs flex flex-col h-full overflow-hidden">
             <div className="px-4 py-3 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
               <div>
                 <h2 className="text-[13px] font-bold text-gray-900">My Consultation Queue</h2>
@@ -364,7 +366,7 @@ export default function DoctorWorkflow({
                       const allDoc = DOCTORS_LIST.find(d => d.id === "all");
                       if (allDoc) setSelectedDoctor(allDoc);
                     }}
-                    className="mt-2 text-[11.5px] font-semibold text-[#1B4FD8] bg-blue-50 px-3 py-1 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
+                    className="mt-2 text-[11.5px] font-semibold text-[#1B4FD8] bg-blue-50 px-3 py-1 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
                   >
                     View All Hospital Patients →
                   </button>
@@ -377,7 +379,7 @@ export default function DoctorWorkflow({
                     <div
                       key={enc.id}
                       onClick={() => handleSelectPatient(enc)}
-                      className={`p-3 rounded-xl cursor-pointer transition-all border ${
+                      className={`p-3 rounded cursor-pointer transition-all border ${
                         isSelected
                           ? "bg-[#EFF6FF] border-[#1B4FD8] ring-2 ring-blue-500/20 shadow-xs"
                           : "bg-white border-[#E2E8F0] hover:bg-[#F8FAFC]"
@@ -423,7 +425,7 @@ export default function DoctorWorkflow({
             <div className="space-y-4">
               {/* Submission Success Alert */}
               {submittedAlert && (
-                <div ref={alertRef} className="bg-[#F0FDF4] border-2 border-[#86EFAC] rounded-2xl p-4.5 text-center space-y-2 shadow-sm animate-in fade-in">
+                <div ref={alertRef} className="bg-[#F0FDF4] border-2 border-[#86EFAC] rounded p-4.5 text-center space-y-2 shadow-sm animate-in fade-in">
                   <div className="text-xl">✓</div>
                   <div className="text-[15px] font-bold text-[#166534]">
                     Consultation Submitted Successfully!
@@ -435,7 +437,7 @@ export default function DoctorWorkflow({
                     <button
                       type="button"
                       onClick={() => onNavigateToOPWorkflow(activeEncounter.id)}
-                      className="px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white text-[12px] font-bold rounded-lg shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer mt-1"
+                      className="px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white text-[12px] font-bold rounded shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer mt-1"
                     >
                       <span>📋</span> View Summary in OP Clinical Journey →
                     </button>
@@ -444,7 +446,7 @@ export default function DoctorWorkflow({
               )}
 
               {/* 1. Patient Information & Current Complaints Card */}
-              <div className="bg-white border border-[#CBD5E1] rounded-2xl p-5 shadow-xs space-y-3">
+              <div className="bg-white border border-[#CBD5E1] rounded p-5 shadow-xs space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-full bg-blue-100 text-[#1B4FD8] flex items-center justify-center font-bold text-base">
@@ -464,10 +466,10 @@ export default function DoctorWorkflow({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-[11.5px] font-mono font-bold bg-blue-50 text-[#1B4FD8] border border-blue-200 px-2.5 py-1 rounded-lg">
+                    <span className="text-[11.5px] font-mono font-bold bg-blue-50 text-[#1B4FD8] border border-blue-200 px-2.5 py-1 rounded">
                       Token: {activeEncounter.queueToken || activeEncounter.opNumber}
                     </span>
-                    <span className={`text-[11.5px] font-semibold px-2.5 py-1 rounded-lg ${
+                    <span className={`text-[11.5px] font-semibold px-2.5 py-1 rounded ${
                       activeEncounter.status === "Consultation Completed"
                         ? "bg-green-100 text-[#15803D]"
                         : "bg-amber-100 text-[#B45309]"
@@ -478,7 +480,7 @@ export default function DoctorWorkflow({
                 </div>
 
                 {/* Chief Complaints & Presenting Symptoms */}
-                <div className="bg-[#F8FAFC] p-3.5 rounded-xl border border-[#E2E8F0] text-[12.5px] space-y-1">
+                <div className="bg-[#F8FAFC] p-3.5 rounded border border-[#E2E8F0] text-[12.5px] space-y-1">
                   <div className="text-[11px] uppercase font-bold text-[#64748B] tracking-wider">Chief Complaint / Triage Narrative</div>
                   <div className="text-gray-800 font-medium">{activeEncounter.chiefComplaint || "Routine consultation requested."}</div>
                   {activeEncounter.symptoms && activeEncounter.symptoms.length > 0 && (
@@ -494,7 +496,7 @@ export default function DoctorWorkflow({
               </div>
 
               {/* 2. Previous Patient History (Read-Only Preview from permanent UMR) */}
-              <div className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-2xl p-4.5 space-y-2.5 shadow-2xs">
+              <div className="bg-[#F8FAFC] border border-[#CBD5E1] rounded p-4.5 space-y-2.5 shadow-2xs">
                 <div className="flex justify-between items-center">
                   <div className="text-[12.5px] font-bold text-gray-900 flex items-center gap-1.5">
                     <span>📜</span> Previous OP History (Permanent UMR: {activeEncounter.umr})
@@ -507,7 +509,7 @@ export default function DoctorWorkflow({
                 {previousEncounters.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[12px]">
                     {previousEncounters.map((pe) => (
-                      <div key={pe.id} className="bg-white p-3 rounded-xl border border-[#E2E8F0] shadow-2xs">
+                      <div key={pe.id} className="bg-white p-3 rounded border border-[#E2E8F0] shadow-2xs">
                         <div className="flex justify-between items-start font-bold">
                           <span className="text-[#1B4FD8] font-mono">{pe.opNumber}</span>
                           <span className="text-gray-500 font-normal text-[11px]">{pe.registrationTime}</span>
@@ -520,17 +522,17 @@ export default function DoctorWorkflow({
                     ))}
                   </div>
                 ) : (
-                  <div className="text-[11.5px] text-[#64748B] italic bg-white p-2.5 rounded-xl border border-[#E2E8F0]">
+                  <div className="text-[11.5px] text-[#64748B] italic bg-white p-2.5 rounded border border-[#E2E8F0]">
                     First outpatient visit for this permanent UMR. No previous historical encounters.
                   </div>
                 )}
               </div>
 
               {/* 2. Nurse-Recorded Vital Signs (Pre-Consultation Assessment) */}
-              <div className="bg-white border-2 border-[#93C5FD] rounded-2xl p-5 shadow-xs space-y-3">
+              <div className="bg-white border-2 border-[#93C5FD] rounded p-5 shadow-xs space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8F0] pb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-blue-100 text-[#1B4FD8] flex items-center justify-center font-bold text-lg">
+                    <div className="w-9 h-9 rounded bg-blue-100 text-[#1B4FD8] flex items-center justify-center font-bold text-lg">
                       🩺
                     </div>
                     <div>
@@ -542,14 +544,14 @@ export default function DoctorWorkflow({
                       </p>
                     </div>
                   </div>
-                  <span className="text-[11px] font-bold bg-green-50 text-[#166534] border border-green-200 px-2.5 py-1 rounded-lg flex items-center gap-1 self-start sm:self-auto">
+                  <span className="text-[11px] font-bold bg-green-50 text-[#166534] border border-green-200 px-2.5 py-1 rounded flex items-center gap-1 self-start sm:self-auto">
                     <span>✓</span> Verified by Nursing Triage
                   </span>
                 </div>
 
                 {/* Vitals Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-[12px]">
-                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded-xl">
+                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded">
                     <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Blood Pressure</span>
                     <span className="text-[16px] font-mono font-bold text-gray-900 block mt-0.5">
                       {activeEncounter.vitals?.bp || "120/80 mmHg"}
@@ -559,7 +561,7 @@ export default function DoctorWorkflow({
                     </span>
                   </div>
 
-                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded-xl">
+                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded">
                     <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Heart Rate / Pulse</span>
                     <span className="text-[16px] font-mono font-bold text-gray-900 block mt-0.5">
                       {activeEncounter.vitals?.pulse || "76 bpm"}
@@ -569,7 +571,7 @@ export default function DoctorWorkflow({
                     </span>
                   </div>
 
-                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded-xl">
+                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded">
                     <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Temperature</span>
                     <span className="text-[16px] font-mono font-bold text-gray-900 block mt-0.5">
                       {activeEncounter.vitals?.temp || "98.6 °F"}
@@ -579,7 +581,7 @@ export default function DoctorWorkflow({
                     </span>
                   </div>
 
-                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded-xl">
+                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded">
                     <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Oxygen SpO2</span>
                     <span className="text-[16px] font-mono font-bold text-gray-900 block mt-0.5">
                       {activeEncounter.vitals?.spo2 || "99%"}
@@ -589,7 +591,7 @@ export default function DoctorWorkflow({
                     </span>
                   </div>
 
-                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded-xl">
+                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 rounded">
                     <span className="text-[#64748B] block text-[10.5px] uppercase font-bold">Body Weight</span>
                     <span className="text-[16px] font-mono font-bold text-gray-900 block mt-0.5">
                       {activeEncounter.vitals?.weight || "74 kg"}
@@ -602,7 +604,7 @@ export default function DoctorWorkflow({
 
                 {/* Nurse Triage Observation Notes */}
                 {activeEncounter.vitals?.notes && (
-                  <div className="bg-[#F0FDF4] border border-green-200 p-3 rounded-xl text-[12px] text-[#166534] flex items-center gap-2">
+                  <div className="bg-[#F0FDF4] border border-green-200 p-3 rounded text-[12px] text-[#166534] flex items-center gap-2">
                     <span className="font-bold">👩‍⚕️ Nurse Assessment Note:</span>
                     <span>{activeEncounter.vitals.notes}</span>
                   </div>
@@ -610,7 +612,7 @@ export default function DoctorWorkflow({
               </div>
 
               {/* 3. Clinical Consultation Form Pad */}
-              <div className="bg-white border-2 border-[#93C5FD] rounded-2xl p-6 space-y-5 shadow-sm">
+              <div className="bg-white border-2 border-[#93C5FD] rounded p-6 space-y-5 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8F0] pb-3">
                   <div>
                     <h3 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
@@ -624,7 +626,7 @@ export default function DoctorWorkflow({
                 </div>
 
                 {/* 1-Click Dummy / Clinical Presets */}
-                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 space-y-2">
+                <div className="bg-blue-50/70 border border-blue-200 rounded p-3.5 space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <span className="text-[11.5px] font-bold text-[#1E3A8A] flex items-center gap-1.5">
                       <span>⚡</span> Quick Load Prescription &amp; Clinical Order Template:
@@ -637,7 +639,7 @@ export default function DoctorWorkflow({
                         key={tmpl.id}
                         type="button"
                         onClick={() => handleApplyTemplate(tmpl.id)}
-                        className="px-3 py-1.5 bg-white hover:bg-blue-50 border border-[#93C5FD] hover:border-[#1B4FD8] text-[#1B4FD8] text-[11.5px] font-bold rounded-lg shadow-2xs transition-all hover:scale-[1.02] cursor-pointer flex items-center gap-1"
+                        className="px-3 py-1.5 bg-white hover:bg-blue-50 border border-[#93C5FD] hover:border-[#1B4FD8] text-[#1B4FD8] text-[11.5px] font-bold rounded shadow-2xs transition-all hover:scale-[1.02] cursor-pointer flex items-center gap-1"
                       >
                         {tmpl.name}
                       </button>
@@ -655,7 +657,7 @@ export default function DoctorWorkflow({
                     value={clinicalAssessment}
                     onChange={e => setClinicalAssessment(e.target.value)}
                     placeholder="Enter objective assessment, examination findings, and clinical reasoning..."
-                    className="w-full border border-[#CBD5E1] rounded-xl p-3 text-[13px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
+                    className="w-full border border-[#CBD5E1] rounded p-3 text-[13px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
                   />
                 </div>
 
@@ -700,7 +702,7 @@ export default function DoctorWorkflow({
 
                   <div className="space-y-2.5">
                     {medications.map((med, idx) => (
-                      <div key={idx} className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl p-3 grid grid-cols-1 sm:grid-cols-5 gap-2.5 items-center text-[12px]">
+                      <div key={idx} className="bg-[#F8FAFC] border border-[#CBD5E1] rounded p-3 grid grid-cols-1 sm:grid-cols-5 gap-2.5 items-center text-[12px]">
                         <div className="sm:col-span-2">
                           <span className="text-[10px] uppercase font-bold text-[#64748B] block">Medicine Name</span>
                           <input
@@ -710,7 +712,7 @@ export default function DoctorWorkflow({
                               setMedications(prev => prev.map((m, i) => i === idx ? { ...m, medicine: val } : m));
                             }}
                             placeholder="Medicine Name (e.g. Aspirin 81mg)"
-                            className="w-full bg-white border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] font-semibold focus:outline-none focus:border-[#1B4FD8]"
+                            className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] font-semibold focus:outline-none focus:border-[#1B4FD8]"
                           />
                         </div>
                         <div>
@@ -722,7 +724,7 @@ export default function DoctorWorkflow({
                               setMedications(prev => prev.map((m, i) => i === idx ? { ...m, dosage: val } : m));
                             }}
                             placeholder="1 tab"
-                            className="w-full bg-white border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
+                            className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
                           />
                         </div>
                         <div>
@@ -733,7 +735,7 @@ export default function DoctorWorkflow({
                               const val = e.target.value;
                               setMedications(prev => prev.map((m, i) => i === idx ? { ...m, frequency: val } : m));
                             }}
-                            className="w-full bg-white border border-[#DDE2EC] rounded-lg px-2 py-1.5 text-[12px] focus:outline-none focus:border-[#1B4FD8]"
+                            className="w-full bg-white border border-[#DDE2EC] rounded px-2 py-1.5 text-[12px] focus:outline-none focus:border-[#1B4FD8]"
                           >
                             <option>OD (Once Daily)</option>
                             <option>BD (Twice Daily)</option>
@@ -753,7 +755,7 @@ export default function DoctorWorkflow({
                                 setMedications(prev => prev.map((m, i) => i === idx ? { ...m, duration: val } : m));
                               }}
                               placeholder="30 days"
-                              className="w-full bg-white border border-[#DDE2EC] rounded-lg px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
+                              className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
                             />
                           </div>
                           <button
@@ -792,7 +794,7 @@ export default function DoctorWorkflow({
                           key={test}
                           type="button"
                           onClick={() => toggleInvestigation(test)}
-                          className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all cursor-pointer ${
+                          className={`px-3 py-1.5 rounded text-[12px] font-semibold border transition-all cursor-pointer ${
                             isChecked
                               ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-xs"
                               : "bg-white text-gray-700 border-[#CBD5E1] hover:bg-[#F8FAFC]"
@@ -815,7 +817,7 @@ export default function DoctorWorkflow({
                     value={advice}
                     onChange={e => setAdvice(e.target.value)}
                     placeholder="Enter lifestyle recommendations, follow-up timeline, precaution warnings..."
-                    className="w-full border border-[#CBD5E1] rounded-xl p-3 text-[13px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
+                    className="w-full border border-[#CBD5E1] rounded p-3 text-[13px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
                   />
                 </div>
 
@@ -825,19 +827,29 @@ export default function DoctorWorkflow({
                     Saving links this consultation to <strong>{activeEncounter.umr}</strong> + <strong>{activeEncounter.opNumber}</strong>.
                   </div>
 
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 flex-wrap">
                     {submitSuccess && (
-                      <span className="text-[12px] font-bold text-[#166534] bg-green-100 border border-green-300 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-in fade-in">
+                      <span className="text-[12px] font-bold text-[#166534] bg-green-100 border border-green-300 px-3 py-1.5 rounded flex items-center gap-1.5 animate-in fade-in">
                         <span>✓</span> Consultation Saved &amp; Synced!
                       </span>
+                    )}
+
+                    {submitSuccess && onNavigateToOPWorkflow && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateToOPWorkflow(activeEncounter.id)}
+                        className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>📋</span> View Prescription Pad (Step 5) →
+                      </button>
                     )}
 
                     <button
                       type="button"
                       onClick={handleSubmitConsultation}
-                      className="px-7 py-3 bg-gradient-to-r from-[#16A34A] to-[#15803D] hover:from-[#15803D] hover:to-[#166534] text-white text-[13.5px] font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+                      className="px-6 py-2.5 bg-gradient-to-r from-[#16A34A] to-[#15803D] hover:from-[#15803D] hover:to-[#166534] text-white text-[13px] font-bold rounded shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer"
                     >
-                      <span>✓</span> Complete &amp; Submit Consultation
+                      <span>✓</span> Complete Consultation &amp; Issue Prescription
                     </button>
                   </div>
                 </div>
@@ -845,7 +857,7 @@ export default function DoctorWorkflow({
 
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center bg-white border border-[#DDE2EC] rounded-2xl p-8 text-center text-[#64748B]">
+            <div className="flex-1 flex items-center justify-center bg-white border border-[#DDE2EC] rounded p-8 text-center text-[#64748B]">
               <div>
                 <span className="text-3xl block mb-2">👨‍⚕️</span>
                 <span className="text-[14px] font-semibold">Select a patient from your queue to begin consultation</span>

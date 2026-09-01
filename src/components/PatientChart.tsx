@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { PatientBanner, TabBar, Card, StatusBadge, Table, TR, TD, TimelineItem, Btn, AlertBanner } from "./shared";
 import { Icon } from "./icons";
+import { NursingDatabase } from "../services/nursingWorkflowDb";
 
 const TABS = ["Summary", "Timeline", "Problems", "Medications", "Allergies", "Vitals", "Notes", "Labs", "Imaging", "Orders", "Documents", "Billing"];
 
@@ -396,7 +397,7 @@ export default function PatientChart({ onBack, openOrder }: { onBack: () => void
             </div>
 
             <div className="space-y-4">
-              {NursingDatabase.getNotes("P-100245").map((note) => (
+              {NursingDatabase.getNotes("P-100245").map((note: any) => (
                 <div key={note.id} className={`bg-white border rounded-lg p-4 shadow-sm ${note.isAddendum ? "border-l-4 border-l-[#7C3AED] bg-[#FCFAFF]" : "border-[#DDE2EC]"}`}>
                   <div className="flex items-start justify-between border-b border-[#F1F5F9] pb-2 mb-2.5 flex-wrap gap-2">
                     <div className="flex items-center gap-2">
@@ -563,7 +564,7 @@ function CareTeamMessageModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-2.5 bg-[#F8FAFC]">
-          {msgs.map((m) => (
+          {msgs.map((m: any) => (
             <div key={m.id} className={`p-2.5 rounded-lg text-[12px] ${m.senderRole === "Doctor" ? "bg-white border text-gray-900 mr-8" : "bg-[#EFF6FF] border border-[#BFDBFE] text-gray-900 ml-8"}`}>
               <div className="flex justify-between font-bold text-[11px] mb-1">
                 <span>{m.senderName} ({m.senderRole})</span>

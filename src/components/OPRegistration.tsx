@@ -50,7 +50,9 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
   useEffect(() => {
     refreshFromDb();
     const unsubscribe = db.subscribe(refreshFromDb);
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Form State: First Name, Middle Name (optional), Last Name, DOB, Age (locked), Gender, Phone
@@ -269,11 +271,11 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
 
         {/* ── TAB 1: NEW PATIENT REGISTRATION FORM (EXACT REQUESTED FIELDS) ── */}
         {activeTab === "new" && (
-          <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded p-7 shadow-md space-y-6">
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
               <div>
                 <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">1</span>
+                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">1</span>
                   OP Patient Registration Form
                 </h2>
               </div>
@@ -439,20 +441,13 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     <>
                       <span>✓</span> Register OP &amp; Generate UMR / OP Number
                     </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* ── TAB 2: EXISTING PATIENT REVISIT WORKFLOW ───────────────── */}
+            {/* ── TAB 2: EXISTING PATIENT REVISIT WORKFLOW ───────────────── */}
         {activeTab === "revisit" && (
-          <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-7 shadow-xl space-y-6 ring-1 ring-slate-900/5">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded p-7 shadow-md space-y-6">
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
               <div>
                 <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">2</span>
+                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-mono">2</span>
                   Existing Patient Revisit (Keep Old UMR ➔ Generate New OP Number)
                 </h2>
                 <p className="text-[12px] text-[#64748B] mt-0.5">
@@ -482,7 +477,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     setSearchQuery(firstPatient.umr);
                   }
                 }}
-                className="px-4 py-2 bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-[#1D4ED8] text-[12.5px] font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs whitespace-nowrap"
+                className="px-4 py-2 bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-[#1D4ED8] text-[12.5px] font-bold rounded transition-colors flex items-center gap-1.5 shadow-xs whitespace-nowrap"
               >
                 <span>📷</span> Scan Card Barcode
               </button>
@@ -493,7 +488,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
               {filteredPatients.map((p) => {
                 const pEncounters = db.getEncountersForPatient(p.umr);
                 return (
-                  <div key={p.umr} className="p-4 border border-[#DDE2EC] rounded-xl hover:border-[#1B4FD8] transition-all bg-white shadow-xs">
+                  <div key={p.umr} className="p-4 border border-[#DDE2EC] rounded hover:border-[#1B4FD8] transition-all bg-white shadow-xs">
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <div className="font-bold text-[14px] text-gray-900">{p.name}</div>
@@ -508,7 +503,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     </div>
 
                     {/* Previous OP visits history */}
-                    <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-2.5 my-2.5 text-[11.5px] space-y-1">
+                    <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded p-2.5 my-2.5 text-[11.5px] space-y-1">
                       <div className="font-semibold text-gray-700 flex justify-between">
                         <span>Past OP Visits On Record:</span>
                         <span className="font-mono text-[#D97706]">{pEncounters.length} Visits in Database</span>
@@ -526,12 +521,12 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     </div>
 
                     <div className="flex justify-between items-center pt-2 border-t border-[#F1F5F9]">
-                      <span className="text-[11.5px] text-[#16A34A] font-semibold">
+                      <span className="text-[11.5px] text-[#166534] font-semibold">
                         ✓ Retain {p.umr}
                       </span>
                       <button
                         onClick={() => handleCreateRevisitEncounter(p)}
-                        className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+                        className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-semibold rounded transition-colors flex items-center gap-1.5 shadow-xs"
                       >
                         <span>🔄</span> Generate New Visit OP Number ➔
                       </button>
@@ -548,7 +543,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
           <div className="space-y-6">
             {/* OP Book Card Preview */}
             {selectedEncounter && (
-              <div ref={cardPreviewRef} className="bg-white border-2 border-[#CBD5E1] rounded-2xl p-6 shadow-xl space-y-4 ring-1 ring-slate-900/5">
+              <div ref={cardPreviewRef} className="bg-white border-2 border-[#CBD5E1] rounded p-6 shadow-md space-y-4">
                 <div className="flex justify-between items-center mb-2">
                   <div>
                     <h3 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
@@ -570,7 +565,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                   </div>
                 </div>
 
-                <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded-2xl p-6 shadow-2xl relative overflow-hidden ring-2 ring-blue-500/10">
+                <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded p-6 shadow-lg relative overflow-hidden">
                   {/* Top Header Accent Strip */}
                   <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
 
@@ -601,11 +596,11 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                     </div>
                     <div className="text-right">
                       <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider">Permanent UMR (Lifetime)</div>
-                      <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200 inline-block mt-0.5">
+                      <div className="text-[15px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200 inline-block mt-0.5">
                         {selectedEncounter.umr}
                       </div>
                       <div className="text-[10px] uppercase text-[#64748B] font-bold tracking-wider mt-2.5">Current Visit OP Number</div>
-                      <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
+                      <div className="text-[15px] font-mono font-bold text-[#D97706] bg-amber-50 px-2.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
                         {selectedEncounter.opNumber}
                       </div>
                     </div>
@@ -620,7 +615,7 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
             )}
 
             {/* Today's Registration Log Table */}
-            <div className="bg-white border-2 border-[#CBD5E1] rounded-2xl shadow-xl overflow-hidden ring-1 ring-slate-900/5">
+            <div className="bg-white border-2 border-[#CBD5E1] rounded shadow-md overflow-hidden">
               <div className="px-5 py-3 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
                 <div>
                   <h3 className="text-[13.5px] font-bold text-gray-900">Database Encounter Registry</h3>
