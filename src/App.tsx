@@ -5,6 +5,8 @@ import Dashboard from "./components/Dashboard";
 import PatientSearch from "./components/PatientSearch";
 import PatientChart from "./components/PatientChart";
 import ErPage from "./pages/ErPage";
+import BedManagementPage from "./pages/BedManagementPage";
+import NursingPortal from "./components/nursing/NursingPortal";
 import type { Notice } from "./types";
 import Laboratory from "./components/Laboratory";
 import Pharmacy from "./components/Pharmacy";
@@ -28,6 +30,7 @@ import ClinicalRAG from "./components/ClinicalRAG";
 import ClinicalSummaries from "./components/ClinicalSummaries";
 import BulkAI from "./components/BulkAI";
 import NLFiltering from "./components/NLFiltering";
+import IntelligenceHub from "./components/IntelligenceHub";
 import QueueManagement from "./components/QueueManagement";
 import OPManagement from "./components/OPManagement";
 import DoctorWorkflow from "./components/DoctorWorkflow";
@@ -52,7 +55,8 @@ type Module =
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
   | "hrms" | "employees" | "patient_exp"
-  | "intelligence" | "ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering";
+  | "intelligence" | "ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering"
+  | "beds";
 
 interface NavItem {
   key: Module;
@@ -100,6 +104,7 @@ const NAV: NavItem[] = [
     key: "inpatient", label: "Inpatient", Icon: Icon.Bed,
     children: [
       { key: "inpatient", label: "Bed Board" },
+      { key: "beds", label: "Bed Management" },
       { key: "admissions", label: "Admissions" },
       { key: "readmission", label: "Readmission" },
       { key: "icu", label: "ICU" },
@@ -259,8 +264,26 @@ function PlaceholderModule({ title, sub }: { title: string; sub?: string }) {
   );
 }
 
+interface StaffProfile {
+  id: string;
+  name: string;
+  role: string;
+  title: string;
+  department: string;
+}
+
+const DEFAULT_STAFF: StaffProfile = {
+  id: "ADM-001",
+  name: "Hospital Administrator",
+  role: "Admin",
+  title: "Hospital Administrator",
+  department: "Administration",
+};
+
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState<string>("admin");
+  const [activeStaff, setActiveStaff] = useState<StaffProfile>(DEFAULT_STAFF);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [module, setModule] = useState<Module>("dashboard");
   const [expanded, setExpanded] = useState<string[]>(["patients", "outpatient"]);
@@ -274,6 +297,14 @@ export default function App() {
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [workflowInitialStep, setWorkflowInitialStep] = useState<number>(2);
   const [selectedWorkflowEncounterId, setSelectedWorkflowEncounterId] = useState<string | undefined>();
+
+  const isNurse = userRole === "rn";
+
+  const handleLogin = (userData: { user: string; role: string; staffId: string }) => {
+    setUserRole(userData.role);
+    setLoggedIn(true);
+    setModule("dashboard");
+  };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -313,7 +344,7 @@ export default function App() {
       }}
     >
       {!loggedIn ? (
-        <Login onLogin={() => setLoggedIn(true)} />
+        <Login onLogin={handleLogin} />
       ) : (
         <>
           {/* ── Top Header ───────────────────────────────────────────────── */}
@@ -395,10 +426,12 @@ export default function App() {
 
               {/* User */}
               <div className="flex items-center gap-2 ml-1 pl-3 border-l border-white/10">
-                <div className="w-7 h-7 rounded-full bg-[#1B4FD8] flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0">JC</div>
+                <div className="w-7 h-7 rounded-full bg-[#1B4FD8] flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0">
+                  {activeStaff.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                </div>
                 <div className="hidden md:block">
-                  <div className="text-[11.5px] font-medium text-white leading-tight">Jessica Carter</div>
-                  <div className="text-[10px] text-[#64748B]">RN · 3N Medical</div>
+                  <div className="text-[11.5px] font-medium text-white leading-tight">{activeStaff.name}</div>
+                  <div className="text-[10px] text-[#93C5FD]">{activeStaff.title} · {activeStaff.activeShift}</div>
                 </div>
                 <button onClick={() => setLoggedIn(false)} className="ml-1 text-[#64748B] hover:text-white text-[11px] font-medium transition-colors px-1.5 py-1 rounded hover:bg-white/10">
                   Sign out
@@ -419,15 +452,22 @@ export default function App() {
             {/* ── Sidebar ──────────────────────────────────────────────── */}
             <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-12" : "w-64"}`}>
               {/* Top Logo Section */}
-              <div className="flex items-center justify-center pt-2 pb-1 px-2 border-b border-[#1E2D42]/50 flex-shrink-0">
+              <div className="flex items-center justify-center py-2.5 px-3 border-b border-[#1E2D42]/60 flex-shrink-0">
                 <img
                   src="/logo.png"
                   alt="HospAI Logo"
-                  className={`${sidebarCollapsed ? "w-8 h-8" : "w-40 h-40"} object-contain pointer-events-none transition-all duration-200`}
+                  className={`${sidebarCollapsed ? "w-7 h-7" : "h-10 w-auto max-w-[160px]"} object-contain pointer-events-none transition-all duration-200`}
                 />
               </div>
               <div className="flex-1 py-2 px-2">
-                {NAV.map((item) => {
+                {(isNurse
+                  ? [
+                      { key: "dashboard" as Module, label: "Nurse Dashboard", Icon: Icon.Dashboard },
+                      { key: "nursing" as Module, label: "Nursing & My Patients", Icon: Icon.Nursing },
+                      { key: "chart" as Module, label: "Patient Chart", Icon: Icon.Clinical },
+                    ]
+                  : NAV
+                ).map((item) => {
                   const isActive = module === item.key || (item.children?.some(c => c.key === module));
                   const isExpanded = expanded.includes(item.key);
 
@@ -438,7 +478,13 @@ export default function App() {
                         onClick={() => {
                           if (item.children) {
                             toggleExpand(item.key);
-                            if (!expanded.includes(item.key)) setModule(item.children[0].key);
+                            if (!expanded.includes(item.key)) {
+                              if (item.key === "intelligence") {
+                                setModule("intelligence");
+                              } else {
+                                setModule(item.children[0].key);
+                              }
+                            }
                           }
                           else setModule(item.key);
                         }}>
@@ -486,7 +532,7 @@ export default function App() {
             </aside>
 
             {/* ── Main Workspace ───────────────────────────────────────── */}
-            <main className="flex-1 flex flex-col overflow-hidden">
+            <main className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden">
               {/* Breadcrumb strip */}
               <div className="bg-white border-b border-[#DDE2EC] px-5 py-1.5 flex items-center gap-1.5 text-[11.5px] text-[#94A3B8] flex-shrink-0">
                 <span>HospAI</span>
@@ -546,7 +592,8 @@ export default function App() {
               {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
               {module === "emergency" && <ErPage setNotice={setNotice} />}
               {module === "inpatient" && <Inpatient />}
-              {module === "nursing" && <NursingDashboard />}
+              {module === "beds" && <BedManagementPage setNotice={setNotice} />}
+              {module === "nursing" && <NursingPortal />}
               {module === "laboratory" && <Laboratory />}
               {module === "pharmacy" && <Pharmacy />}
               {module === "surgery" && <Surgery />}
@@ -561,7 +608,7 @@ export default function App() {
               {module === "reports" && <PlaceholderModule title="Reports" sub="Operational and clinical reporting" />}
               {module === "admin" && <PlaceholderModule title="Administration" sub="Users, roles, departments, and system configuration" />}
 
-              {/* New modules placeholders */}
+              {/* New modules */}
               {module === "queue" && <QueueManagement />}
               {module === "op_management" && <OPManagement />}
               {module === "op_workflow" && (
@@ -598,6 +645,7 @@ export default function App() {
               {module === "clinical_summaries" && <ClinicalSummaries />}
               {module === "bulk_ai" && <BulkAI />}
               {module === "nl_filtering" && <NLFiltering />}
+              {module === "intelligence" && <IntelligenceHub navigate={navigate} />}
             </main>
           </div>
 

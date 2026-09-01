@@ -842,6 +842,7 @@ export default function DoctorWorkflow({
                   </div>
                 </div>
               </div>
+
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center bg-white border border-[#DDE2EC] rounded-2xl p-8 text-center text-[#64748B]">

@@ -26,6 +26,7 @@ import {
 import { apiFetch, reportError } from "../lib/api";
 import { formatDateTimeIST } from "../lib/format";
 import type { Notice, Patient } from "../types";
+import DischargedDirectoryView from "../components/bed/DischargedDirectoryView";
 
 type Props = {
   setNotice: (notice: Notice | null) => void;
@@ -236,6 +237,24 @@ export default function BedManagementPage({ setNotice }: Props) {
   const [allocating, setAllocating] = useState(false);
   const [filterMatchingOnly, setFilterMatchingOnly] = useState(true);
 
+  // Discharged Directory View
+  const [activeView, setActiveView] = useState<"bed_board" | "discharged">("bed_board");
+  const [dischargedPatients, setDischargedPatients] = useState<any[]>([]);
+  const [dischargedLoading, setDischargedLoading] = useState(false);
+  const [dischargedSearch, setDischargedSearch] = useState("");
+
+  const loadDischarged = async () => {
+    setDischargedLoading(true);
+    try {
+      const data = await apiFetch<{ discharged_patients: any[] }>("/api/beds/discharged");
+      setDischargedPatients(data.discharged_patients || []);
+    } catch {
+      setDischargedPatients([]);
+    } finally {
+      setDischargedLoading(false);
+    }
+  };
+
   const requestedCareType = useMemo(() => {
     if (!allocatingRequest) return null;
     const loc = (allocatingRequest.requested_level_of_care || "").toLowerCase();
@@ -263,10 +282,6 @@ export default function BedManagementPage({ setNotice }: Props) {
       );
       setErRequests(data.bed_requests || []);
     } catch {
-      // ER module may not be enabled for this account (no er module at all
-      // still means beds.write should work) -- fail quietly, matching how
-      // this panel simply won't have anything to show for hospitals not
-      // using the ER module yet.
       setErRequests([]);
     } finally {
       setErRequestsLoading(false);
@@ -345,6 +360,7 @@ export default function BedManagementPage({ setNotice }: Props) {
   useEffect(() => {
     void loadBeds();
     void loadErRequests();
+    void loadDischarged();
   }, []);
 
   useEffect(() => {
@@ -583,7 +599,7 @@ export default function BedManagementPage({ setNotice }: Props) {
             : `Bed ${selectedBed.bed_no} released and patient discharged.`,
       });
       resetSelection();
-      await loadBeds();
+      await Promise.all([loadBeds(), loadDischarged()]);
     } catch (error) {
       reportError(
         setNotice,
@@ -619,20 +635,17 @@ export default function BedManagementPage({ setNotice }: Props) {
 
   const handleDeleteBed = async () => {
     if (!selectedBed) return;
-    setSavingBedEdit(true);
     try {
       await apiFetch(`/api/beds/${selectedBed.id}`, { method: "DELETE" });
-      setNotice({ type: "success", message: "Bed removed." });
+      setNotice({ type: "success", message: `Bed ${selectedBed.bed_no} deleted.` });
       resetSelection();
       await loadBeds();
     } catch (error) {
       reportError(
         setNotice,
         error as { message?: string; status?: number },
-        "Unable to remove this bed.",
+        "Unable to delete this bed.",
       );
-    } finally {
-      setSavingBedEdit(false);
     }
   };
 
@@ -645,13 +658,17 @@ export default function BedManagementPage({ setNotice }: Props) {
         method: "PUT",
         body: JSON.stringify({ status: nextStatus }),
       });
+      setNotice({
+        type: "success",
+        message: `Bed ${selectedBed.bed_no} marked as ${nextStatus}.`,
+      });
       resetSelection();
       await loadBeds();
     } catch (error) {
       reportError(
         setNotice,
         error as { message?: string; status?: number },
-        "Unable to update this bed's status.",
+        "Unable to update bed status.",
       );
     } finally {
       setSavingBedEdit(false);
@@ -659,10 +676,6 @@ export default function BedManagementPage({ setNotice }: Props) {
   };
 
   const handleAddBed = async () => {
-    if (!newBedRange.ward.trim() || !newBedRange.room_no.trim()) return;
-    const fromBed = newBedRange.from_bed.trim();
-    const toBed = newBedRange.to_bed.trim() || fromBed;
-    if (!fromBed) return;
     setAddingBed(true);
     try {
       const result = await apiFetch<{
@@ -671,12 +684,12 @@ export default function BedManagementPage({ setNotice }: Props) {
       }>("/api/beds/bulk", {
         method: "POST",
         body: JSON.stringify({
-          ward: newBedRange.ward,
-          room_no: newBedRange.room_no,
+          ward: newBedRange.ward.trim(),
+          room_no: newBedRange.room_no.trim(),
+          from_bed: newBedRange.from_bed.trim(),
+          to_bed: newBedRange.to_bed.trim(),
           bed_type: newBedRange.bed_type,
-          from_bed: fromBed,
-          to_bed: toBed,
-          daily_rate: newBedRange.daily_rate || undefined,
+          daily_rate: Number(newBedRange.daily_rate) || 0,
         }),
       });
       const parts = [
@@ -691,8 +704,6 @@ export default function BedManagementPage({ setNotice }: Props) {
         type: result.created_count > 0 ? "success" : "error",
         message: parts.join(", ") || "Nothing to add.",
       });
-      // Keep ward/room/type prefilled and clear just the bed range -- adding
-      // another room's worth of beds right after is the common next step.
       setNewBedRange((prev) => ({ ...prev, from_bed: "", to_bed: "" }));
       await loadBeds();
     } catch (error) {
@@ -706,88 +717,148 @@ export default function BedManagementPage({ setNotice }: Props) {
     }
   };
 
+  const filteredDischarged = dischargedPatients.filter((dp) => {
+    const q = dischargedSearch.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (dp.patientName || "").toLowerCase().includes(q) ||
+      (dp.mrn || "").includes(q) ||
+      (dp.ward || "").toLowerCase().includes(q) ||
+      (dp.bedNo || "").toLowerCase().includes(q) ||
+      (dp.dischargeReason || "").toLowerCase().includes(q)
+    );
+  });
+
   return (
-    <section className="module-page">
-      <div className="module-panel-head">
-        <p className="muted">
-          A room-by-room, bed-by-bed view of the ward -- click any bed to
-          admit a patient into it, transfer or discharge them, or free it up.
-        </p>
-        <Button onClick={() => setAddBedOpen(true)}>
-          <FiPlus aria-hidden /> Add Bed
-        </Button>
-      </div>
+    <section className="w-full min-h-screen bg-[#F8FAFC]">
+      {/* ── SEGMENTED TOP NAVIGATION HEADER TABS ── */}
+      <div className="w-full bg-white border-b border-[#E2E8F0] px-6 sm:px-8 pt-4 pb-0 mb-4 flex items-center justify-between flex-wrap gap-4 shadow-xs">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setActiveView("bed_board")}
+            className={`px-5 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2.5 cursor-pointer ${
+              activeView === "bed_board"
+                ? "border-[#1B4FD8] text-[#1B4FD8] bg-transparent"
+                : "border-transparent text-[#64748B] hover:text-[#0F172A] bg-transparent"
+            }`}
+          >
+            <span>🛏️ Live Inpatient Bed Board</span>
+            <span
+              className={`px-2 py-0.5 text-xs font-mono rounded-full font-bold ${
+                activeView === "bed_board"
+                  ? "bg-[#EFF6FF] text-[#1B4FD8]"
+                  : "bg-[#F1F5F9] text-[#64748B]"
+              }`}
+            >
+              {beds.length}
+            </span>
+          </button>
 
-      <div className="stat-grid">
-        <StatCard
-          label={selectedWard === "all" ? "Total Beds" : `${selectedWard} — Beds`}
-          value={displaySummary.total}
-        />
-        <StatCard label="Available" value={displaySummary.available} />
-        <StatCard label="Occupied" value={displaySummary.occupied} />
-        <StatCard label="Maintenance" value={displaySummary.maintenance} />
-      </div>
-
-      {(erRequestsLoading || erRequests.length > 0) && (
-        <div className="panel">
-          <div className="module-panel-head">
-            <h3 style={{ margin: 0 }}>ER Bed Requests</h3>
-            <p className="muted" style={{ margin: 0 }}>
-              The ER doctor's clinical decision -- pick the actual bed here.
-            </p>
-          </div>
-          {erRequestsLoading ? (
-            <p className="muted">Loading ER requests...</p>
-          ) : (
-            <Table>
-              <TableHead>
-                <TableCell>ER Visit</TableCell>
-                <TableCell>Patient</TableCell>
-                <TableCell>Level of Care</TableCell>
-                <TableCell>Specialty</TableCell>
-                <TableCell>Requested</TableCell>
-                <TableCell />
-              </TableHead>
-              {erRequests.map((req) => (
-                <TableRow key={req.id}>
-                  <TableCell>{req.visit_no}</TableCell>
-                  <TableCell>{erRequestPatientLabel(req)}</TableCell>
-                  <TableCell style={{ textTransform: "uppercase" }}>
-                    {req.requested_level_of_care}
-                  </TableCell>
-                  <TableCell>{req.requested_specialty || "-"}</TableCell>
-                  <TableCell>{formatDateTimeIST(req.requested_at)}</TableCell>
-                  <TableCell>
-                    <div style={{ display: "flex", gap: "0.4rem" }}>
-                      <Button
-                        size="sm"
-                        disabled={req.is_unknown_patient}
-                        title={
-                          req.is_unknown_patient
-                            ? "Merge the unknown patient in the ER module before allocating a bed"
-                            : undefined
-                        }
-                        onClick={() => setAllocatingRequest(req)}
-                      >
-                        Allocate Bed
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        style={{ color: "#dc2626", borderColor: "#fecaca" }}
-                        title="Patient/Family refuses bed admission (LAMA)"
-                        onClick={() => setLamaRequest(req)}
-                      >
-                        LAMA / Refusal
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </Table>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveView("discharged");
+              void loadDischarged();
+            }}
+            className={`px-5 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2.5 cursor-pointer ${
+              activeView === "discharged"
+                ? "border-[#1B4FD8] text-[#1B4FD8] bg-transparent"
+                : "border-transparent text-[#64748B] hover:text-[#0F172A] bg-transparent"
+            }`}
+          >
+            <span>📑 Discharged Patients Directory</span>
+            <span
+              className={`px-2 py-0.5 text-xs font-mono rounded-full font-bold ${
+                activeView === "discharged"
+                  ? "bg-[#EFF6FF] text-[#1B4FD8]"
+                  : "bg-[#F1F5F9] text-[#64748B]"
+              }`}
+            >
+              {dischargedPatients.length}
+            </span>
+          </button>
         </div>
-      )}
+
+        {activeView === "bed_board" && (
+          <div className="pb-2">
+            <Button onClick={() => setAddBedOpen(true)}>
+              <FiPlus aria-hidden /> Add Bed
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {activeView === "discharged" ? (
+        <DischargedDirectoryView
+          dischargedPatients={dischargedPatients}
+          loading={dischargedLoading}
+          onRefresh={loadDischarged}
+        />
+      ) : (
+        <div className="px-6 sm:px-8 pb-12">
+        <>
+          <div className="stat-grid">
+            <StatCard
+              label={selectedWard === "all" ? "Total Beds" : `${selectedWard} — Beds`}
+              value={displaySummary.total}
+            />
+            <StatCard label="Available" value={displaySummary.available} />
+            <StatCard label="Occupied" value={displaySummary.occupied} />
+            <StatCard label="Maintenance" value={displaySummary.maintenance} />
+          </div>
+
+          {(erRequestsLoading || erRequests.length > 0) && (
+            <div className="panel">
+              <div className="module-panel-head">
+                <h3 style={{ margin: 0 }}>ER Bed Requests</h3>
+                <p className="muted" style={{ margin: 0 }}>
+                  The ER doctor's clinical decision -- pick the actual bed here.
+                </p>
+              </div>
+              {erRequestsLoading ? (
+                <p className="muted">Loading ER requests...</p>
+              ) : (
+                <Table>
+                  <TableHead>
+                    <TableCell>ER Visit</TableCell>
+                    <TableCell>Patient</TableCell>
+                    <TableCell>Level of Care</TableCell>
+                    <TableCell>Specialty</TableCell>
+                    <TableCell>Requested</TableCell>
+                    <TableCell />
+                  </TableHead>
+                  {erRequests.map((req) => (
+                    <TableRow key={req.id}>
+                      <TableCell>{req.visit_no}</TableCell>
+                      <TableCell>{erRequestPatientLabel(req)}</TableCell>
+                      <TableCell style={{ textTransform: "uppercase" }}>
+                        {req.requested_level_of_care}
+                      </TableCell>
+                      <TableCell>{req.requested_specialty || "-"}</TableCell>
+                      <TableCell>{formatDateTimeIST(req.requested_at)}</TableCell>
+                      <TableCell style={{ textAlign: "right" }}>
+                        <Button
+                          type="button"
+                          onClick={() => setAllocatingRequest(req)}
+                        >
+                          Allocate Bed
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          style={{ marginLeft: "0.5rem" }}
+                          onClick={() => setLamaRequest(req)}
+                        >
+                          LAMA / Cancel
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </Table>
+              )}
+            </div>
+          )}
 
       <div className="panel">
         <div className="bed-map-toolbar">
@@ -1254,10 +1325,10 @@ export default function BedManagementPage({ setNotice }: Props) {
             ) : checklist ? (
               <div className="discharge-checklist">
                 <div
-                  className={`discharge-checklist-row${checklist.billing.ok ? " discharge-checklist-row-ok" : " discharge-checklist-row-warn"}`}
+                  className={`discharge-checklist-row${checklist.billing?.ok ? " discharge-checklist-row-ok" : " discharge-checklist-row-warn"}`}
                 >
                   <span>
-                    {checklist.billing.ok ? (
+                    {checklist.billing?.ok ? (
                       <FiCheckCircle aria-hidden />
                     ) : (
                       <FiAlertTriangle aria-hidden />
@@ -1265,16 +1336,16 @@ export default function BedManagementPage({ setNotice }: Props) {
                     Billing
                   </span>
                   <span>
-                    {checklist.billing.ok
+                    {checklist.billing?.ok
                       ? "All invoices settled"
-                      : `${checklist.billing.pending_invoices.length} invoice(s) with dues`}
+                      : `${checklist.billing?.pending_invoices?.length || 0} invoice(s) with dues`}
                   </span>
                 </div>
                 <div
-                  className={`discharge-checklist-row${checklist.prescriptions.ok ? " discharge-checklist-row-ok" : " discharge-checklist-row-warn"}`}
+                  className={`discharge-checklist-row${checklist.prescriptions?.ok ? " discharge-checklist-row-ok" : " discharge-checklist-row-warn"}`}
                 >
                   <span>
-                    {checklist.prescriptions.ok ? (
+                    {checklist.prescriptions?.ok ? (
                       <FiCheckCircle aria-hidden />
                     ) : (
                       <FiAlertTriangle aria-hidden />
@@ -1282,14 +1353,14 @@ export default function BedManagementPage({ setNotice }: Props) {
                     Prescriptions
                   </span>
                   <span>
-                    {checklist.prescriptions.ok
+                    {checklist.prescriptions?.ok
                       ? "All fulfilled"
-                      : `${checklist.prescriptions.pending_count} pending`}
+                      : `${checklist.prescriptions?.pending_count || 0} pending`}
                   </span>
                 </div>
                 <div className="discharge-checklist-row discharge-checklist-row-info">
                   <span>Documents</span>
-                  <span>{checklist.documents.count} on file for this stay</span>
+                  <span>{checklist.documents?.count ?? 0} on file for this stay</span>
                 </div>
               </div>
             ) : (
@@ -1811,6 +1882,9 @@ export default function BedManagementPage({ setNotice }: Props) {
           }}
           setNotice={setNotice}
         />
+      )}
+        </>
+        </div>
       )}
     </section>
   );
