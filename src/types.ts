@@ -3,6 +3,15 @@ export interface Notice {
   message: string;
 }
 
+export type TriageCategory = {
+  id: number;
+  category_code: string;
+  category_label: string;
+  description: string | null;
+  color: string;
+  sort_order: number;
+};
+
 export interface Patient {
   id?: number;
   patient_id: string;

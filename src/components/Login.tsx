@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { API_BASE } from "../lib/constants";
+import { withAuthHeaders } from "../lib/api";
 
 interface LoginProps {
   onLogin: (userData: { user: string; role: string; staffId: string }) => void;
@@ -11,18 +13,31 @@ export default function Login({ onLogin }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !pass) { setError("Please enter your credentials."); return; }
     setError("");
     setLoading(true);
-
-    const staffId = role === "admin" ? "ADM-001" : role === "rn" ? "RN-8821" : "DOC-4401";
-
-    setTimeout(() => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        credentials: "include",
+        headers: withAuthHeaders({ "Content-Type": "application/json" }, "POST"),
+        body: JSON.stringify({ username: user, password: pass }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Invalid credentials.");
+      }
+      const effectiveRole = data.user?.role || role;
+      const staffId = data.user?.employee_id ||
+        (effectiveRole === "admin" ? "ADM-001" : effectiveRole === "rn" ? "RN-8821" : "DOC-4401");
+      onLogin({ user: user.trim(), role: effectiveRole, staffId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign in. Is the backend running?");
+    } finally {
       setLoading(false);
-      onLogin({ user: user.trim(), role, staffId });
-    }, 300);
+    }
   };
 
   const ROLES = [
@@ -122,8 +137,9 @@ export default function Login({ onLogin }: LoginProps) {
                 User ID / Employee Number
               </label>
               <input value={user} onChange={e => setUser(e.target.value)}
-                placeholder="e.g. jcarter@generalhospital.org"
+                placeholder="e.g. employee"
                 className="w-full border border-[#DDE2EC] rounded bg-white text-[13px] px-3.5 py-2.5 focus:outline-none focus:border-[#1B4FD8]" />
+              <p className="text-[11px] text-[#94A3B8] mt-1">Demo account: employee / employee123</p>
             </div>
 
             <div>

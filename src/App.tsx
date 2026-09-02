@@ -25,6 +25,7 @@ import CommandPalette from "./components/CommandPalette";
 import Registration from "./components/Registration";
 import OPWorkflow from "./components/OPWorkflow";
 import SmartOCR from "./components/SmartOCR";
+import DpiOcrPortal from "./components/DpiOcrPortal";
 import SymptomAI from "./components/SymptomAI";
 import ClinicalRAG from "./components/ClinicalRAG";
 import ClinicalSummaries from "./components/ClinicalSummaries";
@@ -55,7 +56,7 @@ type Module =
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
   | "hrms" | "employees" | "patient_exp"
-  | "intelligence" | "ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering"
+  | "intelligence" | "ocr" | "dpi_ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering"
   | "beds";
 
 interface NavItem {
@@ -135,9 +136,8 @@ const NAV: NavItem[] = [
   {
     key: "intelligence", label: "Hosp AI", Icon: Icon.FlaskConical,
     children: [
-      { key: "ocr", label: "Smart OCR" },
+      { key: "dpi_ocr", label: "Keppler OCR" },
       { key: "symptom_ai", label: "Symptom AI" },
-      { key: "clinical_rag", label: "Clinical RAG" },
       { key: "clinical_summaries", label: "Clinical Summaries" },
       { key: "bulk_ai", label: "Bulk Patient AI" },
       { key: "nl_filtering", label: "NL Patient Filtering" },
@@ -591,7 +591,7 @@ export default function App() {
                 />
               )}
               {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
-              {module === "emergency" && <ErPage setNotice={setNotice} />}
+              {module === "emergency" && <ErPage setNotice={setNotice} onNavigate={(m) => setModule(m as any)} />}
               {module === "inpatient" && <Inpatient />}
               {module === "beds" && <BedManagementPage setNotice={setNotice} />}
               {module === "nursing" && <NursingPortal />}
@@ -603,7 +603,8 @@ export default function App() {
               {module === "icu" && <ICU />}
               {module === "analytics" && <Analytics />}
               {module === "discharge" && <Discharge onComplete={() => setModule("inpatient")} />}
-              {module === "triage" && <Triage />}
+              {module === "triage" && <Triage setNotice={setNotice} onNavigate={(m) => setModule(m as any)} />}
+
               {module === "insurance" && <Insurance />}
               {module === "clinical" && <PlaceholderModule title="Clinical" sub="Encounters, orders, results, and care plans" />}
               {module === "reports" && <PlaceholderModule title="Reports" sub="Operational and clinical reporting" />}
@@ -680,11 +681,12 @@ export default function App() {
               {module === "hrms" && <HRMS />}
               {module === "employees" && <Employees />}
               {module === "ocr" && <SmartOCR setNotice={setNotice} />}
+              {module === "dpi_ocr" && <DpiOcrPortal />}
               {module === "symptom_ai" && <SymptomAI setNotice={setNotice} />}
               {module === "clinical_rag" && <ClinicalRAG />}
               {module === "clinical_summaries" && <ClinicalSummaries />}
-              {module === "bulk_ai" && <BulkAI />}
-              {module === "nl_filtering" && <NLFiltering />}
+              {module === "bulk_ai" && <BulkAI setNotice={setNotice} />}
+              {module === "nl_filtering" && <NLFiltering setNotice={setNotice} />}
               {module === "intelligence" && <IntelligenceHub navigate={navigate} />}
             </main>
           </div>

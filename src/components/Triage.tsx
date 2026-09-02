@@ -1,13 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Btn, Card, AlertBanner } from "./shared";
 import { Icon } from "./icons";
-
-const TRIAGE_QUEUE = [
-  { name: "Ann Martinez", mrn: "100088", age: 52, arrived: "10:02", cc: "Altered mental status, fever", initial: "ESI 2", nurse: "RN Chen" },
-  { name: "Kevin Park", mrn: "100422", age: 28, arrived: "10:18", cc: "Laceration R hand, glass injury", initial: "ESI 3", nurse: "—" },
-  { name: "Isabel Cruz", mrn: "100511", age: 19, arrived: "10:31", cc: "Right ankle pain after fall", initial: "ESI 4", nurse: "—" },
-  { name: "Harold Bloom", mrn: "100388", age: 77, arrived: "10:45", cc: "Urinary frequency, dysuria", initial: "ESI 4", nurse: "—" },
-];
+import { apiFetch, reportError } from "../lib/api";
+import type { Notice } from "../types";
 
 const ESI_GUIDE = [
   { level: 1, label: "Immediate", color: "#0F1624", bg: "#1F2937", desc: "Requires immediate life-saving intervention", examples: "Cardiac arrest, respiratory failure" },
@@ -17,74 +12,158 @@ const ESI_GUIDE = [
   { level: 5, label: "Non-Urgent", color: "#fff", bg: "#1B4FD8", desc: "Stable, no resources anticipated", examples: "Cold/flu, prescription refill, minor rash" },
 ];
 
-export default function Triage() {
-  const [selected, setSelected] = useState(0);
-  const [esi, setEsi] = useState(3);
-  const [vitals, setVitals] = useState({ bp: "", hr: "", rr: "", temp: "", spo2: "", pain: "" });
+export default function Triage({ setNotice, onNavigate }: { setNotice?: (notice: Notice | null) => void, onNavigate?: (module: string) => void }) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [esi, setEsi] = useState<number | null>(null);
+  const [vitals, setVitals] = useState({ bpSys: "", bpDia: "", hr: "", rr: "", temp: "", spo2: "", pain: "" });
   const [cc, setCc] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [visits, setVisits] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
 
-  const pt = TRIAGE_QUEUE[selected];
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [visitsRes, catsRes] = await Promise.all([
+        apiFetch<{ visits: any[] }>("/api/er/visits?active_only=true"),
+        apiFetch<{ categories: any[] }>("/api/er/triage-config")
+      ]);
+      const untriaged = visitsRes.visits.filter(v => v.status === "registered" || !v.triage_category);
+      setVisits(untriaged);
+      setCategories(catsRes.categories);
+      if (untriaged.length > 0 && !selectedId) {
+        setSelectedId(untriaged[0].id);
+      } else if (untriaged.length === 0) {
+        setSelectedId(null);
+      }
+    } catch (error: any) {
+      if (setNotice) reportError(setNotice, error, "Failed to load triage data.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const submit = () => {
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const pt = visits.find(v => v.id === selectedId);
+
+  // When patient changes, reset form
+  useEffect(() => {
+    setVitals({ bpSys: "", bpDia: "", hr: "", rr: "", temp: "", spo2: "", pain: "" });
+    setCc("");
+    setEsi(null);
+  }, [selectedId]);
+
+  const submit = async () => {
+    if (!pt) return;
+    if (!esi) {
+      if (setNotice) setNotice({ type: "error", message: "Select an ESI level." });
+      return;
+    }
+
+    try {
+      if (cc.trim()) {
+        await apiFetch(`/api/er/visits/${pt.id}/complaints`, {
+          method: "POST",
+          body: JSON.stringify({ complaint: cc.trim(), case_category: "other" }),
+        });
+      }
+
+      const vBody: Record<string, any> = {};
+      if (vitals.hr.trim()) vBody.heart_rate = parseInt(vitals.hr);
+      if (vitals.bpSys.trim()) vBody.bp_systolic = parseInt(vitals.bpSys);
+      if (vitals.bpDia.trim()) vBody.bp_diastolic = parseInt(vitals.bpDia);
+      if (vitals.spo2.trim()) vBody.spo2 = parseFloat(vitals.spo2);
+      if (vitals.rr.trim()) vBody.respiratory_rate = parseInt(vitals.rr);
+      if (vitals.temp.trim()) vBody.temperature = parseFloat(vitals.temp);
+      if (vitals.pain.trim()) vBody.pain_score = parseInt(vitals.pain);
+
+      if (Object.keys(vBody).length > 0) {
+        await apiFetch(`/api/er/visits/${pt.id}/vitals`, {
+          method: "POST",
+          body: JSON.stringify(vBody),
+        });
+      }
+
+      const categoryCode = `B${esi}`; // ESI 1 -> B1, ESI 2 -> B2
+      await apiFetch(`/api/er/visits/${pt.id}/triage`, {
+        method: "POST",
+        body: JSON.stringify({ category: categoryCode }),
+      });
+
+      setSubmitted(true);
+      if (setNotice) setNotice({ type: "success", message: `Triage completed for ${pt.patient_name || pt.unknown_patient_label}. Assigned ESI ${esi}.` });
+      
+      setTimeout(() => {
+        setSubmitted(false);
+        loadData();
+      }, 1500);
+
+    } catch (error: any) {
+      if (setNotice) reportError(setNotice, error, "Failed to submit triage.");
+    }
+  };
+
+  const getPatientName = (v: any) => {
+    if (v.is_unknown_patient) return v.unknown_patient_label || "Unidentified Trauma Patient";
+    return [v.patient_name, v.patient_last_name].filter(Boolean).join(" ") || v.patient_id;
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#F0F2F5]">
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between flex-shrink-0">
         <div>
           <h1 className="text-base font-semibold text-gray-900">Triage</h1>
-          <p className="text-[11.5px] text-[#64748B]">Emergency Department · {TRIAGE_QUEUE.length} patients awaiting triage</p>
+          <p className="text-[11.5px] text-[#64748B]">Emergency Department · {visits.length} patients awaiting triage</p>
         </div>
-        <Btn variant="primary" size="sm"><Icon.Plus /> Walk-in Registration</Btn>
+        <div className="flex items-center gap-2">
+          <Btn variant="outline" size="sm" onClick={loadData}><Icon.Refresh /> Refresh</Btn>
+          <Btn variant="primary" size="sm" onClick={() => onNavigate?.("emergency")}><Icon.Plus /> ER Queue</Btn>
+        </div>
       </div>
 
-      {submitted && (
-        <div className="bg-[#F0FDF4] border-b border-[#BBF7D0] px-6 py-2.5 flex items-center gap-2 text-[#15803D]">
-          <span className="font-semibold">✓</span>
-          <span className="text-[12.5px] font-medium">Triage completed for {pt.name} — ESI {esi} assigned. Patient moved to ED board.</span>
-        </div>
-      )}
-
-      <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Triage queue */}
-        <div>
-          <Card title="Awaiting Triage" actions={<span className="text-[11px] text-[#DC2626] font-semibold">{TRIAGE_QUEUE.filter(p => p.initial === "ESI 2").length} ESI-2</span>}>
-            <div className="space-y-1 -mx-4 -mb-4">
-              {TRIAGE_QUEUE.map((p, i) => {
-                const esiNum = parseInt(p.initial.replace("ESI ", ""));
-                const esiColors: Record<number, string> = { 1: "#0F1624", 2: "#DC2626", 3: "#D97706", 4: "#16A34A", 5: "#1B4FD8" };
-                return (
-                  <div key={i} onClick={() => setSelected(i)}
-                    className={`flex items-start gap-3 px-4 py-3 border-b border-[#F1F5F9] last:border-0 cursor-pointer transition-colors
-                      ${selected === i ? "bg-[#EFF6FF]" : "hover:bg-[#F8FAFC]"}`}>
-                    <div className="w-8 h-8 rounded flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
-                      style={{ backgroundColor: esiColors[esiNum] }}>
-                      {esiNum}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[12.5px] font-semibold text-gray-900">{p.name}</div>
-                      <div className="text-[11.5px] text-[#64748B] truncate">{p.cc}</div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[11px]">
-                        <span className="font-mono text-[#94A3B8]">{p.mrn}</span>
-                        <span className="text-[#94A3B8]">·</span>
-                        <span className="text-[#94A3B8]">Arrived {p.arrived}</span>
+        <div className="flex flex-col gap-4">
+          <Card title="Awaiting Triage" actions={<span className="text-[11px] text-[#DC2626] font-semibold">{visits.length} Total</span>}>
+            {loading ? (
+              <p className="text-[12px] text-gray-500 p-4">Loading queue...</p>
+            ) : visits.length === 0 ? (
+              <p className="text-[12px] text-gray-500 p-4">No patients awaiting triage.</p>
+            ) : (
+              <div className="space-y-1 -mx-4 -mb-4 max-h-[400px] overflow-y-auto border-t border-[#DDE2EC]">
+                {visits.map((p) => {
+                  return (
+                    <div key={p.id} onClick={() => setSelectedId(p.id)}
+                      className={`flex items-start gap-3 px-4 py-3 border-b border-[#F1F5F9] last:border-0 cursor-pointer transition-colors
+                        ${selectedId === p.id ? "bg-[#EFF6FF]" : "hover:bg-[#F8FAFC]"}`}>
+                      <div className="w-8 h-8 rounded flex items-center justify-center text-gray-600 bg-gray-100 text-[11px] font-bold flex-shrink-0">
+                        ?
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12.5px] font-semibold text-gray-900">{getPatientName(p)}</div>
+                        <div className="text-[11.5px] text-[#64748B] truncate">{p.condition_at_arrival || "No arrival condition"}</div>
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px]">
+                          <span className="font-mono text-[#94A3B8]">{p.visit_no}</span>
+                          {p.patient_age && <><span className="text-[#94A3B8]">·</span><span className="text-[#94A3B8]">{p.patient_age}y</span></>}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </Card>
 
           {/* ESI Guide */}
-          <div className="mt-4 bg-white border border-[#DDE2EC] rounded">
+          <div className="bg-white border border-[#DDE2EC] rounded shadow-sm">
             <div className="px-4 py-2.5 border-b border-[#DDE2EC]">
               <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">ESI Quick Reference</span>
             </div>
-            <div className="divide-y divide-[#F1F5F9]">
+            <div className="divide-y divide-[#F1F5F9] max-h-[300px] overflow-y-auto">
               {ESI_GUIDE.map((e) => (
                 <div key={e.level} className="flex items-start gap-2.5 px-3 py-2">
                   <div className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
@@ -104,113 +183,135 @@ export default function Triage() {
 
         {/* Triage workspace */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Patient header */}
-          <div className="bg-white border border-[#DDE2EC] rounded p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#1B4FD8] flex items-center justify-center text-white font-semibold">
-                  {pt.name.split(" ").map(n => n[0]).join("")}
-                </div>
-                <div>
-                  <div className="text-[14px] font-bold text-gray-900">{pt.name}</div>
-                  <div className="text-[11.5px] text-[#64748B]">{pt.age} yrs · MRN {pt.mrn} · Arrived {pt.arrived}</div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[11px] text-[#64748B]">Initial acuity</div>
-                <div className={`text-[13px] font-bold px-3 py-1 rounded mt-1 inline-block text-white`}
-                  style={{ backgroundColor: pt.initial === "ESI 2" ? "#DC2626" : pt.initial === "ESI 3" ? "#D97706" : "#16A34A" }}>
-                  {pt.initial}
-                </div>
-              </div>
+          {!pt ? (
+            <div className="bg-white border border-[#DDE2EC] rounded p-12 text-center text-[#64748B]">
+              Select a patient from the queue to begin triage.
             </div>
-          </div>
-
-          {/* Vitals */}
-          <Card title="Vital Signs">
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { key: "bp", label: "Blood Pressure", placeholder: "120/80", unit: "mmHg" },
-                { key: "hr", label: "Heart Rate", placeholder: "72", unit: "bpm" },
-                { key: "rr", label: "Resp Rate", placeholder: "16", unit: "/min" },
-                { key: "temp", label: "Temperature", placeholder: "98.6", unit: "°F" },
-                { key: "spo2", label: "SpO₂", placeholder: "98", unit: "%" },
-                { key: "pain", label: "Pain Score", placeholder: "0–10", unit: "/10" },
-              ].map(({ key, label, placeholder, unit }) => (
-                <div key={key}>
-                  <label className="block text-[11px] font-semibold text-[#64748B] mb-1">{label}</label>
-                  <div className="relative">
-                    <input value={vitals[key as keyof typeof vitals]}
-                      onChange={e => setVitals(prev => ({ ...prev, [key]: e.target.value }))}
-                      placeholder={placeholder}
-                      className="w-full border border-[#DDE2EC] rounded bg-white text-[13px] font-mono px-3 py-2 focus:outline-none focus:border-[#1B4FD8] pr-10" />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10.5px] text-[#94A3B8]">{unit}</span>
+          ) : (
+            <>
+              {/* Patient header */}
+              <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-sm flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[#1B4FD8] flex items-center justify-center text-white font-semibold">
+                    {getPatientName(pt)[0]}
+                  </div>
+                  <div>
+                    <div className="text-[14px] font-bold text-gray-900">{getPatientName(pt)}</div>
+                    <div className="text-[11.5px] text-[#64748B]">
+                      {pt.patient_age ? `${pt.patient_age} yrs · ` : ""}
+                      {pt.patient_id ? `MRN ${pt.patient_id} · ` : ""}
+                      Visit {pt.visit_no}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Chief Complaint */}
-          <Card title="Chief Complaint & History">
-            <div className="grid grid-cols-1 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] mb-1">Chief Complaint <span className="text-[#DC2626]">*</span></label>
-                <input value={cc} onChange={e => setCc(e.target.value)}
-                  defaultValue={pt.cc}
-                  placeholder="Patient's chief complaint in their own words..."
-                  className="w-full border border-[#DDE2EC] rounded text-[12.5px] px-3 py-2 focus:outline-none focus:border-[#1B4FD8]" />
+                <div className="text-right">
+                  <div className="text-[11px] text-[#64748B]">Arrival Mode</div>
+                  <div className="text-[12px] font-medium text-gray-800 mt-0.5">{pt.arrival_mode || "Walk-in"}</div>
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: "Onset", placeholder: "e.g., 2 hours ago" },
-                  { label: "Duration", placeholder: "e.g., 2 hours" },
-                  { label: "Severity", placeholder: "Mild / Mod / Severe" },
-                ].map(({ label, placeholder }) => (
-                  <div key={label}>
-                    <label className="block text-[11px] font-semibold text-[#64748B] mb-1">{label}</label>
-                    <input placeholder={placeholder} className="w-full border border-[#DDE2EC] rounded text-[12.5px] px-3 py-2 focus:outline-none focus:border-[#1B4FD8]" />
+
+              {/* Chief Complaint */}
+              <Card title="Chief Complaint & History">
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#64748B] mb-1">Chief Complaint</label>
+                    <input value={cc} onChange={e => setCc(e.target.value)}
+                      placeholder="Patient's chief complaint in their own words..."
+                      className="w-full border border-[#DDE2EC] rounded text-[12.5px] px-3 py-2 focus:outline-none focus:border-[#1B4FD8]" />
                   </div>
-                ))}
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] mb-1">Additional History / Notes</label>
-                <textarea rows={3} placeholder="Relevant history, medications, allergies reported by patient..."
-                  className="w-full border border-[#DDE2EC] rounded text-[12.5px] px-3 py-2 resize-none focus:outline-none focus:border-[#1B4FD8]" />
-              </div>
-            </div>
-          </Card>
+                </div>
+              </Card>
 
-          {/* ESI Assignment */}
-          <Card title="ESI Acuity Assignment">
-            <div className="flex gap-2 mb-3">
-              {ESI_GUIDE.map((e) => (
-                <button key={e.level} onClick={() => setEsi(e.level)}
-                  className={`flex-1 py-3 rounded border-2 font-bold text-[13px] transition-colors
-                    ${esi === e.level ? "border-transparent text-white" : "border-[#DDE2EC] text-gray-500 hover:border-gray-300 bg-white"}`}
-                  style={esi === e.level ? { backgroundColor: e.bg } : {}}>
-                  {e.level}
-                </button>
-              ))}
-            </div>
-            <div className={`text-[12.5px] font-medium p-3 rounded text-white`}
-              style={{ backgroundColor: ESI_GUIDE[esi - 1].bg }}>
-              ESI {esi} — {ESI_GUIDE[esi - 1].label}: {ESI_GUIDE[esi - 1].desc}
-            </div>
-          </Card>
+              {/* Vitals */}
+              <Card title="Vital Signs">
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#64748B] mb-1">Blood Pressure</label>
+                    <div className="flex items-center gap-1">
+                      <input value={vitals.bpSys} onChange={e => setVitals(v => ({ ...v, bpSys: e.target.value }))}
+                        placeholder="Sys" className="w-full border border-[#DDE2EC] rounded text-[13px] font-mono px-2 py-1.5 focus:outline-none focus:border-[#1B4FD8]" />
+                      <span className="text-[#94A3B8]">/</span>
+                      <input value={vitals.bpDia} onChange={e => setVitals(v => ({ ...v, bpDia: e.target.value }))}
+                        placeholder="Dia" className="w-full border border-[#DDE2EC] rounded text-[13px] font-mono px-2 py-1.5 focus:outline-none focus:border-[#1B4FD8]" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#64748B] mb-1">Heart Rate</label>
+                    <div className="relative">
+                      <input value={vitals.hr} onChange={e => setVitals(v => ({ ...v, hr: e.target.value }))}
+                        placeholder="72" className="w-full border border-[#DDE2EC] rounded text-[13px] font-mono px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8]" />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10.5px] text-[#94A3B8]">bpm</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#64748B] mb-1">Resp Rate</label>
+                    <div className="relative">
+                      <input value={vitals.rr} onChange={e => setVitals(v => ({ ...v, rr: e.target.value }))}
+                        placeholder="16" className="w-full border border-[#DDE2EC] rounded text-[13px] font-mono px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8]" />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10.5px] text-[#94A3B8]">/min</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#64748B] mb-1">Temperature</label>
+                    <div className="relative">
+                      <input value={vitals.temp} onChange={e => setVitals(v => ({ ...v, temp: e.target.value }))}
+                        placeholder="98.6" className="w-full border border-[#DDE2EC] rounded text-[13px] font-mono px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8]" />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10.5px] text-[#94A3B8]">°F</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#64748B] mb-1">SpO₂</label>
+                    <div className="relative">
+                      <input value={vitals.spo2} onChange={e => setVitals(v => ({ ...v, spo2: e.target.value }))}
+                        placeholder="98" className="w-full border border-[#DDE2EC] rounded text-[13px] font-mono px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8]" />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10.5px] text-[#94A3B8]">%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#64748B] mb-1">Pain Score</label>
+                    <div className="relative">
+                      <input value={vitals.pain} onChange={e => setVitals(v => ({ ...v, pain: e.target.value }))}
+                        placeholder="0-10" className="w-full border border-[#DDE2EC] rounded text-[13px] font-mono px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8]" />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10.5px] text-[#94A3B8]">/10</span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
 
-          {/* Immediate alerts */}
-          {esi <= 2 && (
-            <AlertBanner type="critical" title={`ESI ${esi} — IMMEDIATE ATTENTION REQUIRED`}
-              body="Notify attending physician immediately. Assign to resuscitation or high-acuity bay." action="Notify Provider" />
+              {/* ESI Assignment */}
+              <Card title="ESI Acuity Assignment">
+                <div className="flex gap-2 mb-3">
+                  {ESI_GUIDE.map((e) => (
+                    <button key={e.level} onClick={() => setEsi(e.level)}
+                      className={`flex-1 py-3 rounded border-2 font-bold text-[13px] transition-colors
+                        ${esi === e.level ? "border-transparent text-white" : "border-[#DDE2EC] text-gray-500 hover:border-gray-300 bg-white"}`}
+                      style={esi === e.level ? { backgroundColor: e.bg } : {}}>
+                      {e.level}
+                    </button>
+                  ))}
+                </div>
+                {esi && (
+                  <div className={`text-[12.5px] font-medium p-3 rounded text-white`}
+                    style={{ backgroundColor: ESI_GUIDE[esi - 1].bg }}>
+                    ESI {esi} — {ESI_GUIDE[esi - 1].label}: {ESI_GUIDE[esi - 1].desc}
+                  </div>
+                )}
+              </Card>
+
+              {/* Immediate alerts */}
+              {esi && esi <= 2 && (
+                <AlertBanner type="critical" title={`ESI ${esi} — IMMEDIATE ATTENTION REQUIRED`}
+                  body="Notify attending physician immediately. Assign to resuscitation or high-acuity bay." action="Notify Provider" />
+              )}
+
+              <div className="flex justify-end gap-3 mt-4">
+                <Btn variant="outline" size="md" onClick={() => setSelectedId(null)}>Cancel</Btn>
+                <Btn variant="primary" size="md" onClick={submit} disabled={!esi || submitted}>
+                  {submitted ? "Saving..." : esi ? `Complete Triage — Assign ESI ${esi}` : "Select ESI to Complete"}
+                </Btn>
+              </div>
+            </>
           )}
-
-          <div className="flex justify-end gap-3">
-            <Btn variant="outline" size="md">Save Draft</Btn>
-            <Btn variant="primary" size="md" onClick={submit}>
-              Complete Triage — Assign ESI {esi}
-            </Btn>
-          </div>
         </div>
       </div>
     </div>
