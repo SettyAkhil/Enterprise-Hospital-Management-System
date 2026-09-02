@@ -457,7 +457,7 @@ export default function App() {
                 <img
                   src="/logo.png"
                   alt="HospAI Logo"
-                  className={`${sidebarCollapsed ? "w-7 h-7" : "h-10 w-auto max-w-[160px]"} object-contain pointer-events-none transition-all duration-200`}
+                  className={`${sidebarCollapsed ? "w-8 h-8" : "w-40 h-40"} object-contain pointer-events-none transition-all duration-200`}
                 />
               </div>
               <div className="flex-1 py-2 px-2">
