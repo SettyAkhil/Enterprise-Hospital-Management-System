@@ -3020,33 +3020,21 @@ function VisitDetailPanel({
   const [showInvestigationModal, setShowInvestigationModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
-  // Derive latest vitals
-  const latestVitals = (detail.vitals && detail.vitals.length > 0)
-    ? detail.vitals[detail.vitals.length - 1]
-    : {
-        bp_systolic: 120,
-        bp_diastolic: 80,
-        heart_rate: 76,
-        spo2: 98,
-        respiratory_rate: 16,
-        temperature: 98.4,
-        pain_score: 0,
-        blood_glucose: 110,
-        gcs: 15,
-        recorded_at: detail.arrival_at,
-      };
+  // Derive latest vitals (null if no vitals recorded yet)
+  const hasVitals = Boolean(detail.vitals && detail.vitals.length > 0);
+  const latestVitals = hasVitals ? detail.vitals[detail.vitals.length - 1] : null;
 
-  // Form states for quick actions initialized with sensible clinical values
+  // Form states for quick actions
   const [quickVitals, setQuickVitals] = useState({
-    hr: String(latestVitals.heart_rate || "80"),
-    bpSys: String(latestVitals.bp_systolic || "120"),
-    bpDia: String(latestVitals.bp_diastolic || "80"),
-    spo2: String(latestVitals.spo2 || "98"),
-    rr: String(latestVitals.respiratory_rate || "18"),
-    temp: String(latestVitals.temperature || "98.6"),
-    glucose: String(latestVitals.blood_glucose || "110"),
-    pain: String(latestVitals.pain_score || "0"),
-    gcs: String(latestVitals.gcs || "15"),
+    hr: latestVitals?.heart_rate ? String(latestVitals.heart_rate) : "",
+    bpSys: latestVitals?.bp_systolic ? String(latestVitals.bp_systolic) : "",
+    bpDia: latestVitals?.bp_diastolic ? String(latestVitals.bp_diastolic) : "",
+    spo2: latestVitals?.spo2 ? String(latestVitals.spo2) : "",
+    rr: latestVitals?.respiratory_rate ? String(latestVitals.respiratory_rate) : "",
+    temp: latestVitals?.temperature ? String(latestVitals.temperature) : "",
+    glucose: latestVitals?.blood_glucose ? String(latestVitals.blood_glucose) : "",
+    pain: latestVitals?.pain_score != null ? String(latestVitals.pain_score) : "0",
+    gcs: latestVitals?.gcs ? String(latestVitals.gcs) : "15",
   });
   const [quickIntervention, setQuickIntervention] = useState({ type: "", description: "" });
   const [quickNote, setQuickNote] = useState({ type: "Physician Progress Note", content: "" });
@@ -3055,22 +3043,22 @@ function VisitDetailPanel({
 
   // Derive chief complaint & onset
   const primaryComplaint = detail.complaints && detail.complaints.length > 0 ? detail.complaints[0] : null;
-  const chiefComplaint = primaryComplaint?.complaint || "Acute Presentation";
+  const chiefComplaint = primaryComplaint?.complaint || "Acute Emergency Presentation";
   const onsetText = primaryComplaint?.duration
     ? `${primaryComplaint.duration} before arrival`
     : `${formatTimeStr(detail.arrival_at)} (at arrival)`;
 
   // Derive attending doctor
-  const doctorName = detail.assigned_doctor_name ? detail.assigned_doctor_name.replace(/\s*\(.*\)/, "") : "Dr. Vikram Seth";
+  const doctorName = detail.assigned_doctor_name ? detail.assigned_doctor_name.replace(/\s*\(.*\)/, "") : "Awaiting Doctor";
   const doctorSpecialty = detail.assigned_specialty || (detail.assigned_doctor_name?.match(/\((.*)\)/)?.[1]) || "Emergency Medicine";
 
   // Derive triage info
-  const triageCatCode = detail.triage_category || detail.triage?.category || "B1";
+  const triageCatCode = detail.triage_category || detail.triage?.category || "B2";
   const triageCatObj = categories.find((c) => c.category_code === triageCatCode);
-  const triageCatLabel = triageCatObj ? triageCatObj.category_label : "Critical Priority";
+  const triageCatLabel = triageCatObj ? triageCatObj.category_label : "Emergent Priority";
 
   // Derive bed / location
-  const location = detail.triage?.triage_bed_label || detail.triage_bed_label || "ER Bay 01";
+  const location = detail.triage?.triage_bed_label || detail.triage_bed_label || "ER Triage Bay";
 
   // Derive destination
   const destination = getDestination(detail) || (detail.disposition ? `• ${formatOutcomeLabel(detail.disposition.outcome)}` : "• Under Assessment");
@@ -3145,44 +3133,38 @@ function VisitDetailPanel({
 
   // Dynamic Vitals Chart Coordinates
   const vitalsChartData = useMemo(() => {
-    const rawVitals = detail.vitals && detail.vitals.length > 0 ? detail.vitals : [latestVitals];
-    let pts = rawVitals;
-    if (pts.length === 1) {
-      const v = pts[0];
-      pts = [
-        { ...v, bp_systolic: Math.min(200, (v.bp_systolic || 120) + 12), heart_rate: (v.heart_rate || 80) + 10, spo2: Math.max(88, (v.spo2 || 95) - 2), recorded_at: new Date(new Date(detail.arrival_at || Date.now()).getTime() - 40 * 60000).toISOString() },
-        { ...v, bp_systolic: Math.min(190, (v.bp_systolic || 120) + 6), heart_rate: (v.heart_rate || 80) + 5, spo2: (v.spo2 || 95) - 1, recorded_at: new Date(new Date(detail.arrival_at || Date.now()).getTime() - 20 * 60000).toISOString() },
-        { ...v },
-      ];
+    if (!detail.vitals || detail.vitals.length === 0) {
+      return { bpPoints: [], hrPoints: [], spo2Points: [], timeLabels: [] };
     }
+    const pts = detail.vitals;
     const n = pts.length;
     const xStep = n > 1 ? (280 - 35) / (n - 1) : 0;
 
     const bpPoints = pts.map((v, i) => {
       const val = v.bp_systolic || 120;
       const y = Math.max(15, Math.min(95, 95 - ((val - 50) / 170) * 80));
-      const x = 35 + i * xStep;
+      const x = n === 1 ? 140 : 35 + i * xStep;
       return { x, y, val };
     });
 
     const hrPoints = pts.map((v, i) => {
       const val = v.heart_rate || 80;
       const y = Math.max(20, Math.min(95, 95 - ((val - 40) / 120) * 75));
-      const x = 35 + i * xStep;
+      const x = n === 1 ? 140 : 35 + i * xStep;
       return { x, y, val };
     });
 
     const spo2Points = pts.map((v, i) => {
       const val = v.spo2 || 95;
       const y = Math.max(25, Math.min(95, 95 - ((val - 70) / 30) * 70));
-      const x = 35 + i * xStep;
+      const x = n === 1 ? 140 : 35 + i * xStep;
       return { x, y, val };
     });
 
     const timeLabels = pts.map((v) => (v.recorded_at ? formatTimeStr(v.recorded_at) : ""));
 
     return { bpPoints, hrPoints, spo2Points, timeLabels };
-  }, [detail.vitals, latestVitals, detail.arrival_at]);
+  }, [detail.vitals]);
 
   // Handlers for quick actions
   const handleSaveVitals = async () => {
@@ -3585,23 +3567,45 @@ function VisitDetailPanel({
 
                   <div>
                     <span className="text-[#64748B] block text-[10.5px] mb-1.5">Vitals (Latest)</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
-                        BP {latestVitals.bp_systolic || "—"}/{latestVitals.bp_diastolic || "—"} mmHg
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
-                        HR {latestVitals.heart_rate || "—"} bpm
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
-                        SpO₂ {latestVitals.spo2 || "—"}%
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FFEDD5] text-[#EA580C] border border-orange-200">
-                        RR {latestVitals.respiratory_rate || "—"}/min
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
-                        Temp {latestVitals.temperature || "98.6"}°F
-                      </span>
-                    </div>
+                    {latestVitals ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {latestVitals.bp_systolic && latestVitals.bp_diastolic && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+                            BP {latestVitals.bp_systolic}/{latestVitals.bp_diastolic} mmHg
+                          </span>
+                        )}
+                        {latestVitals.heart_rate && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+                            HR {latestVitals.heart_rate} bpm
+                          </span>
+                        )}
+                        {latestVitals.spo2 && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+                            SpO₂ {latestVitals.spo2}%
+                          </span>
+                        )}
+                        {latestVitals.respiratory_rate && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FFEDD5] text-[#EA580C] border border-orange-200">
+                            RR {latestVitals.respiratory_rate}/min
+                          </span>
+                        )}
+                        {latestVitals.temperature && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
+                            Temp {latestVitals.temperature}°F
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[11px] flex items-center justify-between">
+                        <span className="text-[#64748B] italic">No vitals charted yet</span>
+                        <button
+                          onClick={() => setShowAddVitalsModal(true)}
+                          className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-[#1B4FD8] font-bold rounded cursor-pointer text-[10.5px] transition-colors"
+                        >
+                          + Add Vitals
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="border-t border-slate-100 pt-2.5">
@@ -3633,7 +3637,7 @@ function VisitDetailPanel({
               </div>
 
               <div className="pt-2 border-t border-slate-100 text-[10.5px] text-[#64748B]">
-                Last Updated: {formatTimeStr(latestVitals.recorded_at || detail.arrival_at)}
+                Last Updated: {latestVitals ? formatTimeStr(latestVitals.recorded_at || detail.arrival_at) : formatTimeStr(detail.arrival_at)}
               </div>
             </div>
 
@@ -3670,125 +3674,157 @@ function VisitDetailPanel({
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">VITALS TREND</span>
-                  <select
-                    value={trendRange}
-                    onChange={(e) => setTrendRange(e.target.value)}
-                    className="text-[11px] font-semibold text-gray-700 bg-white border border-[#CBD5E1] rounded px-2 py-0.5"
-                  >
-                    <option value="Last 2 Hours">Last 2 Hours</option>
-                    <option value="Last 4 Hours">Last 4 Hours</option>
-                    <option value="All Visit">All Visit</option>
-                  </select>
+                  {hasVitals ? (
+                    <select
+                      value={trendRange}
+                      onChange={(e) => setTrendRange(e.target.value)}
+                      className="text-[11px] font-semibold text-gray-700 bg-white border border-[#CBD5E1] rounded px-2 py-0.5"
+                    >
+                      <option value="Last 2 Hours">Last 2 Hours</option>
+                      <option value="Last 4 Hours">Last 4 Hours</option>
+                      <option value="All Visit">All Visit</option>
+                    </select>
+                  ) : (
+                    <button
+                      onClick={() => setShowAddVitalsModal(true)}
+                      className="text-[11px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
+                    >
+                      + Record
+                    </button>
+                  )}
                 </div>
 
-                {/* Vitals Trend Chart */}
-                <div className="pt-2">
-                  {/* Legend */}
-                  <div className="flex items-center justify-center gap-3 text-[10.5px] font-semibold text-[#64748B] mb-2">
-                    <span className="flex items-center gap-1 text-[#DC2626]">
-                      <span className="w-2.5 h-0.5 bg-[#DC2626]"></span> BP (mmHg)
-                    </span>
-                    <span className="flex items-center gap-1 text-[#2563EB]">
-                      <span className="w-2.5 h-0.5 bg-[#2563EB]"></span> HR (bpm)
-                    </span>
-                    <span className="flex items-center gap-1 text-[#16A34A]">
-                      <span className="w-2.5 h-0.5 bg-[#16A34A]"></span> SpO₂ (%)
-                    </span>
+                {hasVitals && latestVitals ? (
+                  <>
+                    {/* Vitals Trend Chart */}
+                    <div className="pt-2">
+                      {/* Legend */}
+                      <div className="flex items-center justify-center gap-3 text-[10.5px] font-semibold text-[#64748B] mb-2">
+                        <span className="flex items-center gap-1 text-[#DC2626]">
+                          <span className="w-2.5 h-0.5 bg-[#DC2626]"></span> BP (mmHg)
+                        </span>
+                        <span className="flex items-center gap-1 text-[#2563EB]">
+                          <span className="w-2.5 h-0.5 bg-[#2563EB]"></span> HR (bpm)
+                        </span>
+                        <span className="flex items-center gap-1 text-[#16A34A]">
+                          <span className="w-2.5 h-0.5 bg-[#16A34A]"></span> SpO₂ (%)
+                        </span>
+                      </div>
+
+                      {/* SVG Trend Line Chart */}
+                      <div className="relative h-36 w-full bg-slate-50/70 rounded border border-slate-100 p-2">
+                        <svg className="w-full h-full" viewBox="0 0 300 110" preserveAspectRatio="none">
+                          <line x1="25" y1="20" x2="290" y2="20" stroke="#E2E8F0" strokeDasharray="3 3" />
+                          <line x1="25" y1="50" x2="290" y2="50" stroke="#E2E8F0" strokeDasharray="3 3" />
+                          <line x1="25" y1="80" x2="290" y2="80" stroke="#E2E8F0" strokeDasharray="3 3" />
+
+                          <text x="5" y="23" fontSize="8" fill="#94A3B8">200</text>
+                          <text x="5" y="53" fontSize="8" fill="#94A3B8">100</text>
+                          <text x="10" y="83" fontSize="8" fill="#94A3B8">50</text>
+
+                          {/* BP Polyline */}
+                          <polyline
+                            fill="none"
+                            stroke="#DC2626"
+                            strokeWidth="2"
+                            points={vitalsChartData.bpPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+                          />
+                          {vitalsChartData.bpPoints.map((p, i) => (
+                            <circle key={`bp-${i}`} cx={p.x} cy={p.y} r="3" fill="#DC2626" />
+                          ))}
+
+                          {/* HR Polyline */}
+                          <polyline
+                            fill="none"
+                            stroke="#2563EB"
+                            strokeWidth="2"
+                            points={vitalsChartData.hrPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+                          />
+                          {vitalsChartData.hrPoints.map((p, i) => (
+                            <circle key={`hr-${i}`} cx={p.x} cy={p.y} r="3" fill="#2563EB" />
+                          ))}
+
+                          {/* SpO2 Polyline */}
+                          <polyline
+                            fill="none"
+                            stroke="#16A34A"
+                            strokeWidth="2"
+                            points={vitalsChartData.spo2Points.map((p) => `${p.x},${p.y}`).join(" ")}
+                          />
+                          {vitalsChartData.spo2Points.map((p, i) => (
+                            <circle key={`spo2-${i}`} cx={p.x} cy={p.y} r="3" fill="#16A34A" />
+                          ))}
+                        </svg>
+
+                        <div className="flex justify-between text-[9px] text-[#94A3B8] px-3 font-mono">
+                          {vitalsChartData.timeLabels.map((lbl, i) => (
+                            <span key={i}>{lbl}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Latest Vitals Table */}
+                    <div className="pt-3 mt-2 border-t border-slate-100">
+                      <span className="text-[10.5px] font-bold text-[#64748B] uppercase block mb-2">
+                        Latest Vitals ({formatTimeStr(latestVitals.recorded_at || detail.arrival_at)})
+                      </span>
+                      <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-[11px]">
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Blood Pressure</span>
+                          <span className="font-bold text-gray-900">{latestVitals.bp_systolic && latestVitals.bp_diastolic ? `${latestVitals.bp_systolic}/${latestVitals.bp_diastolic}` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Heart Rate</span>
+                          <span className="font-bold text-gray-900">{latestVitals.heart_rate ? `${latestVitals.heart_rate} bpm` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Resp Rate</span>
+                          <span className="font-bold text-gray-900">{latestVitals.respiratory_rate ? `${latestVitals.respiratory_rate} /min` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">SpO₂</span>
+                          <span className="font-bold text-gray-900">{latestVitals.spo2 ? `${latestVitals.spo2}%` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Temperature</span>
+                          <span className="font-bold text-gray-900">{latestVitals.temperature ? `${latestVitals.temperature} °F` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Pain Score</span>
+                          <span className="font-bold text-gray-900">{latestVitals.pain_score != null ? `${latestVitals.pain_score} /10` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#64748B]">GCS</span>
+                          <span className="font-bold text-gray-900">{latestVitals.gcs ? `${latestVitals.gcs} /15` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#64748B]">Blood Glucose</span>
+                          <span className="font-bold text-gray-900">{latestVitals.blood_glucose ? `${latestVitals.blood_glucose} mg/dL` : "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-7 text-center text-[#64748B] space-y-3">
+                    <div className="w-11 h-11 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-xl mx-auto">
+                      🫀
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-[12.5px]">No Vitals Recorded</p>
+                      <p className="text-[11px] text-[#64748B] mt-0.5 max-w-[210px] mx-auto">
+                        Emergency nurse or triage clinician can record initial vital signs.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddVitalsModal(true)}
+                      className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[11.5px] font-bold shadow-xs cursor-pointer inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      <span>➕</span> Record Initial Vitals
+                    </button>
                   </div>
-
-                  {/* SVG Trend Line Chart */}
-                  <div className="relative h-36 w-full bg-slate-50/70 rounded border border-slate-100 p-2">
-                    <svg className="w-full h-full" viewBox="0 0 300 110" preserveAspectRatio="none">
-                      <line x1="25" y1="20" x2="290" y2="20" stroke="#E2E8F0" strokeDasharray="3 3" />
-                      <line x1="25" y1="50" x2="290" y2="50" stroke="#E2E8F0" strokeDasharray="3 3" />
-                      <line x1="25" y1="80" x2="290" y2="80" stroke="#E2E8F0" strokeDasharray="3 3" />
-
-                      <text x="5" y="23" fontSize="8" fill="#94A3B8">200</text>
-                      <text x="5" y="53" fontSize="8" fill="#94A3B8">100</text>
-                      <text x="10" y="83" fontSize="8" fill="#94A3B8">50</text>
-
-                      {/* BP Polyline */}
-                      <polyline
-                        fill="none"
-                        stroke="#DC2626"
-                        strokeWidth="2"
-                        points={vitalsChartData.bpPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-                      />
-                      {vitalsChartData.bpPoints.map((p, i) => (
-                        <circle key={`bp-${i}`} cx={p.x} cy={p.y} r="3" fill="#DC2626" />
-                      ))}
-
-                      {/* HR Polyline */}
-                      <polyline
-                        fill="none"
-                        stroke="#2563EB"
-                        strokeWidth="2"
-                        points={vitalsChartData.hrPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-                      />
-                      {vitalsChartData.hrPoints.map((p, i) => (
-                        <circle key={`hr-${i}`} cx={p.x} cy={p.y} r="3" fill="#2563EB" />
-                      ))}
-
-                      {/* SpO2 Polyline */}
-                      <polyline
-                        fill="none"
-                        stroke="#16A34A"
-                        strokeWidth="2"
-                        points={vitalsChartData.spo2Points.map((p) => `${p.x},${p.y}`).join(" ")}
-                      />
-                      {vitalsChartData.spo2Points.map((p, i) => (
-                        <circle key={`spo2-${i}`} cx={p.x} cy={p.y} r="3" fill="#16A34A" />
-                      ))}
-                    </svg>
-
-                    <div className="flex justify-between text-[9px] text-[#94A3B8] px-3 font-mono">
-                      {vitalsChartData.timeLabels.map((lbl, i) => (
-                        <span key={i}>{lbl}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Latest Vitals Table */}
-                <div className="pt-3 mt-2 border-t border-slate-100">
-                  <span className="text-[10.5px] font-bold text-[#64748B] uppercase block mb-2">
-                    Latest Vitals ({formatTimeStr(latestVitals.recorded_at || detail.arrival_at)})
-                  </span>
-                  <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-[11px]">
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Blood Pressure</span>
-                      <span className="font-bold text-[#DC2626]">{latestVitals.bp_systolic || "—"}/{latestVitals.bp_diastolic || "—"}</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Heart Rate</span>
-                      <span className="font-bold text-[#DC2626]">{latestVitals.heart_rate || "—"} bpm</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Resp Rate</span>
-                      <span className="font-bold text-[#EA580C]">{latestVitals.respiratory_rate || "—"} /min</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">SpO₂</span>
-                      <span className="font-bold text-[#DC2626]">{latestVitals.spo2 || "—"}%</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Temperature</span>
-                      <span className="font-bold text-[#16A34A]">{latestVitals.temperature || "98.6"} °F</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Pain Score</span>
-                      <span className="font-bold text-[#DC2626]">{latestVitals.pain_score || "0"} /10</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B]">GCS</span>
-                      <span className="font-bold text-gray-900">{latestVitals.gcs || "15"} /15</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B]">Blood Glucose</span>
-                      <span className="font-bold text-[#D97706]">{latestVitals.blood_glucose || "110"} mg/dL</span>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
