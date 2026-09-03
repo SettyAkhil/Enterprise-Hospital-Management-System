@@ -298,6 +298,7 @@ export default function App() {
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [workflowInitialStep, setWorkflowInitialStep] = useState<number>(2);
   const [selectedWorkflowEncounterId, setSelectedWorkflowEncounterId] = useState<string | undefined>();
+  const [selectedTriageVisitId, setSelectedTriageVisitId] = useState<number | null>(null);
 
   const isNurse = userRole === "rn";
 
@@ -591,7 +592,16 @@ export default function App() {
                 />
               )}
               {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
-              {module === "emergency" && <ErPage setNotice={setNotice} onNavigate={(m) => setModule(m as any)} />}
+              {module === "emergency" && (
+                <ErPage
+                  setNotice={setNotice}
+                  onNavigate={(m) => setModule(m as any)}
+                  onOpenTriage={(visitId) => {
+                    setSelectedTriageVisitId(visitId);
+                    setModule("triage");
+                  }}
+                />
+              )}
               {module === "inpatient" && <Inpatient />}
               {module === "beds" && <BedManagementPage setNotice={setNotice} />}
               {module === "nursing" && <NursingPortal />}
@@ -603,7 +613,13 @@ export default function App() {
               {module === "icu" && <ICU />}
               {module === "analytics" && <Analytics />}
               {module === "discharge" && <Discharge onComplete={() => setModule("inpatient")} />}
-              {module === "triage" && <Triage setNotice={setNotice} onNavigate={(m) => setModule(m as any)} />}
+              {module === "triage" && (
+                <Triage
+                  initialVisitId={selectedTriageVisitId}
+                  setNotice={setNotice}
+                  onNavigate={(m) => setModule(m as any)}
+                />
+              )}
 
               {module === "insurance" && <Insurance />}
               {module === "clinical" && <PlaceholderModule title="Clinical" sub="Encounters, orders, results, and care plans" />}

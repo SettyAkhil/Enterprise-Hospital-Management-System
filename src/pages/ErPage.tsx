@@ -71,6 +71,7 @@ async function uploadConsentDocument(consentId: number, file: File): Promise<voi
 type Props = {
   setNotice: (notice: Notice | null) => void;
   onNavigate?: (page: string, extraData?: any) => void;
+  onOpenTriage?: (visitId: number) => void;
   // Handed back by AddPatientPage after a patient registered via the "New"
   // mode card below completes -- see App.tsx's navigateToPage. Lets Quick
   // Intake pick up exactly where staff left off instead of making them
@@ -83,7 +84,7 @@ type Props = {
   mergeTarget?: { visitId: number; patientId: string } | null;
 };
 
-type ErVisit = {
+export type ErVisit = {
   id: number;
   visit_no: string;
   patient_id: string | null;
@@ -109,7 +110,7 @@ type ErVisit = {
   patient?: Patient | null;
 };
 
-type ErComplaint = {
+export type ErComplaint = {
   id: number;
   complaint: string;
   severity: string | null;
@@ -119,7 +120,7 @@ type ErComplaint = {
   created_at: string;
 };
 
-type ErVitals = {
+export type ErVitals = {
   id: number;
   recorded_at: string;
   recorded_by: string | null;
@@ -136,7 +137,7 @@ type ErVitals = {
   notes: string | null;
 };
 
-type ErTriage = {
+export type ErTriage = {
   category: string;
   triage_bed_label: string | null;
   reason: string | null;
@@ -144,7 +145,7 @@ type ErTriage = {
   assigned_by: string | null;
 } | null;
 
-type ErTreatment = {
+export type ErTreatment = {
   id: number;
   intervention_type: string;
   description: string | null;
@@ -152,7 +153,7 @@ type ErTreatment = {
   administered_by: string | null;
 };
 
-type ErClinicalNote = {
+export type ErClinicalNote = {
   id: number;
   note_type: string;
   author: string | null;
@@ -160,7 +161,7 @@ type ErClinicalNote = {
   created_at: string;
 };
 
-type ErDisposition = {
+export type ErDisposition = {
   outcome: string;
   required_specialty: string | null;
   clinical_reason: string;
@@ -169,7 +170,7 @@ type ErDisposition = {
   priority: string | null;
 } | null;
 
-type ErBedRequest = {
+export type ErBedRequest = {
   id: number;
   status: string;
   requested_level_of_care: string;
@@ -180,7 +181,7 @@ type ErBedRequest = {
   allocated_at: string | null;
 };
 
-type ErConsent = {
+export type ErConsent = {
   id: number;
   hospital_id?: number;
   patient_id?: string;
@@ -200,7 +201,7 @@ type ErConsent = {
   document_mime_type?: string | null;
 };
 
-type ErVisitDetail = ErVisit & {
+export type ErVisitDetail = ErVisit & {
   complaints: ErComplaint[];
   vitals: ErVitals[];
   triage: ErTriage;
@@ -212,7 +213,7 @@ type ErVisitDetail = ErVisit & {
   investigations?: ErInvestigationItem[];
 };
 
-type TriageCategory = {
+export type TriageCategory = {
   id: number;
   category_code: string;
   category_label: string;
@@ -665,7 +666,7 @@ async function fetchAiTriageSuggestion(symptoms: string): Promise<AiTriageSugges
   );
 }
 
-export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTarget }: Props) {
+export default function ErPage({ setNotice, onNavigate, onOpenTriage, prefillPatient, mergeTarget }: Props) {
   const [tab, setTab] = useState<"queue" | "config">("queue");
   const [visits, setVisits] = useState<ErVisit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1270,7 +1271,13 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
                         <td className="pr-6 py-3.5 text-right whitespace-nowrap">
                           <button
                             type="button"
-                            onClick={() => setSelectedVisitId(v.id)}
+                            onClick={() => {
+                              if (onOpenTriage) {
+                                onOpenTriage(v.id);
+                              } else {
+                                setSelectedVisitId(v.id);
+                              }
+                            }}
                             className="px-3.5 py-1 text-[12px] font-semibold text-[#1B4FD8] bg-white border border-[#CBD5E1] rounded hover:bg-blue-50 hover:border-[#1B4FD8] transition-all cursor-pointer shadow-2xs"
                           >
                             Open
@@ -2964,7 +2971,7 @@ function formatArrivalModeLabel(mode?: string | null): string {
   return found ? found.label : mode.replace(/_/g, " ");
 }
 
-function VisitDetailPanel({
+export function VisitDetailPanel({
   detail,
   loading,
   categories,
