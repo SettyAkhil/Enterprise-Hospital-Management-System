@@ -3338,6 +3338,21 @@ function AddTimelineEventModal({
   const currentTimestamp = new Date().toISOString();
   const currentBed = detail.triage_bed_label || "ER Red Zone (Bay 01)";
 
+  // 0. Patient Arrived form state
+  const [arrivalForm, setArrivalForm] = useState({
+    arrivalMode: detail.arrival_mode || "108_ambulance",
+    condition: detail.condition_at_arrival || "Acute Presentation",
+    accompanying: "Family / Relative",
+    notes: "Patient arrived at ER, emergency triage initiated.",
+  });
+
+  // 00. ER Bed Assigned form state
+  const [bedAssignedForm, setBedAssignedForm] = useState({
+    zone: "Red Zone (Resuscitation)",
+    bedLabel: detail.triage_bed_label || "ER-Bay-01",
+    notes: "Allocated to emergency bay for continuous monitoring and intervention.",
+  });
+
   // 1. Vitals form state
   const latestV = detail.vitals && detail.vitals.length > 0 ? detail.vitals[detail.vitals.length - 1] : null;
   const [vitalsForm, setVitalsForm] = useState({
@@ -3443,7 +3458,14 @@ function AddTimelineEventModal({
         notes: genericNotes || undefined,
       };
 
-      if (selectedType === "initial_vitals" || selectedType === "followup_vitals") {
+      if (selectedType === "patient_arrived") {
+        eventPayload.location = "ER Reception / Triage";
+        eventPayload.notes = `Arrived via ${formatArrivalModeLabel(arrivalForm.arrivalMode)} • Condition: ${arrivalForm.condition} • Accompanying: ${arrivalForm.accompanying}${arrivalForm.notes ? ` • ${arrivalForm.notes}` : ""}`;
+      } else if (selectedType === "bed_assigned") {
+        eventPayload.location = `${bedAssignedForm.zone} - ${bedAssignedForm.bedLabel}`;
+        eventPayload.bed = bedAssignedForm.bedLabel;
+        eventPayload.notes = `Allocated ${bedAssignedForm.bedLabel} (${bedAssignedForm.zone})${bedAssignedForm.notes ? ` • ${bedAssignedForm.notes}` : ""}`;
+      } else if (selectedType === "initial_vitals" || selectedType === "followup_vitals") {
         eventPayload.vitals_data = {
           bp_systolic: vitalsForm.bpSys ? Number(vitalsForm.bpSys) : null,
           bp_diastolic: vitalsForm.bpDia ? Number(vitalsForm.bpDia) : null,
@@ -3615,6 +3637,106 @@ function AddTimelineEventModal({
 
         {/* Dynamic Structured Form Fields */}
         <div className="space-y-3.5 pt-1 text-[12px]">
+          {/* 0. Patient Arrived Form */}
+          {selectedType === "patient_arrived" && (
+            <div className="bg-[#EFF6FF] border border-blue-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#1B4FD8] uppercase tracking-wider block">
+                Emergency Intake &amp; Arrival Details
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Mode of Arrival</label>
+                  <select
+                    value={arrivalForm.arrivalMode}
+                    onChange={(e) => setArrivalForm({ ...arrivalForm, arrivalMode: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 bg-white font-medium"
+                  >
+                    <option value="108_ambulance">🚑 108 Emergency Ambulance</option>
+                    <option value="private_ambulance">🚑 Private Hospital Ambulance</option>
+                    <option value="walk_in">🚶 Walk-in (Self)</option>
+                    <option value="family_vehicle">🚗 Family / Private Vehicle</option>
+                    <option value="police_bystander">🚓 Police / Bystander</option>
+                    <option value="interhospital_transfer">🏥 Inter-Hospital Transfer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Condition at Arrival</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Conscious, acute distress, diaphoretic"
+                    value={arrivalForm.condition}
+                    onChange={(e) => setArrivalForm({ ...arrivalForm, condition: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Accompanying Person</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Spouse / Relative / EMT Staff"
+                    value={arrivalForm.accompanying}
+                    onChange={(e) => setArrivalForm({ ...arrivalForm, accompanying: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Intake Notes / Incident Details</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document initial arrival circumstances, paramedic handover..."
+                  value={arrivalForm.notes}
+                  onChange={(e) => setArrivalForm({ ...arrivalForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 00. ER Bed Assigned Form */}
+          {selectedType === "bed_assigned" && (
+            <div className="bg-[#EEF2FF] border border-indigo-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#4F46E5] uppercase tracking-wider block">
+                Emergency Bay &amp; Bed Allocation
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Emergency Zone</label>
+                  <select
+                    value={bedAssignedForm.zone}
+                    onChange={(e) => setBedAssignedForm({ ...bedAssignedForm, zone: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 bg-white font-bold"
+                  >
+                    <option value="Red Zone (Resuscitation)">🔴 Red Zone (Resuscitation / Critical)</option>
+                    <option value="Yellow Zone (Acute Care)">🟡 Yellow Zone (Acute Care / Emergent)</option>
+                    <option value="Green Zone (Ambulatory)">🟢 Green Zone (Ambulatory / Urgent)</option>
+                    <option value="Trauma Bay">🚨 Trauma Resuscitation Bay</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Assigned Bay / Bed Identifier</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. ER-Bay-01 / Resus-1"
+                    value={bedAssignedForm.bedLabel}
+                    onChange={(e) => setBedAssignedForm({ ...bedAssignedForm, bedLabel: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-mono font-bold"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Bay Allocation Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Positioned on monitor, oxygen cylinder connected..."
+                  value={bedAssignedForm.notes}
+                  onChange={(e) => setBedAssignedForm({ ...bedAssignedForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
           {/* 1. Vitals Form (Initial & Follow-up) */}
           {(selectedType === "initial_vitals" || selectedType === "followup_vitals") && (
             <div className="bg-[#FAFCFF] border border-blue-100 rounded p-3.5 space-y-3">
