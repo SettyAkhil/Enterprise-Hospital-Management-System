@@ -413,34 +413,34 @@ function renderTriagePill(category: string | null | undefined) {
   const cat = category.toUpperCase();
   if (cat === "B1") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]"></span> B1
       </span>
     );
   }
   if (cat === "B2") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FFEDD5] text-[#EA580C] border border-orange-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-[#FFEDD5] text-[#EA580C] border border-orange-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C]"></span> B2
       </span>
     );
   }
   if (cat === "B3") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FEF9C3] text-[#CA8A04] border border-yellow-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-[#FEF9C3] text-[#CA8A04] border border-yellow-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#CA8A04]"></span> B3
       </span>
     );
   }
   if (cat === "B4") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span> B4
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#EFF6FF] text-[#2563EB] border border-blue-200">
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-[#EFF6FF] text-[#2563EB] border border-blue-200">
       <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]"></span> {cat}
     </span>
   );
@@ -450,41 +450,41 @@ function renderStatusPill(status: string) {
   const s = status.toLowerCase();
   if (s === "under_treatment" || s === "treatment") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#FEF3C7] text-[#B45309] border border-amber-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#B45309]"></span> Under Treatment
       </span>
     );
   }
   if (s === "doctor_assigned") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FEF3C7] text-[#D97706] border border-yellow-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#FEF3C7] text-[#D97706] border border-yellow-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]"></span> Doctor Assigned
       </span>
     );
   }
   if (s === "triaged" || s === "registered" || s === "awaiting_doctor") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#EFF6FF] text-[#2563EB] border border-blue-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#EFF6FF] text-[#2563EB] border border-blue-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]"></span> Awaiting Doctor
       </span>
     );
   }
   if (s === "under_investigation") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#E0F2FE] text-[#0284C7] border border-sky-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#E0F2FE] text-[#0284C7] border border-sky-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#0284C7]"></span> Under Investigation
       </span>
     );
   }
   if (s === "stabilizing" || s === "stabilized") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#DCFCE7] text-[#16A34A] border border-green-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span> Stabilizing
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
       <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span> {STATUS_LABELS[status] || status}
     </span>
   );
@@ -494,27 +494,27 @@ function renderDestinationPill(dest: string | null | undefined) {
   if (!dest) return <span className="text-gray-400 font-bold">—</span>;
   if (dest.includes("ICU")) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F3E8FF] text-[#7E22CE] border border-purple-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F3E8FF] text-[#7E22CE] border border-purple-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#7E22CE]"></span> {dest.replace(/^•\s*/, "")}
       </span>
     );
   }
   if (dest.includes("Ward")) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#DBEAFE] text-[#1D4ED8] border border-blue-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#DBEAFE] text-[#1D4ED8] border border-blue-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#1D4ED8]"></span> {dest.replace(/^•\s*/, "")}
       </span>
     );
   }
   if (dest.includes("Observation")) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#CCFBF1] text-[#0F766E] border border-teal-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#CCFBF1] text-[#0F766E] border border-teal-200">
         {dest.replace(/^•\s*/, "")}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
       {dest}
     </span>
   );
@@ -827,7 +827,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
 
   if (selectedVisitId && detail) {
     return (
-      <>
+      <div className="flex-1 bg-[#F0F2F5] p-5 sm:p-6 min-h-full">
         <VisitDetailPanel
           detail={detail}
           loading={detailLoading}
@@ -864,7 +864,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
             onClose={() => setPrescriptionTarget(null)}
           />
         )}
-      </>
+      </div>
     );
   }
 
@@ -900,9 +900,9 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
   const wardAllocatedCount = Math.max(0, bedAllocatedCount - icuAllocatedCount);
 
   return (
-    <section className="space-y-5 p-1">
+    <div className="flex-1 bg-[#F0F2F5] p-5 sm:p-6 space-y-4 min-h-full">
       {/* Top Header: Search Bar & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Search Option in place of the subtitle */}
         <div className="relative flex-1 max-w-2xl">
           <div className="relative flex items-center">
@@ -912,13 +912,13 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
               value={trackboardSearch}
               onChange={(e) => setTrackboardSearch(e.target.value)}
               placeholder="Search ED Track Board by patient name, ID, phone, triage, complaint, doctor, bed..."
-              className="w-full pl-10 pr-10 py-2.5 bg-white border border-[#CBD5E1] rounded-lg text-[13px] text-gray-900 placeholder:text-gray-400 shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#1B4FD8]/20 focus:border-[#1B4FD8] transition-all"
+              className="w-full pl-10 pr-10 py-2 bg-white border border-[#DDE2EC] rounded text-[13px] text-gray-900 placeholder:text-gray-400 shadow-2xs focus:outline-none focus:border-[#1B4FD8] transition-all"
             />
             {trackboardSearch && (
               <button
                 type="button"
                 onClick={() => setTrackboardSearch("")}
-                className="absolute right-3 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                className="absolute right-3 text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer"
                 title="Clear search"
               >
                 <FiX className="text-[14px]" />
@@ -928,11 +928,11 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
         </div>
 
         {/* Top Right Action Controls */}
-        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
           <button
             type="button"
             onClick={loadVisits}
-            className="px-3.5 py-2 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-gray-700 text-[12.5px] font-semibold rounded-lg shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+            className="px-3.5 py-2 bg-white border border-[#DDE2EC] hover:bg-slate-50 text-gray-700 text-[12.5px] font-semibold rounded shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
             title="Refresh ED visits"
           >
             <FiRefreshCw className="text-[13px]" /> Refresh
@@ -943,7 +943,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
             <button
               type="button"
               onClick={() => setIsRegMenuOpen((prev) => !prev)}
-              className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white text-[13px] font-bold rounded-lg shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white text-[13px] font-bold rounded shadow-xs transition-all flex items-center gap-2 cursor-pointer"
               aria-expanded={isRegMenuOpen}
               aria-haspopup="true"
             >
@@ -953,7 +953,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
             </button>
 
             {isRegMenuOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#E2E8F0] rounded-xl shadow-xl z-50 py-1.5 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#DDE2EC] rounded shadow-lg z-50 py-1.5 overflow-hidden">
                 <div className="px-3.5 py-1.5 text-[10.5px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
                   Select Registration Type
                 </div>
@@ -967,7 +967,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
                   }}
                   className="w-full text-left px-3.5 py-2.5 hover:bg-blue-50/70 text-gray-800 hover:text-[#1B4FD8] transition-colors flex items-start gap-3 group cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-[#1B4FD8] flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#1B4FD8] group-hover:text-white transition-colors">
+                  <div className="w-8 h-8 rounded bg-blue-100 text-[#1B4FD8] flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#1B4FD8] group-hover:text-white transition-colors">
                     <FiUserPlus />
                   </div>
                   <div>
@@ -989,7 +989,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
                   }}
                   className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 text-gray-800 hover:text-[#1B4FD8] transition-colors flex items-start gap-3 group cursor-pointer border-t border-gray-100"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#1B4FD8] group-hover:text-white transition-colors">
+                  <div className="w-8 h-8 rounded bg-slate-100 text-slate-700 flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#1B4FD8] group-hover:text-white transition-colors">
                     <FiSearch />
                   </div>
                   <div>
@@ -1011,7 +1011,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
                   }}
                   className="w-full text-left px-3.5 py-2.5 hover:bg-red-50/70 text-gray-800 hover:text-[#DC2626] transition-colors flex items-start gap-3 group cursor-pointer border-t border-gray-100"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-red-100 text-[#DC2626] flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#DC2626] group-hover:text-white transition-colors">
+                  <div className="w-8 h-8 rounded bg-red-100 text-[#DC2626] flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#DC2626] group-hover:text-white transition-colors">
                     <FiAlertCircle />
                   </div>
                   <div>
@@ -1033,8 +1033,8 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: ACTIVE VISITS */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-xl shrink-0">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-xl shrink-0">
             <FiUsers />
           </div>
           <div>
@@ -1045,8 +1045,8 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
         </div>
 
         {/* Card 2: AWAITING DOCTOR */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-lg bg-amber-50 text-[#D97706] flex items-center justify-center text-xl shrink-0">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-amber-50 text-[#D97706] flex items-center justify-center text-xl shrink-0">
             <FiWatch />
           </div>
           <div>
@@ -1057,8 +1057,8 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
         </div>
 
         {/* Card 3: BED REQUESTED */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-lg bg-red-50 text-[#DC2626] flex items-center justify-center text-xl shrink-0">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-red-50 text-[#DC2626] flex items-center justify-center text-xl shrink-0">
             <FiBell />
           </div>
           <div>
@@ -1071,8 +1071,8 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
         </div>
 
         {/* Card 4: BED ALLOCATED */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-lg bg-green-50 text-[#16A34A] flex items-center justify-center text-xl shrink-0">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-green-50 text-[#16A34A] flex items-center justify-center text-xl shrink-0">
             <FiHome />
           </div>
           <div>
@@ -1086,14 +1086,14 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
       </div>
 
       {/* Main Track Board Panel */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-2xs overflow-hidden">
+      <div className="bg-white border border-[#DDE2EC] rounded shadow-2xs overflow-hidden">
         {/* Tabs Bar */}
-        <div className="flex items-center justify-between border-b border-[#E2E8F0] px-6 pt-3 bg-white">
+        <div className="flex items-center justify-between border-b border-[#DDE2EC] px-5 pt-2.5 bg-white">
           <div className="flex items-center gap-6">
             <button
               type="button"
               onClick={() => setTab("queue")}
-              className={`pb-3 text-[13.5px] font-bold transition-colors cursor-pointer border-b-2 ${
+              className={`pb-2.5 text-[13px] font-bold transition-colors cursor-pointer border-b-2 ${
                 tab === "queue"
                   ? "border-[#1B4FD8] text-[#1B4FD8]"
                   : "border-transparent text-[#64748B] hover:text-gray-900"
@@ -1104,7 +1104,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
             <button
               type="button"
               onClick={() => setTab("config")}
-              className={`pb-3 text-[13.5px] font-semibold transition-colors cursor-pointer border-b-2 ${
+              className={`pb-2.5 text-[13px] font-semibold transition-colors cursor-pointer border-b-2 ${
                 tab === "config"
                   ? "border-[#1B4FD8] text-[#1B4FD8]"
                   : "border-transparent text-[#64748B] hover:text-gray-900"
@@ -1374,7 +1374,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
           />
         </Modal>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -3353,11 +3353,11 @@ function VisitDetailPanel({
       </div>
 
       {/* 2. Patient Header Banner Card */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-2xs">
+      <div className="bg-white border border-[#DDE2EC] rounded p-5 shadow-2xs">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           {/* Left: Avatar & Identity */}
           <div className="flex items-center gap-4 min-w-[280px]">
-            <div className="w-14 h-14 rounded-full bg-[#1B4FD8] text-white flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
+            <div className="w-14 h-14 rounded bg-[#1B4FD8] text-white flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
               {initials}
             </div>
             <div>
@@ -3365,7 +3365,7 @@ function VisitDetailPanel({
                 <h1 className="text-[22px] font-bold text-gray-900 leading-tight">
                   {displayName}
                 </h1>
-                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold shrink-0 border ${
+                <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold shrink-0 border ${
                   triageCatCode === "B1"
                     ? "bg-[#FEE2E2] text-[#DC2626] border-red-200"
                     : triageCatCode === "B2"
@@ -3396,7 +3396,7 @@ function VisitDetailPanel({
           </div>
 
           {/* Right: Visit Metadata & Status */}
-          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between xl:justify-end gap-6 sm:gap-8 border-t xl:border-t-0 xl:border-l border-[#E2E8F0] pt-4 xl:pt-0 xl:pl-8 text-[12px]">
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between xl:justify-end gap-6 sm:gap-8 border-t xl:border-t-0 xl:border-l border-[#DDE2EC] pt-4 xl:pt-0 xl:pl-8 text-[12px]">
             <div>
               <span className="text-[#64748B] block text-[11px] font-medium">ER Visit ID</span>
               <div className="font-bold text-gray-900 flex items-center gap-1 mt-0.5 whitespace-nowrap">
@@ -3429,9 +3429,9 @@ function VisitDetailPanel({
               </div>
             </div>
 
-            <div className="border-t sm:border-t-0 sm:border-l border-[#E2E8F0] pt-3 sm:pt-0 sm:pl-6 shrink-0 w-full sm:w-auto">
+            <div className="border-t sm:border-t-0 sm:border-l border-[#DDE2EC] pt-3 sm:pt-0 sm:pl-6 shrink-0 w-full sm:w-auto">
               <span className="text-[#64748B] block text-[11px] font-medium mb-1.5">Current Status</span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-200 whitespace-nowrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-200 whitespace-nowrap">
                 <span className="w-2 h-2 rounded-full bg-[#B45309] animate-pulse"></span>
                 {STATUS_LABELS[detail.status] || detail.status.replace(/_/g, " ").toUpperCase()}
               </span>
@@ -3441,7 +3441,7 @@ function VisitDetailPanel({
       </div>
 
       {/* 3. Horizontal Navigation Tabs */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl px-4 shadow-2xs overflow-x-auto">
+      <div className="bg-white border border-[#DDE2EC] rounded px-4 shadow-2xs overflow-x-auto">
         <div className="flex items-center gap-6 min-w-max">
           {[
             { id: "overview", label: "Clinical Overview" },
@@ -3471,8 +3471,8 @@ function VisitDetailPanel({
       {/* 4. 6 Key Status Cards Strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
         {/* Card 1: Chief Complaint */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
             📋
           </div>
           <div className="min-w-0 flex-1">
@@ -3483,8 +3483,8 @@ function VisitDetailPanel({
         </div>
 
         {/* Card 2: Triage */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-amber-50 text-[#D97706] flex items-center justify-center text-base shrink-0 mt-0.5">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-amber-50 text-[#D97706] flex items-center justify-center text-base shrink-0 mt-0.5">
             🛡️
           </div>
           <div className="min-w-0 flex-1">
@@ -3498,8 +3498,8 @@ function VisitDetailPanel({
         </div>
 
         {/* Card 3: Current Location */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-green-50 text-[#16A34A] flex items-center justify-center text-base shrink-0 mt-0.5">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-green-50 text-[#16A34A] flex items-center justify-center text-base shrink-0 mt-0.5">
             🛏️
           </div>
           <div className="min-w-0 flex-1">
@@ -3510,8 +3510,8 @@ function VisitDetailPanel({
         </div>
 
         {/* Card 4: Attending Doctor */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
             👨‍⚕️
           </div>
           <div className="min-w-0 flex-1">
@@ -3525,8 +3525,8 @@ function VisitDetailPanel({
         </div>
 
         {/* Card 5: Destination */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-purple-50 text-[#7E22CE] flex items-center justify-center text-base shrink-0 mt-0.5">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-purple-50 text-[#7E22CE] flex items-center justify-center text-base shrink-0 mt-0.5">
             🛡️
           </div>
           <div className="min-w-0 flex-1">
@@ -3540,8 +3540,8 @@ function VisitDetailPanel({
         </div>
 
         {/* Card 6: Next Step */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
             ➡️
           </div>
           <div className="min-w-0 flex-1">
@@ -3560,7 +3560,7 @@ function VisitDetailPanel({
           {/* Main 4 Equal-Width Columns Dashboard Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
             {/* Column 1: CLINICAL SNAPSHOT */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between space-y-4">
+            <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">CLINICAL SNAPSHOT</span>
@@ -3638,7 +3638,7 @@ function VisitDetailPanel({
             </div>
 
             {/* Column 2: TIMELINE (LATEST EVENTS) */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+            <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">TIMELINE (LATEST EVENTS)</span>
@@ -3666,7 +3666,7 @@ function VisitDetailPanel({
             </div>
 
             {/* Column 3: VITALS TREND & Latest Vitals */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between space-y-4">
+            <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">VITALS TREND</span>
@@ -3795,7 +3795,7 @@ function VisitDetailPanel({
             {/* Column 4: PATIENT & VISIT INFORMATION */}
             <div className="space-y-4 flex flex-col justify-between">
               {/* Patient Information */}
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs space-y-2">
+              <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs space-y-2">
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">PATIENT INFORMATION</span>
                   <button
@@ -3849,7 +3849,7 @@ function VisitDetailPanel({
               </div>
 
               {/* Visit Information */}
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs space-y-2">
+              <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs space-y-2">
                 <div className="border-b border-[#F1F5F9] pb-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">VISIT INFORMATION</span>
                 </div>
@@ -3895,7 +3895,7 @@ function VisitDetailPanel({
           {/* 6. Bottom Row Cards (Medications, Investigations, Notes, Quick Actions) */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
             {/* Medications & Interventions Card */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+            <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-3">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">CURRENT MEDICATIONS & INTERVENTIONS</span>
@@ -3947,7 +3947,7 @@ function VisitDetailPanel({
             </div>
 
             {/* Recent Investigations Card */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+            <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-3">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">RECENT INVESTIGATIONS</span>
@@ -4009,7 +4009,7 @@ function VisitDetailPanel({
             </div>
 
             {/* Clinical Notes Card */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+            <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-3">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">NOTES</span>
@@ -4050,7 +4050,7 @@ function VisitDetailPanel({
             </div>
 
             {/* Quick Actions Card */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+            <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between">
               <div>
                 <div className="border-b border-[#F1F5F9] pb-2 mb-3">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">QUICK ACTIONS</span>
@@ -4107,7 +4107,7 @@ function VisitDetailPanel({
 
       {/* Timeline Tab */}
       {activeTab === "timeline" && (
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-2xs space-y-4">
+        <div className="bg-white border border-[#DDE2EC] rounded p-6 shadow-2xs space-y-4">
           <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
             <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
               <FiClock className="text-[#1B4FD8]" /> Complete Emergency Chronological Event Log
