@@ -3458,91 +3458,119 @@ function VisitDetailPanel({
       </div>
 
       {/* 4. 6 Key Status Cards Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 items-stretch">
         {/* Card 1: Chief Complaint */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
-            📋
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Chief Complaint</span>
+            <span className="text-sm">📋</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block">Chief Complaint</span>
-            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 line-clamp-2" title={chiefComplaint}>
+          <div>
+            <div className="font-bold text-gray-900 text-[12.5px] leading-snug break-words" title={chiefComplaint}>
               {chiefComplaint}
             </div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate" title={`Onset: ${onsetText}`}>
-              <span className="font-semibold text-gray-700">Onset:</span> {onsetText}
-            </span>
+          </div>
+          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
+            <span className="font-semibold text-gray-600">Onset:</span>
+            <span className="font-medium text-gray-900">{onsetText}</span>
           </div>
         </div>
 
         {/* Card 2: Triage */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded bg-amber-50 text-[#D97706] flex items-center justify-center text-base shrink-0 mt-0.5">
-            🛡️
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Triage</span>
+            <span className="text-sm">🛡️</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Triage</span>
-            <div className="font-bold text-[#DC2626] text-[12px] leading-snug mt-0.5 truncate">{triageCatCode} ({triageCatLabel})</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">
-              {detail.triage?.triaged_at ? formatTimeStr(detail.triage.triaged_at) : formatTimeStr(detail.arrival_at)}
-            </span>
-            <span className="text-[10.5px] text-[#64748B] block truncate">By: {detail.triage?.assigned_by || "Triage RN"}</span>
+          <div>
+            <div className="font-bold text-[#DC2626] text-[12.5px] leading-snug break-words">
+              {triageCatCode} ({triageCatLabel})
+            </div>
+          </div>
+          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
+            <span>{detail.triage?.triaged_at ? formatTimeStr(detail.triage.triaged_at) : formatTimeStr(detail.arrival_at)}</span>
+            <span className="font-medium text-gray-700">{detail.triage?.assigned_by || "ED Medical Officer"}</span>
           </div>
         </div>
 
         {/* Card 3: Current Location */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded bg-green-50 text-[#16A34A] flex items-center justify-center text-base shrink-0 mt-0.5">
-            🛏️
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Current Location</span>
+            <span className="text-sm">🛏️</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Current Location</span>
-            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate">{location}</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">Since: {formatTimeStr(detail.arrival_at)}</span>
+          <div>
+            <div className="font-bold text-gray-900 text-[12.5px] leading-snug break-words">
+              {location}
+            </div>
+          </div>
+          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
+            <span className="font-semibold text-gray-600">Since:</span>
+            <span className="font-medium text-gray-900">{formatTimeStr(detail.arrival_at)}</span>
           </div>
         </div>
 
         {/* Card 4: Attending Doctor */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
-            👨‍⚕️
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Attending Doctor</span>
+            <span className="text-sm">👨‍⚕️</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Attending Doctor</span>
-            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate">{doctorName}</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">{doctorSpecialty}</span>
-            <span className="text-[10.5px] text-[#64748B] block truncate">
-              {detail.doctor_assigned_at ? `Assigned: ${formatTimeStr(detail.doctor_assigned_at)}` : "Assigned"}
+          <div>
+            <div className="font-bold text-gray-900 text-[12.5px] leading-snug break-words">
+              {doctorName}
+            </div>
+            <div className="text-[11px] text-[#1B4FD8] font-semibold mt-0.5">
+              {doctorSpecialty}
+            </div>
+          </div>
+          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
+            <span className="font-semibold text-gray-600">Assigned:</span>
+            <span className="font-medium text-gray-900">
+              {detail.doctor_assigned_at ? formatTimeStr(detail.doctor_assigned_at) : formatTimeStr(detail.arrival_at)}
             </span>
           </div>
         </div>
 
         {/* Card 5: Destination */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded bg-purple-50 text-[#7E22CE] flex items-center justify-center text-base shrink-0 mt-0.5">
-            🛡️
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Destination</span>
+            <span className="text-sm">🎯</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Destination</span>
-            <div className="font-bold text-[#7E22CE] text-[12px] leading-snug mt-0.5 truncate">{destination.replace(/^•\s*/, "")}</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">{detail.disposition?.priority || "High Priority"}</span>
-            <span className="text-[10.5px] text-[#64748B] block truncate">
-              {detail.disposition?.decided_at ? `Decided: ${formatTimeStr(detail.disposition.decided_at)}` : "Under Review"}
+          <div>
+            <div className="font-bold text-[#7E22CE] text-[12.5px] leading-snug break-words">
+              {destination.replace(/^•\s*/, "")}
+            </div>
+            <div className="text-[11px] text-amber-700 font-semibold mt-0.5">
+              {detail.disposition?.priority || "High Priority"}
+            </div>
+          </div>
+          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
+            <span className="font-semibold text-gray-600">Status:</span>
+            <span className="font-medium text-gray-900">
+              {detail.disposition?.decided_at ? formatTimeStr(detail.disposition.decided_at) : "Under Review"}
             </span>
           </div>
         </div>
 
         {/* Card 6: Next Step */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
-            ➡️
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Next Step</span>
+            <span className="text-sm">➡️</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Next Step</span>
-            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate">
+          <div>
+            <div className="font-bold text-gray-900 text-[12.5px] leading-snug break-words">
               {detail.disposition ? "Finalize Transfer" : "Doctor Assessment"}
             </div>
-            <span className="text-[10.5px] text-[#1B4FD8] font-semibold block mt-0.5 truncate">In Progress</span>
+          </div>
+          <div className="text-[10.5px] pt-1.5 border-t border-slate-100 flex items-center justify-between">
+            <span className="font-semibold text-gray-600">Phase:</span>
+            <span className="font-bold text-emerald-600 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              In Progress
+            </span>
           </div>
         </div>
       </div>
