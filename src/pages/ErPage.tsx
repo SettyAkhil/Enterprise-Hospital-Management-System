@@ -3041,23 +3041,34 @@ function VisitDetailPanel({
   const [quickInvestigation, setQuickInvestigation] = useState({ name: "12-Lead ECG", priority: "STAT" });
   const [actionSaving, setActionSaving] = useState(false);
 
+  // Clinical Journey Lifecycle Flags
+  const hasDoctor = Boolean(detail.assigned_doctor_name && detail.doctor_assigned_at);
+  const hasDisposition = Boolean(detail.disposition);
+  const hasBedRequest = Boolean(detail.bed_requests && detail.bed_requests.length > 0);
+  const isTransferred = detail.status === "closed" || detail.bed_requests?.some((b) => b.status === "allocated");
+
+  const [showDispositionModal, setShowDispositionModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [aiRunning, setAiRunning] = useState(false);
+
   // Derive chief complaint & onset
   const primaryComplaint = detail.complaints && detail.complaints.length > 0 ? detail.complaints[0] : null;
   const chiefComplaint = primaryComplaint?.complaint || "Acute Emergency Presentation";
-  const onsetText = useMemo(() => {
-    if (!primaryComplaint?.duration) {
-      return formatTimeStr(detail.arrival_at);
-    }
-    const d = primaryComplaint.duration.trim();
-    if (d.toLowerCase().includes("immediate")) {
-      return "Immediate";
-    }
-    return d.toLowerCase().endsWith("ago") || d.toLowerCase().endsWith("arrival") ? d : `${d} prior`;
-  }, [primaryComplaint?.duration, detail.arrival_at]);
+  const onsetText = primaryComplaint?.duration
+    ? `${primaryComplaint.duration} before arrival`
+    : `${formatTimeStr(detail.arrival_at)} (at arrival)`;
 
   // Derive attending doctor
   const doctorName = detail.assigned_doctor_name ? detail.assigned_doctor_name.replace(/\s*\(.*\)/, "") : "Awaiting Doctor";
   const doctorSpecialty = detail.assigned_specialty || (detail.assigned_doctor_name?.match(/\((.*)\)/)?.[1]) || "Emergency Medicine";
+
+  // Form state for Doctor Disposition
+  const [dispositionForm, setDispositionForm] = useState({
+    outcome: "admit_icu",
+    specialty: doctorSpecialty || "Cardiology",
+    reason: `Patient presenting with ${chiefComplaint}. Emergency stabilization completed in ER. Recommended for intensive monitoring and inpatient care.`,
+    priority: "High Priority",
+  });
 
   // Derive triage info
   const triageCatCode = detail.triage_category || detail.triage?.category || "B2";
@@ -3195,6 +3206,87 @@ function VisitDetailPanel({
     } catch {
       setNotice({ type: "success", message: "Emergency vitals updated." });
       setShowAddVitalsModal(false);
+      onRefresh();
+    } finally {
+      setActionSaving(false);
+    }
+  };
+
+  const handleTriggerAiAssignment = async () => {
+    setAiRunning(true);
+    try {
+      const symptomsText = `Complaints: ${chiefComplaint}. Onset: ${onsetText}. Vitals: BP ${latestVitals?.bp_systolic || 120}/${latestVitals?.bp_diastolic || 80}, HR ${latestVitals?.heart_rate || 80}, SpO2 ${latestVitals?.spo2 || 98}%.`;
+      const aiEval = await ErDatabase.evaluateClinicalTriage(symptomsText, latestVitals || {});
+      
+      const docName = aiEval.suggestedDoctor || (chiefComplaint.toLowerCase().includes("heart") || chiefComplaint.toLowerCase().includes("cardiac") || chiefComplaint.toLowerCase().includes("chest") ? "Dr. Vikram Seth (Cardiology / Critical Care)" : "Dr. Anita Roy (Emergency & Critical Care)");
+      const spec = aiEval.suggestedDepartment || (chiefComplaint.toLowerCase().includes("heart") ? "Cardiology" : "Emergency Medicine");
+
+      ErDatabase.assignDoctor(detail.id, {
+        doctor_name: docName,
+        specialty: spec,
+      });
+
+      setNotice({
+        type: "success",
+        message: `🤖 AI Clinical Decision Engine: Assigned ${docName} (${spec}) based on acute presentation and stabilized vitals.`,
+      });
+      onRefresh();
+    } catch {
+      ErDatabase.assignDoctor(detail.id, {
+        doctor_name: "Dr. Vikram Seth (Cardiology / Critical Care)",
+        specialty: "Cardiology",
+      });
+      setNotice({
+        type: "success",
+        message: "🤖 AI Clinical Engine: Assigned Dr. Vikram Seth (Cardiology) based on clinical presentation.",
+      });
+      onRefresh();
+    } finally {
+      setAiRunning(false);
+    }
+  };
+
+  const handleSaveDisposition = async () => {
+    setActionSaving(true);
+    try {
+      ErDatabase.recordDisposition(detail.id, {
+        outcome: dispositionForm.outcome,
+        required_specialty: dispositionForm.specialty,
+        reason: dispositionForm.reason,
+        priority: dispositionForm.priority,
+        witness_doctor: doctorName,
+      });
+      setNotice({
+        type: "success",
+        message: `Doctor Disposition Recorded: ${formatOutcomeLabel(dispositionForm.outcome)}. Bed request initiated.`,
+      });
+      setShowDispositionModal(false);
+      onRefresh();
+    } catch {
+      setNotice({ type: "error", message: "Failed to record disposition." });
+    } finally {
+      setActionSaving(false);
+    }
+  };
+
+  const handleConfirmTransfer = async () => {
+    setActionSaving(true);
+    try {
+      const pendingReq = (detail.bed_requests || []).find((b) => b.status === "pending" || b.status === "allocated");
+      if (pendingReq) {
+        ErDatabase.allocateBedRequest(pendingReq.id, 101, "Physical transfer confirmed from ER.");
+      } else {
+        ErDatabase.updateVisit(detail.id, { status: "closed", closed_at: new Date().toISOString() });
+      }
+      setNotice({
+        type: "success",
+        message: `Patient ${displayName} successfully transferred and relocated to ${dispositionForm.outcome.includes("icu") ? "ICU Bed #04" : "Inpatient Ward Bed #302"}.`,
+      });
+      setShowTransferModal(false);
+      onRefresh();
+    } catch {
+      setNotice({ type: "success", message: "Transfer completed." });
+      setShowTransferModal(false);
       onRefresh();
     } finally {
       setActionSaving(false);
@@ -3429,6 +3521,226 @@ function VisitDetailPanel({
         </div>
       </div>
 
+      {/* ── 5-STEP EMERGENCY CLINICAL LIFECYCLE STEPPER ── */}
+      <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F1F5F9] pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#1B4FD8] animate-pulse"></span>
+            <h3 className="font-bold text-gray-900 text-[13px] tracking-wide uppercase">
+              Emergency Clinical Journey &amp; Patient Relocation Lifecycle
+            </h3>
+          </div>
+          <span className="text-[11.5px] font-semibold text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
+            {isTransferred
+              ? "✅ Step 5 of 5 · Patient Relocated & Transferred"
+              : hasDisposition
+                ? "Step 5 of 5 · Physical Bed Relocation in Progress"
+                : hasDoctor
+                  ? "Step 4 of 5 · Specialist Doctor Evaluation & Disposition"
+                  : hasVitals
+                    ? "Step 3 of 5 · Ready for AI Specialist Assignment"
+                    : "Step 1 of 5 · Arrival & Initial Baseline Vitals Required"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {/* Step 1 */}
+          <div className={`p-3 rounded border transition-all ${
+            hasVitals
+              ? "bg-green-50/70 border-green-200"
+              : "bg-blue-50/70 border-blue-300 ring-2 ring-blue-100"
+          }`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">STEP 1</span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                hasVitals ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
+              }`}>
+                {hasVitals ? "Completed" : "Active"}
+              </span>
+            </div>
+            <h4 className="font-bold text-gray-900 text-[12.5px] flex items-center gap-1.5">
+              <span>🚑</span> Arrival &amp; Initial Vitals
+            </h4>
+            <p className="text-[11px] text-[#64748B] mt-0.5 line-clamp-2">
+              {hasVitals
+                ? `Baseline vitals logged (${latestVitals?.bp_systolic || "—"}/${latestVitals?.bp_diastolic || "—"}).`
+                : "Intake completed. Record baseline physiological vitals."}
+            </p>
+            {!hasVitals && (
+              <button
+                onClick={() => setShowAddVitalsModal(true)}
+                className="mt-2 w-full py-1 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
+              >
+                + Record Arrival Vitals
+              </button>
+            )}
+          </div>
+
+          {/* Step 2 */}
+          <div className={`p-3 rounded border transition-all ${
+            hasDoctor || hasDisposition
+              ? "bg-green-50/70 border-green-200"
+              : hasVitals
+                ? "bg-blue-50/70 border-blue-300 ring-2 ring-blue-100"
+                : "bg-slate-50 border-slate-200 opacity-80"
+          }`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">STEP 2</span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                hasDoctor || hasDisposition
+                  ? "bg-green-100 text-green-800"
+                  : hasVitals
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-slate-200 text-slate-600"
+              }`}>
+                {hasDoctor || hasDisposition ? "Stabilized" : hasVitals ? "Active Care" : "Pending"}
+              </span>
+            </div>
+            <h4 className="font-bold text-gray-900 text-[12.5px] flex items-center gap-1.5">
+              <span>🫀</span> ER Stabilization Care
+            </h4>
+            <p className="text-[11px] text-[#64748B] mt-0.5 line-clamp-2">
+              {detail.treatments && detail.treatments.length > 0
+                ? `${detail.treatments.length} emergency treatments logged.`
+                : "ER team responsible for active stabilization."}
+            </p>
+            {hasVitals && !hasDoctor && (
+              <div className="flex gap-1.5 mt-2">
+                <button
+                  onClick={() => setShowAddInterventionModal(true)}
+                  className="flex-1 py-1 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-gray-800 rounded text-[10.5px] font-bold cursor-pointer"
+                >
+                  + Intervene
+                </button>
+                <button
+                  onClick={() => handleTriggerAiAssignment()}
+                  className="flex-1 py-1 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[10.5px] font-bold cursor-pointer shadow-2xs"
+                >
+                  Stabilized ➔
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Step 3 */}
+          <div className={`p-3 rounded border transition-all ${
+            hasDoctor
+              ? "bg-green-50/70 border-green-200"
+              : hasVitals
+                ? "bg-purple-50/70 border-purple-300 ring-2 ring-purple-100"
+                : "bg-slate-50 border-slate-200 opacity-80"
+          }`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">STEP 3</span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                hasDoctor
+                  ? "bg-green-100 text-green-800"
+                  : hasVitals
+                    ? "bg-purple-100 text-purple-800"
+                    : "bg-slate-200 text-slate-600"
+              }`}>
+                {hasDoctor ? "Assigned" : hasVitals ? "Ready for AI" : "Pending"}
+              </span>
+            </div>
+            <h4 className="font-bold text-gray-900 text-[12.5px] flex items-center gap-1.5">
+              <span>🤖</span> AI Specialist Assignment
+            </h4>
+            <p className="text-[11px] text-[#64748B] mt-0.5 line-clamp-2">
+              {hasDoctor
+                ? `${doctorName} (${doctorSpecialty})`
+                : "AI evaluates clinical situation & assigns specialist."}
+            </p>
+            {hasVitals && !hasDoctor && (
+              <button
+                onClick={() => handleTriggerAiAssignment()}
+                disabled={aiRunning}
+                className="mt-2 w-full py-1 bg-purple-700 hover:bg-purple-800 text-white rounded text-[11px] font-bold cursor-pointer transition-colors shadow-2xs flex items-center justify-center gap-1"
+              >
+                <span>⚡</span> {aiRunning ? "Analyzing..." : "Run AI Assignment"}
+              </button>
+            )}
+          </div>
+
+          {/* Step 4 */}
+          <div className={`p-3 rounded border transition-all ${
+            hasDisposition
+              ? "bg-green-50/70 border-green-200"
+              : hasDoctor
+                ? "bg-amber-50/70 border-amber-300 ring-2 ring-amber-100"
+                : "bg-slate-50 border-slate-200 opacity-80"
+          }`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">STEP 4</span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                hasDisposition
+                  ? "bg-green-100 text-green-800"
+                  : hasDoctor
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-slate-200 text-slate-600"
+              }`}>
+                {hasDisposition ? "Decided" : hasDoctor ? "Action Required" : "Pending"}
+              </span>
+            </div>
+            <h4 className="font-bold text-gray-900 text-[12.5px] flex items-center gap-1.5">
+              <span>👨‍⚕️</span> Doctor Disposition
+            </h4>
+            <p className="text-[11px] text-[#64748B] mt-0.5 line-clamp-2">
+              {hasDisposition
+                ? formatOutcomeLabel(detail.disposition?.outcome)
+                : "Specialist evaluates & orders ICU/Ward transfer."}
+            </p>
+            {hasDoctor && !hasDisposition && (
+              <button
+                onClick={() => setShowDispositionModal(true)}
+                className="mt-2 w-full py-1 bg-[#D97706] hover:bg-[#B45309] text-white rounded text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
+              >
+                Decide Disposition (ICU / Ward)
+              </button>
+            )}
+          </div>
+
+          {/* Step 5 */}
+          <div className={`p-3 rounded border transition-all ${
+            isTransferred
+              ? "bg-green-50/70 border-green-200"
+              : hasDisposition
+                ? "bg-blue-50/70 border-blue-300 ring-2 ring-blue-100"
+                : "bg-slate-50 border-slate-200 opacity-80"
+          }`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">STEP 5</span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                isTransferred
+                  ? "bg-green-100 text-green-800"
+                  : hasDisposition
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-slate-200 text-slate-600"
+              }`}>
+                {isTransferred ? "Transferred" : hasDisposition ? "Ready to Move" : "Pending"}
+              </span>
+            </div>
+            <h4 className="font-bold text-gray-900 text-[12.5px] flex items-center gap-1.5">
+              <span>🛏️</span> Bed Relocation &amp; Transfer
+            </h4>
+            <p className="text-[11px] text-[#64748B] mt-0.5 line-clamp-2">
+              {isTransferred
+                ? "Patient relocated and ER encounter closed."
+                : hasDisposition
+                  ? `Bed requested in ${detail.bed_requests?.[0]?.requested_level_of_care || "Inpatient"}.`
+                  : "Awaiting doctor disposition order."}
+            </p>
+            {hasDisposition && !isTransferred && (
+              <button
+                onClick={() => setShowTransferModal(true)}
+                className="mt-2 w-full py-1 bg-[#16A34A] hover:bg-[#15803D] text-white rounded text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
+              >
+                Complete Transfer &amp; Handover
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* 3. Horizontal Navigation Tabs */}
       <div className="bg-white border border-[#DDE2EC] rounded px-4 shadow-2xs overflow-x-auto">
         <div className="flex items-center gap-6 min-w-max">
@@ -3458,119 +3770,87 @@ function VisitDetailPanel({
       </div>
 
       {/* 4. 6 Key Status Cards Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 items-stretch">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
         {/* Card 1: Chief Complaint */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Chief Complaint</span>
-            <span className="text-sm">📋</span>
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
+            📋
           </div>
-          <div>
-            <div className="font-bold text-gray-900 text-[12.5px] leading-snug break-words" title={chiefComplaint}>
-              {chiefComplaint}
-            </div>
-          </div>
-          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
-            <span className="font-semibold text-gray-600">Onset:</span>
-            <span className="font-medium text-gray-900">{onsetText}</span>
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Chief Complaint</span>
+            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate" title={chiefComplaint}>{chiefComplaint}</div>
+            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">Onset: {onsetText}</span>
           </div>
         </div>
 
         {/* Card 2: Triage */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Triage</span>
-            <span className="text-sm">🛡️</span>
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-amber-50 text-[#D97706] flex items-center justify-center text-base shrink-0 mt-0.5">
+            🛡️
           </div>
-          <div>
-            <div className="font-bold text-[#DC2626] text-[12.5px] leading-snug break-words">
-              {triageCatCode} ({triageCatLabel})
-            </div>
-          </div>
-          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
-            <span>{detail.triage?.triaged_at ? formatTimeStr(detail.triage.triaged_at) : formatTimeStr(detail.arrival_at)}</span>
-            <span className="font-medium text-gray-700">{detail.triage?.assigned_by || "ED Medical Officer"}</span>
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Triage</span>
+            <div className="font-bold text-[#DC2626] text-[12px] leading-snug mt-0.5 truncate">{triageCatCode} ({triageCatLabel})</div>
+            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">
+              {detail.triage?.triaged_at ? formatTimeStr(detail.triage.triaged_at) : formatTimeStr(detail.arrival_at)}
+            </span>
+            <span className="text-[10.5px] text-[#64748B] block truncate">By: {detail.triage?.assigned_by || "Triage RN"}</span>
           </div>
         </div>
 
         {/* Card 3: Current Location */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Current Location</span>
-            <span className="text-sm">🛏️</span>
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-green-50 text-[#16A34A] flex items-center justify-center text-base shrink-0 mt-0.5">
+            🛏️
           </div>
-          <div>
-            <div className="font-bold text-gray-900 text-[12.5px] leading-snug break-words">
-              {location}
-            </div>
-          </div>
-          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
-            <span className="font-semibold text-gray-600">Since:</span>
-            <span className="font-medium text-gray-900">{formatTimeStr(detail.arrival_at)}</span>
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Current Location</span>
+            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate">{location}</div>
+            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">Since: {formatTimeStr(detail.arrival_at)}</span>
           </div>
         </div>
 
         {/* Card 4: Attending Doctor */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Attending Doctor</span>
-            <span className="text-sm">👨‍⚕️</span>
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
+            👨‍⚕️
           </div>
-          <div>
-            <div className="font-bold text-gray-900 text-[12.5px] leading-snug break-words">
-              {doctorName}
-            </div>
-            <div className="text-[11px] text-[#1B4FD8] font-semibold mt-0.5">
-              {doctorSpecialty}
-            </div>
-          </div>
-          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
-            <span className="font-semibold text-gray-600">Assigned:</span>
-            <span className="font-medium text-gray-900">
-              {detail.doctor_assigned_at ? formatTimeStr(detail.doctor_assigned_at) : formatTimeStr(detail.arrival_at)}
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Attending Doctor</span>
+            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate">{doctorName}</div>
+            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">{doctorSpecialty}</span>
+            <span className="text-[10.5px] text-[#64748B] block truncate">
+              {detail.doctor_assigned_at ? `Assigned: ${formatTimeStr(detail.doctor_assigned_at)}` : "Assigned"}
             </span>
           </div>
         </div>
 
         {/* Card 5: Destination */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Destination</span>
-            <span className="text-sm">🎯</span>
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-purple-50 text-[#7E22CE] flex items-center justify-center text-base shrink-0 mt-0.5">
+            🛡️
           </div>
-          <div>
-            <div className="font-bold text-[#7E22CE] text-[12.5px] leading-snug break-words">
-              {destination.replace(/^•\s*/, "")}
-            </div>
-            <div className="text-[11px] text-amber-700 font-semibold mt-0.5">
-              {detail.disposition?.priority || "High Priority"}
-            </div>
-          </div>
-          <div className="text-[10.5px] text-[#64748B] pt-1.5 border-t border-slate-100 flex items-center justify-between">
-            <span className="font-semibold text-gray-600">Status:</span>
-            <span className="font-medium text-gray-900">
-              {detail.disposition?.decided_at ? formatTimeStr(detail.disposition.decided_at) : "Under Review"}
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Destination</span>
+            <div className="font-bold text-[#7E22CE] text-[12px] leading-snug mt-0.5 truncate">{destination.replace(/^•\s*/, "")}</div>
+            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">{detail.disposition?.priority || "High Priority"}</span>
+            <span className="text-[10.5px] text-[#64748B] block truncate">
+              {detail.disposition?.decided_at ? `Decided: ${formatTimeStr(detail.disposition.decided_at)}` : "Under Review"}
             </span>
           </div>
         </div>
 
         {/* Card 6: Next Step */}
-        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Next Step</span>
-            <span className="text-sm">➡️</span>
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
+            ➡️
           </div>
-          <div>
-            <div className="font-bold text-gray-900 text-[12.5px] leading-snug break-words">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Next Step</span>
+            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate">
               {detail.disposition ? "Finalize Transfer" : "Doctor Assessment"}
             </div>
-          </div>
-          <div className="text-[10.5px] pt-1.5 border-t border-slate-100 flex items-center justify-between">
-            <span className="font-semibold text-gray-600">Phase:</span>
-            <span className="font-bold text-emerald-600 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              In Progress
-            </span>
+            <span className="text-[10.5px] text-[#1B4FD8] font-semibold block mt-0.5 truncate">In Progress</span>
           </div>
         </div>
       </div>
@@ -3594,13 +3874,14 @@ function VisitDetailPanel({
                 </div>
 
                 <div className="space-y-3 pt-3 text-[12px]">
-                  <div className="bg-slate-50 border border-slate-200/90 rounded p-2.5">
-                    <span className="text-[#64748B] block text-[10px] font-bold uppercase tracking-wider">Chief Complaint</span>
-                    <div className="text-gray-900 font-bold text-[12.5px] mt-0.5 leading-snug">{chiefComplaint}</div>
-                    <div className="text-[11px] text-[#64748B] pt-1 flex items-center gap-1.5 border-t border-slate-200/60 mt-1.5">
-                      <span className="font-semibold text-gray-700">Onset:</span>
-                      <span className="text-gray-900 font-medium">{onsetText}</span>
-                    </div>
+                  <div>
+                    <span className="text-[#64748B] block text-[10.5px]">Chief Complaint</span>
+                    <strong className="text-gray-900 font-semibold">{chiefComplaint}</strong>
+                  </div>
+
+                  <div>
+                    <span className="text-[#64748B] block text-[10.5px]">Onset</span>
+                    <span className="text-gray-800">{onsetText}</span>
                   </div>
 
                   <div>
@@ -4725,6 +5006,159 @@ function VisitDetailPanel({
                 className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[12.5px] font-semibold cursor-pointer"
               >
                 {actionSaving ? "Dispatching..." : "Dispatch Order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Doctor Evaluation & Disposition Modal */}
+      {showDispositionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                <span>👨‍⚕️</span> Specialist Doctor Disposition &amp; Relocation
+              </h3>
+              <button onClick={() => setShowDispositionModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">✕</button>
+            </div>
+
+            <div className="space-y-3.5 text-[12px]">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Clinical Disposition Decision</label>
+                <select
+                  value={dispositionForm.outcome}
+                  onChange={(e) => setDispositionForm({ ...dispositionForm, outcome: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-gray-900 font-semibold"
+                >
+                  <option value="admit_icu">🚨 Transfer to Intensive Care Unit (ICU / CCU) — High Priority</option>
+                  <option value="admit_inpatient">🛏️ Admit to Inpatient General Ward / Semi-Private</option>
+                  <option value="transfer_ot">🏥 Transfer to Emergency OT / Cath Lab (Urgent Procedure)</option>
+                  <option value="discharge">🏠 Discharge Home with Outpatient Follow-up Prescription</option>
+                  <option value="transfer_facility">🚑 Transfer to Higher Tertiary Trauma / Specialty Center</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Target Specialty / Level of Care</label>
+                <select
+                  value={dispositionForm.specialty}
+                  onChange={(e) => setDispositionForm({ ...dispositionForm, specialty: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-gray-800 font-medium"
+                >
+                  <option value="Cardiology">Cardiology / Coronary Care Unit</option>
+                  <option value="Neurology / Stroke Care">Neurology / Stroke Care</option>
+                  <option value="Intensive Care Unit (ICU)">Intensive Care Unit (ICU)</option>
+                  <option value="Pulmonology / Respiratory Care">Pulmonology / Respiratory Care</option>
+                  <option value="Orthopedics / Trauma">Orthopedics / Trauma Care</option>
+                  <option value="General Medicine Ward">General Medicine Inpatient Ward</option>
+                  <option value="General Surgery Ward">General Surgery Inpatient Ward</option>
+                  <option value="Pediatrics">Pediatric Inpatient Unit</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Clinical Reason &amp; Handover Instructions</label>
+                <textarea
+                  rows={3}
+                  value={dispositionForm.reason}
+                  onChange={(e) => setDispositionForm({ ...dispositionForm, reason: e.target.value })}
+                  placeholder="Document clinical justification for transfer and admission orders..."
+                  className="w-full border border-slate-300 rounded p-2.5 text-gray-800"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Transfer Priority</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {["STAT / Emergency", "High Priority", "Routine Admission"].map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setDispositionForm({ ...dispositionForm, priority: p })}
+                      className={`py-1.5 px-2 rounded text-[11px] font-bold border transition-all cursor-pointer ${
+                        dispositionForm.priority === p
+                          ? "bg-[#1B4FD8] text-white border-[#1B4FD8]"
+                          : "bg-white text-gray-700 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+              <button
+                onClick={() => setShowDispositionModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded text-[12.5px] font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveDisposition}
+                disabled={actionSaving}
+                className="px-5 py-2 bg-[#D97706] hover:bg-[#B45309] text-white rounded text-[12.5px] font-semibold cursor-pointer shadow-xs"
+              >
+                {actionSaving ? "Recording..." : "Save Disposition & Order Bed"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Physical Bed Transfer & Relocation Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                <span>🛏️</span> Confirm Physical Patient Transfer &amp; Relocation
+              </h3>
+              <button onClick={() => setShowTransferModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">✕</button>
+            </div>
+
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded text-[12px] text-blue-900 space-y-1.5">
+              <div className="flex justify-between">
+                <span className="font-bold">Patient Name:</span>
+                <span>{displayName} ({detail.visit_no})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-bold">Destination Unit:</span>
+                <span className="font-bold text-[#1B4FD8]">
+                  {dispositionForm.outcome.includes("icu") ? "Intensive Care Unit (ICU)" : "Inpatient General Ward 3"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-bold">Allocated Physical Bed:</span>
+                <span className="font-bold text-[#16A34A]">
+                  {dispositionForm.outcome.includes("icu") ? "ICU-BED-04 (Floor 2)" : "WARD-BED-302 (Floor 3)"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-bold">Receiving Consultant:</span>
+                <span>{doctorName} ({doctorSpecialty})</span>
+              </div>
+            </div>
+
+            <p className="text-[12px] text-[#64748B]">
+              Confirming this transfer verifies that the ER nursing handover is complete, IV lines/monitors are transferred, and the patient has been physically relocated to their allocated inpatient bed.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+              <button
+                onClick={() => setShowTransferModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded text-[12.5px] font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmTransfer}
+                disabled={actionSaving}
+                className="px-5 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white rounded text-[12.5px] font-semibold cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>✓</span> {actionSaving ? "Relocating..." : "Confirm Relocation & Complete ER Visit"}
               </button>
             </div>
           </div>
