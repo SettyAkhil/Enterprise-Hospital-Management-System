@@ -3044,9 +3044,16 @@ function VisitDetailPanel({
   // Derive chief complaint & onset
   const primaryComplaint = detail.complaints && detail.complaints.length > 0 ? detail.complaints[0] : null;
   const chiefComplaint = primaryComplaint?.complaint || "Acute Emergency Presentation";
-  const onsetText = primaryComplaint?.duration
-    ? `${primaryComplaint.duration} before arrival`
-    : `${formatTimeStr(detail.arrival_at)} (at arrival)`;
+  const onsetText = useMemo(() => {
+    if (!primaryComplaint?.duration) {
+      return formatTimeStr(detail.arrival_at);
+    }
+    const d = primaryComplaint.duration.trim();
+    if (d.toLowerCase().includes("immediate")) {
+      return "Immediate";
+    }
+    return d.toLowerCase().endsWith("ago") || d.toLowerCase().endsWith("arrival") ? d : `${d} prior`;
+  }, [primaryComplaint?.duration, detail.arrival_at]);
 
   // Derive attending doctor
   const doctorName = detail.assigned_doctor_name ? detail.assigned_doctor_name.replace(/\s*\(.*\)/, "") : "Awaiting Doctor";
@@ -3458,9 +3465,13 @@ function VisitDetailPanel({
             📋
           </div>
           <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Chief Complaint</span>
-            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate" title={chiefComplaint}>{chiefComplaint}</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">Onset: {onsetText}</span>
+            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block">Chief Complaint</span>
+            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 line-clamp-2" title={chiefComplaint}>
+              {chiefComplaint}
+            </div>
+            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate" title={`Onset: ${onsetText}`}>
+              <span className="font-semibold text-gray-700">Onset:</span> {onsetText}
+            </span>
           </div>
         </div>
 
@@ -3555,14 +3566,13 @@ function VisitDetailPanel({
                 </div>
 
                 <div className="space-y-3 pt-3 text-[12px]">
-                  <div>
-                    <span className="text-[#64748B] block text-[10.5px]">Chief Complaint</span>
-                    <strong className="text-gray-900 font-semibold">{chiefComplaint}</strong>
-                  </div>
-
-                  <div>
-                    <span className="text-[#64748B] block text-[10.5px]">Onset</span>
-                    <span className="text-gray-800">{onsetText}</span>
+                  <div className="bg-slate-50 border border-slate-200/90 rounded p-2.5">
+                    <span className="text-[#64748B] block text-[10px] font-bold uppercase tracking-wider">Chief Complaint</span>
+                    <div className="text-gray-900 font-bold text-[12.5px] mt-0.5 leading-snug">{chiefComplaint}</div>
+                    <div className="text-[11px] text-[#64748B] pt-1 flex items-center gap-1.5 border-t border-slate-200/60 mt-1.5">
+                      <span className="font-semibold text-gray-700">Onset:</span>
+                      <span className="text-gray-900 font-medium">{onsetText}</span>
+                    </div>
                   </div>
 
                   <div>
