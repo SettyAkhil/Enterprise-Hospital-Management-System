@@ -126,6 +126,104 @@ export interface ErInvestigationItem {
   verified_at?: string | null;
 }
 
+export type ErTimelineEventType =
+  | "patient_arrived"
+  | "bed_assigned"
+  | "initial_vitals"
+  | "medication_given"
+  | "intervention_given"
+  | "followup_vitals"
+  | "patient_stabilized"
+  | "doctor_assigned"
+  | "doctor_arrived"
+  | "doctor_assessment_completed"
+  | "destination_assigned"
+  | "destination_bed_assigned"
+  | "patient_transferred";
+
+export interface ErTimelineEventItem {
+  id: number;
+  event_type: ErTimelineEventType;
+  event_name: string;
+  timestamp: string; // ISO string
+  logged_by: string; // e.g. "Staff Nurse Jessica Carter, RN"
+  visit_id: number;
+  visit_no: string;
+  patient_id?: string | null;
+  location?: string | null;
+  bed?: string | null;
+  notes?: string | null;
+
+  vitals_data?: {
+    bp_systolic?: number | null;
+    bp_diastolic?: number | null;
+    heart_rate?: number | null;
+    spo2?: number | null;
+    respiratory_rate?: number | null;
+    temperature?: number | null;
+    blood_glucose?: number | null;
+    pain_score?: number | null;
+    gcs?: number | null;
+    notes?: string | null;
+  };
+
+  medication_data?: {
+    drug_name: string;
+    dosage?: string;
+    route?: string;
+    response?: string;
+    notes?: string;
+  };
+
+  intervention_data?: {
+    intervention_type: string;
+    details?: string;
+    patient_response?: string;
+    notes?: string;
+  };
+
+  stabilization_data?: {
+    status: string;
+    clinical_notes?: string;
+  };
+
+  doctor_data?: {
+    doctor_name: string;
+    specialty: string;
+    assignment_method: "Manual by Nurse" | "AI Recommended & Nurse Confirmed";
+    notes?: string;
+  };
+
+  assessment_data?: {
+    doctor_name: string;
+    clinical_impression?: string;
+    acute_condition?: string;
+    care_plan?: string;
+  };
+
+  destination_data?: {
+    destination: "Ward" | "ICU" | "HDU" | "Specialty Ward" | "Observation" | "Operating Theatre" | "Discharge";
+    clinical_reason?: string;
+    doctor_name?: string;
+    ai_recommendation_notes?: string;
+  };
+
+  destination_bed_data?: {
+    department: string;
+    bed_id_or_label: string;
+    allocated_by?: string;
+  };
+
+  transfer_data?: {
+    source_location: string;
+    target_destination: string;
+    target_bed: string;
+    transfer_status: "Transfer Completed" | "In Transit";
+    escorting_staff?: string;
+    handover_notes?: string;
+  };
+}
+
 export interface ErVisitRecord {
   id: number;
   visit_no: string;
@@ -164,6 +262,7 @@ export interface ErVisitRecord {
   disposition: ErDispositionItem | null;
   bed_requests: ErBedRequestItem[];
   consents: ErConsentItem[];
+  timeline_events?: ErTimelineEventItem[];
 }
 
 export interface TriageCategoryConfig {
@@ -1843,6 +1942,124 @@ export class ErDatabase {
         break;
       }
     }
+  }
+
+  static getTimelineEvents(visitId: number): ErTimelineEventItem[] {
+    const visit = this.getVisit(visitId);
+    if (!visit) return [];
+    return (visit.timeline_events || []).slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  static addTimelineEvent(visitId: number, eventData: Partial<ErTimelineEventItem>): ErTimelineEventItem {
+    const visits = this.getVisits("all");
+    const idx = visits.findIndex((v) => v.id === Number(visitId));
+    if (idx < 0) throw new Error("Visit not found");
+
+    const v = visits[idx];
+    if (!v.timeline_events) v.timeline_events = [];
+
+    const newId = v.timeline_events.length > 0 ? Math.max(...v.timeline_events.map((e) => e.id)) + 1 : 1;
+    const now = new Date().toISOString();
+
+    const fullEvent: ErTimelineEventItem = {
+      id: newId,
+      event_type: eventData.event_type || "initial_vitals",
+      event_name: eventData.event_name || "Clinical Event",
+      timestamp: eventData.timestamp || now,
+      logged_by: eventData.logged_by || "Staff Nurse Jessica Carter, RN",
+      visit_id: v.id,
+      visit_no: v.visit_no,
+      patient_id: v.patient_id,
+      location: eventData.location || v.triage_bed_label || "ER Bay",
+      bed: eventData.bed || v.triage_bed_label || null,
+      notes: eventData.notes || null,
+      vitals_data: eventData.vitals_data,
+      medication_data: eventData.medication_data,
+      intervention_data: eventData.intervention_data,
+      stabilization_data: eventData.stabilization_data,
+      doctor_data: eventData.doctor_data,
+      assessment_data: eventData.assessment_data,
+      destination_data: eventData.destination_data,
+      destination_bed_data: eventData.destination_bed_data,
+      transfer_data: eventData.transfer_data,
+    };
+
+    // Add to chronological timeline
+    v.timeline_events.push(fullEvent);
+
+    // Sync corresponding subsystems:
+    if (fullEvent.event_type === "initial_vitals" || fullEvent.event_type === "followup_vitals") {
+      if (fullEvent.vitals_data) {
+        if (!v.vitals) v.vitals = [];
+        v.vitals.push({
+          id: v.vitals.length + 1,
+          recorded_at: fullEvent.timestamp,
+          recorded_by: fullEvent.logged_by,
+          heart_rate: fullEvent.vitals_data.heart_rate ?? null,
+          bp_systolic: fullEvent.vitals_data.bp_systolic ?? null,
+          bp_diastolic: fullEvent.vitals_data.bp_diastolic ?? null,
+          respiratory_rate: fullEvent.vitals_data.respiratory_rate ?? null,
+          spo2: fullEvent.vitals_data.spo2 ?? null,
+          temperature: fullEvent.vitals_data.temperature ?? null,
+          blood_glucose: fullEvent.vitals_data.blood_glucose ?? null,
+          pain_score: fullEvent.vitals_data.pain_score ?? null,
+          gcs: fullEvent.vitals_data.gcs ?? null,
+          consciousness_level: fullEvent.vitals_data.gcs && fullEvent.vitals_data.gcs < 15 ? "Altered" : "Alert (A)",
+          notes: fullEvent.vitals_data.notes || null,
+        });
+      }
+    } else if (fullEvent.event_type === "medication_given" && fullEvent.medication_data) {
+      if (!v.treatments) v.treatments = [];
+      v.treatments.push({
+        id: v.treatments.length + 1,
+        intervention_type: fullEvent.medication_data.drug_name,
+        description: `Dose: ${fullEvent.medication_data.dosage || "STAT"} • Route: ${fullEvent.medication_data.route || "IV"} • Response: ${fullEvent.medication_data.response || "Tolerated"}`,
+        performed_at: fullEvent.timestamp,
+        administered_by: fullEvent.logged_by,
+      });
+    } else if (fullEvent.event_type === "intervention_given" && fullEvent.intervention_data) {
+      if (!v.treatments) v.treatments = [];
+      v.treatments.push({
+        id: v.treatments.length + 1,
+        intervention_type: fullEvent.intervention_data.intervention_type,
+        description: `${fullEvent.intervention_data.details || ""} ${fullEvent.intervention_data.patient_response ? `• Response: ${fullEvent.intervention_data.patient_response}` : ""}`,
+        performed_at: fullEvent.timestamp,
+        administered_by: fullEvent.logged_by,
+      });
+    } else if (fullEvent.event_type === "doctor_assigned" && fullEvent.doctor_data) {
+      v.assigned_doctor_name = fullEvent.doctor_data.doctor_name;
+      v.assigned_specialty = fullEvent.doctor_data.specialty;
+      v.doctor_assigned_at = fullEvent.timestamp;
+    } else if (fullEvent.event_type === "doctor_arrived" && fullEvent.assessment_data) {
+      v.doctor_accepted_at = fullEvent.timestamp;
+    } else if (fullEvent.event_type === "destination_assigned" && fullEvent.destination_data) {
+      const outcomeMap: Record<string, string> = {
+        "ICU": "admit_icu",
+        "Ward": "admit_inpatient",
+        "HDU": "admit_icu",
+        "Specialty Ward": "admit_inpatient",
+        "Observation": "admit_inpatient",
+        "Operating Theatre": "transfer_ot",
+        "Discharge": "discharge",
+      };
+      v.disposition = {
+        outcome: outcomeMap[fullEvent.destination_data.destination] || "admit_inpatient",
+        required_specialty: fullEvent.destination_data.destination,
+        clinical_reason: fullEvent.destination_data.clinical_reason || "Emergency evaluation completed",
+        decided_by: fullEvent.destination_data.doctor_name || v.assigned_doctor_name || "Attending Physician",
+        decided_at: fullEvent.timestamp,
+        priority: "High Priority",
+      };
+    } else if (fullEvent.event_type === "destination_bed_assigned" && fullEvent.destination_bed_data) {
+      v.triage_bed_label = `${fullEvent.destination_bed_data.department} (${fullEvent.destination_bed_data.bed_id_or_label})`;
+    } else if (fullEvent.event_type === "patient_transferred" && fullEvent.transfer_data) {
+      v.status = "closed";
+      v.closed_at = fullEvent.timestamp;
+      v.triage_bed_label = `${fullEvent.transfer_data.target_destination} (${fullEvent.transfer_data.target_bed})`;
+    }
+
+    this.save(ER_STORAGE_KEY_VISITS, visits);
+    return fullEvent;
   }
 
   static closeVisit(visitId: number, consultationFee?: number): { invoice_id: number; total: number } {

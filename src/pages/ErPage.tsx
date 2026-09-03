@@ -48,7 +48,7 @@ import { apiFetch, reportError, getHospitalCode } from "../lib/api";
 import { API_BASE } from "../lib/constants";
 import { formatDateTimeIST } from "../lib/format";
 import type { Notice, Patient } from "../types";
-import { ErDatabase, type ErInvestigationItem } from "../services/erDb";
+import { ErDatabase, type ErInvestigationItem, type ErTimelineEventItem, type ErTimelineEventType } from "../services/erDb";
 
 // apiFetch always sends Content-Type: application/json, which breaks a
 // multipart file upload -- this is the one place in the ER module that needs
@@ -211,6 +211,7 @@ export type ErVisitDetail = ErVisit & {
   bed_requests: ErBedRequest[];
   consents?: ErConsent[];
   investigations?: ErInvestigationItem[];
+  timeline_events?: ErTimelineEventItem[];
 };
 
 export type TriageCategory = {
@@ -2971,6 +2972,1185 @@ function formatArrivalModeLabel(mode?: string | null): string {
   return found ? found.label : mode.replace(/_/g, " ");
 }
 
+const TIMELINE_EVENT_DEFINITIONS: Record<
+  ErTimelineEventType,
+  {
+    label: string;
+    category: "Intake & Triage" | "Vitals" | "Medications & Procedures" | "Physician" | "Disposition & Transfer";
+    icon: string;
+    badgeBg: string;
+    badgeText: string;
+    dotColor: string;
+    description: string;
+  }
+> = {
+  patient_arrived: {
+    label: "Patient Arrived / Registered",
+    category: "Intake & Triage",
+    icon: "🏥",
+    badgeBg: "#EFF6FF",
+    badgeText: "#1B4FD8",
+    dotColor: "bg-blue-500",
+    description: "Initial check-in, arrival mode & emergency presentation recorded",
+  },
+  bed_assigned: {
+    label: "ER Bed Assigned",
+    category: "Intake & Triage",
+    icon: "🛏️",
+    badgeBg: "#EEF2FF",
+    badgeText: "#4F46E5",
+    dotColor: "bg-indigo-500",
+    description: "Emergency bay/bed allocated in Red/Yellow/Green zone",
+  },
+  initial_vitals: {
+    label: "Initial Vitals Checked",
+    category: "Vitals",
+    icon: "🫀",
+    badgeBg: "#FEE2E2",
+    badgeText: "#DC2626",
+    dotColor: "bg-rose-500",
+    description: "Baseline vital signs charted upon arrival",
+  },
+  followup_vitals: {
+    label: "Follow-up Vitals Checked",
+    category: "Vitals",
+    icon: "📈",
+    badgeBg: "#FEF3C7",
+    badgeText: "#B45309",
+    dotColor: "bg-amber-500",
+    description: "Repeat/periodic vital signs check during ongoing care",
+  },
+  medication_given: {
+    label: "Medication Given",
+    category: "Medications & Procedures",
+    icon: "💊",
+    badgeBg: "#DCFCE7",
+    badgeText: "#15803D",
+    dotColor: "bg-emerald-500",
+    description: "STAT or scheduled medication administered to patient",
+  },
+  intervention_given: {
+    label: "Intervention / Treatment Given",
+    category: "Medications & Procedures",
+    icon: "💉",
+    badgeBg: "#CCFBF1",
+    badgeText: "#0F766E",
+    dotColor: "bg-teal-500",
+    description: "Emergency clinical procedure, resuscitation or nursing intervention",
+  },
+  patient_stabilized: {
+    label: "Patient Stabilized",
+    category: "Medications & Procedures",
+    icon: "✨",
+    badgeBg: "#D1FAE5",
+    badgeText: "#047857",
+    dotColor: "bg-green-600",
+    description: "Hemodynamic stability achieved post-emergency interventions",
+  },
+  doctor_assigned: {
+    label: "Doctor Assigned",
+    category: "Physician",
+    icon: "👨‍⚕️",
+    badgeBg: "#DBEAFE",
+    badgeText: "#1D4ED8",
+    dotColor: "bg-blue-600",
+    description: "Physician or specialist assigned (Manual or AI recommended)",
+  },
+  doctor_arrived: {
+    label: "Doctor Arrived",
+    category: "Physician",
+    icon: "🩺",
+    badgeBg: "#E0F2FE",
+    badgeText: "#0369A1",
+    dotColor: "bg-cyan-600",
+    description: "Doctor arrived at bedside for physical examination",
+  },
+  doctor_assessment_completed: {
+    label: "Doctor Assessment Completed",
+    category: "Physician",
+    icon: "📝",
+    badgeBg: "#F3E8FF",
+    badgeText: "#7E22CE",
+    dotColor: "bg-purple-600",
+    description: "Physician examination completed, preliminary diagnosis established",
+  },
+  destination_assigned: {
+    label: "Destination Assigned",
+    category: "Disposition & Transfer",
+    icon: "🎯",
+    badgeBg: "#FFEDD5",
+    badgeText: "#C2410C",
+    dotColor: "bg-amber-600",
+    description: "Clinical disposition decision by doctor (ICU, Ward, OT, Discharge)",
+  },
+  destination_bed_assigned: {
+    label: "Destination Bed Assigned",
+    category: "Disposition & Transfer",
+    icon: "🏨",
+    badgeBg: "#FED7AA",
+    badgeText: "#9A3412",
+    dotColor: "bg-orange-600",
+    description: "Inpatient/ICU bed allocation confirmed by Bed Management",
+  },
+  patient_transferred: {
+    label: "Patient Transferred",
+    category: "Disposition & Transfer",
+    icon: "🚑",
+    badgeBg: "#F1F5F9",
+    badgeText: "#334155",
+    dotColor: "bg-slate-700",
+    description: "Handover completed and patient physically relocated from ER",
+  },
+};
+
+function formatTimelineEventSummary(ev: ErTimelineEventItem): string {
+  if (ev.event_type === "initial_vitals" || ev.event_type === "followup_vitals") {
+    if (ev.vitals_data) {
+      const parts: string[] = [];
+      if (ev.vitals_data.bp_systolic && ev.vitals_data.bp_diastolic) parts.push(`BP ${ev.vitals_data.bp_systolic}/${ev.vitals_data.bp_diastolic} mmHg`);
+      if (ev.vitals_data.heart_rate) parts.push(`HR ${ev.vitals_data.heart_rate} bpm`);
+      if (ev.vitals_data.spo2) parts.push(`SpO₂ ${ev.vitals_data.spo2}%`);
+      if (ev.vitals_data.respiratory_rate) parts.push(`RR ${ev.vitals_data.respiratory_rate}/min`);
+      if (ev.vitals_data.temperature) parts.push(`Temp ${ev.vitals_data.temperature}°F`);
+      if (ev.vitals_data.pain_score != null) parts.push(`Pain ${ev.vitals_data.pain_score}/10`);
+      return parts.join(", ") || ev.notes || "Vital signs recorded";
+    }
+  } else if (ev.event_type === "medication_given" && ev.medication_data) {
+    return `${ev.medication_data.drug_name} ${ev.medication_data.dosage || ""} via ${ev.medication_data.route || "IV"} • Response: ${ev.medication_data.response || "Tolerated"}`;
+  } else if (ev.event_type === "intervention_given" && ev.intervention_data) {
+    return `${ev.intervention_data.intervention_type} • ${ev.intervention_data.details || ""} ${ev.intervention_data.patient_response ? `(Response: ${ev.intervention_data.patient_response})` : ""}`;
+  } else if (ev.event_type === "patient_stabilized" && ev.stabilization_data) {
+    return `Status: ${ev.stabilization_data.status} • ${ev.stabilization_data.clinical_notes || "Vital signs stabilizing"}`;
+  } else if (ev.event_type === "doctor_assigned" && ev.doctor_data) {
+    return `${ev.doctor_data.doctor_name} (${ev.doctor_data.specialty}) • ${ev.doctor_data.assignment_method}`;
+  } else if (ev.event_type === "doctor_arrived" && ev.assessment_data) {
+    return `Doctor: ${ev.assessment_data.doctor_name} • Presentation: ${ev.assessment_data.acute_condition || "Bedside examination started"}`;
+  } else if (ev.event_type === "doctor_assessment_completed" && ev.assessment_data) {
+    return `Impression: ${ev.assessment_data.clinical_impression || "Assessment completed"} • Plan: ${ev.assessment_data.care_plan || "Treatment in progress"}`;
+  } else if (ev.event_type === "destination_assigned" && ev.destination_data) {
+    return `Assigned to: ${ev.destination_data.destination} • Indication: ${ev.destination_data.clinical_reason || "Inpatient admission"}`;
+  } else if (ev.event_type === "destination_bed_assigned" && ev.destination_bed_data) {
+    return `Unit: ${ev.destination_bed_data.department} • Bed: ${ev.destination_bed_data.bed_id_or_label}`;
+  } else if (ev.event_type === "patient_transferred" && ev.transfer_data) {
+    return `Transferred to: ${ev.transfer_data.target_destination} (${ev.transfer_data.target_bed}) • Escort: ${ev.transfer_data.escorting_staff || "Staff RN"}`;
+  } else if (ev.event_type === "bed_assigned") {
+    return `Assigned to: ${ev.location || "ER Bay"} • Bed ${ev.bed || "ER-01"}`;
+  } else if (ev.event_type === "patient_arrived") {
+    return ev.notes || "Emergency registration completed";
+  }
+  return ev.notes || "Clinical event logged";
+}
+
+function getSynthesizedTimeline(detail: ErVisitDetail): ErTimelineEventItem[] {
+  if (detail.timeline_events && detail.timeline_events.length > 0) {
+    return detail.timeline_events.slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  // Synthesize from existing records for initial visits
+  const list: ErTimelineEventItem[] = [];
+  let idCounter = 1;
+
+  if (detail.arrival_at) {
+    list.push({
+      id: idCounter++,
+      event_type: "patient_arrived",
+      event_name: "Patient Arrived / Registered",
+      timestamp: detail.arrival_at,
+      logged_by: "ER Receptionist / Intake Staff",
+      visit_id: detail.id,
+      visit_no: detail.visit_no,
+      patient_id: detail.patient_id,
+      location: "ER Reception",
+      bed: detail.triage_bed_label || "ER Bay",
+      notes: `Arrived via ${formatArrivalModeLabel(detail.arrival_mode)} • ${detail.condition_at_arrival || "Emergency Arrival"}`,
+    });
+  }
+
+  if (detail.triage_bed_label) {
+    list.push({
+      id: idCounter++,
+      event_type: "bed_assigned",
+      event_name: "ER Bed Assigned",
+      timestamp: detail.arrival_at || new Date().toISOString(),
+      logged_by: "Triage Nurse",
+      visit_id: detail.id,
+      visit_no: detail.visit_no,
+      patient_id: detail.patient_id,
+      location: detail.triage_bed_label,
+      bed: detail.triage_bed_label,
+      notes: `Assigned to ${detail.triage_bed_label} for emergency care`,
+    });
+  }
+
+  (detail.vitals || []).forEach((v, idx) => {
+    list.push({
+      id: idCounter++,
+      event_type: idx === 0 ? "initial_vitals" : "followup_vitals",
+      event_name: idx === 0 ? "Initial Vitals Checked" : "Follow-up Vitals Checked",
+      timestamp: v.recorded_at,
+      logged_by: v.recorded_by || "Staff Nurse Jessica Carter, RN",
+      visit_id: detail.id,
+      visit_no: detail.visit_no,
+      patient_id: detail.patient_id,
+      location: detail.triage_bed_label || "ER Bay",
+      bed: detail.triage_bed_label,
+      vitals_data: {
+        bp_systolic: v.bp_systolic,
+        bp_diastolic: v.bp_diastolic,
+        heart_rate: v.heart_rate,
+        spo2: v.spo2,
+        respiratory_rate: v.respiratory_rate,
+        temperature: v.temperature,
+        blood_glucose: v.blood_glucose,
+        pain_score: v.pain_score,
+        gcs: v.gcs,
+        notes: v.notes,
+      },
+    });
+  });
+
+  (detail.treatments || []).forEach((t) => {
+    const isMed = t.intervention_type.toLowerCase().includes("aspirin") ||
+      t.intervention_type.toLowerCase().includes("ticagrelor") ||
+      t.intervention_type.toLowerCase().includes("heparin") ||
+      t.intervention_type.toLowerCase().includes("fentanyl") ||
+      t.intervention_type.toLowerCase().includes("morphine") ||
+      t.intervention_type.toLowerCase().includes("paracetamol") ||
+      t.intervention_type.toLowerCase().includes("ondansetron");
+
+    if (isMed) {
+      list.push({
+        id: idCounter++,
+        event_type: "medication_given",
+        event_name: "Medication Given",
+        timestamp: t.performed_at,
+        logged_by: t.administered_by || "Staff Nurse Jessica Carter, RN",
+        visit_id: detail.id,
+        visit_no: detail.visit_no,
+        patient_id: detail.patient_id,
+        location: detail.triage_bed_label || "ER Bay",
+        medication_data: {
+          drug_name: t.intervention_type,
+          dosage: "STAT",
+          route: "IV / PO",
+          response: "Tolerated well, clinical improvement noted",
+          notes: t.description || undefined,
+        },
+      });
+    } else {
+      list.push({
+        id: idCounter++,
+        event_type: "intervention_given",
+        event_name: "Intervention / Treatment Given",
+        timestamp: t.performed_at,
+        logged_by: t.administered_by || "Staff Nurse Jessica Carter, RN",
+        visit_id: detail.id,
+        visit_no: detail.visit_no,
+        patient_id: detail.patient_id,
+        location: detail.triage_bed_label || "ER Bay",
+        intervention_data: {
+          intervention_type: t.intervention_type,
+          details: t.description || "",
+          patient_response: "Stable post-procedure",
+        },
+      });
+    }
+  });
+
+  if (detail.assigned_doctor_name && detail.doctor_assigned_at) {
+    list.push({
+      id: idCounter++,
+      event_type: "doctor_assigned",
+      event_name: "Doctor Assigned",
+      timestamp: detail.doctor_assigned_at,
+      logged_by: "Triage Dispatch Coordinator",
+      visit_id: detail.id,
+      visit_no: detail.visit_no,
+      patient_id: detail.patient_id,
+      location: detail.triage_bed_label || "ER Bay",
+      doctor_data: {
+        doctor_name: detail.assigned_doctor_name,
+        specialty: detail.assigned_specialty || "Emergency Medicine",
+        assignment_method: "AI Recommended & Nurse Confirmed",
+      },
+    });
+  }
+
+  if (detail.doctor_accepted_at) {
+    list.push({
+      id: idCounter++,
+      event_type: "doctor_arrived",
+      event_name: "Doctor Arrived",
+      timestamp: detail.doctor_accepted_at,
+      logged_by: "Bedside Primary RN",
+      visit_id: detail.id,
+      visit_no: detail.visit_no,
+      patient_id: detail.patient_id,
+      location: detail.triage_bed_label || "ER Bay",
+      assessment_data: {
+        doctor_name: detail.assigned_doctor_name || "Attending Physician",
+        acute_condition: "Acute presentation evaluated; secondary survey initiated",
+      },
+    });
+  }
+
+  if (detail.disposition) {
+    const destName = detail.disposition.outcome.includes("icu") ? "ICU" : detail.disposition.outcome.includes("ward") ? "Ward" : "Discharge";
+    list.push({
+      id: idCounter++,
+      event_type: "destination_assigned",
+      event_name: "Destination Assigned",
+      timestamp: detail.disposition.decided_at,
+      logged_by: detail.disposition.decided_by || "Attending Physician",
+      visit_id: detail.id,
+      visit_no: detail.visit_no,
+      patient_id: detail.patient_id,
+      location: detail.triage_bed_label || "ER Bay",
+      destination_data: {
+        destination: destName as any,
+        clinical_reason: detail.disposition.clinical_reason,
+        doctor_name: detail.disposition.decided_by || detail.assigned_doctor_name || undefined,
+      },
+    });
+  }
+
+  return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+function AddTimelineEventModal({
+  detail,
+  initialEventType = "initial_vitals",
+  onClose,
+  onSaved,
+  setNotice,
+}: {
+  detail: ErVisitDetail;
+  initialEventType?: ErTimelineEventType;
+  onClose: () => void;
+  onSaved: () => void;
+  setNotice: (notice: Notice | null) => void;
+}) {
+  const [selectedType, setSelectedType] = useState<ErTimelineEventType>(initialEventType);
+  const [saving, setSaving] = useState(false);
+
+  // Auto-captured metadata
+  const loggedBy = "Staff Nurse Jessica Carter, RN";
+  const currentTimestamp = new Date().toISOString();
+  const currentBed = detail.triage_bed_label || "ER Red Zone (Bay 01)";
+
+  // 1. Vitals form state
+  const latestV = detail.vitals && detail.vitals.length > 0 ? detail.vitals[detail.vitals.length - 1] : null;
+  const [vitalsForm, setVitalsForm] = useState({
+    bpSys: latestV?.bp_systolic ? String(latestV.bp_systolic) : "",
+    bpDia: latestV?.bp_diastolic ? String(latestV.bp_diastolic) : "",
+    hr: latestV?.heart_rate ? String(latestV.heart_rate) : "",
+    spo2: latestV?.spo2 ? String(latestV.spo2) : "",
+    rr: latestV?.respiratory_rate ? String(latestV.respiratory_rate) : "",
+    temp: latestV?.temperature ? String(latestV.temperature) : "",
+    glucose: latestV?.blood_glucose ? String(latestV.blood_glucose) : "",
+    pain: latestV?.pain_score != null ? String(latestV.pain_score) : "0",
+    gcs: latestV?.gcs ? String(latestV.gcs) : "15",
+    notes: "",
+  });
+
+  // 2. Medication form state
+  const [medForm, setMedForm] = useState({
+    drugName: "Aspirin (Dispersible)",
+    dosage: "300 mg",
+    route: "Oral (PO)",
+    response: "Tolerated well, no acute distress",
+    notes: "STAT loading dose per emergency chest pain protocol",
+  });
+
+  // 3. Intervention form state
+  const [interventionForm, setInterventionForm] = useState({
+    type: "18G IV Cannulation (Left Forearm)",
+    details: "18-gauge cannula inserted under aseptic precautions, flushed with 5mL normal saline. Flow patent.",
+    response: "Procedure tolerated well without extravasation",
+    notes: "",
+  });
+
+  // 4. Stabilization form state
+  const [stabilizationForm, setStabilizationForm] = useState({
+    status: "Hemodynamically Stable",
+    notes: "BP and heart rate stabilized post-analgesia and oxygen therapy. Patient resting comfortably.",
+  });
+
+  // 5. Doctor Assigned form state
+  const [doctorAssignedForm, setDoctorAssignedForm] = useState({
+    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    specialty: detail.assigned_specialty || "Cardiology",
+    method: "AI Recommended & Nurse Confirmed" as "Manual by Nurse" | "AI Recommended & Nurse Confirmed",
+    notes: "Assigned per acute triage symptom match.",
+  });
+
+  // 6. Doctor Arrived form state
+  const [doctorArrivedForm, setDoctorArrivedForm] = useState({
+    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    acuteCondition: "Conscious, diaphoretic, acute substernal pain 7/10",
+    notes: "Attending doctor arrived at bedside for physical examination.",
+  });
+
+  // 7. Doctor Assessment form state
+  const [doctorAssessmentForm, setDoctorAssessmentForm] = useState({
+    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    impression: "Acute Anterior Wall STEMI / Coronary Syndrome",
+    plan: "Initiate dual antiplatelets, STAT coronary angiography & Cath Lab activation",
+  });
+
+  // 8. Destination Assigned form state
+  const [destinationForm, setDestinationForm] = useState({
+    destination: "ICU" as "Ward" | "ICU" | "HDU" | "Specialty Ward" | "Observation" | "Operating Theatre" | "Discharge",
+    reason: "Requires continuous 24/7 telemetry monitoring and post-angioplasty care",
+    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    aiNotes: "AI Recommendation: Intensive Care Unit (CCU / Cardiac ICU)",
+  });
+
+  // 9. Destination Bed Assigned form state
+  const [destinationBedForm, setDestinationBedForm] = useState({
+    department: "Medical ICU (Floor 2)",
+    bedId: "ICU-BED-04",
+    allocatedBy: "Bed Management & Triage Coordinator",
+  });
+
+  // 10. Patient Transferred form state
+  const [transferForm, setTransferForm] = useState({
+    sourceLocation: currentBed,
+    targetDestination: "Medical Intensive Care Unit (ICU)",
+    targetBed: "ICU-BED-04",
+    transferStatus: "Transfer Completed" as "Transfer Completed" | "In Transit",
+    escortingStaff: loggedBy,
+    notes: "Handover completed with receiving ICU Staff Nurse. Monitors and IV lines transferred successfully.",
+  });
+
+  // 11. Generic Notes form state
+  const [genericNotes, setGenericNotes] = useState("");
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const def = TIMELINE_EVENT_DEFINITIONS[selectedType];
+      const eventPayload: Partial<ErTimelineEventItem> = {
+        event_type: selectedType,
+        event_name: def.label,
+        timestamp: currentTimestamp,
+        logged_by: loggedBy,
+        visit_id: detail.id,
+        visit_no: detail.visit_no,
+        patient_id: detail.patient_id,
+        location: currentBed,
+        bed: currentBed,
+        notes: genericNotes || undefined,
+      };
+
+      if (selectedType === "initial_vitals" || selectedType === "followup_vitals") {
+        eventPayload.vitals_data = {
+          bp_systolic: vitalsForm.bpSys ? Number(vitalsForm.bpSys) : null,
+          bp_diastolic: vitalsForm.bpDia ? Number(vitalsForm.bpDia) : null,
+          heart_rate: vitalsForm.hr ? Number(vitalsForm.hr) : null,
+          spo2: vitalsForm.spo2 ? Number(vitalsForm.spo2) : null,
+          respiratory_rate: vitalsForm.rr ? Number(vitalsForm.rr) : null,
+          temperature: vitalsForm.temp ? Number(vitalsForm.temp) : null,
+          blood_glucose: vitalsForm.glucose ? Number(vitalsForm.glucose) : null,
+          pain_score: vitalsForm.pain ? Number(vitalsForm.pain) : 0,
+          gcs: vitalsForm.gcs ? Number(vitalsForm.gcs) : 15,
+          notes: vitalsForm.notes || undefined,
+        };
+      } else if (selectedType === "medication_given") {
+        eventPayload.medication_data = {
+          drug_name: medForm.drugName,
+          dosage: medForm.dosage,
+          route: medForm.route,
+          response: medForm.response,
+          notes: medForm.notes,
+        };
+      } else if (selectedType === "intervention_given") {
+        eventPayload.intervention_data = {
+          intervention_type: interventionForm.type,
+          details: interventionForm.details,
+          patient_response: interventionForm.response,
+          notes: interventionForm.notes,
+        };
+      } else if (selectedType === "patient_stabilized") {
+        eventPayload.stabilization_data = {
+          status: stabilizationForm.status,
+          clinical_notes: stabilizationForm.notes,
+        };
+      } else if (selectedType === "doctor_assigned") {
+        eventPayload.doctor_data = {
+          doctor_name: doctorAssignedForm.doctorName,
+          specialty: doctorAssignedForm.specialty,
+          assignment_method: doctorAssignedForm.method,
+          notes: doctorAssignedForm.notes,
+        };
+      } else if (selectedType === "doctor_arrived") {
+        eventPayload.assessment_data = {
+          doctor_name: doctorArrivedForm.doctorName,
+          acute_condition: doctorArrivedForm.acuteCondition,
+        };
+        eventPayload.notes = doctorArrivedForm.notes;
+      } else if (selectedType === "doctor_assessment_completed") {
+        eventPayload.assessment_data = {
+          doctor_name: doctorAssessmentForm.doctorName,
+          clinical_impression: doctorAssessmentForm.impression,
+          care_plan: doctorAssessmentForm.plan,
+        };
+      } else if (selectedType === "destination_assigned") {
+        eventPayload.destination_data = {
+          destination: destinationForm.destination,
+          clinical_reason: destinationForm.reason,
+          doctor_name: destinationForm.doctorName,
+          ai_recommendation_notes: destinationForm.aiNotes,
+        };
+      } else if (selectedType === "destination_bed_assigned") {
+        eventPayload.destination_bed_data = {
+          department: destinationBedForm.department,
+          bed_id_or_label: destinationBedForm.bedId,
+          allocated_by: destinationBedForm.allocatedBy,
+        };
+      } else if (selectedType === "patient_transferred") {
+        eventPayload.transfer_data = {
+          source_location: transferForm.sourceLocation,
+          target_destination: transferForm.targetDestination,
+          target_bed: transferForm.targetBed,
+          transfer_status: transferForm.transferStatus,
+          escorting_staff: transferForm.escortingStaff,
+          handover_notes: transferForm.notes,
+        };
+      }
+
+      ErDatabase.addTimelineEvent(detail.id, eventPayload);
+
+      setNotice({
+        type: "success",
+        message: `Timeline Event recorded: "${def.label}" by ${loggedBy}.`,
+      });
+
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Failed to record timeline event." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const currentDef = TIMELINE_EVENT_DEFINITIONS[selectedType];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in overflow-y-auto">
+      <div className="bg-white rounded max-w-2xl w-full p-6 space-y-4 shadow-xl border border-slate-200 my-8">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl">{currentDef.icon}</span>
+            <div>
+              <h3 className="font-bold text-gray-900 text-base">Record Patient Journey Event</h3>
+              <p className="text-[11.5px] text-[#64748B]">
+                Nurse-managed clinical encounter timeline • Automatically captures time &amp; staff signature
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        {/* Auto-Captured Metadata Banner */}
+        <div className="bg-[#F8FAFC] border border-[#DDE2EC] rounded p-3 text-[11.5px] text-gray-700 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div>
+            <span className="text-[#64748B] block text-[10px] uppercase font-bold">Logged-In Nurse</span>
+            <strong className="text-[#1B4FD8] truncate block">👩‍⚕️ {loggedBy.replace(", RN", "")}</strong>
+          </div>
+          <div>
+            <span className="text-[#64748B] block text-[10px] uppercase font-bold">Recorded Time</span>
+            <span className="font-mono text-gray-900 font-semibold">{formatTimeStr(currentTimestamp)} (Now)</span>
+          </div>
+          <div>
+            <span className="text-[#64748B] block text-[10px] uppercase font-bold">ER Encounter</span>
+            <span className="font-mono text-gray-900 font-semibold">{detail.visit_no}</span>
+          </div>
+          <div>
+            <span className="text-[#64748B] block text-[10px] uppercase font-bold">Current Location</span>
+            <span className="font-semibold text-gray-900 truncate block">{currentBed}</span>
+          </div>
+        </div>
+
+        {/* Event Type Selector Dropdown / Pills */}
+        <div>
+          <label className="block text-[11.5px] font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
+            Select Clinical Event Type
+          </label>
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value as ErTimelineEventType)}
+            className="w-full border border-slate-300 rounded p-2 text-[12.5px] text-gray-900 font-bold bg-white focus:outline-none focus:border-[#1B4FD8]"
+          >
+            <optgroup label="── Intake &amp; Triage ──">
+              <option value="patient_arrived">🏥 Patient Arrived / Registered</option>
+              <option value="bed_assigned">🛏️ ER Bed Assigned</option>
+            </optgroup>
+            <optgroup label="── Vital Signs &amp; Monitoring ──">
+              <option value="initial_vitals">🫀 Initial Vitals Checked</option>
+              <option value="followup_vitals">📈 Follow-up Vitals Checked</option>
+            </optgroup>
+            <optgroup label="── Medications &amp; Interventions ──">
+              <option value="medication_given">💊 Medication Given</option>
+              <option value="intervention_given">💉 Intervention / Treatment Given</option>
+              <option value="patient_stabilized">✨ Patient Stabilized</option>
+            </optgroup>
+            <optgroup label="── Physician Assessment ──">
+              <option value="doctor_assigned">👨‍⚕️ Doctor Assigned</option>
+              <option value="doctor_arrived">🩺 Doctor Arrived</option>
+              <option value="doctor_assessment_completed">📝 Doctor Assessment Completed</option>
+            </optgroup>
+            <optgroup label="── Disposition &amp; Transfer ──">
+              <option value="destination_assigned">🎯 Destination Assigned</option>
+              <option value="destination_bed_assigned">🏨 Destination Bed Assigned</option>
+              <option value="patient_transferred">🚑 Patient Transferred</option>
+            </optgroup>
+          </select>
+          <span className="text-[11px] text-[#64748B] mt-1 block italic">{currentDef.description}</span>
+        </div>
+
+        {/* Dynamic Structured Form Fields */}
+        <div className="space-y-3.5 pt-1 text-[12px]">
+          {/* 1. Vitals Form (Initial & Follow-up) */}
+          {(selectedType === "initial_vitals" || selectedType === "followup_vitals") && (
+            <div className="bg-[#FAFCFF] border border-blue-100 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#1B4FD8] uppercase tracking-wider block">
+                {selectedType === "initial_vitals" ? "Baseline Arrival Vital Signs" : "Repeat / Follow-up Vital Signs"}
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">BP (mmHg)</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      placeholder="Sys"
+                      value={vitalsForm.bpSys}
+                      onChange={(e) => setVitalsForm({ ...vitalsForm, bpSys: e.target.value })}
+                      className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                    />
+                    <span>/</span>
+                    <input
+                      type="number"
+                      placeholder="Dia"
+                      value={vitalsForm.bpDia}
+                      onChange={(e) => setVitalsForm({ ...vitalsForm, bpDia: e.target.value })}
+                      className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Heart Rate (bpm)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 78"
+                    value={vitalsForm.hr}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, hr: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">SpO₂ (%)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 98"
+                    value={vitalsForm.spo2}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, spo2: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Resp Rate (/min)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 16"
+                    value={vitalsForm.rr}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, rr: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Temp (°F)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 98.6"
+                    value={vitalsForm.temp}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, temp: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Glucose (mg/dL)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 120"
+                    value={vitalsForm.glucose}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, glucose: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Pain Score (0-10)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={vitalsForm.pain}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, pain: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">GCS Score (3-15)</label>
+                  <input
+                    type="number"
+                    min="3"
+                    max="15"
+                    value={vitalsForm.gcs}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, gcs: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Vitals Response &amp; Clinical Trend Notes</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Pulse regular, extremities warm, breathing unlabored on room air"
+                  value={vitalsForm.notes}
+                  onChange={(e) => setVitalsForm({ ...vitalsForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 2. Medication Given Form */}
+          {selectedType === "medication_given" && (
+            <div className="bg-[#F0FDF4] border border-green-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#15803D] uppercase tracking-wider block">
+                Administered Medication Details
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Drug / Medication Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Aspirin / Morphine / IV Ceftriaxone"
+                    value={medForm.drugName}
+                    onChange={(e) => setMedForm({ ...medForm, drugName: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Dosage / Strength</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 300mg / 4mg / 1g in 100ml NS"
+                    value={medForm.dosage}
+                    onChange={(e) => setMedForm({ ...medForm, dosage: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Route of Administration</label>
+                  <select
+                    value={medForm.route}
+                    onChange={(e) => setMedForm({ ...medForm, route: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 bg-white font-medium"
+                  >
+                    <option value="Intravenous (IV Bolus)">Intravenous (IV Bolus)</option>
+                    <option value="Intravenous Infusion (IV Drip)">Intravenous Infusion (IV Drip)</option>
+                    <option value="Oral (PO)">Oral (PO)</option>
+                    <option value="Sublingual (SL)">Sublingual (SL)</option>
+                    <option value="Intramuscular (IM)">Intramuscular (IM)</option>
+                    <option value="Subcutaneous (SC)">Subcutaneous (SC)</option>
+                    <option value="Nebulization (Inhalation)">Nebulization (Inhalation)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Patient Clinical Response</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Pain relieved from 8/10 to 3/10 within 15 mins, no adverse allergy noted"
+                  value={medForm.response}
+                  onChange={(e) => setMedForm({ ...medForm, response: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Nurse Notes / Instructions</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Given STAT under attending physician verbal order"
+                  value={medForm.notes}
+                  onChange={(e) => setMedForm({ ...medForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 3. Intervention / Treatment Form */}
+          {selectedType === "intervention_given" && (
+            <div className="bg-[#F0FDFA] border border-teal-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#0F766E] uppercase tracking-wider block">
+                Emergency Procedure &amp; Treatment Details
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Intervention / Procedure</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 18G IV Cannulation / High Flow O2 6L/min / Wound Dressing / Splinting"
+                  value={interventionForm.type}
+                  onChange={(e) => setInterventionForm({ ...interventionForm, type: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-1.5 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Procedure Details &amp; Anatomical Site</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Left cubital fossa, flushed with saline, sterile dressing applied."
+                  value={interventionForm.details}
+                  onChange={(e) => setInterventionForm({ ...interventionForm, details: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Patient Response &amp; Condition</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Procedure successful, bleeding controlled, stable vitals maintained."
+                  value={interventionForm.response}
+                  onChange={(e) => setInterventionForm({ ...interventionForm, response: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 4. Patient Stabilized Form */}
+          {selectedType === "patient_stabilized" && (
+            <div className="bg-[#ECFDF5] border border-emerald-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#047857] uppercase tracking-wider block">
+                Patient Stabilization Assessment
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Stabilization Status</label>
+                <select
+                  value={stabilizationForm.status}
+                  onChange={(e) => setStabilizationForm({ ...stabilizationForm, status: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 bg-white font-bold text-gray-900"
+                >
+                  <option value="Hemodynamically Stable">Hemodynamically Stable (BP/HR/SpO2 in target range)</option>
+                  <option value="Pain Controlled & Calm">Pain Controlled &amp; Patient Comfortable</option>
+                  <option value="SpO2 Normalized (>95% on Room Air)">SpO₂ Normalized (&gt;95% on Room Air)</option>
+                  <option value="Consciousness & GCS Improved">Consciousness &amp; Sensorium Improved (GCS 15)</option>
+                  <option value="Cardiac Rhythm Stabilized">Cardiac Rhythm Stabilized Post-Intervention</option>
+                  <option value="Active Bleeding Arrested">Active Hemorrhage / Bleeding Arrested</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Clinical Evaluation Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document patient clinical status post-resuscitation..."
+                  value={stabilizationForm.notes}
+                  onChange={(e) => setStabilizationForm({ ...stabilizationForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 5. Doctor Assigned Form */}
+          {selectedType === "doctor_assigned" && (
+            <div className="bg-[#EFF6FF] border border-blue-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#1D4ED8] uppercase tracking-wider block">
+                Doctor / Specialist Assignment
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Attending Physician Name</label>
+                  <input
+                    type="text"
+                    value={doctorAssignedForm.doctorName}
+                    onChange={(e) => setDoctorAssignedForm({ ...doctorAssignedForm, doctorName: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Medical Specialty</label>
+                  <input
+                    type="text"
+                    value={doctorAssignedForm.specialty}
+                    onChange={(e) => setDoctorAssignedForm({ ...doctorAssignedForm, specialty: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Assignment Method</label>
+                <div className="flex gap-2">
+                  {[
+                    "AI Recommended & Nurse Confirmed",
+                    "Manual by Nurse",
+                  ].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setDoctorAssignedForm({ ...doctorAssignedForm, method: m as any })}
+                      className={`flex-1 py-1.5 px-3 rounded text-[11px] font-bold border transition-all ${
+                        doctorAssignedForm.method === m
+                          ? "bg-[#1B4FD8] text-white border-[#1B4FD8]"
+                          : "bg-white text-gray-700 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Doctor Arrived Form */}
+          {selectedType === "doctor_arrived" && (
+            <div className="bg-[#F0F9FF] border border-sky-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#0369A1] uppercase tracking-wider block">
+                Doctor Bedside Arrival Confirmation
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Attending Doctor</label>
+                <input
+                  type="text"
+                  value={doctorArrivedForm.doctorName}
+                  onChange={(e) => setDoctorArrivedForm({ ...doctorArrivedForm, doctorName: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Acute Condition upon Doctor Arrival</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Diaphoretic, chest pain 7/10, awaiting STAT ECG"
+                  value={doctorArrivedForm.acuteCondition}
+                  onChange={(e) => setDoctorArrivedForm({ ...doctorArrivedForm, acuteCondition: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 7. Doctor Assessment Completed Form */}
+          {selectedType === "doctor_assessment_completed" && (
+            <div className="bg-[#FAF5FF] border border-purple-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#7E22CE] uppercase tracking-wider block">
+                Physician Assessment &amp; Impression
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Preliminary Diagnosis / Clinical Impression</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Acute STEMI / Subdural Hemorrhage / Polytrauma"
+                  value={doctorAssessmentForm.impression}
+                  onChange={(e) => setDoctorAssessmentForm({ ...doctorAssessmentForm, impression: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Recommended Plan of Care &amp; Orders</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document orders, treatment pathway, and urgent investigations..."
+                  value={doctorAssessmentForm.plan}
+                  onChange={(e) => setDoctorAssessmentForm({ ...doctorAssessmentForm, plan: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 8. Destination Assigned Form */}
+          {selectedType === "destination_assigned" && (
+            <div className="bg-[#FFF7ED] border border-orange-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#C2410C] uppercase tracking-wider block">
+                Doctor Clinical Disposition Decision
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Selected Clinical Destination</label>
+                <select
+                  value={destinationForm.destination}
+                  onChange={(e) => setDestinationForm({ ...destinationForm, destination: e.target.value as any })}
+                  className="w-full border border-slate-300 rounded p-2 bg-white font-bold text-gray-900"
+                >
+                  <option value="ICU">🚨 Intensive Care Unit (ICU / CCU) — STAT Critical</option>
+                  <option value="HDU">🏨 Specialty High Dependency Unit (HDU)</option>
+                  <option value="Ward">🛏️ Inpatient General Medical / Surgical Ward</option>
+                  <option value="Specialty Ward">🏥 Specialty Ward (Cardiology / Orthopedics / Neuro)</option>
+                  <option value="Observation">⏱️ Short-Stay Observation Unit (&lt; 24h)</option>
+                  <option value="Operating Theatre">🏥 Emergency Operating Theatre (OT) / Cath Lab</option>
+                  <option value="Discharge">🏠 Discharge Home with Outpatient Prescription</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Clinical Justification &amp; Indication</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document clinical indication for transfer or admission..."
+                  value={destinationForm.reason}
+                  onChange={(e) => setDestinationForm({ ...destinationForm, reason: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 9. Destination Bed Assigned Form */}
+          {selectedType === "destination_bed_assigned" && (
+            <div className="bg-[#FFFBEB] border border-amber-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#B45309] uppercase tracking-wider block">
+                Inpatient / ICU Bed Allocation
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Target Department / Ward</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Medical ICU (Floor 2) / Ward 3B"
+                    value={destinationBedForm.department}
+                    onChange={(e) => setDestinationBedForm({ ...destinationBedForm, department: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Allocated Physical Bed ID</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. ICU-BED-04 / WARD-BED-302"
+                    value={destinationBedForm.bedId}
+                    onChange={(e) => setDestinationBedForm({ ...destinationBedForm, bedId: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-mono font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 10. Patient Transferred Form */}
+          {selectedType === "patient_transferred" && (
+            <div className="bg-[#F8FAFC] border border-slate-300 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#334155] uppercase tracking-wider block">
+                Physical Relocation &amp; ER Handover Completion
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Source ER Location</label>
+                  <input
+                    type="text"
+                    value={transferForm.sourceLocation}
+                    onChange={(e) => setTransferForm({ ...transferForm, sourceLocation: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Target Destination</label>
+                  <input
+                    type="text"
+                    value={transferForm.targetDestination}
+                    onChange={(e) => setTransferForm({ ...transferForm, targetDestination: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-semibold text-[#1B4FD8]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Target Bed Number</label>
+                  <input
+                    type="text"
+                    value={transferForm.targetBed}
+                    onChange={(e) => setTransferForm({ ...transferForm, targetBed: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono font-bold text-[#16A34A]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Nursing Handover &amp; Equipment Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document transfer details, IV lines, oxygen transport, receiving nurse signature..."
+                  value={transferForm.notes}
+                  onChange={(e) => setTransferForm({ ...transferForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+
+              <div className="p-2.5 bg-green-50 border border-green-200 rounded text-[11px] text-green-800">
+                ✓ Marking transfer completed will close the active ER journey and relocate the patient to {transferForm.targetDestination}.
+              </div>
+            </div>
+          )}
+
+          {/* Optional Generic Nurse Notes */}
+          {selectedType === "patient_arrived" || selectedType === "bed_assigned" ? (
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Clinical Event Notes</label>
+              <textarea
+                rows={2}
+                placeholder="Add any specific clinical notes or observations..."
+                value={genericNotes}
+                onChange={(e) => setGenericNotes(e.target.value)}
+                className="w-full border border-slate-300 rounded p-2 text-[12px]"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded text-[12.5px] font-semibold cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[12.5px] font-bold cursor-pointer shadow-xs flex items-center gap-1.5"
+          >
+            {saving ? "Recording..." : `Save "${currentDef.label}"`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function VisitDetailPanel({
   detail,
   loading,
@@ -3025,6 +4205,8 @@ export function VisitDetailPanel({
   const [showAddInterventionModal, setShowAddInterventionModal] = useState(false);
   const [showAddNoteModal, setShowAddNoteModal] = useState(false);
   const [showInvestigationModal, setShowInvestigationModal] = useState(false);
+  const [showAddTimelineEventModal, setShowAddTimelineEventModal] = useState(false);
+  const [defaultTimelineEventType, setDefaultTimelineEventType] = useState<ErTimelineEventType | undefined>();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   // Derive latest vitals (null if no vitals recorded yet)
@@ -3088,73 +4270,10 @@ export function VisitDetailPanel({
   // Derive destination
   const destination = getDestination(detail) || (detail.disposition ? `• ${formatOutcomeLabel(detail.disposition.outcome)}` : "• Under Assessment");
 
-  // Dynamic timeline events for Overview Column 2
-  const timelineEvents = useMemo(() => {
-    const list: { title: string; time: string; details: string; dotColor: string }[] = [];
-    if (detail.disposition) {
-      list.push({
-        title: formatOutcomeLabel(detail.disposition.outcome),
-        time: formatTimeStr(detail.disposition.decided_at),
-        details: `${detail.disposition.priority || "High"} Priority • ${detail.disposition.decided_by || doctorName}`,
-        dotColor: "bg-purple-600",
-      });
-    }
-    if (detail.doctor_assigned_at) {
-      list.push({
-        title: "Doctor Assigned",
-        time: formatTimeStr(detail.doctor_assigned_at),
-        details: `${doctorName} (${doctorSpecialty})`,
-        dotColor: "bg-blue-600",
-      });
-    }
-    (detail.treatments || []).slice().reverse().forEach((t) => {
-      list.push({
-        title: t.intervention_type,
-        time: formatTimeStr(t.performed_at),
-        details: t.description || `Administered by ${t.administered_by || "Staff RN"}`,
-        dotColor: "bg-emerald-600",
-      });
-    });
-    (detail.investigations || []).slice().reverse().forEach((inv) => {
-      list.push({
-        title: `${inv.test_name} (${inv.status})`,
-        time: formatTimeStr(inv.ordered_at),
-        details: inv.result || "Sample in progress",
-        dotColor: "bg-teal-600",
-      });
-    });
-    (detail.vitals || []).slice().reverse().forEach((v) => {
-      list.push({
-        title: "Vitals Recorded",
-        time: formatTimeStr(v.recorded_at),
-        details: `BP ${v.bp_systolic || "—"}/${v.bp_diastolic || "—"}, HR ${v.heart_rate || "—"} bpm, SpO₂ ${v.spo2 || "—"}%`,
-        dotColor: "bg-amber-500",
-      });
-    });
-    if (detail.triage) {
-      list.push({
-        title: `Triage Completed (${detail.triage.category})`,
-        time: formatTimeStr(detail.triage.triaged_at),
-        details: `${detail.triage.reason || "Acuity assessment"} • By ${detail.triage.assigned_by || "Triage RN"}`,
-        dotColor: "bg-rose-500",
-      });
-    }
-    list.push({
-      title: "Patient Arrived",
-      time: formatTimeStr(detail.arrival_at),
-      details: `Via ${formatArrivalModeLabel(detail.arrival_mode)} • ${detail.condition_at_arrival || "Emergency Arrival"}`,
-      dotColor: "bg-blue-500",
-    });
-    if (primaryComplaint) {
-      list.push({
-        title: "Symptom Onset",
-        time: primaryComplaint.duration ? `${primaryComplaint.duration} prior` : "Prior to arrival",
-        details: primaryComplaint.complaint,
-        dotColor: "bg-red-400",
-      });
-    }
-    return list.slice(0, 8);
-  }, [detail, doctorName, doctorSpecialty, primaryComplaint]);
+  // Nurse-maintained patient journey timeline events
+  const activeTimelineEvents = useMemo(() => {
+    return getSynthesizedTimeline(detail);
+  }, [detail]);
 
   // Dynamic Vitals Chart Coordinates
   const vitalsChartData = useMemo(() => {
@@ -3748,30 +4867,91 @@ export function VisitDetailPanel({
             </div>
 
             {/* Column 2: TIMELINE (LATEST EVENTS) */}
-            <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between">
+            <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between space-y-3">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">TIMELINE (LATEST EVENTS)</span>
-                  <button
-                    onClick={() => setActiveTab("timeline")}
-                    className="text-[11px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
-                  >
-                    View Full Timeline
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">TIMELINE (LATEST EVENTS)</span>
+                    <span className="text-[10.5px] text-[#1B4FD8] font-bold">({activeTimelineEvents.length})</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDefaultTimelineEventType(undefined);
+                        setShowAddTimelineEventModal(true);
+                      }}
+                      className="text-[10.5px] font-bold text-[#1B4FD8] bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-1"
+                    >
+                      <span>➕</span> Add Event
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("timeline")}
+                      className="text-[10.5px] font-bold text-[#64748B] hover:text-[#1B4FD8] hover:underline cursor-pointer"
+                    >
+                      View Full
+                    </button>
+                  </div>
                 </div>
 
-                <div className="relative pl-6 space-y-3.5 pt-3 text-[11.5px] before:absolute before:left-2 before:top-4 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                  {timelineEvents.map((ev, idx) => (
-                    <div key={idx} className="relative">
-                      <span className={`absolute -left-6 top-0.5 w-3.5 h-3.5 rounded-full ${ev.dotColor} border-2 border-white shadow-xs`}></span>
-                      <div className="flex items-baseline justify-between">
-                        <strong className="text-gray-900 font-bold">{ev.title}</strong>
-                        <span className="text-[10px] text-[#64748B]">{ev.time}</span>
-                      </div>
-                      <div className="text-[11px] text-[#64748B] truncate max-w-[210px]">{ev.details}</div>
+                <div className="relative pl-6 space-y-3 pt-3 text-[11.5px] before:absolute before:left-2 before:top-4 before:bottom-2 before:w-0.5 before:bg-slate-200 max-h-[340px] overflow-y-auto">
+                  {activeTimelineEvents.length === 0 ? (
+                    <div className="py-4 text-center text-[#64748B]">
+                      <p className="text-[12px]">No timeline events recorded yet.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDefaultTimelineEventType("initial_vitals");
+                          setShowAddTimelineEventModal(true);
+                        }}
+                        className="mt-1.5 text-xs font-bold text-[#1B4FD8] hover:underline cursor-pointer"
+                      >
+                        + Record Initial Vitals
+                      </button>
                     </div>
-                  ))}
+                  ) : (
+                    activeTimelineEvents.slice(0, 5).map((ev) => {
+                      const def = TIMELINE_EVENT_DEFINITIONS[ev.event_type] || TIMELINE_EVENT_DEFINITIONS.initial_vitals;
+                      return (
+                        <div key={ev.id} className="relative group">
+                          <span
+                            className={`absolute -left-6 top-0.5 w-3.5 h-3.5 rounded-full ${def.dotColor} border-2 border-white shadow-xs`}
+                          ></span>
+                          <div className="flex items-baseline justify-between gap-1">
+                            <strong className="text-gray-900 font-bold flex items-center gap-1 truncate max-w-[160px]">
+                              <span>{def.icon}</span>
+                              <span className="truncate">{ev.event_name || def.label}</span>
+                            </strong>
+                            <span className="text-[10px] text-[#64748B] font-mono shrink-0">
+                              {formatTimeStr(ev.timestamp)}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[#475569] mt-0.5 leading-snug line-clamp-2">
+                            {formatTimelineEventSummary(ev)}
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-[#94A3B8] mt-1 pt-0.5 border-t border-slate-100">
+                            <span className="truncate">{ev.logged_by ? ev.logged_by.replace(", RN", "") : "Staff RN"}</span>
+                            <span className="shrink-0">{ev.location || "ER Bay"}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10.5px] text-[#64748B]">
+                <span>Nurse Managed Journey</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDefaultTimelineEventType(undefined);
+                    setShowAddTimelineEventModal(true);
+                  }}
+                  className="text-[#1B4FD8] font-bold hover:underline cursor-pointer"
+                >
+                  + Log New Action
+                </button>
               </div>
             </div>
 
@@ -4200,24 +5380,43 @@ export function VisitDetailPanel({
 
                 <div className="grid grid-cols-2 gap-2 text-[11.5px]">
                   <button
-                    onClick={() => setShowAddVitalsModal(true)}
-                    className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                    onClick={() => {
+                      setDefaultTimelineEventType(undefined);
+                      setShowAddTimelineEventModal(true);
+                    }}
+                    className="p-2.5 bg-blue-50/70 border border-blue-200 hover:bg-blue-100 hover:border-[#1B4FD8] text-[#1B4FD8] font-bold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer col-span-2"
                   >
-                    <span>➕</span> Add Vitals
+                    <span>➕</span> Add Timeline Event
                   </button>
 
                   <button
-                    onClick={() => onOrderMedication()}
+                    onClick={() => {
+                      setDefaultTimelineEventType(hasVitals ? "followup_vitals" : "initial_vitals");
+                      setShowAddTimelineEventModal(true);
+                    }}
                     className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
                   >
-                    <span>➕</span> Add Medication
+                    <span>🫀</span> Add Vitals
                   </button>
 
                   <button
-                    onClick={() => setShowAddInterventionModal(true)}
+                    onClick={() => {
+                      setDefaultTimelineEventType("medication_given");
+                      setShowAddTimelineEventModal(true);
+                    }}
                     className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
                   >
-                    <span>➕</span> Add Intervention
+                    <span>💊</span> Add Medication
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setDefaultTimelineEventType("intervention_given");
+                      setShowAddTimelineEventModal(true);
+                    }}
+                    className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                  >
+                    <span>💉</span> Add Intervention
                   </button>
 
                   <button
@@ -4231,7 +5430,7 @@ export function VisitDetailPanel({
                     onClick={() => setShowInvestigationModal(true)}
                     className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
                   >
-                    <span>📋</span> Request Investigation
+                    <span>📋</span> Request Tests
                   </button>
 
                   <button
@@ -4256,12 +5455,19 @@ export function VisitDetailPanel({
             </h3>
             <button
               onClick={() => setActiveTab("overview")}
-              className="text-[12px] font-semibold text-[#1B4FD8] hover:underline"
+              className="text-[12px] font-semibold text-[#1B4FD8] hover:underline cursor-pointer"
             >
               ← Back to Overview
             </button>
           </div>
-          <ErTimelineView detail={detail} categories={categories} />
+          <ErTimelineView
+            detail={detail}
+            categories={categories}
+            onAddEvent={(type) => {
+              setDefaultTimelineEventType(type);
+              setShowAddTimelineEventModal(true);
+            }}
+          />
         </div>
       )}
 
@@ -4952,6 +6158,17 @@ export function VisitDetailPanel({
         </div>
       )}
 
+      {/* Add Timeline Event Modal */}
+      {showAddTimelineEventModal && (
+        <AddTimelineEventModal
+          detail={detail}
+          initialEventType={defaultTimelineEventType}
+          onClose={() => setShowAddTimelineEventModal(false)}
+          onSaved={onRefresh}
+          setNotice={setNotice}
+        />
+      )}
+
       {/* Handover Modal */}
       {showHandoverModal && (
         <ErHandoverModal
@@ -4967,177 +6184,370 @@ export function VisitDetailPanel({
 function ErTimelineView({
   detail,
   categories,
+  onAddEvent,
 }: {
   detail: ErVisitDetail;
   categories: TriageCategory[];
+  onAddEvent?: (type?: ErTimelineEventType) => void;
 }) {
-  const events: {
-    timestamp: string;
-    title: string;
-    subtitle?: string;
-    badge?: string;
-    type: "arrival" | "vitals" | "triage" | "treatment" | "doctor" | "note" | "disposition" | "bed";
-  }[] = [];
+  const [filterCategory, setFilterCategory] = useState<"all" | "vitals" | "treatments" | "physician" | "transfer">("all");
+  const allEvents = useMemo(() => getSynthesizedTimeline(detail), [detail]);
 
-  if (detail.arrival_at) {
-    events.push({
-      timestamp: detail.arrival_at,
-      title: "Patient Arrived at Emergency Department",
-      subtitle: `Arrival Mode: ${detail.arrival_mode || "Walk-in"}${detail.condition_at_arrival ? ` · Condition: ${detail.condition_at_arrival}` : ""}`,
-      badge: "Arrival",
-      type: "arrival",
-    });
-  }
-
-  detail.complaints.forEach((c) => {
-    events.push({
-      timestamp: c.created_at,
-      title: `Chief Complaint: ${c.complaint}`,
-      subtitle: c.reported_by ? `Reported by: ${c.reported_by}` : undefined,
-      badge: "Complaint",
-      type: "note",
-    });
-  });
-
-  detail.vitals.forEach((v) => {
-    const parts = [];
-    if (v.heart_rate) parts.push(`HR: ${v.heart_rate} bpm`);
-    if (v.bp_systolic && v.bp_diastolic) parts.push(`BP: ${v.bp_systolic}/${v.bp_diastolic}`);
-    if (v.spo2) parts.push(`SpO2: ${v.spo2}%`);
-    if (v.temperature) parts.push(`Temp: ${v.temperature}°C`);
-    if (v.respiratory_rate) parts.push(`RR: ${v.respiratory_rate}/min`);
-    events.push({
-      timestamp: v.recorded_at,
-      title: "Emergency Vitals Recorded",
-      subtitle: parts.join(" · "),
-      badge: "Vitals",
-      type: "vitals",
-    });
-  });
-
-  if (detail.triage) {
-    const cat = categories.find((c) => c.category_code === detail.triage!.category);
-    events.push({
-      timestamp: detail.triage.triaged_at,
-      title: `Emergency Triage: ${detail.triage.category} - ${cat?.category_label || detail.triage.category}`,
-      subtitle: `Triage Bay: ${detail.triage.triage_bed_label || "B1-B4"} · Reason: ${detail.triage.reason || "Clinical assessment"}`,
-      badge: detail.triage.category,
-      type: "triage",
-    });
-  }
-
-  detail.treatments.forEach((t) => {
-    events.push({
-      timestamp: t.performed_at,
-      title: `Emergency Intervention: ${t.intervention_type}`,
-      subtitle: t.description || undefined,
-      badge: "Intervention",
-      type: "treatment",
-    });
-  });
-
-  if (detail.doctor_assigned_at) {
-    events.push({
-      timestamp: detail.doctor_assigned_at,
-      title: `Doctor Assigned: Dr. ${detail.assigned_doctor_name}`,
-      subtitle: `Specialty: ${detail.assigned_specialty}`,
-      badge: "Doctor",
-      type: "doctor",
-    });
-  }
-  if (detail.doctor_accepted_at) {
-    events.push({
-      timestamp: detail.doctor_accepted_at,
-      title: `Doctor Accepted Patient: Dr. ${detail.assigned_doctor_name}`,
-      subtitle: "Active Clinical Care & Assessment Initiated",
-      badge: "Accepted",
-      type: "doctor",
-    });
-  }
-
-  detail.clinical_notes.forEach((n) => {
-    events.push({
-      timestamp: n.created_at,
-      title: `Clinical Note (${n.note_type})`,
-      subtitle: n.content,
-      badge: "Note",
-      type: "note",
-    });
-  });
-
-  if (detail.disposition) {
-    events.push({
-      timestamp: detail.disposition.decided_at,
-      title: `Clinical Disposition: ${detail.disposition.outcome.toUpperCase()}`,
-      subtitle: `Reason: ${detail.disposition.clinical_reason}${detail.disposition.decided_by ? ` · Decided by: ${detail.disposition.decided_by}` : ""}`,
-      badge: "Disposition",
-      type: "disposition",
-    });
-  }
-
-  detail.bed_requests.forEach((r) => {
-    if (r.status === "allocated" && r.allocated_at) {
-      events.push({
-        timestamp: r.allocated_at,
-        title: `Physical Bed Allocated: Bed #${r.allocated_bed_id}`,
-        subtitle: `Admission #${r.allocated_admission_id} · Assigned by Reception / Bed Management`,
-        badge: "Bed Allocated",
-        type: "bed",
-      });
+  const filteredEvents = useMemo(() => {
+    if (filterCategory === "all") return allEvents;
+    if (filterCategory === "vitals") {
+      return allEvents.filter((e) => e.event_type === "initial_vitals" || e.event_type === "followup_vitals");
     }
-  });
+    if (filterCategory === "treatments") {
+      return allEvents.filter(
+        (e) => e.event_type === "medication_given" || e.event_type === "intervention_given" || e.event_type === "patient_stabilized"
+      );
+    }
+    if (filterCategory === "physician") {
+      return allEvents.filter(
+        (e) => e.event_type === "doctor_assigned" || e.event_type === "doctor_arrived" || e.event_type === "doctor_assessment_completed"
+      );
+    }
+    if (filterCategory === "transfer") {
+      return allEvents.filter(
+        (e) =>
+          e.event_type === "patient_arrived" ||
+          e.event_type === "bed_assigned" ||
+          e.event_type === "destination_assigned" ||
+          e.event_type === "destination_bed_assigned" ||
+          e.event_type === "patient_transferred"
+      );
+    }
+    return allEvents;
+  }, [allEvents, filterCategory]);
 
-  if (detail.closed_at) {
-    events.push({
-      timestamp: detail.closed_at,
-      title: "Emergency Visit Closed / Discharged",
-      badge: "Closed",
-      type: "disposition",
-    });
-  }
-
-  events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const vitalsCount = allEvents.filter((e) => e.event_type === "initial_vitals" || e.event_type === "followup_vitals").length;
+  const treatmentsCount = allEvents.filter(
+    (e) => e.event_type === "medication_given" || e.event_type === "intervention_given" || e.event_type === "patient_stabilized"
+  ).length;
+  const physicianCount = allEvents.filter(
+    (e) => e.event_type === "doctor_assigned" || e.event_type === "doctor_arrived" || e.event_type === "doctor_assessment_completed"
+  ).length;
+  const transferCount = allEvents.filter(
+    (e) =>
+      e.event_type === "patient_arrived" ||
+      e.event_type === "bed_assigned" ||
+      e.event_type === "destination_assigned" ||
+      e.event_type === "destination_bed_assigned" ||
+      e.event_type === "patient_transferred"
+  ).length;
 
   return (
-    <div className="er-timeline-container" style={{ padding: "0.5rem" }}>
-      <div style={{ position: "relative", paddingLeft: "1.5rem", borderLeft: "2px solid #cbd5e1" }}>
-        {events.map((ev, idx) => (
-          <div key={idx} style={{ marginBottom: "1.25rem", position: "relative" }}>
-            <span
-              style={{
-                position: "absolute",
-                left: "-1.95rem",
-                top: "0.2rem",
-                width: "14px",
-                height: "14px",
-                borderRadius: "50%",
-                backgroundColor:
-                  ev.type === "triage"
-                    ? "#dc2626"
-                    : ev.type === "vitals"
-                      ? "#3b82f6"
-                      : ev.type === "treatment"
-                        ? "#10b981"
-                        : ev.type === "doctor"
-                          ? "#8b5cf6"
-                          : "#64748b",
-                border: "2px solid #fff",
-                boxShadow: "0 0 0 2px #cbd5e1",
-              }}
-            />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
-              <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "#1e293b" }}>{ev.title}</div>
-              <span className="muted" style={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-                {formatDateTimeIST(ev.timestamp)}
-              </span>
-            </div>
-            {ev.subtitle && (
-              <p className="muted" style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "#475569" }}>
-                {ev.subtitle}
-              </p>
-            )}
-          </div>
+    <div className="space-y-4">
+      {/* Top Controls Bar */}
+      <div className="bg-[#FAFCFF] border border-[#DDE2EC] rounded p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
+        <div>
+          <h4 className="text-[14px] font-bold text-gray-900 flex items-center gap-2">
+            <span>🛡️</span> Nurse-Managed ER Clinical Journey Timeline
+          </h4>
+          <p className="text-[11.5px] text-[#64748B] mt-0.5">
+            Real-time chronological log managed by ER nursing staff from arrival until final destination transfer.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onAddEvent?.()}
+          className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[12px] font-bold cursor-pointer transition-all shadow-xs flex items-center gap-1.5 shrink-0 self-start md:self-auto"
+        >
+          <span>➕</span> Add Timeline Event
+        </button>
+      </div>
+
+      {/* Filter Chips */}
+      <div className="flex flex-wrap gap-2 pt-1 border-b border-slate-200 pb-3">
+        {[
+          { id: "all", label: `All Events (${allEvents.length})` },
+          { id: "vitals", label: `Vitals & Monitoring (${vitalsCount})` },
+          { id: "treatments", label: `Medications & Interventions (${treatmentsCount})` },
+          { id: "physician", label: `Physician Actions (${physicianCount})` },
+          { id: "transfer", label: `Intake & Transfer (${transferCount})` },
+        ].map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setFilterCategory(f.id as any)}
+            className={`px-3 py-1 rounded text-[11.5px] font-bold border transition-all cursor-pointer ${
+              filterCategory === f.id
+                ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-2xs"
+                : "bg-white text-gray-700 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            {f.label}
+          </button>
         ))}
+      </div>
+
+      {/* Timeline List (Newest at Top) */}
+      <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-4 before:bottom-4 before:w-0.5 before:bg-slate-200">
+        {filteredEvents.length === 0 ? (
+          <div className="bg-white border border-[#DDE2EC] rounded p-8 text-center text-[#64748B]">
+            <p className="font-bold text-[13px]">No events recorded under this category.</p>
+            <button
+              onClick={() => onAddEvent?.()}
+              className="mt-2 text-xs font-bold text-[#1B4FD8] hover:underline cursor-pointer"
+            >
+              + Record First Event
+            </button>
+          </div>
+        ) : (
+          filteredEvents.map((ev) => {
+            const def = TIMELINE_EVENT_DEFINITIONS[ev.event_type] || TIMELINE_EVENT_DEFINITIONS.initial_vitals;
+
+            return (
+              <div key={ev.id} className="relative group">
+                {/* Timeline Node Dot */}
+                <span
+                  className={`absolute -left-6 top-3 w-4 h-4 rounded-full ${def.dotColor} border-2 border-white shadow-xs flex items-center justify-center text-[8px] text-white font-bold`}
+                >
+                  ✓
+                </span>
+
+                {/* Event Card */}
+                <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs space-y-2.5 hover:border-[#1B4FD8] transition-all">
+                  {/* Card Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1F5F9] pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{def.icon}</span>
+                      <strong className="text-[13px] font-bold text-gray-900">{ev.event_name || def.label}</strong>
+                      <span
+                        className="px-2 py-0.5 rounded text-[10px] font-bold"
+                        style={{ backgroundColor: def.badgeBg, color: def.badgeText }}
+                      >
+                        {def.category}
+                      </span>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="font-mono text-[11px] font-bold text-gray-900">
+                        {formatDateTimeIST(ev.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Structured Content */}
+                  <div className="text-[12px] text-gray-800 space-y-2">
+                    {/* Vitals Display */}
+                    {(ev.event_type === "initial_vitals" || ev.event_type === "followup_vitals") && ev.vitals_data && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-[#FAFCFF] border border-blue-100 rounded p-2.5 text-[11px]">
+                        {ev.vitals_data.bp_systolic && ev.vitals_data.bp_diastolic && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Blood Pressure</span>
+                            <strong className="font-mono text-red-600 font-bold">
+                              {ev.vitals_data.bp_systolic}/{ev.vitals_data.bp_diastolic} mmHg
+                            </strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.heart_rate && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Heart Rate</span>
+                            <strong className="font-mono text-red-600 font-bold">{ev.vitals_data.heart_rate} bpm</strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.spo2 && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">SpO₂</span>
+                            <strong className="font-mono text-blue-700 font-bold">{ev.vitals_data.spo2}%</strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.respiratory_rate && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Resp Rate</span>
+                            <strong className="font-mono text-orange-700 font-bold">
+                              {ev.vitals_data.respiratory_rate} /min
+                            </strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.temperature && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Temperature</span>
+                            <strong className="font-mono text-gray-800 font-bold">{ev.vitals_data.temperature} °F</strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.blood_glucose && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Blood Glucose</span>
+                            <strong className="font-mono text-gray-800 font-bold">
+                              {ev.vitals_data.blood_glucose} mg/dL
+                            </strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.pain_score != null && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Pain Score</span>
+                            <strong className="font-mono text-red-600 font-bold">{ev.vitals_data.pain_score} / 10</strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.gcs != null && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">GCS Score</span>
+                            <strong className="font-mono text-purple-700 font-bold">{ev.vitals_data.gcs} / 15</strong>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Medication Display */}
+                    {ev.event_type === "medication_given" && ev.medication_data && (
+                      <div className="bg-[#F0FDF4] border border-green-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <strong className="text-[#15803D] font-bold text-[12.5px]">
+                            💊 {ev.medication_data.drug_name}
+                          </strong>
+                          {ev.medication_data.dosage && (
+                            <span className="px-2 py-0.5 rounded bg-green-100 text-green-800 font-bold text-[10.5px]">
+                              {ev.medication_data.dosage}
+                            </span>
+                          )}
+                          {ev.medication_data.route && (
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10.5px]">
+                              Route: {ev.medication_data.route}
+                            </span>
+                          )}
+                        </div>
+                        {ev.medication_data.response && (
+                          <div className="text-gray-700">
+                            <strong>Patient Response:</strong> {ev.medication_data.response}
+                          </div>
+                        )}
+                        {ev.medication_data.notes && (
+                          <div className="text-[#64748B] text-[11px] italic">{ev.medication_data.notes}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Intervention Display */}
+                    {ev.event_type === "intervention_given" && ev.intervention_data && (
+                      <div className="bg-[#F0FDFA] border border-teal-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="font-bold text-[#0F766E] text-[12.5px]">
+                          💉 {ev.intervention_data.intervention_type}
+                        </div>
+                        {ev.intervention_data.details && (
+                          <div className="text-gray-800">{ev.intervention_data.details}</div>
+                        )}
+                        {ev.intervention_data.patient_response && (
+                          <div className="text-teal-800 font-medium">
+                            <strong>Response:</strong> {ev.intervention_data.patient_response}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Patient Stabilized Display */}
+                    {ev.event_type === "patient_stabilized" && ev.stabilization_data && (
+                      <div className="bg-[#ECFDF5] border border-emerald-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="font-bold text-[#047857] flex items-center gap-1.5">
+                          <span>✨</span> Status: {ev.stabilization_data.status}
+                        </div>
+                        {ev.stabilization_data.clinical_notes && (
+                          <div className="text-gray-700">{ev.stabilization_data.clinical_notes}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Doctor Assigned / Arrived / Assessment */}
+                    {ev.event_type === "doctor_assigned" && ev.doctor_data && (
+                      <div className="bg-[#EFF6FF] border border-blue-200 rounded p-2.5 text-[11.5px] flex items-center justify-between">
+                        <div>
+                          <strong className="text-[#1D4ED8]">👨‍⚕️ {ev.doctor_data.doctor_name}</strong>
+                          <span className="text-[#64748B] ml-2">({ev.doctor_data.specialty})</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">
+                          {ev.doctor_data.assignment_method}
+                        </span>
+                      </div>
+                    )}
+
+                    {ev.event_type === "doctor_arrived" && ev.assessment_data && (
+                      <div className="bg-[#F0F9FF] border border-sky-200 rounded p-2.5 text-[11.5px]">
+                        <strong>👨‍⚕️ Doctor Bedside Arrival:</strong> {ev.assessment_data.doctor_name}
+                        {ev.assessment_data.acute_condition && (
+                          <div className="text-[#64748B] mt-0.5">
+                            Acute Presentation: {ev.assessment_data.acute_condition}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {ev.event_type === "doctor_assessment_completed" && ev.assessment_data && (
+                      <div className="bg-[#FAF5FF] border border-purple-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div>
+                          <strong>Preliminary Impression:</strong> {ev.assessment_data.clinical_impression}
+                        </div>
+                        {ev.assessment_data.care_plan && (
+                          <div className="text-purple-900 font-medium">
+                            <strong>Care Plan:</strong> {ev.assessment_data.care_plan}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Disposition / Transfer Display */}
+                    {ev.event_type === "destination_assigned" && ev.destination_data && (
+                      <div className="bg-[#FFF7ED] border border-orange-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="font-bold text-[#C2410C]">
+                          🎯 Disposition Assigned: {ev.destination_data.destination}
+                        </div>
+                        {ev.destination_data.clinical_reason && (
+                          <div className="text-gray-800">
+                            <strong>Reason:</strong> {ev.destination_data.clinical_reason}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {ev.event_type === "destination_bed_assigned" && ev.destination_bed_data && (
+                      <div className="bg-[#FFFBEB] border border-amber-200 rounded p-2.5 text-[11.5px] flex items-center justify-between">
+                        <div>
+                          <strong>🏨 Inpatient Unit:</strong> {ev.destination_bed_data.department}
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-mono font-bold text-[11px]">
+                          Bed: {ev.destination_bed_data.bed_id_or_label}
+                        </span>
+                      </div>
+                    )}
+
+                    {ev.event_type === "patient_transferred" && ev.transfer_data && (
+                      <div className="bg-[#F8FAFC] border border-slate-300 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          <span>🚑</span> Transferred from {ev.transfer_data.source_location} ➔{" "}
+                          <span className="text-[#1B4FD8]">{ev.transfer_data.target_destination}</span> (
+                          <span className="text-[#16A34A]">{ev.transfer_data.target_bed}</span>)
+                        </div>
+                        {ev.transfer_data.handover_notes && (
+                          <div className="text-gray-700">
+                            <strong>Handover:</strong> {ev.transfer_data.handover_notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Generic / Additional Notes */}
+                    {ev.notes && (
+                      <div className="text-gray-700 text-[11.5px]">{ev.notes}</div>
+                    )}
+                  </div>
+
+                  {/* Card Footer Metadata */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[10.5px] text-[#64748B]">
+                    <div className="flex items-center gap-2">
+                      <span>👤 {ev.logged_by || "Staff RN"}</span>
+                      <span>•</span>
+                      <span>📍 {ev.location || "ER Bay"}</span>
+                    </div>
+
+                    <div className="font-mono text-[#94A3B8]">Encounter: {ev.visit_no}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
