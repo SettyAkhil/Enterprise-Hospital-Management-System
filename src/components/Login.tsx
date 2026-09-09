@@ -36,7 +36,7 @@ export default function Login({ onLogin }: LoginProps) {
     } catch (err) {
       // If backend API is unreachable (connection refused / offline), fallback to standalone client-side authentication
       const isConnectionError = err instanceof TypeError || (err instanceof Error && (err.message.includes("fetch") || err.message.includes("network") || err.message.includes("Is the backend running")));
-      
+
       if (isConnectionError) {
         const effectiveRole = role;
         const staffId = effectiveRole === "admin" ? "ADM-001" : effectiveRole === "rn" ? "RN-8821" : "DOC-4401";
@@ -186,8 +186,8 @@ export default function Login({ onLogin }: LoginProps) {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4"/>
-                    <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                    <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                   Authenticating...
                 </span>

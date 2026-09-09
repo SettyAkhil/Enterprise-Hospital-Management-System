@@ -111,56 +111,6 @@ export default function Triage({
 
   return (
     <div className="flex-1 bg-[#F0F2F5] p-5 sm:p-6 min-h-full space-y-3">
-      {/* Top Triage Switcher & Return Bar */}
-      <div className="bg-white border border-[#DDE2EC] rounded p-3 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => onNavigate?.("emergency")}
-            className="px-3.5 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-gray-700 font-semibold rounded text-[12px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-          >
-            <FiArrowLeft className="text-gray-500" />
-            <span>Return to ED Track Board</span>
-          </button>
-
-          {/* Quick Patient Switcher */}
-          {visits.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-[11.5px] font-bold text-[#64748B] uppercase hidden sm:inline">
-                Switch Patient:
-              </span>
-              <div className="relative">
-                <select
-                  value={selectedVisitId || ""}
-                  onChange={(e) => setSelectedVisitId(Number(e.target.value))}
-                  className="bg-[#F8FAFC] border border-[#CBD5E1] hover:border-[#1B4FD8] rounded px-3 py-1.5 text-[12px] font-semibold text-gray-900 focus:outline-none focus:border-[#1B4FD8] cursor-pointer shadow-2xs pr-7"
-                >
-                  {visits.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {getPatientDisplayName(v)} ({v.visit_no} • {v.triage_category || "B1"})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-[#16A34A] bg-green-50 border border-green-200 px-2.5 py-1 rounded">
-            ● Active Triage View
-          </span>
-          <button
-            type="button"
-            onClick={refreshAfterAction}
-            className="p-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-gray-700 rounded transition-colors cursor-pointer shadow-2xs"
-            title="Refresh patient chart"
-          >
-            <FiRefreshCw className={`w-3.5 h-3.5 ${detailLoading ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      </div>
-
       {/* Patient Clinical Chart / Visit Detail Panel */}
       {detail ? (
         <VisitDetailPanel
@@ -180,6 +130,8 @@ export default function Triage({
               doctorName: detail.assigned_doctor_name || undefined,
             })
           }
+          visits={visits}
+          onSelectVisit={(id) => setSelectedVisitId(id)}
         />
       ) : (
         <div className="bg-white border border-[#DDE2EC] rounded p-12 text-center text-[#64748B]">

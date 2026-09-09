@@ -280,6 +280,7 @@ const DEFAULT_TRIAGE_CATEGORIES: TriageCategoryConfig[] = [
   { id: 3, category_code: "B3", category_label: "Moderate / Urgent", description: "Serious condition requiring medical evaluation within 30-60 minutes", color: "#D97706", sort_order: 3 },
   { id: 4, category_code: "B4", category_label: "Low / Less Urgent", description: "Stable condition, routine emergency evaluation", color: "#16A34A", sort_order: 4 },
   { id: 5, category_code: "B5", category_label: "Non-Urgent", description: "Minor presentation, can be managed electively or referred to OP", color: "#2563EB", sort_order: 5 },
+  { id: 6, category_code: "Black", category_label: "Expectant / Comfort Care", description: "Catastrophic non-survivable presentation or deceased; comfort & palliative care", color: "#1E293B", sort_order: 6 },
 ];
 
 const INITIAL_PATIENTS: ErPatient[] = [
@@ -1692,7 +1693,7 @@ export class ErDatabase {
     if (!visit) throw new Error("Visit not found");
     const newTriage: ErTriageItem = {
       category: triage.category,
-      triage_bed_label: triage.bedLabel || (triage.category === "B1" ? "ER Red Zone" : triage.category === "B2" ? "ER Yellow Zone" : "ER Green Zone"),
+      triage_bed_label: triage.bedLabel || (triage.category === "B1" ? "ER Red Zone" : triage.category === "B2" ? "ER Yellow Zone" : triage.category === "Black" ? "ER Comfort / Palliative Bay" : "ER Green Zone"),
       reason: triage.reason || "Clinical Assessment",
       triaged_at: new Date().toISOString(),
       assigned_by: "ED Medical Officer",
@@ -2060,6 +2061,24 @@ export class ErDatabase {
 
     this.save(ER_STORAGE_KEY_VISITS, visits);
     return fullEvent;
+  }
+
+  static clearTimeline(visitId: number): void {
+    const visits = this.getVisits("all");
+    const idx = visits.findIndex((v) => v.id === Number(visitId));
+    if (idx < 0) throw new Error("Visit not found");
+    visits[idx].timeline_events = [];
+    this.save(ER_STORAGE_KEY_VISITS, visits);
+  }
+
+  static deleteTimelineEvent(visitId: number, eventId: number): void {
+    const visits = this.getVisits("all");
+    const idx = visits.findIndex((v) => v.id === Number(visitId));
+    if (idx < 0) throw new Error("Visit not found");
+    if (visits[idx].timeline_events) {
+      visits[idx].timeline_events = visits[idx].timeline_events!.filter((e) => e.id !== eventId);
+      this.save(ER_STORAGE_KEY_VISITS, visits);
+    }
   }
 
   static closeVisit(visitId: number, consultationFee?: number): { invoice_id: number; total: number } {
