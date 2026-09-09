@@ -465,16 +465,16 @@ export default function App() {
           {/* ── Body ─────────────────────────────────────────────────────── */}
           <div className="flex flex-1 overflow-hidden">
             {/* ── Sidebar ──────────────────────────────────────────────── */}
-            <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-[72px]" : "w-64"}`}>
+            <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-16" : "w-64"}`}>
               {/* Top Logo Section */}
-              <div className="flex items-center justify-center py-3 px-3 border-b border-[#1E2D42]/60 flex-shrink-0">
+              <div className="flex items-center justify-center py-2.5 px-2 border-b border-[#1E2D42]/60 flex-shrink-0">
                 <img
                   src="/logo.png"
                   alt="HospAI Logo"
-                  className={`${sidebarCollapsed ? "w-11 h-11" : "w-40 h-40"} object-contain pointer-events-none transition-all duration-200`}
+                  className={`${sidebarCollapsed ? "w-10 h-10" : "w-40 h-40"} object-contain pointer-events-none transition-all duration-200`}
                 />
               </div>
-              <div className={`flex-1 py-2.5 ${sidebarCollapsed ? "px-2" : "px-2"}`}>
+              <div className={`flex-1 py-2 ${sidebarCollapsed ? "px-1.5" : "px-2"}`}>
                 {((isNurse
                   ? [
                       { key: "dashboard" as Module, label: "Nurse Dashboard", Icon: Icon.Dashboard },
@@ -491,7 +491,7 @@ export default function App() {
                       <div
                         className={
                           sidebarCollapsed
-                            ? `w-12 h-12 mx-auto my-1.5 flex items-center justify-center rounded-xl cursor-pointer transition-all duration-150 relative ${
+                            ? `w-10 h-10 mx-auto my-1 flex items-center justify-center rounded-lg cursor-pointer transition-all duration-150 relative ${
                                 isActive
                                   ? "bg-[#1B4FD8] text-white shadow-md shadow-blue-500/25 ring-1 ring-blue-400/40"
                                   : "text-[#94A3B8] hover:text-white hover:bg-white/10"
@@ -523,12 +523,12 @@ export default function App() {
                       >
                         <item.Icon
                           size={sidebarCollapsed ? 22 : 16}
-                          className={sidebarCollapsed ? "w-[22px] h-[22px]" : "w-4 h-4"}
+                          className={sidebarCollapsed ? "w-10 h-10 p-1.5" : "w-4 h-4"}
                         />
 
                         {/* Collapsed Badge Dot */}
                         {sidebarCollapsed && item.badge && !isActive && (
-                          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-[#DC2626] border-2 border-[#0C1524] rounded-full"></span>
+                          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#DC2626] border-2 border-[#0C1524] rounded-full"></span>
                         )}
 
                         {/* Collapsed Hover Tooltip */}
@@ -578,9 +578,9 @@ export default function App() {
                   <button
                     onClick={() => setCmdOpen(true)}
                     title="Command Palette (Ctrl+K)"
-                    className="w-12 h-12 flex items-center justify-center rounded-xl text-[#94A3B8] hover:text-white hover:bg-white/10 transition-colors"
+                    className="w-10 h-10 flex items-center justify-center rounded-lg text-[#94A3B8] hover:text-white hover:bg-white/10 transition-colors"
                   >
-                    <Icon.Cmd size={22} className="w-[22px] h-[22px]" />
+                    <Icon.Cmd size={22} className="w-10 h-10 p-1.5" />
                   </button>
                 </div>
               ) : (
