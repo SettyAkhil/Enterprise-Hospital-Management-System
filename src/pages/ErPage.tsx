@@ -5596,7 +5596,7 @@ export function VisitDetailPanel({
           </div>
 
           {/* Right: Visit Metadata & Status */}
-          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between xl:justify-end gap-6 sm:gap-8 border-t xl:border-t-0 xl:border-l border-[#DDE2EC] pt-4 xl:pt-0 xl:pl-8 text-[12px]">
+          <div className="flex flex-wrap items-center justify-between xl:justify-end gap-4 sm:gap-6 lg:gap-8 border-t xl:border-t-0 xl:border-l border-[#DDE2EC] pt-4 xl:pt-0 xl:pl-8 text-[12px] min-w-0">
             <div>
               <span className="text-[#64748B] block text-[11px] font-medium">ER Visit ID</span>
               <div className="font-bold text-gray-900 flex items-center gap-1 mt-0.5 whitespace-nowrap">
