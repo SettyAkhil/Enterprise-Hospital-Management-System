@@ -284,9 +284,18 @@ const DEFAULT_STAFF: StaffProfile = {
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<string>("admin");
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [activeStaff, setActiveStaff] = useState<StaffProfile>(DEFAULT_STAFF);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [module, setModule] = useState<Module>("dashboard");
+  // Set alongside setModule("chart") when another page (e.g. a bed card's
+  // patient name) wants Patient Chart to open directly on that patient
+  // instead of its own directory.
+  const [clinicalPatientId, setClinicalPatientId] = useState<string | null>(null);
+  const openPatientClinical = (patientId: string) => {
+    setClinicalPatientId(patientId);
+    setModule("chart");
+  };
   const [expanded, setExpanded] = useState<string[]>(["patients", "outpatient"]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
@@ -302,8 +311,9 @@ export default function App() {
 
   const isNurse = userRole === "rn";
 
-  const handleLogin = (userData: { user: string; role: string; staffId: string }) => {
+  const handleLogin = (userData: { user: string; role: string; staffId: string; permissions: string[] }) => {
     setUserRole(userData.role);
+    setUserPermissions(userData.permissions);
     setLoggedIn(true);
     setModule("dashboard");
   };
@@ -588,7 +598,9 @@ export default function App() {
               {module === "chart" && (
                 <PatientChart
                   onBack={() => setModule("patients")}
-                  openOrder={() => setOrderOpen(true)}
+                  setNotice={setNotice}
+                  initialPatientId={clinicalPatientId}
+                  onConsumeInitialPatient={() => setClinicalPatientId(null)}
                 />
               )}
               {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
@@ -602,17 +614,27 @@ export default function App() {
                   }}
                 />
               )}
-              {module === "inpatient" && <Inpatient />}
-              {module === "beds" && <BedManagementPage setNotice={setNotice} />}
+              {module === "inpatient" && (
+                <Inpatient navigate={navigate} onOpenPatientClinical={openPatientClinical} permissions={userPermissions} />
+              )}
+              {module === "beds" && (
+                <BedManagementPage
+                  setNotice={setNotice}
+                  onOpenPatientClinical={openPatientClinical}
+                  permissions={userPermissions}
+                />
+              )}
               {module === "nursing" && <NursingPortal />}
               {module === "laboratory" && <Laboratory />}
               {module === "pharmacy" && <Pharmacy />}
               {module === "surgery" && <Surgery />}
               {module === "billing" && <Billing />}
               {module === "radiology" && <Radiology />}
-              {module === "icu" && <ICU />}
+              {module === "icu" && (
+                <ICU navigate={navigate} onOpenPatientClinical={openPatientClinical} permissions={userPermissions} />
+              )}
               {module === "analytics" && <Analytics />}
-              {module === "discharge" && <Discharge onComplete={() => setModule("inpatient")} />}
+              {module === "discharge" && <Discharge setNotice={setNotice} onComplete={() => setModule("inpatient")} />}
               {module === "triage" && (
                 <Triage
                   initialVisitId={selectedTriageVisitId}
@@ -690,8 +712,8 @@ export default function App() {
                 />
               )}
               {module === "scheduling" && <DoctorScheduling />}
-              {module === "admissions" && <Admissions />}
-              {module === "readmission" && <Readmission />}
+              {module === "admissions" && <Admissions setNotice={setNotice} navigate={navigate} />}
+              {module === "readmission" && <Readmission setNotice={setNotice} />}
               {module === "payments" && <PaymentCollection />}
               {module === "revenue_reports" && <RevenueReports />}
               {module === "hrms" && <HRMS />}
