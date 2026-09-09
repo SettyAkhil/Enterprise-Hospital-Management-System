@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Icon } from "./components/icons";
+import { Icon, type IconProps } from "./components/icons";
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
 import PatientSearch from "./components/PatientSearch";
@@ -62,7 +62,7 @@ type Module =
 interface NavItem {
   key: Module;
   label: string;
-  Icon: React.FC;
+  Icon: React.FC<IconProps>;
   badge?: number;
   children?: { key: Module; label: string }[];
 }
@@ -362,10 +362,13 @@ export default function App() {
           {/* ── Top Header ───────────────────────────────────────────────── */}
           <header className="bg-[#0C1524] border-b border-[#1E2D42] h-12 flex items-center gap-3 px-3 flex-shrink-0 z-40">
             {/* Sidebar toggle */}
-            <button onClick={() => setSidebarCollapsed(c => !c)}
-              className="w-7 h-7 flex items-center justify-center text-[#64748B] hover:text-white transition-colors rounded hover:bg-white/10">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M2 3.5h10M2 7h10M2 10.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <button
+              onClick={() => setSidebarCollapsed(c => !c)}
+              className="w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white transition-colors rounded-lg hover:bg-white/10"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M3 4.5h12M3 9h12M3 13.5h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </button>
 
@@ -462,16 +465,16 @@ export default function App() {
           {/* ── Body ─────────────────────────────────────────────────────── */}
           <div className="flex flex-1 overflow-hidden">
             {/* ── Sidebar ──────────────────────────────────────────────── */}
-            <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-12" : "w-64"}`}>
+            <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-[72px]" : "w-64"}`}>
               {/* Top Logo Section */}
-              <div className="flex items-center justify-center py-2.5 px-3 border-b border-[#1E2D42]/60 flex-shrink-0">
+              <div className="flex items-center justify-center py-3 px-3 border-b border-[#1E2D42]/60 flex-shrink-0">
                 <img
                   src="/logo.png"
                   alt="HospAI Logo"
-                  className={`${sidebarCollapsed ? "w-8 h-8" : "w-40 h-40"} object-contain pointer-events-none transition-all duration-200`}
+                  className={`${sidebarCollapsed ? "w-11 h-11" : "w-40 h-40"} object-contain pointer-events-none transition-all duration-200`}
                 />
               </div>
-              <div className="flex-1 py-2 px-2">
+              <div className={`flex-1 py-2.5 ${sidebarCollapsed ? "px-2" : "px-2"}`}>
                 {((isNurse
                   ? [
                       { key: "dashboard" as Module, label: "Nurse Dashboard", Icon: Icon.Dashboard },
@@ -484,23 +487,62 @@ export default function App() {
                   const isExpanded = expanded.includes(item.key);
 
                   return (
-                    <div key={item.key}>
+                    <div key={item.key} className="relative group">
                       <div
-                        className={`nav-item ${isActive ? "active" : ""}`}
+                        className={
+                          sidebarCollapsed
+                            ? `w-12 h-12 mx-auto my-1.5 flex items-center justify-center rounded-xl cursor-pointer transition-all duration-150 relative ${
+                                isActive
+                                  ? "bg-[#1B4FD8] text-white shadow-md shadow-blue-500/25 ring-1 ring-blue-400/40"
+                                  : "text-[#94A3B8] hover:text-white hover:bg-white/10"
+                              }`
+                            : `nav-item ${isActive ? "active" : ""}`
+                        }
                         onClick={() => {
                           if (item.children) {
-                            toggleExpand(item.key);
-                            if (!expanded.includes(item.key)) {
+                            if (sidebarCollapsed) {
                               if (item.key === "intelligence") {
                                 setModule("intelligence");
                               } else {
                                 setModule(item.children[0].key);
                               }
+                            } else {
+                              toggleExpand(item.key);
+                              if (!expanded.includes(item.key)) {
+                                if (item.key === "intelligence") {
+                                  setModule("intelligence");
+                                } else {
+                                  setModule(item.children[0].key);
+                                }
+                              }
                             }
                           }
                           else setModule(item.key);
-                        }}>
-                        <item.Icon />
+                        }}
+                        title={sidebarCollapsed ? item.label : undefined}
+                      >
+                        <item.Icon
+                          size={sidebarCollapsed ? 22 : 16}
+                          className={sidebarCollapsed ? "w-[22px] h-[22px]" : "w-4 h-4"}
+                        />
+
+                        {/* Collapsed Badge Dot */}
+                        {sidebarCollapsed && item.badge && !isActive && (
+                          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-[#DC2626] border-2 border-[#0C1524] rounded-full"></span>
+                        )}
+
+                        {/* Collapsed Hover Tooltip */}
+                        {sidebarCollapsed && (
+                          <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#0F172A] text-white text-[12px] font-semibold rounded-lg shadow-2xl border border-white/10 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 flex items-center gap-2">
+                            <span>{item.label}</span>
+                            {item.badge && (
+                              <span className="bg-[#DC2626] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {!sidebarCollapsed && (
                           <>
                             <span className="flex-1 truncate">{item.label}</span>
@@ -531,7 +573,17 @@ export default function App() {
                 })}
               </div>
 
-              {!sidebarCollapsed && (
+              {sidebarCollapsed ? (
+                <div className="p-2 border-t border-[#1E2D42]/60 flex justify-center">
+                  <button
+                    onClick={() => setCmdOpen(true)}
+                    title="Command Palette (Ctrl+K)"
+                    className="w-12 h-12 flex items-center justify-center rounded-xl text-[#94A3B8] hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <Icon.Cmd size={22} className="w-[22px] h-[22px]" />
+                  </button>
+                </div>
+              ) : (
                 <div className="p-3 border-t border-[#1E2D42]">
                   <button onClick={() => setCmdOpen(true)}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded border border-white/10 text-[#64748B] hover:text-white hover:border-white/20 transition-colors text-[11.5px]">
