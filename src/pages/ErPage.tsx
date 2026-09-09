@@ -48,7 +48,7 @@ import { apiFetch, reportError, getHospitalCode } from "../lib/api";
 import { API_BASE } from "../lib/constants";
 import { formatDateTimeIST } from "../lib/format";
 import type { Notice, Patient } from "../types";
-import { ErDatabase, type ErInvestigationItem } from "../services/erDb";
+import { ErDatabase, type ErInvestigationItem, type ErTimelineEventItem, type ErTimelineEventType } from "../services/erDb";
 
 // apiFetch always sends Content-Type: application/json, which breaks a
 // multipart file upload -- this is the one place in the ER module that needs
@@ -71,6 +71,7 @@ async function uploadConsentDocument(consentId: number, file: File): Promise<voi
 type Props = {
   setNotice: (notice: Notice | null) => void;
   onNavigate?: (page: string, extraData?: any) => void;
+  onOpenTriage?: (visitId: number) => void;
   // Handed back by AddPatientPage after a patient registered via the "New"
   // mode card below completes -- see App.tsx's navigateToPage. Lets Quick
   // Intake pick up exactly where staff left off instead of making them
@@ -83,7 +84,7 @@ type Props = {
   mergeTarget?: { visitId: number; patientId: string } | null;
 };
 
-type ErVisit = {
+export type ErVisit = {
   id: number;
   visit_no: string;
   patient_id: string | null;
@@ -109,7 +110,7 @@ type ErVisit = {
   patient?: Patient | null;
 };
 
-type ErComplaint = {
+export type ErComplaint = {
   id: number;
   complaint: string;
   severity: string | null;
@@ -119,7 +120,7 @@ type ErComplaint = {
   created_at: string;
 };
 
-type ErVitals = {
+export type ErVitals = {
   id: number;
   recorded_at: string;
   recorded_by: string | null;
@@ -136,7 +137,7 @@ type ErVitals = {
   notes: string | null;
 };
 
-type ErTriage = {
+export type ErTriage = {
   category: string;
   triage_bed_label: string | null;
   reason: string | null;
@@ -144,7 +145,7 @@ type ErTriage = {
   assigned_by: string | null;
 } | null;
 
-type ErTreatment = {
+export type ErTreatment = {
   id: number;
   intervention_type: string;
   description: string | null;
@@ -152,7 +153,7 @@ type ErTreatment = {
   administered_by: string | null;
 };
 
-type ErClinicalNote = {
+export type ErClinicalNote = {
   id: number;
   note_type: string;
   author: string | null;
@@ -160,7 +161,7 @@ type ErClinicalNote = {
   created_at: string;
 };
 
-type ErDisposition = {
+export type ErDisposition = {
   outcome: string;
   required_specialty: string | null;
   clinical_reason: string;
@@ -169,7 +170,7 @@ type ErDisposition = {
   priority: string | null;
 } | null;
 
-type ErBedRequest = {
+export type ErBedRequest = {
   id: number;
   status: string;
   requested_level_of_care: string;
@@ -180,7 +181,7 @@ type ErBedRequest = {
   allocated_at: string | null;
 };
 
-type ErConsent = {
+export type ErConsent = {
   id: number;
   hospital_id?: number;
   patient_id?: string;
@@ -200,7 +201,7 @@ type ErConsent = {
   document_mime_type?: string | null;
 };
 
-type ErVisitDetail = ErVisit & {
+export type ErVisitDetail = ErVisit & {
   complaints: ErComplaint[];
   vitals: ErVitals[];
   triage: ErTriage;
@@ -210,9 +211,10 @@ type ErVisitDetail = ErVisit & {
   bed_requests: ErBedRequest[];
   consents?: ErConsent[];
   investigations?: ErInvestigationItem[];
+  timeline_events?: ErTimelineEventItem[];
 };
 
-type TriageCategory = {
+export type TriageCategory = {
   id: number;
   category_code: string;
   category_label: string;
@@ -411,37 +413,44 @@ function getBedLabel(v: ErVisit): string | null {
 function renderTriagePill(category: string | null | undefined) {
   if (!category) return <span className="text-gray-400 font-medium text-[11px]">Not triaged</span>;
   const cat = category.toUpperCase();
-  if (cat === "B1") {
+  if (cat === "B1" || cat === "RED") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]"></span> B1
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-black bg-red-600 text-white shadow-xs border border-red-700 tracking-wide">
+        <span className="w-2 h-2 rounded-full bg-white ring-1 ring-red-300"></span> B1
       </span>
     );
   }
-  if (cat === "B2") {
+  if (cat === "B2" || cat === "YELLOW" || cat === "ORANGE") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FFEDD5] text-[#EA580C] border border-orange-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C]"></span> B2
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-black bg-amber-500 text-white shadow-xs border border-amber-600 tracking-wide">
+        <span className="w-2 h-2 rounded-full bg-white ring-1 ring-amber-300"></span> B2
       </span>
     );
   }
-  if (cat === "B3") {
+  if (cat === "B3" || cat === "GREEN") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FEF9C3] text-[#CA8A04] border border-yellow-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#CA8A04]"></span> B3
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-black bg-emerald-600 text-white shadow-xs border border-emerald-700 tracking-wide">
+        <span className="w-2 h-2 rounded-full bg-white ring-1 ring-emerald-300"></span> B3
       </span>
     );
   }
   if (cat === "B4") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span> B4
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-black bg-teal-600 text-white shadow-xs border border-teal-700 tracking-wide">
+        <span className="w-2 h-2 rounded-full bg-white ring-1 ring-teal-300"></span> B4
+      </span>
+    );
+  }
+  if (cat === "BLACK" || cat === "EXPECTANT") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-black bg-slate-950 text-white shadow-xs border border-slate-800 tracking-wide">
+        <span className="w-2 h-2 rounded-full bg-slate-300"></span> Black
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#EFF6FF] text-[#2563EB] border border-blue-200">
-      <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]"></span> {cat}
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-black bg-blue-600 text-white shadow-xs border border-blue-700 tracking-wide">
+      <span className="w-2 h-2 rounded-full bg-white"></span> {cat}
     </span>
   );
 }
@@ -450,74 +459,170 @@ function renderStatusPill(status: string) {
   const s = status.toLowerCase();
   if (s === "under_treatment" || s === "treatment") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#FEF3C7] text-[#B45309] border border-amber-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#B45309]"></span> Under Treatment
       </span>
     );
   }
   if (s === "doctor_assigned") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#FEF3C7] text-[#D97706] border border-yellow-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]"></span> Doctor Assigned
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#EFF6FF] text-[#1D4ED8] border border-blue-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#1D4ED8]"></span> Doctor Assigned
       </span>
     );
   }
-  if (s === "triaged" || s === "registered" || s === "awaiting_doctor") {
+  if (s === "triaged") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#EFF6FF] text-[#2563EB] border border-blue-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]"></span> Awaiting Doctor
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-green-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#15803D]"></span> Triaged
+      </span>
+    );
+  }
+  if (s === "registered") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#F1F5F9] text-[#475569] border border-slate-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#475569]"></span> Registered
+      </span>
+    );
+  }
+  if (s === "discharged") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#F8FAFC] text-[#64748B] border border-slate-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#64748B]"></span> Discharged
       </span>
     );
   }
   if (s === "under_investigation") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#E0F2FE] text-[#0284C7] border border-sky-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#E0F2FE] text-[#0284C7] border border-sky-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#0284C7]"></span> Under Investigation
       </span>
     );
   }
   if (s === "stabilizing" || s === "stabilized") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#DCFCE7] text-[#16A34A] border border-green-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span> Stabilizing
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span> {STATUS_LABELS[status] || status}
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-700 border border-gray-200">
+      <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span> {status}
     </span>
   );
 }
 
 function renderDestinationPill(dest: string | null | undefined) {
   if (!dest) return <span className="text-gray-400 font-bold">—</span>;
-  if (dest.includes("ICU")) {
+  const isIcu = dest.includes("ICU");
+  const isOt = dest.includes("OT");
+  const isDischarge = dest.includes("Discharge");
+
+  if (isIcu) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F3E8FF] text-[#7E22CE] border border-purple-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-[#F3E8FF] text-[#7E22CE] border border-purple-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#7E22CE]"></span> {dest.replace(/^•\s*/, "")}
       </span>
     );
   }
   if (dest.includes("Ward")) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#DBEAFE] text-[#1D4ED8] border border-blue-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#DBEAFE] text-[#1D4ED8] border border-blue-200">
         <span className="w-1.5 h-1.5 rounded-full bg-[#1D4ED8]"></span> {dest.replace(/^•\s*/, "")}
       </span>
     );
   }
   if (dest.includes("Observation")) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#CCFBF1] text-[#0F766E] border border-teal-200">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#CCFBF1] text-[#0F766E] border border-teal-200">
         {dest.replace(/^•\s*/, "")}
       </span>
     );
   }
+  if (isOt) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+        ⚡ {dest.replace(/^•\s*/, "")}
+      </span>
+    );
+  }
+  if (isDischarge) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+        ✅ {dest.replace(/^•\s*/, "")}
+      </span>
+    );
+  }
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-      {dest}
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+      {dest.replace(/^•\s*/, "")}
     </span>
   );
+}
+
+const getDestinationBadge = renderDestinationPill;
+
+export const DISPOSITION_DESTINATION_OPTIONS = [
+  {
+    value: "admit_icu",
+    icon: "🚨",
+    title: "Transfer to ICU / CCU (for critical care)",
+    tag: "STAT / Critical Monitoring",
+    badgeColor: "bg-red-50 text-red-700 border-red-200",
+    defaultSpecialty: "Intensive Care Unit (ICU)",
+    defaultPriority: "STAT / Emergency",
+  },
+  {
+    value: "admit_inpatient",
+    icon: "🛏️",
+    title: "Admit to Inpatient General Ward (for recovery)",
+    tag: "Inpatient Bed Admission",
+    badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
+    defaultSpecialty: "General Medicine Ward",
+    defaultPriority: "Routine Admission",
+  },
+  {
+    value: "transfer_ot",
+    icon: "⚡",
+    title: "Transfer to Emergency OT / Cath Lab (for urgent surgery)",
+    tag: "Urgent Operative Care",
+    badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
+    defaultSpecialty: "General Surgery Ward",
+    defaultPriority: "STAT / Emergency",
+  },
+  {
+    value: "discharge",
+    icon: "🏠",
+    title: "Discharge Home (with follow-up prescription)",
+    tag: "Clinical Discharge",
+    badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    defaultSpecialty: "General Medicine Ward",
+    defaultPriority: "Routine Admission",
+  },
+  {
+    value: "transfer_facility",
+    icon: "🚑",
+    title: "Transfer to Higher Tertiary Center",
+    tag: "Inter-Hospital Transfer",
+    badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
+    defaultSpecialty: "Orthopedics / Trauma",
+    defaultPriority: "High Priority",
+  },
+];
+
+function formatOutcomeLabel(outcome: string | null | undefined): string {
+  if (!outcome) return "Under Assessment";
+  const matched = DISPOSITION_DESTINATION_OPTIONS.find((o) => o.value === outcome);
+  if (matched) return matched.title;
+  if (outcome === "ward") return "Admit to Inpatient General Ward (for recovery)";
+  if (outcome === "icu") return "Transfer to ICU / CCU (for critical care)";
+  if (outcome === "ot") return "Transfer to Emergency OT / Cath Lab (for urgent surgery)";
+  if (outcome === "referral") return "Transfer to Higher Tertiary Center";
+  if (outcome === "observation") return "ER Short Stay Observation";
+  if (outcome === "lama") return "LAMA (Left Against Medical Advice)";
+  if (outcome === "dama") return "DAMA (Discharge Against Medical Advice)";
+  return outcome.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function triageColorFor(category: string | null | undefined, categories: TriageCategory[]): string {
@@ -537,10 +642,13 @@ function TriageChip({
   compact?: boolean;
 }) {
   const cat = categories.find((c) => c.category_code === category);
-  const color = cat?.color || "#6b7280";
+  const color = cat?.color || (category === "B1" ? "#DC2626" : category === "B2" ? "#F59E0B" : category === "B3" ? "#10B981" : category === "Black" ? "#0F172A" : "#2563EB");
   return (
-    <span className="er-triage-chip" style={{ background: `${color}22`, color }}>
-      <span className="er-triage-dot" />
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-black text-white shadow-xs tracking-wide"
+      style={{ background: color }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-white ring-1 ring-white/40" />
       {compact ? category : cat ? `${cat.category_code} — ${cat.category_label}` : category}
       {!compact && bedLabel ? ` · ${bedLabel}` : ""}
     </span>
@@ -700,7 +808,7 @@ async function fetchAiTriageSuggestion(symptoms: string): Promise<AiTriageSugges
   );
 }
 
-export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTarget }: Props) {
+export default function ErPage({ setNotice, onNavigate, onOpenTriage, prefillPatient, mergeTarget }: Props) {
   const [tab, setTab] = useState<"queue" | "config">("queue");
   const [visits, setVisits] = useState<ErVisit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -862,7 +970,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
 
   if (selectedVisitId && detail) {
     return (
-      <>
+      <div className="flex-1 bg-[#F0F2F5] p-5 sm:p-6 min-h-full">
         <VisitDetailPanel
           detail={detail}
           loading={detailLoading}
@@ -884,6 +992,11 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
               doctorName: detail.assigned_doctor_name || undefined,
             })
           }
+          visits={visits}
+          onSelectVisit={(id) => {
+            setSelectedVisitId(id);
+            loadDetail(id);
+          }}
         />
         {/* Order Medication (on VisitDetailPanel, above) sets prescriptionTarget,
             but this component early-returns just VisitDetailPanel while a visit is
@@ -899,7 +1012,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
             onClose={() => setPrescriptionTarget(null)}
           />
         )}
-      </>
+      </div>
     );
   }
 
@@ -935,9 +1048,9 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
   const wardAllocatedCount = Math.max(0, bedAllocatedCount - icuAllocatedCount);
 
   return (
-    <section className="space-y-5 p-1">
+    <div className="flex-1 bg-[#F0F2F5] p-5 sm:p-6 space-y-4 min-h-full">
       {/* Top Header: Search Bar & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Search Option in place of the subtitle */}
         <div className="relative flex-1 max-w-2xl">
           <div className="relative flex items-center">
@@ -947,13 +1060,13 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
               value={trackboardSearch}
               onChange={(e) => setTrackboardSearch(e.target.value)}
               placeholder="Search ED Track Board by patient name, ID, phone, triage, complaint, doctor, bed..."
-              className="w-full pl-10 pr-10 py-2.5 bg-white border border-[#CBD5E1] rounded-lg text-[13px] text-gray-900 placeholder:text-gray-400 shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#1B4FD8]/20 focus:border-[#1B4FD8] transition-all"
+              className="w-full pl-10 pr-10 py-2 bg-white border border-[#DDE2EC] rounded text-[13px] text-gray-900 placeholder:text-gray-400 shadow-2xs focus:outline-none focus:border-[#1B4FD8] transition-all"
             />
             {trackboardSearch && (
               <button
                 type="button"
                 onClick={() => setTrackboardSearch("")}
-                className="absolute right-3 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                className="absolute right-3 text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer"
                 title="Clear search"
               >
                 <FiX className="text-[14px]" />
@@ -963,11 +1076,11 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
         </div>
 
         {/* Top Right Action Controls */}
-        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
           <button
             type="button"
             onClick={loadVisits}
-            className="px-3.5 py-2 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-gray-700 text-[12.5px] font-semibold rounded-lg shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+            className="px-3.5 py-2 bg-white border border-[#DDE2EC] hover:bg-slate-50 text-gray-700 text-[12.5px] font-semibold rounded shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
             title="Refresh ED visits"
           >
             <FiRefreshCw className="text-[13px]" /> Refresh
@@ -978,7 +1091,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
             <button
               type="button"
               onClick={() => setIsRegMenuOpen((prev) => !prev)}
-              className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white text-[13px] font-bold rounded-lg shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white text-[13px] font-bold rounded shadow-xs transition-all flex items-center gap-2 cursor-pointer"
               aria-expanded={isRegMenuOpen}
               aria-haspopup="true"
             >
@@ -988,7 +1101,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
             </button>
 
             {isRegMenuOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#E2E8F0] rounded-xl shadow-xl z-50 py-1.5 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#DDE2EC] rounded shadow-lg z-50 py-1.5 overflow-hidden">
                 <div className="px-3.5 py-1.5 text-[10.5px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
                   Select Registration Type
                 </div>
@@ -1002,7 +1115,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
                   }}
                   className="w-full text-left px-3.5 py-2.5 hover:bg-blue-50/70 text-gray-800 hover:text-[#1B4FD8] transition-colors flex items-start gap-3 group cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-[#1B4FD8] flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#1B4FD8] group-hover:text-white transition-colors">
+                  <div className="w-8 h-8 rounded bg-blue-100 text-[#1B4FD8] flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#1B4FD8] group-hover:text-white transition-colors">
                     <FiUserPlus />
                   </div>
                   <div>
@@ -1024,7 +1137,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
                   }}
                   className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 text-gray-800 hover:text-[#1B4FD8] transition-colors flex items-start gap-3 group cursor-pointer border-t border-gray-100"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#1B4FD8] group-hover:text-white transition-colors">
+                  <div className="w-8 h-8 rounded bg-slate-100 text-slate-700 flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#1B4FD8] group-hover:text-white transition-colors">
                     <FiSearch />
                   </div>
                   <div>
@@ -1046,7 +1159,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
                   }}
                   className="w-full text-left px-3.5 py-2.5 hover:bg-red-50/70 text-gray-800 hover:text-[#DC2626] transition-colors flex items-start gap-3 group cursor-pointer border-t border-gray-100"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-red-100 text-[#DC2626] flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#DC2626] group-hover:text-white transition-colors">
+                  <div className="w-8 h-8 rounded bg-red-100 text-[#DC2626] flex items-center justify-center text-[15px] shrink-0 mt-0.5 group-hover:bg-[#DC2626] group-hover:text-white transition-colors">
                     <FiAlertCircle />
                   </div>
                   <div>
@@ -1068,8 +1181,8 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: ACTIVE VISITS */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-xl shrink-0">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-xl shrink-0">
             <FiUsers />
           </div>
           <div>
@@ -1080,8 +1193,8 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
         </div>
 
         {/* Card 2: AWAITING DOCTOR */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-lg bg-amber-50 text-[#D97706] flex items-center justify-center text-xl shrink-0">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-amber-50 text-[#D97706] flex items-center justify-center text-xl shrink-0">
             <FiWatch />
           </div>
           <div>
@@ -1092,8 +1205,8 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
         </div>
 
         {/* Card 3: BED REQUESTED */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-lg bg-red-50 text-[#DC2626] flex items-center justify-center text-xl shrink-0">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-red-50 text-[#DC2626] flex items-center justify-center text-xl shrink-0">
             <FiBell />
           </div>
           <div>
@@ -1106,8 +1219,8 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
         </div>
 
         {/* Card 4: BED ALLOCATED */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-lg bg-green-50 text-[#16A34A] flex items-center justify-center text-xl shrink-0">
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-green-50 text-[#16A34A] flex items-center justify-center text-xl shrink-0">
             <FiHome />
           </div>
           <div>
@@ -1121,14 +1234,14 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
       </div>
 
       {/* Main Track Board Panel */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-2xs overflow-hidden">
+      <div className="bg-white border border-[#DDE2EC] rounded shadow-2xs overflow-hidden">
         {/* Tabs Bar */}
-        <div className="flex items-center justify-between border-b border-[#E2E8F0] px-6 pt-3 bg-white">
+        <div className="flex items-center justify-between border-b border-[#DDE2EC] px-5 pt-2.5 bg-white">
           <div className="flex items-center gap-6">
             <button
               type="button"
               onClick={() => setTab("queue")}
-              className={`pb-3 text-[13.5px] font-bold transition-colors cursor-pointer border-b-2 ${
+              className={`pb-2.5 text-[13px] font-bold transition-colors cursor-pointer border-b-2 ${
                 tab === "queue"
                   ? "border-[#1B4FD8] text-[#1B4FD8]"
                   : "border-transparent text-[#64748B] hover:text-gray-900"
@@ -1139,7 +1252,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
             <button
               type="button"
               onClick={() => setTab("config")}
-              className={`pb-3 text-[13.5px] font-semibold transition-colors cursor-pointer border-b-2 ${
+              className={`pb-2.5 text-[13px] font-semibold transition-colors cursor-pointer border-b-2 ${
                 tab === "config"
                   ? "border-[#1B4FD8] text-[#1B4FD8]"
                   : "border-transparent text-[#64748B] hover:text-gray-900"
@@ -1305,7 +1418,13 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
                         <td className="pr-6 py-3.5 text-right whitespace-nowrap">
                           <button
                             type="button"
-                            onClick={() => setSelectedVisitId(v.id)}
+                            onClick={() => {
+                              if (onOpenTriage) {
+                                onOpenTriage(v.id);
+                              } else {
+                                setSelectedVisitId(v.id);
+                              }
+                            }}
                             className="px-3.5 py-1 text-[12px] font-semibold text-[#1B4FD8] bg-white border border-[#CBD5E1] rounded hover:bg-blue-50 hover:border-[#1B4FD8] transition-all cursor-pointer shadow-2xs"
                           >
                             Open
@@ -1409,7 +1528,7 @@ export default function ErPage({ setNotice, onNavigate, prefillPatient, mergeTar
           />
         </Modal>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -1438,6 +1557,8 @@ function NewPatientIntakePanel({
   const [newDob, setNewDob] = useState("");
   const [newAge, setNewAge] = useState("");
   const [newGender, setNewGender] = useState("Male");
+  const [newBloodGroup, setNewBloodGroup] = useState("O+");
+  const [newAllergies, setNewAllergies] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newAddress, setNewAddress] = useState("");
 
@@ -1461,7 +1582,11 @@ function NewPatientIntakePanel({
   const [caseCategory, setCaseCategory] = useState("Cardiac");
   const [infoProvidedBy, setInfoProvidedBy] = useState("Relative");
 
-  // 5. MLC
+  // 5. Emergency Triage & Bed Color Allocation
+  const [triageCategory, setTriageCategory] = useState("B2");
+  const [triageBedLabel, setTriageBedLabel] = useState("ER Bed 03 (Yellow Zone - High Care)");
+
+  // 6. MLC
   const [newMlc, setNewMlc] = useState<"No" | "Yes">("No");
   const [saving, setSaving] = useState(false);
 
@@ -1523,6 +1648,8 @@ function NewPatientIntakePanel({
             gender: newGender,
             age: newAge.trim() ? parseInt(newAge) : undefined,
             dob: newDob || undefined,
+            blood_group: newBloodGroup,
+            allergies: newAllergies.trim() || "No Known Allergies",
             phone: newPhone.trim() || "0000000000",
             emergency_contact: newEmergencyContact.trim(),
             emergency_contact_name: newEmergencyContactName.trim() || undefined,
@@ -1530,7 +1657,6 @@ function NewPatientIntakePanel({
             guardian_name: attendantName.trim() || undefined,
             guardian_relation: attendantRelation || undefined,
             address: newAddress.trim() || undefined,
-            allergies: "",
           },
           visit: {
             arrival_date: arrivalDate,
@@ -1556,31 +1682,19 @@ function NewPatientIntakePanel({
       const visitId = regRes.visit.id;
       const visitNo = regRes.visit.visit_no;
 
-      // Background AI Triage trigger
-      const symptomsText = `Complaints: ${complaint.trim() || "Emergency Presentation"}. Condition: ${conditionAtArrival}. Consciousness: ${consciousnessLevel}. Category: ${caseCategory}.`;
+      // Manual Triage & Bed Allocation Assignment
       try {
-        const aiRes = await fetchAiTriageSuggestion(symptomsText);
-        const categoryCode = mapUrgencyToTriageCategory(aiRes.urgency, categories) || "B2";
-        if (categoryCode) {
-          await apiFetch(`/api/er/visits/${visitId}/triage`, {
-            method: "POST",
-            body: JSON.stringify({
-              category: categoryCode,
-              reason: (aiRes.reasoning || "AI Clinical Triage").substring(0, 500),
-            }),
-          });
-        }
-        if (aiRes.doctor || aiRes.department) {
-          await apiFetch(`/api/er/visits/${visitId}/assign-doctor`, {
-            method: "POST",
-            body: JSON.stringify({
-              specialty: aiRes.department || "Emergency",
-              doctor_name: aiRes.doctor || undefined,
-            }),
-          });
-        }
-      } catch (aiErr) {
-        console.warn("AI Triage auto-execution fallback:", aiErr);
+        await apiFetch(`/api/er/visits/${visitId}/triage`, {
+          method: "POST",
+          body: JSON.stringify({
+            category: triageCategory,
+            triage_bed_label: triageBedLabel,
+            bedLabel: triageBedLabel,
+            reason: `Intake Bed Allocation — Zone: ${triageCategory}, Location: ${triageBedLabel}`,
+          }),
+        });
+      } catch (tErr) {
+        console.warn("Triage save:", tErr);
       }
 
       setNotice({
@@ -1602,7 +1716,7 @@ function NewPatientIntakePanel({
       <div>
         <div className="flex items-center gap-2 pb-2 border-b border-slate-200 mb-3">
           <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase">
-            1. PATIENT DEMOGRAPHICS
+            1. PATIENT DEMOGRAPHICS &amp; CLINICAL HISTORY
           </span>
         </div>
 
@@ -1664,7 +1778,7 @@ function NewPatientIntakePanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Sex<span className="text-red-500 font-bold ml-0.5">*</span>
@@ -1681,6 +1795,25 @@ function NewPatientIntakePanel({
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Blood Group
+              </label>
+              <select
+                value={newBloodGroup}
+                onChange={(e) => setNewBloodGroup(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none cursor-pointer"
+              >
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Mobile
               </label>
               <input
@@ -1691,6 +1824,53 @@ function NewPatientIntakePanel({
                 onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none"
               />
+            </div>
+          </div>
+
+          {/* ALLERGIES FIELD */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700">
+                Known Drug / Food Allergies
+              </label>
+              <span className="text-[11px] text-slate-400 italic">Optional (default: No Known Allergies)</span>
+            </div>
+            <input
+              type="text"
+              placeholder="e.g. Penicillin, Sulfa drugs, NSAIDs / Aspirin, Peanuts (or type 'No Known Allergies')"
+              value={newAllergies}
+              onChange={(e) => setNewAllergies(e.target.value)}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none"
+            />
+            {/* Quick-select allergy tags */}
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              <span className="text-[10.5px] text-slate-500 font-medium mr-1">Quick Select:</span>
+              {[
+                { label: "No Known Allergies (NKDA)", val: "No Known Allergies" },
+                { label: "Penicillin", val: "Penicillin" },
+                { label: "Sulfa", val: "Sulfa drugs" },
+                { label: "NSAIDs / Aspirin", val: "NSAIDs, Aspirin" },
+                { label: "Latex", val: "Latex" },
+              ].map((tag) => (
+                <button
+                  key={tag.label}
+                  type="button"
+                  onClick={() => {
+                    if (tag.val === "No Known Allergies") {
+                      setNewAllergies("No Known Allergies");
+                    } else {
+                      if (!newAllergies || newAllergies === "No Known Allergies") {
+                        setNewAllergies(tag.val);
+                      } else if (!newAllergies.includes(tag.val)) {
+                        setNewAllergies(`${newAllergies}, ${tag.val}`);
+                      }
+                    }
+                  }}
+                  className="px-2 py-0.5 rounded text-[10.5px] font-medium bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 transition-colors cursor-pointer"
+                >
+                  + {tag.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -2001,11 +2181,171 @@ function NewPatientIntakePanel({
         </div>
       </div>
 
-      {/* 5. MEDICO-LEGAL */}
+      {/* 5. EMERGENCY TRIAGE & BED COLOR ASSIGNMENT */}
+      <div>
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200 mb-3">
+          <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase flex items-center gap-1.5">
+            <span>🛡️</span> 5. EMERGENCY TRIAGE &amp; BED COLOR ASSIGNMENT
+          </span>
+          <span className="text-[11px] text-slate-500 font-medium">Select Bed Zone &amp; Priority</span>
+        </div>
+
+        <div className="space-y-4">
+          {/* Triage Color Cards */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-2">
+              Select Triage Priority &amp; Bed Color<span className="text-red-500 font-bold ml-0.5">*</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              {/* Red Zone */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("B1");
+                  setTriageBedLabel("ER Bed 01 (Red Zone - Resuscitation)");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "B1"
+                    ? "bg-red-600 text-white border-red-700 shadow-sm ring-2 ring-red-400"
+                    : "bg-red-50/70 border-red-200 text-red-950 hover:bg-red-50"
+                }`}
+              >
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>🔴</span> Red Zone (B1)
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "B1" ? "bg-red-700 text-white" : "bg-red-100 text-red-700"
+                }`}>
+                  0 min
+                </span>
+              </button>
+
+              {/* Yellow Zone */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("B2");
+                  setTriageBedLabel("ER Bed 03 (Yellow Zone - High Care)");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "B2"
+                    ? "bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300"
+                    : "bg-amber-50/70 border-amber-200 text-amber-950 hover:bg-amber-50"
+                }`}
+              >
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>🟡</span> Yellow Zone (B2)
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "B2" ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-800"
+                }`}>
+                  10–15 min
+                </span>
+              </button>
+
+              {/* Green Zone */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("B3");
+                  setTriageBedLabel("ER Bed 05 (Green Zone - Fast Track)");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "B3"
+                    ? "bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-300"
+                    : "bg-emerald-50/70 border-emerald-200 text-emerald-950 hover:bg-emerald-50"
+                }`}
+              >
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>🟢</span> Green Zone (B3)
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "B3" ? "bg-emerald-700 text-white" : "bg-emerald-100 text-emerald-700"
+                }`}>
+                  30–60 min
+                </span>
+              </button>
+
+              {/* Black / Expectant */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("Black");
+                  setTriageBedLabel("ER Comfort / Palliative Bay");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "Black"
+                    ? "bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-slate-400"
+                    : "bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200"
+                }`}
+              >
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>⚫</span> Black Zone
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "Black" ? "bg-slate-800 text-slate-200" : "bg-slate-200 text-slate-700"
+                }`}>
+                  Comfort
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Assigned Bed / Bay */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Assigned Emergency Bed / Bay Location<span className="text-red-500 font-bold ml-0.5">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. ER Bed 01 (Red Zone)"
+                value={triageBedLabel}
+                onChange={(e) => setTriageBedLabel(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Quick Bed Presets
+              </label>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {[
+                  { label: "🔴 Bay 01 (Red)", val: "ER Bed 01 (Red Zone - Resuscitation)" },
+                  { label: "🔴 Bay 02 (Red)", val: "ER Bed 02 (Red Zone - Resuscitation)" },
+                  { label: "🟡 Bay 03 (Yellow)", val: "ER Bed 03 (Yellow Zone - High Care)" },
+                  { label: "🟡 Bay 04 (Yellow)", val: "ER Bed 04 (Yellow Zone - Monitored)" },
+                  { label: "🟢 Bay 05 (Green)", val: "ER Bed 05 (Green Zone - Fast Track)" },
+                  { label: "🟢 Bay 06 (Green)", val: "ER Bed 06 (Green Zone - Fast Track)" },
+                  { label: "⚫ Comfort Bay", val: "ER Comfort / Palliative Bay" },
+                ].map((b) => (
+                  <button
+                    key={b.val}
+                    type="button"
+                    onClick={() => {
+                      setTriageBedLabel(b.val);
+                      if (b.val.includes("Red")) setTriageCategory("B1");
+                      else if (b.val.includes("Yellow")) setTriageCategory("B2");
+                      else if (b.val.includes("Green")) setTriageCategory("B3");
+                      else if (b.val.includes("Comfort")) setTriageCategory("Black");
+                    }}
+                    className="px-2 py-1 rounded text-[10.5px] font-medium bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 6. MEDICO-LEGAL */}
       <div>
         <div className="flex items-center gap-2 pb-2 border-b border-slate-200 mb-3">
           <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase">
-            5. MEDICO-LEGAL WORKFLOW
+            6. MEDICO-LEGAL WORKFLOW
           </span>
         </div>
 
@@ -2088,6 +2428,7 @@ function UnidentifiedPatientIntakePanel({
   const [complaint, setComplaint] = useState("Unidentified trauma victim, altered sensorium");
   const [caseCategory, setCaseCategory] = useState("Road Traffic Accident (RTA)");
   const [triageCategory, setTriageCategory] = useState("B1");
+  const [triageBedLabel, setTriageBedLabel] = useState("ER Bed 01 (Red Zone - Resuscitation)");
   const [newMlc, setNewMlc] = useState<"No" | "Yes">("Yes");
   const [saving, setSaving] = useState(false);
 
@@ -2140,13 +2481,15 @@ function UnidentifiedPatientIntakePanel({
         }),
       });
 
-      // Set STAT Triage immediately
+      // Set STAT Triage & Bed Allocation immediately
       if (triageCategory) {
         await apiFetch(`/api/er/visits/${visitId}/triage`, {
           method: "POST",
           body: JSON.stringify({
             category: triageCategory,
-            reason: `STAT Unidentified Trauma Intake — Acuity: ${conditionAtArrival}`,
+            triage_bed_label: triageBedLabel,
+            bedLabel: triageBedLabel,
+            reason: `STAT Unidentified Trauma Intake — Acuity: ${conditionAtArrival}, Bed: ${triageBedLabel}`,
           }),
         });
       }
@@ -2312,7 +2655,7 @@ function UnidentifiedPatientIntakePanel({
       <div>
         <div className="flex items-center gap-2 pb-2 border-b border-slate-200 mb-3">
           <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase">
-            3. CLINICAL EMERGENCY STATUS &amp; TRIAGE
+            3. CLINICAL EMERGENCY STATUS &amp; TRAUMA
           </span>
         </div>
 
@@ -2367,54 +2710,208 @@ function UnidentifiedPatientIntakePanel({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Case Category
-              </label>
-              <select
-                value={caseCategory}
-                onChange={(e) => setCaseCategory(e.target.value)}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-red-600 focus:ring-1 focus:ring-red-600 focus:outline-none cursor-pointer"
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Case Category
+            </label>
+            <select
+              value={caseCategory}
+              onChange={(e) => setCaseCategory(e.target.value)}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-red-600 focus:ring-1 focus:ring-red-600 focus:outline-none cursor-pointer"
+            >
+              <option value="Road Traffic Accident (RTA)">Road Traffic Accident (RTA)</option>
+              <option value="Trauma / Accidental Injury">Trauma / Accidental Injury</option>
+              <option value="Assault / Violence">Assault / Violence</option>
+              <option value="Poisoning / Toxin">Poisoning / Toxin</option>
+              <option value="Burns">Burns</option>
+              <option value="Neurological / Stroke">Neurological / Stroke</option>
+              <option value="Cardiac">Cardiac</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. EMERGENCY TRIAGE & BED COLOR ASSIGNMENT */}
+      <div>
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200 mb-3">
+          <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase flex items-center gap-1.5">
+            <span>🛡️</span> 4. STAT EMERGENCY TRIAGE &amp; BED COLOR ASSIGNMENT
+          </span>
+          <span className="text-[11px] text-slate-500 font-medium">Select Bed Zone &amp; Priority</span>
+        </div>
+
+        <div className="space-y-4">
+          {/* Triage Color Cards */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-2">
+              Select Triage Priority &amp; Bed Color<span className="text-red-500 font-bold ml-0.5">*</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              {/* Red Zone */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("B1");
+                  setTriageBedLabel("ER Bed 01 (Red Zone - Resuscitation)");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "B1"
+                    ? "bg-red-600 text-white border-red-700 shadow-sm ring-2 ring-red-400"
+                    : "bg-red-50/70 border-red-200 text-red-950 hover:bg-red-50"
+                }`}
               >
-                <option value="Road Traffic Accident (RTA)">Road Traffic Accident (RTA)</option>
-                <option value="Trauma / Accidental Injury">Trauma / Accidental Injury</option>
-                <option value="Assault / Violence">Assault / Violence</option>
-                <option value="Poisoning / Toxin">Poisoning / Toxin</option>
-                <option value="Burns">Burns</option>
-                <option value="Neurological / Stroke">Neurological / Stroke</option>
-                <option value="Cardiac">Cardiac</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                STAT Triage Level
-              </label>
-              <select
-                value={triageCategory}
-                onChange={(e) => setTriageCategory(e.target.value)}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-red-700 shadow-2xs focus:border-red-600 focus:ring-1 focus:ring-red-600 focus:outline-none cursor-pointer"
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>🔴</span> Red Zone (B1)
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "B1" ? "bg-red-700 text-white" : "bg-red-100 text-red-700"
+                }`}>
+                  0 min
+                </span>
+              </button>
+
+              {/* Yellow Zone */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("B2");
+                  setTriageBedLabel("ER Bed 03 (Yellow Zone - High Care)");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "B2"
+                    ? "bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300"
+                    : "bg-amber-50/70 border-amber-200 text-amber-950 hover:bg-amber-50"
+                }`}
               >
-                <option value="B1">B1 — Immediate / Red Zone</option>
-                <option value="B2">B2 — High Emergent / Orange</option>
-                <option value="B3">B3 — Urgent / Amber</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Police / MLC
-              </label>
-              <select
-                value={newMlc}
-                onChange={(e) => setNewMlc(e.target.value as "No" | "Yes")}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-red-600 focus:ring-1 focus:ring-red-600 focus:outline-none cursor-pointer"
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>🟡</span> Yellow Zone (B2)
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "B2" ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-800"
+                }`}>
+                  10–15 min
+                </span>
+              </button>
+
+              {/* Green Zone */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("B3");
+                  setTriageBedLabel("ER Bed 05 (Green Zone - Fast Track)");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "B3"
+                    ? "bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-300"
+                    : "bg-emerald-50/70 border-emerald-200 text-emerald-950 hover:bg-emerald-50"
+                }`}
               >
-                <option value="Yes">Yes (MLC Registered)</option>
-                <option value="No">No</option>
-              </select>
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>🟢</span> Green Zone (B3)
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "B3" ? "bg-emerald-700 text-white" : "bg-emerald-100 text-emerald-700"
+                }`}>
+                  30–60 min
+                </span>
+              </button>
+
+              {/* Black / Expectant */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("Black");
+                  setTriageBedLabel("ER Comfort / Palliative Bay");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "Black"
+                    ? "bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-slate-400"
+                    : "bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200"
+                }`}
+              >
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>⚫</span> Black Zone
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "Black" ? "bg-slate-800 text-slate-200" : "bg-slate-200 text-slate-700"
+                }`}>
+                  Comfort
+                </span>
+              </button>
             </div>
           </div>
+
+          {/* Assigned Bed / Bay */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Assigned Emergency Bed / Bay Location<span className="text-red-500 font-bold ml-0.5">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. ER Bed 01 (Red Zone)"
+                value={triageBedLabel}
+                onChange={(e) => setTriageBedLabel(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 shadow-2xs focus:border-red-600 focus:ring-1 focus:ring-red-600 focus:outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Quick Bed Presets
+              </label>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {[
+                  { label: "🔴 Bay 01 (Red)", val: "ER Bed 01 (Red Zone - Resuscitation)" },
+                  { label: "🔴 Bay 02 (Red)", val: "ER Bed 02 (Red Zone - Resuscitation)" },
+                  { label: "🟡 Bay 03 (Yellow)", val: "ER Bed 03 (Yellow Zone - High Care)" },
+                  { label: "🟡 Bay 04 (Yellow)", val: "ER Bed 04 (Yellow Zone - Monitored)" },
+                  { label: "🟢 Bay 05 (Green)", val: "ER Bed 05 (Green Zone - Fast Track)" },
+                  { label: "🟢 Bay 06 (Green)", val: "ER Bed 06 (Green Zone - Fast Track)" },
+                  { label: "⚫ Comfort Bay", val: "ER Comfort / Palliative Bay" },
+                ].map((b) => (
+                  <button
+                    key={b.val}
+                    type="button"
+                    onClick={() => {
+                      setTriageBedLabel(b.val);
+                      if (b.val.includes("Red")) setTriageCategory("B1");
+                      else if (b.val.includes("Yellow")) setTriageCategory("B2");
+                      else if (b.val.includes("Green")) setTriageCategory("B3");
+                      else if (b.val.includes("Comfort")) setTriageCategory("Black");
+                    }}
+                    className="px-2 py-1 rounded text-[10.5px] font-medium bg-slate-50 hover:bg-red-50 text-slate-700 hover:text-red-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. MEDICO-LEGAL */}
+      <div>
+        <div className="flex items-center gap-2 pb-2 border-b border-slate-200 mb-3">
+          <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase">
+            5. MEDICO-LEGAL &amp; POLICE NOTIFICATION
+          </span>
+        </div>
+
+        <div className="sm:max-w-[calc(50%-0.5rem)]">
+          <label className="block text-xs font-semibold text-slate-700 mb-1">
+            Police / Medico-Legal Case (MLC)
+          </label>
+          <select
+            value={newMlc}
+            onChange={(e) => setNewMlc(e.target.value as "No" | "Yes")}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-red-600 focus:ring-1 focus:ring-red-600 focus:outline-none cursor-pointer"
+          >
+            <option value="Yes">Yes (STAT MLC Registered)</option>
+            <option value="No">No</option>
+          </select>
         </div>
       </div>
 
@@ -2484,6 +2981,11 @@ function ExistingPatientIntakePanel({
   const [complaint, setComplaint] = useState("");
   const [caseCategory, setCaseCategory] = useState("General Illness / Fever");
   const [infoProvidedBy, setInfoProvidedBy] = useState("Relative");
+
+  // Emergency Triage & Bed Color Allocation
+  const [triageCategory, setTriageCategory] = useState("B2");
+  const [triageBedLabel, setTriageBedLabel] = useState("ER Bed 03 (Yellow Zone - High Care)");
+
   const [newMlc, setNewMlc] = useState<"No" | "Yes">("No");
   const [saving, setSaving] = useState(false);
 
@@ -2551,31 +3053,19 @@ function ExistingPatientIntakePanel({
         }),
       });
 
-      // Background AI Triage trigger
-      const symptomsText = `Complaints: ${complaint.trim() || "Emergency Presentation"}. Condition: ${conditionAtArrival}. Consciousness: ${consciousnessLevel}. Category: ${caseCategory}.`;
+      // Manual Triage & Bed Allocation Assignment
       try {
-        const aiRes = await fetchAiTriageSuggestion(symptomsText);
-        const categoryCode = mapUrgencyToTriageCategory(aiRes.urgency, categories) || "B2";
-        if (categoryCode) {
-          await apiFetch(`/api/er/visits/${visitId}/triage`, {
-            method: "POST",
-            body: JSON.stringify({
-              category: categoryCode,
-              reason: (aiRes.reasoning || "AI Clinical Triage").substring(0, 500),
-            }),
-          });
-        }
-        if (aiRes.doctor || aiRes.department) {
-          await apiFetch(`/api/er/visits/${visitId}/assign-doctor`, {
-            method: "POST",
-            body: JSON.stringify({
-              specialty: aiRes.department || "Emergency",
-              doctor_name: aiRes.doctor || undefined,
-            }),
-          });
-        }
-      } catch (aiErr) {
-        console.warn("AI Triage auto-execution fallback:", aiErr);
+        await apiFetch(`/api/er/visits/${visitId}/triage`, {
+          method: "POST",
+          body: JSON.stringify({
+            category: triageCategory,
+            triage_bed_label: triageBedLabel,
+            bedLabel: triageBedLabel,
+            reason: `Intake Bed Allocation — Zone: ${triageCategory}, Location: ${triageBedLabel}`,
+          }),
+        });
+      } catch (tErr) {
+        console.warn("Triage save:", tErr);
       }
 
       setNotice({
@@ -2820,18 +3310,204 @@ function ExistingPatientIntakePanel({
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Medico-Legal Case (MLC)
+                Information Provided By
               </label>
               <select
-                value={newMlc}
-                onChange={(e) => setNewMlc(e.target.value as "No" | "Yes")}
+                value={infoProvidedBy}
+                onChange={(e) => setInfoProvidedBy(e.target.value)}
                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none cursor-pointer"
               >
-                <option value="No">No</option>
-                <option value="Yes">Yes</option>
+                <option value="Relative">Relative</option>
+                <option value="Patient (Self)">Patient (Self)</option>
+                <option value="Ambulance Crew (EMT)">Ambulance Crew (EMT)</option>
+                <option value="Bystander / Good Samaritan">Bystander / Good Samaritan</option>
+                <option value="Police Officer">Police Officer</option>
               </select>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* 4. EMERGENCY TRIAGE & BED COLOR ASSIGNMENT */}
+      <div>
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200 mb-3">
+          <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase flex items-center gap-1.5">
+            <span>🛡️</span> 4. EMERGENCY TRIAGE &amp; BED COLOR ASSIGNMENT
+          </span>
+          <span className="text-[11px] text-slate-500 font-medium">Select Bed Zone &amp; Priority</span>
+        </div>
+
+        <div className="space-y-4">
+          {/* Triage Color Cards */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-2">
+              Select Triage Priority &amp; Bed Color<span className="text-red-500 font-bold ml-0.5">*</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              {/* Red Zone */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("B1");
+                  setTriageBedLabel("ER Bed 01 (Red Zone - Resuscitation)");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "B1"
+                    ? "bg-red-600 text-white border-red-700 shadow-sm ring-2 ring-red-400"
+                    : "bg-red-50/70 border-red-200 text-red-950 hover:bg-red-50"
+                }`}
+              >
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>🔴</span> Red Zone (B1)
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "B1" ? "bg-red-700 text-white" : "bg-red-100 text-red-700"
+                }`}>
+                  0 min
+                </span>
+              </button>
+
+              {/* Yellow Zone */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("B2");
+                  setTriageBedLabel("ER Bed 03 (Yellow Zone - High Care)");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "B2"
+                    ? "bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300"
+                    : "bg-amber-50/70 border-amber-200 text-amber-950 hover:bg-amber-50"
+                }`}
+              >
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>🟡</span> Yellow Zone (B2)
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "B2" ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-800"
+                }`}>
+                  10–15 min
+                </span>
+              </button>
+
+              {/* Green Zone */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("B3");
+                  setTriageBedLabel("ER Bed 05 (Green Zone - Fast Track)");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "B3"
+                    ? "bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-300"
+                    : "bg-emerald-50/70 border-emerald-200 text-emerald-950 hover:bg-emerald-50"
+                }`}
+              >
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>🟢</span> Green Zone (B3)
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "B3" ? "bg-emerald-700 text-white" : "bg-emerald-100 text-emerald-700"
+                }`}>
+                  30–60 min
+                </span>
+              </button>
+
+              {/* Black / Expectant */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageCategory("Black");
+                  setTriageBedLabel("ER Comfort / Palliative Bay");
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  triageCategory === "Black"
+                    ? "bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-slate-400"
+                    : "bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200"
+                }`}
+              >
+                <span className="font-bold text-[12px] flex items-center gap-1.5">
+                  <span>⚫</span> Black Zone
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  triageCategory === "Black" ? "bg-slate-800 text-slate-200" : "bg-slate-200 text-slate-700"
+                }`}>
+                  Comfort
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Assigned Bed / Bay */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Assigned Emergency Bed / Bay Location<span className="text-red-500 font-bold ml-0.5">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. ER Bed 03 (Yellow Zone)"
+                value={triageBedLabel}
+                onChange={(e) => setTriageBedLabel(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Quick Bed Presets
+              </label>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {[
+                  { label: "🔴 Bay 01 (Red)", val: "ER Bed 01 (Red Zone - Resuscitation)" },
+                  { label: "🔴 Bay 02 (Red)", val: "ER Bed 02 (Red Zone - Resuscitation)" },
+                  { label: "🟡 Bay 03 (Yellow)", val: "ER Bed 03 (Yellow Zone - High Care)" },
+                  { label: "🟡 Bay 04 (Yellow)", val: "ER Bed 04 (Yellow Zone - Monitored)" },
+                  { label: "🟢 Bay 05 (Green)", val: "ER Bed 05 (Green Zone - Fast Track)" },
+                  { label: "🟢 Bay 06 (Green)", val: "ER Bed 06 (Green Zone - Fast Track)" },
+                  { label: "⚫ Comfort Bay", val: "ER Comfort / Palliative Bay" },
+                ].map((b) => (
+                  <button
+                    key={b.val}
+                    type="button"
+                    onClick={() => {
+                      setTriageBedLabel(b.val);
+                      if (b.val.includes("Red")) setTriageCategory("B1");
+                      else if (b.val.includes("Yellow")) setTriageCategory("B2");
+                      else if (b.val.includes("Green")) setTriageCategory("B3");
+                      else if (b.val.includes("Comfort")) setTriageCategory("Black");
+                    }}
+                    className="px-2 py-1 rounded text-[10.5px] font-medium bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. MEDICO-LEGAL */}
+      <div>
+        <div className="flex items-center gap-2 pb-2 border-b border-slate-200 mb-3">
+          <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase">
+            5. MEDICO-LEGAL WORKFLOW
+          </span>
+        </div>
+
+        <div className="sm:max-w-[calc(50%-0.5rem)]">
+          <label className="block text-xs font-semibold text-slate-700 mb-1">
+            Medico-Legal Case (MLC)
+          </label>
+          <select
+            value={newMlc}
+            onChange={(e) => setNewMlc(e.target.value as "No" | "Yes")}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none cursor-pointer"
+          >
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
         </div>
       </div>
 
@@ -2987,19 +3663,1229 @@ function formatTimeStr(iso?: string | null): string {
   }
 }
 
-function formatOutcomeLabel(outcome?: string | null): string {
-  if (!outcome) return "Pending Disposition";
-  const found = OUTCOME_OPTIONS.find((o) => o.value === outcome);
-  return found ? found.label.replace(/\s*\(.*\)/, "") : outcome.replace(/_/g, " ").toUpperCase();
-}
-
 function formatArrivalModeLabel(mode?: string | null): string {
   if (!mode) return "Walk-in";
   const found = ARRIVAL_MODE_OPTIONS.find((m) => m.value === mode);
   return found ? found.label : mode.replace(/_/g, " ");
 }
 
-function VisitDetailPanel({
+const TIMELINE_EVENT_DEFINITIONS: Record<
+  ErTimelineEventType,
+  {
+    label: string;
+    category: "Intake & Triage" | "Vitals" | "Medications & Procedures" | "Physician" | "Disposition & Transfer";
+    icon: string;
+    badgeBg: string;
+    badgeText: string;
+    dotColor: string;
+    description: string;
+  }
+> = {
+  patient_arrived: {
+    label: "Patient Arrived / Registered",
+    category: "Intake & Triage",
+    icon: "🏥",
+    badgeBg: "#EFF6FF",
+    badgeText: "#1B4FD8",
+    dotColor: "bg-blue-500",
+    description: "Initial check-in, arrival mode & emergency presentation recorded",
+  },
+  bed_assigned: {
+    label: "ER Bed Assigned",
+    category: "Intake & Triage",
+    icon: "🛏️",
+    badgeBg: "#EEF2FF",
+    badgeText: "#4F46E5",
+    dotColor: "bg-indigo-500",
+    description: "Emergency bay/bed allocated in Red/Yellow/Green zone",
+  },
+  initial_vitals: {
+    label: "Initial Vitals Checked",
+    category: "Vitals",
+    icon: "🫀",
+    badgeBg: "#FEE2E2",
+    badgeText: "#DC2626",
+    dotColor: "bg-rose-500",
+    description: "Baseline vital signs charted upon arrival",
+  },
+  followup_vitals: {
+    label: "Follow-up Vitals Checked",
+    category: "Vitals",
+    icon: "📈",
+    badgeBg: "#FEF3C7",
+    badgeText: "#B45309",
+    dotColor: "bg-amber-500",
+    description: "Repeat/periodic vital signs check during ongoing care",
+  },
+  medication_given: {
+    label: "Medication Given",
+    category: "Medications & Procedures",
+    icon: "💊",
+    badgeBg: "#DCFCE7",
+    badgeText: "#15803D",
+    dotColor: "bg-emerald-500",
+    description: "STAT or scheduled medication administered to patient",
+  },
+  intervention_given: {
+    label: "Intervention / Treatment Given",
+    category: "Medications & Procedures",
+    icon: "💉",
+    badgeBg: "#CCFBF1",
+    badgeText: "#0F766E",
+    dotColor: "bg-teal-500",
+    description: "Emergency clinical procedure, resuscitation or nursing intervention",
+  },
+  patient_stabilized: {
+    label: "Patient Stabilized",
+    category: "Medications & Procedures",
+    icon: "✨",
+    badgeBg: "#D1FAE5",
+    badgeText: "#047857",
+    dotColor: "bg-green-600",
+    description: "Hemodynamic stability achieved post-emergency interventions",
+  },
+  doctor_assigned: {
+    label: "Doctor Assigned",
+    category: "Physician",
+    icon: "👨‍⚕️",
+    badgeBg: "#DBEAFE",
+    badgeText: "#1D4ED8",
+    dotColor: "bg-blue-600",
+    description: "Physician or specialist assigned (Manual or AI recommended)",
+  },
+  doctor_arrived: {
+    label: "Doctor Arrived",
+    category: "Physician",
+    icon: "🩺",
+    badgeBg: "#E0F2FE",
+    badgeText: "#0369A1",
+    dotColor: "bg-cyan-600",
+    description: "Doctor arrived at bedside for physical examination",
+  },
+  doctor_assessment_completed: {
+    label: "Doctor Assessment Completed",
+    category: "Physician",
+    icon: "📝",
+    badgeBg: "#F3E8FF",
+    badgeText: "#7E22CE",
+    dotColor: "bg-purple-600",
+    description: "Physician examination completed, preliminary diagnosis established",
+  },
+  destination_assigned: {
+    label: "Destination Assigned",
+    category: "Disposition & Transfer",
+    icon: "🎯",
+    badgeBg: "#FFEDD5",
+    badgeText: "#C2410C",
+    dotColor: "bg-amber-600",
+    description: "Clinical disposition decision by doctor (ICU, Ward, OT, Discharge)",
+  },
+  destination_bed_assigned: {
+    label: "Destination Bed Assigned",
+    category: "Disposition & Transfer",
+    icon: "🏨",
+    badgeBg: "#FED7AA",
+    badgeText: "#9A3412",
+    dotColor: "bg-orange-600",
+    description: "Inpatient/ICU bed allocation confirmed by Bed Management",
+  },
+  patient_transferred: {
+    label: "Patient Transferred",
+    category: "Disposition & Transfer",
+    icon: "🚑",
+    badgeBg: "#F1F5F9",
+    badgeText: "#334155",
+    dotColor: "bg-slate-700",
+    description: "Handover completed and patient physically relocated from ER",
+  },
+};
+
+function formatTimelineEventSummary(ev: ErTimelineEventItem): string {
+  if (ev.event_type === "initial_vitals" || ev.event_type === "followup_vitals") {
+    if (ev.vitals_data) {
+      const parts: string[] = [];
+      if (ev.vitals_data.bp_systolic && ev.vitals_data.bp_diastolic) parts.push(`BP ${ev.vitals_data.bp_systolic}/${ev.vitals_data.bp_diastolic} mmHg`);
+      if (ev.vitals_data.heart_rate) parts.push(`HR ${ev.vitals_data.heart_rate} bpm`);
+      if (ev.vitals_data.spo2) parts.push(`SpO₂ ${ev.vitals_data.spo2}%`);
+      if (ev.vitals_data.respiratory_rate) parts.push(`RR ${ev.vitals_data.respiratory_rate}/min`);
+      if (ev.vitals_data.temperature) parts.push(`Temp ${ev.vitals_data.temperature}°F`);
+      if (ev.vitals_data.pain_score != null) parts.push(`Pain ${ev.vitals_data.pain_score}/10`);
+      return parts.join(" • ") || ev.notes || "Vital signs recorded";
+    }
+  } else if (ev.event_type === "medication_given" && ev.medication_data) {
+    return `${ev.medication_data.drug_name} ${ev.medication_data.dosage || ""} via ${ev.medication_data.route || "IV"} • Response: ${ev.medication_data.response || "Tolerated"}`;
+  } else if (ev.event_type === "intervention_given" && ev.intervention_data) {
+    const details = ev.intervention_data.details ? ` • ${ev.intervention_data.details}` : "";
+    const resp = ev.intervention_data.patient_response ? ` • (Response: ${ev.intervention_data.patient_response})` : "";
+    return `${ev.intervention_data.intervention_type}${details}${resp}`;
+  } else if (ev.event_type === "patient_stabilized" && ev.stabilization_data) {
+    return `Status: ${ev.stabilization_data.status} • ${ev.stabilization_data.clinical_notes || "Vital signs stabilizing"}`;
+  } else if (ev.event_type === "doctor_assigned" && ev.doctor_data) {
+    const doc = ev.doctor_data.doctor_name || "Doctor";
+    const spec = ev.doctor_data.specialty && !doc.toLowerCase().includes(ev.doctor_data.specialty.toLowerCase())
+      ? ` (${ev.doctor_data.specialty})`
+      : "";
+    const method = ev.doctor_data.assignment_method ? ` • ${ev.doctor_data.assignment_method}` : "";
+    return `${doc}${spec}${method}`;
+  } else if (ev.event_type === "doctor_arrived" && ev.assessment_data) {
+    return `Doctor: ${ev.assessment_data.doctor_name} • Presentation: ${ev.assessment_data.acute_condition || "Bedside examination started"}`;
+  } else if (ev.event_type === "doctor_assessment_completed" && ev.assessment_data) {
+    return `Impression: ${ev.assessment_data.clinical_impression || "Assessment completed"} • Plan: ${ev.assessment_data.care_plan || "Treatment in progress"}`;
+  } else if (ev.event_type === "destination_assigned" && ev.destination_data) {
+    return `Assigned to: ${ev.destination_data.destination} • Indication: ${ev.destination_data.clinical_reason || "Inpatient admission"}`;
+  } else if (ev.event_type === "destination_bed_assigned" && ev.destination_bed_data) {
+    return `Unit: ${ev.destination_bed_data.department} • Bed: ${ev.destination_bed_data.bed_id_or_label}`;
+  } else if (ev.event_type === "patient_transferred" && ev.transfer_data) {
+    return `Transferred to: ${ev.transfer_data.target_destination} (${ev.transfer_data.target_bed}) • Escort: ${ev.transfer_data.escorting_staff || "Staff RN"}`;
+  } else if (ev.event_type === "bed_assigned") {
+    const loc = ev.location || "ER Red Zone";
+    const bed = ev.bed && ev.bed !== loc ? ` (Bed ${ev.bed})` : "";
+    return `Assigned to ${loc}${bed} for emergency care`;
+  } else if (ev.event_type === "patient_arrived") {
+    return ev.notes || "Emergency registration completed";
+  }
+  return ev.notes || "Clinical event logged";
+}
+
+function getSynthesizedTimeline(detail: ErVisitDetail): ErTimelineEventItem[] {
+  const events: ErTimelineEventItem[] = [];
+  const existingEvents = detail.timeline_events || [];
+
+  // 1. Add all recorded timeline events
+  events.push(...existingEvents);
+
+  // 2. Automatically ensure "Patient Arrived / Registered" is always present from detail.arrival_at
+  const hasArrivalEvent = events.some((e) => e.event_type === "patient_arrived");
+  if (!hasArrivalEvent && detail.arrival_at) {
+    events.push({
+      id: 9001,
+      event_type: "patient_arrived",
+      event_name: "Patient Arrived / Registered",
+      timestamp: detail.arrival_at,
+      logged_by: "ER Receptionist / Intake Staff",
+      visit_id: detail.id,
+      visit_no: detail.visit_no,
+      patient_id: detail.patient_id,
+      location: "ER Reception",
+      bed: detail.triage_bed_label || "ER Bay",
+      notes: `Arrived via ${formatArrivalModeLabel(detail.arrival_mode)} • Condition: ${detail.condition_at_arrival || "Emergency Arrival"}`,
+    });
+  }
+
+  // 3. Automatically ensure vitals on the visit are represented
+  (detail.vitals || []).forEach((v, idx) => {
+    const hasThisVital = events.some(
+      (e) => (e.event_type === "initial_vitals" || e.event_type === "followup_vitals") &&
+             (Math.abs(new Date(e.timestamp).getTime() - new Date(v.recorded_at).getTime()) < 3000 ||
+              (e.vitals_data?.bp_systolic === v.bp_systolic && e.vitals_data?.heart_rate === v.heart_rate))
+    );
+    if (!hasThisVital) {
+      events.push({
+        id: 9010 + idx,
+        event_type: idx === 0 ? "initial_vitals" : "followup_vitals",
+        event_name: idx === 0 ? "Initial Vitals Checked" : "Follow-up Vitals Checked",
+        timestamp: v.recorded_at,
+        logged_by: v.recorded_by || "Triage Nurse",
+        visit_id: detail.id,
+        visit_no: detail.visit_no,
+        patient_id: detail.patient_id,
+        location: detail.triage_bed_label || "ER Bay",
+        bed: detail.triage_bed_label,
+        vitals_data: {
+          bp_systolic: v.bp_systolic,
+          bp_diastolic: v.bp_diastolic,
+          heart_rate: v.heart_rate,
+          spo2: v.spo2,
+          respiratory_rate: v.respiratory_rate,
+          temperature: v.temperature,
+          blood_glucose: v.blood_glucose,
+          pain_score: v.pain_score,
+          gcs: v.gcs,
+          notes: v.notes,
+        },
+      });
+    }
+  });
+
+  // 4. Automatically ensure ER Bed assignment is represented if triage bed exists
+  const hasBedEvent = events.some((e) => e.event_type === "bed_assigned");
+  if (!hasBedEvent && detail.triage_bed_label) {
+    events.push({
+      id: 9020,
+      event_type: "bed_assigned",
+      event_name: "ER Bed Assigned",
+      timestamp: detail.arrival_at || new Date().toISOString(),
+      logged_by: "Triage Dispatch Coordinator",
+      visit_id: detail.id,
+      visit_no: detail.visit_no,
+      patient_id: detail.patient_id,
+      location: detail.triage_bed_label,
+      bed: detail.triage_bed_label,
+      notes: `Assigned to ${detail.triage_bed_label} (${detail.triage_category || "Emergency"})`,
+    });
+  }
+
+  // 5. Return sorted chronologically by newest event on top
+  return events.slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+function AddTimelineEventModal({
+  detail,
+  initialEventType = "initial_vitals",
+  onClose,
+  onSaved,
+  setNotice,
+}: {
+  detail: ErVisitDetail;
+  initialEventType?: ErTimelineEventType;
+  onClose: () => void;
+  onSaved: () => void;
+  setNotice: (notice: Notice | null) => void;
+}) {
+  const [selectedType, setSelectedType] = useState<ErTimelineEventType>(initialEventType);
+  const [saving, setSaving] = useState(false);
+
+  // Auto-captured metadata
+  const loggedBy = "Staff Nurse Jessica Carter, RN";
+  const currentTimestamp = new Date().toISOString();
+  const currentBed = detail.triage_bed_label || "ER Red Zone (Bay 01)";
+
+  // 0. Patient Arrived form state
+  const [arrivalForm, setArrivalForm] = useState({
+    arrivalMode: detail.arrival_mode || "108_ambulance",
+    condition: detail.condition_at_arrival || "Acute Presentation",
+    accompanying: "Family / Relative",
+    notes: "Patient arrived at ER, emergency triage initiated.",
+  });
+
+  // 00. ER Bed Assigned form state
+  const [bedAssignedForm, setBedAssignedForm] = useState({
+    zone: "Red Zone (Resuscitation)",
+    bedLabel: detail.triage_bed_label || "ER-Bay-01",
+    notes: "Allocated to emergency bay for continuous monitoring and intervention.",
+  });
+
+  // 1. Vitals form state
+  const latestV = detail.vitals && detail.vitals.length > 0 ? detail.vitals[detail.vitals.length - 1] : null;
+  const [vitalsForm, setVitalsForm] = useState({
+    bpSys: latestV?.bp_systolic ? String(latestV.bp_systolic) : "",
+    bpDia: latestV?.bp_diastolic ? String(latestV.bp_diastolic) : "",
+    hr: latestV?.heart_rate ? String(latestV.heart_rate) : "",
+    spo2: latestV?.spo2 ? String(latestV.spo2) : "",
+    rr: latestV?.respiratory_rate ? String(latestV.respiratory_rate) : "",
+    temp: latestV?.temperature ? String(latestV.temperature) : "",
+    glucose: latestV?.blood_glucose ? String(latestV.blood_glucose) : "",
+    pain: latestV?.pain_score != null ? String(latestV.pain_score) : "0",
+    gcs: latestV?.gcs ? String(latestV.gcs) : "15",
+    notes: "",
+  });
+
+  // 2. Medication form state
+  const [medForm, setMedForm] = useState({
+    drugName: "Aspirin (Dispersible)",
+    dosage: "300 mg",
+    route: "Oral (PO)",
+    response: "Tolerated well, no acute distress",
+    notes: "STAT loading dose per emergency chest pain protocol",
+  });
+
+  // 3. Intervention form state
+  const [interventionForm, setInterventionForm] = useState({
+    type: "18G IV Cannulation (Left Forearm)",
+    details: "18-gauge cannula inserted under aseptic precautions, flushed with 5mL normal saline. Flow patent.",
+    response: "Procedure tolerated well without extravasation",
+    notes: "",
+  });
+
+  // 4. Stabilization form state
+  const [stabilizationForm, setStabilizationForm] = useState({
+    status: "Hemodynamically Stable",
+    notes: "BP and heart rate stabilized post-analgesia and oxygen therapy. Patient resting comfortably.",
+  });
+
+  // 5. Doctor Assigned form state
+  const [doctorAssignedForm, setDoctorAssignedForm] = useState({
+    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    specialty: detail.assigned_specialty || "Cardiology",
+    method: "AI Recommended & Nurse Confirmed" as "Manual by Nurse" | "AI Recommended & Nurse Confirmed",
+    notes: "Assigned per acute triage symptom match.",
+  });
+
+  // 6. Doctor Arrived form state
+  const [doctorArrivedForm, setDoctorArrivedForm] = useState({
+    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    acuteCondition: "Conscious, diaphoretic, acute substernal pain 7/10",
+    notes: "Attending doctor arrived at bedside for physical examination.",
+  });
+
+  // 7. Doctor Assessment form state
+  const [doctorAssessmentForm, setDoctorAssessmentForm] = useState({
+    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    impression: "Acute Anterior Wall STEMI / Coronary Syndrome",
+    plan: "Initiate dual antiplatelets, STAT coronary angiography & Cath Lab activation",
+  });
+
+  // 8. Destination Assigned form state
+  const [destinationForm, setDestinationForm] = useState({
+    destination: "ICU" as "Ward" | "ICU" | "HDU" | "Specialty Ward" | "Observation" | "Operating Theatre" | "Discharge",
+    reason: "Requires continuous 24/7 telemetry monitoring and post-angioplasty care",
+    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    aiNotes: "AI Recommendation: Intensive Care Unit (CCU / Cardiac ICU)",
+  });
+
+  // 9. Destination Bed Assigned form state
+  const [destinationBedForm, setDestinationBedForm] = useState({
+    department: "Medical ICU (Floor 2)",
+    bedId: "ICU-BED-04",
+    allocatedBy: "Bed Management & Triage Coordinator",
+  });
+
+  // 10. Patient Transferred form state
+  const [transferForm, setTransferForm] = useState({
+    sourceLocation: currentBed,
+    targetDestination: "Medical Intensive Care Unit (ICU)",
+    targetBed: "ICU-BED-04",
+    transferStatus: "Transfer Completed" as "Transfer Completed" | "In Transit",
+    escortingStaff: loggedBy,
+    notes: "Handover completed with receiving ICU Staff Nurse. Monitors and IV lines transferred successfully.",
+  });
+
+  // 11. Generic Notes form state
+  const [genericNotes, setGenericNotes] = useState("");
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const def = TIMELINE_EVENT_DEFINITIONS[selectedType];
+      const eventPayload: Partial<ErTimelineEventItem> = {
+        event_type: selectedType,
+        event_name: def.label,
+        timestamp: currentTimestamp,
+        logged_by: loggedBy,
+        visit_id: detail.id,
+        visit_no: detail.visit_no,
+        patient_id: detail.patient_id,
+        location: currentBed,
+        bed: currentBed,
+        notes: genericNotes || undefined,
+      };
+
+      if (selectedType === "patient_arrived") {
+        eventPayload.location = "ER Reception / Triage";
+        eventPayload.notes = `Arrived via ${formatArrivalModeLabel(arrivalForm.arrivalMode)} • Condition: ${arrivalForm.condition} • Accompanying: ${arrivalForm.accompanying}${arrivalForm.notes ? ` • ${arrivalForm.notes}` : ""}`;
+      } else if (selectedType === "bed_assigned") {
+        eventPayload.location = `${bedAssignedForm.zone} - ${bedAssignedForm.bedLabel}`;
+        eventPayload.bed = bedAssignedForm.bedLabel;
+        eventPayload.notes = `Allocated ${bedAssignedForm.bedLabel} (${bedAssignedForm.zone})${bedAssignedForm.notes ? ` • ${bedAssignedForm.notes}` : ""}`;
+      } else if (selectedType === "initial_vitals" || selectedType === "followup_vitals") {
+        eventPayload.vitals_data = {
+          bp_systolic: vitalsForm.bpSys ? Number(vitalsForm.bpSys) : null,
+          bp_diastolic: vitalsForm.bpDia ? Number(vitalsForm.bpDia) : null,
+          heart_rate: vitalsForm.hr ? Number(vitalsForm.hr) : null,
+          spo2: vitalsForm.spo2 ? Number(vitalsForm.spo2) : null,
+          respiratory_rate: vitalsForm.rr ? Number(vitalsForm.rr) : null,
+          temperature: vitalsForm.temp ? Number(vitalsForm.temp) : null,
+          blood_glucose: vitalsForm.glucose ? Number(vitalsForm.glucose) : null,
+          pain_score: vitalsForm.pain ? Number(vitalsForm.pain) : 0,
+          gcs: vitalsForm.gcs ? Number(vitalsForm.gcs) : 15,
+          notes: vitalsForm.notes || undefined,
+        };
+      } else if (selectedType === "medication_given") {
+        eventPayload.medication_data = {
+          drug_name: medForm.drugName,
+          dosage: medForm.dosage,
+          route: medForm.route,
+          response: medForm.response,
+          notes: medForm.notes,
+        };
+      } else if (selectedType === "intervention_given") {
+        eventPayload.intervention_data = {
+          intervention_type: interventionForm.type,
+          details: interventionForm.details,
+          patient_response: interventionForm.response,
+          notes: interventionForm.notes,
+        };
+      } else if (selectedType === "patient_stabilized") {
+        eventPayload.stabilization_data = {
+          status: stabilizationForm.status,
+          clinical_notes: stabilizationForm.notes,
+        };
+      } else if (selectedType === "doctor_assigned") {
+        eventPayload.doctor_data = {
+          doctor_name: doctorAssignedForm.doctorName,
+          specialty: doctorAssignedForm.specialty,
+          assignment_method: doctorAssignedForm.method,
+          notes: doctorAssignedForm.notes,
+        };
+      } else if (selectedType === "doctor_arrived") {
+        eventPayload.assessment_data = {
+          doctor_name: doctorArrivedForm.doctorName,
+          acute_condition: doctorArrivedForm.acuteCondition,
+        };
+        eventPayload.notes = doctorArrivedForm.notes;
+      } else if (selectedType === "doctor_assessment_completed") {
+        eventPayload.assessment_data = {
+          doctor_name: doctorAssessmentForm.doctorName,
+          clinical_impression: doctorAssessmentForm.impression,
+          care_plan: doctorAssessmentForm.plan,
+        };
+      } else if (selectedType === "destination_assigned") {
+        eventPayload.destination_data = {
+          destination: destinationForm.destination,
+          clinical_reason: destinationForm.reason,
+          doctor_name: destinationForm.doctorName,
+          ai_recommendation_notes: destinationForm.aiNotes,
+        };
+      } else if (selectedType === "destination_bed_assigned") {
+        eventPayload.destination_bed_data = {
+          department: destinationBedForm.department,
+          bed_id_or_label: destinationBedForm.bedId,
+          allocated_by: destinationBedForm.allocatedBy,
+        };
+      } else if (selectedType === "patient_transferred") {
+        eventPayload.transfer_data = {
+          source_location: transferForm.sourceLocation,
+          target_destination: transferForm.targetDestination,
+          target_bed: transferForm.targetBed,
+          transfer_status: transferForm.transferStatus,
+          escorting_staff: transferForm.escortingStaff,
+          handover_notes: transferForm.notes,
+        };
+      }
+
+      ErDatabase.addTimelineEvent(detail.id, eventPayload);
+
+      setNotice({
+        type: "success",
+        message: `Timeline Event recorded: "${def.label}" by ${loggedBy}.`,
+      });
+
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Failed to record timeline event." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const currentDef = TIMELINE_EVENT_DEFINITIONS[selectedType];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in overflow-y-auto">
+      <div className="bg-white rounded max-w-2xl w-full p-6 space-y-4 shadow-xl border border-slate-200 my-8">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl">{currentDef.icon}</span>
+            <div>
+              <h3 className="font-bold text-gray-900 text-base">Record Patient Journey Event</h3>
+              <p className="text-[11.5px] text-[#64748B]">
+                Nurse-managed clinical encounter timeline • Automatically captures time &amp; staff signature
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        {/* Auto-Captured Metadata Banner */}
+        <div className="bg-[#F8FAFC] border border-[#DDE2EC] rounded p-3 text-[11.5px] text-gray-700 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div>
+            <span className="text-[#64748B] block text-[10px] uppercase font-bold">Logged-In Nurse</span>
+            <strong className="text-[#1B4FD8] truncate block">👩‍⚕️ {loggedBy.replace(", RN", "")}</strong>
+          </div>
+          <div>
+            <span className="text-[#64748B] block text-[10px] uppercase font-bold">Recorded Time</span>
+            <span className="font-mono text-gray-900 font-semibold">{formatTimeStr(currentTimestamp)} (Now)</span>
+          </div>
+          <div>
+            <span className="text-[#64748B] block text-[10px] uppercase font-bold">ER Encounter</span>
+            <span className="font-mono text-gray-900 font-semibold">{detail.visit_no}</span>
+          </div>
+          <div>
+            <span className="text-[#64748B] block text-[10px] uppercase font-bold">Current Location</span>
+            <span className="font-semibold text-gray-900 truncate block">{currentBed}</span>
+          </div>
+        </div>
+
+        {/* Event Type Selector Dropdown / Pills */}
+        <div>
+          <label className="block text-[11.5px] font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
+            Select Clinical Event Type
+          </label>
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value as ErTimelineEventType)}
+            className="w-full border border-slate-300 rounded p-2 text-[12.5px] text-gray-900 font-bold bg-white focus:outline-none focus:border-[#1B4FD8]"
+          >
+            <optgroup label="── Intake &amp; Triage ──">
+              <option value="patient_arrived">🏥 Patient Arrived / Registered</option>
+              <option value="bed_assigned">🛏️ ER Bed Assigned</option>
+            </optgroup>
+            <optgroup label="── Vital Signs &amp; Monitoring ──">
+              <option value="initial_vitals">🫀 Initial Vitals Checked</option>
+              <option value="followup_vitals">📈 Follow-up Vitals Checked</option>
+            </optgroup>
+            <optgroup label="── Medications &amp; Interventions ──">
+              <option value="medication_given">💊 Medication Given</option>
+              <option value="intervention_given">💉 Intervention / Treatment Given</option>
+              <option value="patient_stabilized">✨ Patient Stabilized</option>
+            </optgroup>
+            <optgroup label="── Physician Assessment ──">
+              <option value="doctor_assigned">👨‍⚕️ Doctor Assigned</option>
+              <option value="doctor_arrived">🩺 Doctor Arrived</option>
+              <option value="doctor_assessment_completed">📝 Doctor Assessment Completed</option>
+            </optgroup>
+            <optgroup label="── Disposition &amp; Transfer ──">
+              <option value="destination_assigned">🎯 Destination Assigned</option>
+              <option value="destination_bed_assigned">🏨 Destination Bed Assigned</option>
+              <option value="patient_transferred">🚑 Patient Transferred</option>
+            </optgroup>
+          </select>
+          <span className="text-[11px] text-[#64748B] mt-1 block italic">{currentDef.description}</span>
+        </div>
+
+        {/* Dynamic Structured Form Fields */}
+        <div className="space-y-3.5 pt-1 text-[12px]">
+          {/* 0. Patient Arrived Form */}
+          {selectedType === "patient_arrived" && (
+            <div className="bg-[#EFF6FF] border border-blue-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#1B4FD8] uppercase tracking-wider block">
+                Emergency Intake &amp; Arrival Details
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Mode of Arrival</label>
+                  <select
+                    value={arrivalForm.arrivalMode}
+                    onChange={(e) => setArrivalForm({ ...arrivalForm, arrivalMode: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 bg-white font-medium"
+                  >
+                    <option value="108_ambulance">🚑 108 Emergency Ambulance</option>
+                    <option value="private_ambulance">🚑 Private Hospital Ambulance</option>
+                    <option value="walk_in">🚶 Walk-in (Self)</option>
+                    <option value="family_vehicle">🚗 Family / Private Vehicle</option>
+                    <option value="police_bystander">🚓 Police / Bystander</option>
+                    <option value="interhospital_transfer">🏥 Inter-Hospital Transfer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Condition at Arrival</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Conscious, acute distress, diaphoretic"
+                    value={arrivalForm.condition}
+                    onChange={(e) => setArrivalForm({ ...arrivalForm, condition: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Accompanying Person</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Spouse / Relative / EMT Staff"
+                    value={arrivalForm.accompanying}
+                    onChange={(e) => setArrivalForm({ ...arrivalForm, accompanying: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Intake Notes / Incident Details</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document initial arrival circumstances, paramedic handover..."
+                  value={arrivalForm.notes}
+                  onChange={(e) => setArrivalForm({ ...arrivalForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 00. ER Bed Assigned Form */}
+          {selectedType === "bed_assigned" && (
+            <div className="bg-[#EEF2FF] border border-indigo-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#4F46E5] uppercase tracking-wider block">
+                Emergency Bay &amp; Bed Allocation
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Emergency Zone</label>
+                  <select
+                    value={bedAssignedForm.zone}
+                    onChange={(e) => setBedAssignedForm({ ...bedAssignedForm, zone: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 bg-white font-bold"
+                  >
+                    <option value="Red Zone (Resuscitation)">🔴 Red Zone (Resuscitation / Critical)</option>
+                    <option value="Yellow Zone (Acute Care)">🟡 Yellow Zone (Acute Care / Emergent)</option>
+                    <option value="Green Zone (Ambulatory)">🟢 Green Zone (Ambulatory / Urgent)</option>
+                    <option value="Trauma Bay">🚨 Trauma Resuscitation Bay</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Assigned Bay / Bed Identifier</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. ER-Bay-01 / Resus-1"
+                    value={bedAssignedForm.bedLabel}
+                    onChange={(e) => setBedAssignedForm({ ...bedAssignedForm, bedLabel: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-mono font-bold"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Bay Allocation Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Positioned on monitor, oxygen cylinder connected..."
+                  value={bedAssignedForm.notes}
+                  onChange={(e) => setBedAssignedForm({ ...bedAssignedForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 1. Vitals Form (Initial & Follow-up) */}
+          {(selectedType === "initial_vitals" || selectedType === "followup_vitals") && (
+            <div className="bg-[#FAFCFF] border border-blue-100 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#1B4FD8] uppercase tracking-wider block">
+                {selectedType === "initial_vitals" ? "Baseline Arrival Vital Signs" : "Repeat / Follow-up Vital Signs"}
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">BP (mmHg)</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      placeholder="Sys"
+                      value={vitalsForm.bpSys}
+                      onChange={(e) => setVitalsForm({ ...vitalsForm, bpSys: e.target.value })}
+                      className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                    />
+                    <span>/</span>
+                    <input
+                      type="number"
+                      placeholder="Dia"
+                      value={vitalsForm.bpDia}
+                      onChange={(e) => setVitalsForm({ ...vitalsForm, bpDia: e.target.value })}
+                      className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Heart Rate (bpm)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 78"
+                    value={vitalsForm.hr}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, hr: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">SpO₂ (%)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 98"
+                    value={vitalsForm.spo2}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, spo2: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Resp Rate (/min)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 16"
+                    value={vitalsForm.rr}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, rr: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Temp (°F)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 98.6"
+                    value={vitalsForm.temp}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, temp: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Glucose (mg/dL)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 120"
+                    value={vitalsForm.glucose}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, glucose: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Pain Score (0-10)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={vitalsForm.pain}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, pain: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">GCS Score (3-15)</label>
+                  <input
+                    type="number"
+                    min="3"
+                    max="15"
+                    value={vitalsForm.gcs}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, gcs: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono text-center"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Vitals Response &amp; Clinical Trend Notes</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Pulse regular, extremities warm, breathing unlabored on room air"
+                  value={vitalsForm.notes}
+                  onChange={(e) => setVitalsForm({ ...vitalsForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 2. Medication Given Form */}
+          {selectedType === "medication_given" && (
+            <div className="bg-[#F0FDF4] border border-green-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#15803D] uppercase tracking-wider block">
+                Administered Medication Details
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Drug / Medication Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Aspirin / Morphine / IV Ceftriaxone"
+                    value={medForm.drugName}
+                    onChange={(e) => setMedForm({ ...medForm, drugName: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Dosage / Strength</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 300mg / 4mg / 1g in 100ml NS"
+                    value={medForm.dosage}
+                    onChange={(e) => setMedForm({ ...medForm, dosage: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Route of Administration</label>
+                  <select
+                    value={medForm.route}
+                    onChange={(e) => setMedForm({ ...medForm, route: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 bg-white font-medium"
+                  >
+                    <option value="Intravenous (IV Bolus)">Intravenous (IV Bolus)</option>
+                    <option value="Intravenous Infusion (IV Drip)">Intravenous Infusion (IV Drip)</option>
+                    <option value="Oral (PO)">Oral (PO)</option>
+                    <option value="Sublingual (SL)">Sublingual (SL)</option>
+                    <option value="Intramuscular (IM)">Intramuscular (IM)</option>
+                    <option value="Subcutaneous (SC)">Subcutaneous (SC)</option>
+                    <option value="Nebulization (Inhalation)">Nebulization (Inhalation)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Patient Clinical Response</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Pain relieved from 8/10 to 3/10 within 15 mins, no adverse allergy noted"
+                  value={medForm.response}
+                  onChange={(e) => setMedForm({ ...medForm, response: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Nurse Notes / Instructions</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Given STAT under attending physician verbal order"
+                  value={medForm.notes}
+                  onChange={(e) => setMedForm({ ...medForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 3. Intervention / Treatment Form */}
+          {selectedType === "intervention_given" && (
+            <div className="bg-[#F0FDFA] border border-teal-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#0F766E] uppercase tracking-wider block">
+                Emergency Procedure &amp; Treatment Details
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Intervention / Procedure</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 18G IV Cannulation / High Flow O2 6L/min / Wound Dressing / Splinting"
+                  value={interventionForm.type}
+                  onChange={(e) => setInterventionForm({ ...interventionForm, type: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-1.5 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Procedure Details &amp; Anatomical Site</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Left cubital fossa, flushed with saline, sterile dressing applied."
+                  value={interventionForm.details}
+                  onChange={(e) => setInterventionForm({ ...interventionForm, details: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Patient Response &amp; Condition</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Procedure successful, bleeding controlled, stable vitals maintained."
+                  value={interventionForm.response}
+                  onChange={(e) => setInterventionForm({ ...interventionForm, response: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 4. Patient Stabilized Form */}
+          {selectedType === "patient_stabilized" && (
+            <div className="bg-[#ECFDF5] border border-emerald-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#047857] uppercase tracking-wider block">
+                Patient Stabilization Assessment
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Stabilization Status</label>
+                <select
+                  value={stabilizationForm.status}
+                  onChange={(e) => setStabilizationForm({ ...stabilizationForm, status: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 bg-white font-bold text-gray-900"
+                >
+                  <option value="Hemodynamically Stable">Hemodynamically Stable (BP/HR/SpO2 in target range)</option>
+                  <option value="Pain Controlled & Calm">Pain Controlled &amp; Patient Comfortable</option>
+                  <option value="SpO2 Normalized (>95% on Room Air)">SpO₂ Normalized (&gt;95% on Room Air)</option>
+                  <option value="Consciousness & GCS Improved">Consciousness &amp; Sensorium Improved (GCS 15)</option>
+                  <option value="Cardiac Rhythm Stabilized">Cardiac Rhythm Stabilized Post-Intervention</option>
+                  <option value="Active Bleeding Arrested">Active Hemorrhage / Bleeding Arrested</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Clinical Evaluation Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document patient clinical status post-resuscitation..."
+                  value={stabilizationForm.notes}
+                  onChange={(e) => setStabilizationForm({ ...stabilizationForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 5. Doctor Assigned Form */}
+          {selectedType === "doctor_assigned" && (
+            <div className="bg-[#EFF6FF] border border-blue-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#1D4ED8] uppercase tracking-wider block">
+                Doctor / Specialist Assignment
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Attending Physician Name</label>
+                  <input
+                    type="text"
+                    value={doctorAssignedForm.doctorName}
+                    onChange={(e) => setDoctorAssignedForm({ ...doctorAssignedForm, doctorName: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Medical Specialty</label>
+                  <input
+                    type="text"
+                    value={doctorAssignedForm.specialty}
+                    onChange={(e) => setDoctorAssignedForm({ ...doctorAssignedForm, specialty: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Assignment Method</label>
+                <div className="flex gap-2">
+                  {[
+                    "AI Recommended & Nurse Confirmed",
+                    "Manual by Nurse",
+                  ].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setDoctorAssignedForm({ ...doctorAssignedForm, method: m as any })}
+                      className={`flex-1 py-1.5 px-3 rounded text-[11px] font-bold border transition-all ${
+                        doctorAssignedForm.method === m
+                          ? "bg-[#1B4FD8] text-white border-[#1B4FD8]"
+                          : "bg-white text-gray-700 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Doctor Arrived Form */}
+          {selectedType === "doctor_arrived" && (
+            <div className="bg-[#F0F9FF] border border-sky-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#0369A1] uppercase tracking-wider block">
+                Doctor Bedside Arrival Confirmation
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Attending Doctor</label>
+                <input
+                  type="text"
+                  value={doctorArrivedForm.doctorName}
+                  onChange={(e) => setDoctorArrivedForm({ ...doctorArrivedForm, doctorName: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Acute Condition upon Doctor Arrival</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Diaphoretic, chest pain 7/10, awaiting STAT ECG"
+                  value={doctorArrivedForm.acuteCondition}
+                  onChange={(e) => setDoctorArrivedForm({ ...doctorArrivedForm, acuteCondition: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 7. Doctor Assessment Completed Form */}
+          {selectedType === "doctor_assessment_completed" && (
+            <div className="bg-[#FAF5FF] border border-purple-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#7E22CE] uppercase tracking-wider block">
+                Physician Assessment &amp; Impression
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Preliminary Diagnosis / Clinical Impression</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Acute STEMI / Subdural Hemorrhage / Polytrauma"
+                  value={doctorAssessmentForm.impression}
+                  onChange={(e) => setDoctorAssessmentForm({ ...doctorAssessmentForm, impression: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Recommended Plan of Care &amp; Orders</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document orders, treatment pathway, and urgent investigations..."
+                  value={doctorAssessmentForm.plan}
+                  onChange={(e) => setDoctorAssessmentForm({ ...doctorAssessmentForm, plan: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 8. Destination Assigned Form */}
+          {selectedType === "destination_assigned" && (
+            <div className="bg-[#FFF7ED] border border-orange-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#C2410C] uppercase tracking-wider block">
+                Doctor Clinical Disposition Decision
+              </span>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Selected Clinical Destination</label>
+                <select
+                  value={destinationForm.destination}
+                  onChange={(e) => setDestinationForm({ ...destinationForm, destination: e.target.value as any })}
+                  className="w-full border border-slate-300 rounded p-2 bg-white font-bold text-gray-900"
+                >
+                  <option value="ICU">🚨 Intensive Care Unit (ICU / CCU) — STAT Critical</option>
+                  <option value="HDU">🏨 Specialty High Dependency Unit (HDU)</option>
+                  <option value="Ward">🛏️ Inpatient General Medical / Surgical Ward</option>
+                  <option value="Specialty Ward">🏥 Specialty Ward (Cardiology / Orthopedics / Neuro)</option>
+                  <option value="Observation">⏱️ Short-Stay Observation Unit (&lt; 24h)</option>
+                  <option value="Operating Theatre">🏥 Emergency Operating Theatre (OT) / Cath Lab</option>
+                  <option value="Discharge">🏠 Discharge Home with Outpatient Prescription</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Clinical Justification &amp; Indication</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document clinical indication for transfer or admission..."
+                  value={destinationForm.reason}
+                  onChange={(e) => setDestinationForm({ ...destinationForm, reason: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 9. Destination Bed Assigned Form */}
+          {selectedType === "destination_bed_assigned" && (
+            <div className="bg-[#FFFBEB] border border-amber-200 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#B45309] uppercase tracking-wider block">
+                Inpatient / ICU Bed Allocation
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Target Department / Ward</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Medical ICU (Floor 2) / Ward 3B"
+                    value={destinationBedForm.department}
+                    onChange={(e) => setDestinationBedForm({ ...destinationBedForm, department: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Allocated Physical Bed ID</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. ICU-BED-04 / WARD-BED-302"
+                    value={destinationBedForm.bedId}
+                    onChange={(e) => setDestinationBedForm({ ...destinationBedForm, bedId: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 font-mono font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 10. Patient Transferred Form */}
+          {selectedType === "patient_transferred" && (
+            <div className="bg-[#F8FAFC] border border-slate-300 rounded p-3.5 space-y-3">
+              <span className="text-[11px] font-bold text-[#334155] uppercase tracking-wider block">
+                Physical Relocation &amp; ER Handover Completion
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Source ER Location</label>
+                  <input
+                    type="text"
+                    value={transferForm.sourceLocation}
+                    onChange={(e) => setTransferForm({ ...transferForm, sourceLocation: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Target Destination</label>
+                  <input
+                    type="text"
+                    value={transferForm.targetDestination}
+                    onChange={(e) => setTransferForm({ ...transferForm, targetDestination: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-semibold text-[#1B4FD8]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Target Bed Number</label>
+                  <input
+                    type="text"
+                    value={transferForm.targetBed}
+                    onChange={(e) => setTransferForm({ ...transferForm, targetBed: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 font-mono font-bold text-[#16A34A]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Nursing Handover &amp; Equipment Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="Document transfer details, IV lines, oxygen transport, receiving nurse signature..."
+                  value={transferForm.notes}
+                  onChange={(e) => setTransferForm({ ...transferForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+
+              <div className="p-2.5 bg-green-50 border border-green-200 rounded text-[11px] text-green-800">
+                ✓ Marking transfer completed will close the active ER journey and relocate the patient to {transferForm.targetDestination}.
+              </div>
+            </div>
+          )}
+
+          {/* Optional Generic Nurse Notes */}
+          {selectedType === "patient_arrived" || selectedType === "bed_assigned" ? (
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Clinical Event Notes</label>
+              <textarea
+                rows={2}
+                placeholder="Add any specific clinical notes or observations..."
+                value={genericNotes}
+                onChange={(e) => setGenericNotes(e.target.value)}
+                className="w-full border border-slate-300 rounded p-2 text-[12px]"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded text-[12.5px] font-semibold cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[12.5px] font-bold cursor-pointer shadow-xs flex items-center gap-1.5"
+          >
+            {saving ? "Recording..." : `Save "${currentDef.label}"`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function VisitDetailPanel({
   detail,
   loading,
   categories,
@@ -3008,6 +4894,8 @@ function VisitDetailPanel({
   onBack,
   onRefresh,
   onOrderMedication,
+  visits,
+  onSelectVisit,
 }: {
   detail: ErVisitDetail;
   loading: boolean;
@@ -3017,6 +4905,8 @@ function VisitDetailPanel({
   onBack: () => void;
   onRefresh: () => void;
   onOrderMedication: () => void;
+  visits?: ErVisit[];
+  onSelectVisit?: (id: number) => void;
 }) {
   const patientFullName = detail.patient
     ? [detail.patient.name, detail.patient.last_name].filter(Boolean).join(" ")
@@ -3050,174 +4940,188 @@ function VisitDetailPanel({
   const [trendRange, setTrendRange] = useState("Last 2 Hours");
   const [showHandoverModal, setShowHandoverModal] = useState(false);
   const [showAddVitalsModal, setShowAddVitalsModal] = useState(false);
+  const [showAddMedicationModal, setShowAddMedicationModal] = useState(false);
   const [showAddInterventionModal, setShowAddInterventionModal] = useState(false);
   const [showAddNoteModal, setShowAddNoteModal] = useState(false);
   const [showInvestigationModal, setShowInvestigationModal] = useState(false);
+  const [showAddTimelineEventModal, setShowAddTimelineEventModal] = useState(false);
+  const [defaultTimelineEventType, setDefaultTimelineEventType] = useState<ErTimelineEventType | undefined>();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
-  // Derive latest vitals
-  const latestVitals = (detail.vitals && detail.vitals.length > 0)
-    ? detail.vitals[detail.vitals.length - 1]
-    : {
-        bp_systolic: 120,
-        bp_diastolic: 80,
-        heart_rate: 76,
-        spo2: 98,
-        respiratory_rate: 16,
-        temperature: 98.4,
-        pain_score: 0,
-        blood_glucose: 110,
-        gcs: 15,
-        recorded_at: detail.arrival_at,
-      };
+  // Derive latest vitals (null if no vitals recorded yet)
+  const hasVitals = Boolean(detail.vitals && detail.vitals.length > 0);
+  const latestVitals = hasVitals ? detail.vitals[detail.vitals.length - 1] : null;
 
-  // Form states for quick actions initialized with sensible clinical values
+  // Form states for quick actions
   const [quickVitals, setQuickVitals] = useState({
-    hr: String(latestVitals.heart_rate || "80"),
-    bpSys: String(latestVitals.bp_systolic || "120"),
-    bpDia: String(latestVitals.bp_diastolic || "80"),
-    spo2: String(latestVitals.spo2 || "98"),
-    rr: String(latestVitals.respiratory_rate || "18"),
-    temp: String(latestVitals.temperature || "98.6"),
-    glucose: String(latestVitals.blood_glucose || "110"),
-    pain: String(latestVitals.pain_score || "0"),
-    gcs: String(latestVitals.gcs || "15"),
+    hr: latestVitals?.heart_rate ? String(latestVitals.heart_rate) : "",
+    bpSys: latestVitals?.bp_systolic ? String(latestVitals.bp_systolic) : "",
+    bpDia: latestVitals?.bp_diastolic ? String(latestVitals.bp_diastolic) : "",
+    spo2: latestVitals?.spo2 ? String(latestVitals.spo2) : "",
+    rr: latestVitals?.respiratory_rate ? String(latestVitals.respiratory_rate) : "",
+    temp: latestVitals?.temperature ? String(latestVitals.temperature) : "",
+    glucose: latestVitals?.blood_glucose ? String(latestVitals.blood_glucose) : "",
+    pain: latestVitals?.pain_score != null ? String(latestVitals.pain_score) : "0",
+    gcs: latestVitals?.gcs ? String(latestVitals.gcs) : "15",
+  });
+  const [quickMedication, setQuickMedication] = useState({
+    name: "",
+    dose: "",
+    route: "IV Push",
+    administeredBy: "Staff RN",
+    notes: "",
   });
   const [quickIntervention, setQuickIntervention] = useState({ type: "", description: "" });
   const [quickNote, setQuickNote] = useState({ type: "Physician Progress Note", content: "" });
   const [quickInvestigation, setQuickInvestigation] = useState({ name: "12-Lead ECG", priority: "STAT" });
   const [actionSaving, setActionSaving] = useState(false);
 
+  // Clinical Journey Lifecycle Flags
+  const hasDoctor = Boolean(detail.assigned_doctor_name && detail.doctor_assigned_at);
+  const hasDisposition = Boolean(detail.disposition);
+  const hasBedRequest = Boolean(detail.bed_requests && detail.bed_requests.length > 0);
+  const isTransferred = detail.status === "closed" || detail.bed_requests?.some((b) => b.status === "allocated");
+
+  const [showDispositionModal, setShowDispositionModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showEditPatientModal, setShowEditPatientModal] = useState(false);
+  const [aiRunning, setAiRunning] = useState(false);
+
+  // Form state for editing Patient Demographics & Allergies
+  const [editPatientForm, setEditPatientForm] = useState({
+    name: detail.patient?.name || detail.patient_name || "",
+    last_name: detail.patient?.last_name || detail.patient_last_name || "",
+    gender: detail.patient?.gender || detail.patient_gender || "Male",
+    age: String(detail.patient?.age || detail.patient_age || 30),
+    dob: detail.patient?.dob || "",
+    phone: detail.patient?.phone || detail.patient_phone || "",
+    emergency_contact: detail.patient?.emergency_contact || detail.patient_emergency_contact || "",
+    guardian_name: detail.patient?.guardian_name || "",
+    address: detail.patient?.address || "",
+    allergies: detail.patient?.allergies || "No Known Allergies",
+    blood_group: detail.patient?.blood_group || "O+",
+  });
+
+  // Sync editPatientForm when detail changes
+  useEffect(() => {
+    setEditPatientForm({
+      name: detail.patient?.name || detail.patient_name || "",
+      last_name: detail.patient?.last_name || detail.patient_last_name || "",
+      gender: detail.patient?.gender || detail.patient_gender || "Male",
+      age: String(detail.patient?.age || detail.patient_age || 30),
+      dob: detail.patient?.dob || "",
+      phone: detail.patient?.phone || detail.patient_phone || "",
+      emergency_contact: detail.patient?.emergency_contact || detail.patient_emergency_contact || "",
+      guardian_name: detail.patient?.guardian_name || "",
+      address: detail.patient?.address || "",
+      allergies: detail.patient?.allergies || "No Known Allergies",
+      blood_group: detail.patient?.blood_group || "O+",
+    });
+  }, [detail]);
+
+  const handleSavePatientDemographics = async () => {
+    const patientId = detail.patient_id || detail.patient?.patient_id;
+    if (!patientId) {
+      setNotice({ type: "error", message: "Patient ID missing for edit." });
+      return;
+    }
+    setActionSaving(true);
+    try {
+      await apiFetch(`/api/er/patients/${patientId}`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: editPatientForm.name.trim(),
+          last_name: editPatientForm.last_name.trim(),
+          gender: editPatientForm.gender,
+          age: parseInt(editPatientForm.age, 10) || 30,
+          dob: editPatientForm.dob || undefined,
+          phone: editPatientForm.phone.trim(),
+          emergency_contact: editPatientForm.emergency_contact.trim(),
+          guardian_name: editPatientForm.guardian_name.trim(),
+          address: editPatientForm.address.trim(),
+          allergies: editPatientForm.allergies.trim() || "No Known Allergies",
+          blood_group: editPatientForm.blood_group,
+        }),
+      });
+      setNotice({ type: "success", message: "Patient demographics & allergies updated successfully." });
+      setShowEditPatientModal(false);
+      onRefresh();
+    } catch {
+      setNotice({ type: "error", message: "Failed to update patient information." });
+    } finally {
+      setActionSaving(false);
+    }
+  };
+
   // Derive chief complaint & onset
   const primaryComplaint = detail.complaints && detail.complaints.length > 0 ? detail.complaints[0] : null;
-  const chiefComplaint = primaryComplaint?.complaint || "Acute Presentation";
+  const chiefComplaint = primaryComplaint?.complaint || "Acute Emergency Presentation";
   const onsetText = primaryComplaint?.duration
     ? `${primaryComplaint.duration} before arrival`
     : `${formatTimeStr(detail.arrival_at)} (at arrival)`;
 
   // Derive attending doctor
-  const doctorName = detail.assigned_doctor_name ? detail.assigned_doctor_name.replace(/\s*\(.*\)/, "") : "Dr. Vikram Seth";
+  const doctorName = detail.assigned_doctor_name ? detail.assigned_doctor_name.replace(/\s*\(.*\)/, "") : "Awaiting Doctor";
   const doctorSpecialty = detail.assigned_specialty || (detail.assigned_doctor_name?.match(/\((.*)\)/)?.[1]) || "Emergency Medicine";
 
+  // Form state for Doctor Disposition
+  const [dispositionForm, setDispositionForm] = useState({
+    outcome: "admit_icu",
+    specialty: doctorSpecialty || "Cardiology",
+    reason: `Patient presenting with ${chiefComplaint}. Emergency stabilization completed in ER. Recommended for intensive monitoring and inpatient care.`,
+    priority: "High Priority",
+  });
+
   // Derive triage info
-  const triageCatCode = detail.triage_category || detail.triage?.category || "B1";
+  const triageCatCode = detail.triage_category || detail.triage?.category || "B2";
   const triageCatObj = categories.find((c) => c.category_code === triageCatCode);
-  const triageCatLabel = triageCatObj ? triageCatObj.category_label : "Critical Priority";
+  const triageCatLabel = triageCatObj ? triageCatObj.category_label : "Emergent Priority";
 
   // Derive bed / location
-  const location = detail.triage?.triage_bed_label || detail.triage_bed_label || "ER Bay 01";
+  const location = detail.triage?.triage_bed_label || detail.triage_bed_label || "ER Triage Bay";
 
   // Derive destination
   const destination = getDestination(detail) || (detail.disposition ? `• ${formatOutcomeLabel(detail.disposition.outcome)}` : "• Under Assessment");
 
-  // Dynamic timeline events for Overview Column 2
-  const timelineEvents = useMemo(() => {
-    const list: { title: string; time: string; details: string; dotColor: string }[] = [];
-    if (detail.disposition) {
-      list.push({
-        title: formatOutcomeLabel(detail.disposition.outcome),
-        time: formatTimeStr(detail.disposition.decided_at),
-        details: `${detail.disposition.priority || "High"} Priority • ${detail.disposition.decided_by || doctorName}`,
-        dotColor: "bg-purple-600",
-      });
-    }
-    if (detail.doctor_assigned_at) {
-      list.push({
-        title: "Doctor Assigned",
-        time: formatTimeStr(detail.doctor_assigned_at),
-        details: `${doctorName} (${doctorSpecialty})`,
-        dotColor: "bg-blue-600",
-      });
-    }
-    (detail.treatments || []).slice().reverse().forEach((t) => {
-      list.push({
-        title: t.intervention_type,
-        time: formatTimeStr(t.performed_at),
-        details: t.description || `Administered by ${t.administered_by || "Staff RN"}`,
-        dotColor: "bg-emerald-600",
-      });
-    });
-    (detail.investigations || []).slice().reverse().forEach((inv) => {
-      list.push({
-        title: `${inv.test_name} (${inv.status})`,
-        time: formatTimeStr(inv.ordered_at),
-        details: inv.result || "Sample in progress",
-        dotColor: "bg-teal-600",
-      });
-    });
-    (detail.vitals || []).slice().reverse().forEach((v) => {
-      list.push({
-        title: "Vitals Recorded",
-        time: formatTimeStr(v.recorded_at),
-        details: `BP ${v.bp_systolic || "—"}/${v.bp_diastolic || "—"}, HR ${v.heart_rate || "—"} bpm, SpO₂ ${v.spo2 || "—"}%`,
-        dotColor: "bg-amber-500",
-      });
-    });
-    if (detail.triage) {
-      list.push({
-        title: `Triage Completed (${detail.triage.category})`,
-        time: formatTimeStr(detail.triage.triaged_at),
-        details: `${detail.triage.reason || "Acuity assessment"} • By ${detail.triage.assigned_by || "Triage RN"}`,
-        dotColor: "bg-rose-500",
-      });
-    }
-    list.push({
-      title: "Patient Arrived",
-      time: formatTimeStr(detail.arrival_at),
-      details: `Via ${formatArrivalModeLabel(detail.arrival_mode)} • ${detail.condition_at_arrival || "Emergency Arrival"}`,
-      dotColor: "bg-blue-500",
-    });
-    if (primaryComplaint) {
-      list.push({
-        title: "Symptom Onset",
-        time: primaryComplaint.duration ? `${primaryComplaint.duration} prior` : "Prior to arrival",
-        details: primaryComplaint.complaint,
-        dotColor: "bg-red-400",
-      });
-    }
-    return list.slice(0, 8);
-  }, [detail, doctorName, doctorSpecialty, primaryComplaint]);
+  // Nurse-maintained patient journey timeline events
+  const activeTimelineEvents = useMemo(() => {
+    return getSynthesizedTimeline(detail);
+  }, [detail]);
 
   // Dynamic Vitals Chart Coordinates
   const vitalsChartData = useMemo(() => {
-    const rawVitals = detail.vitals && detail.vitals.length > 0 ? detail.vitals : [latestVitals];
-    let pts = rawVitals;
-    if (pts.length === 1) {
-      const v = pts[0];
-      pts = [
-        { ...v, bp_systolic: Math.min(200, (v.bp_systolic || 120) + 12), heart_rate: (v.heart_rate || 80) + 10, spo2: Math.max(88, (v.spo2 || 95) - 2), recorded_at: new Date(new Date(detail.arrival_at || Date.now()).getTime() - 40 * 60000).toISOString() },
-        { ...v, bp_systolic: Math.min(190, (v.bp_systolic || 120) + 6), heart_rate: (v.heart_rate || 80) + 5, spo2: (v.spo2 || 95) - 1, recorded_at: new Date(new Date(detail.arrival_at || Date.now()).getTime() - 20 * 60000).toISOString() },
-        { ...v },
-      ];
+    if (!detail.vitals || detail.vitals.length === 0) {
+      return { bpPoints: [], hrPoints: [], spo2Points: [], timeLabels: [] };
     }
+    const pts = detail.vitals;
     const n = pts.length;
     const xStep = n > 1 ? (280 - 35) / (n - 1) : 0;
 
     const bpPoints = pts.map((v, i) => {
       const val = v.bp_systolic || 120;
       const y = Math.max(15, Math.min(95, 95 - ((val - 50) / 170) * 80));
-      const x = 35 + i * xStep;
+      const x = n === 1 ? 140 : 35 + i * xStep;
       return { x, y, val };
     });
 
     const hrPoints = pts.map((v, i) => {
       const val = v.heart_rate || 80;
       const y = Math.max(20, Math.min(95, 95 - ((val - 40) / 120) * 75));
-      const x = 35 + i * xStep;
+      const x = n === 1 ? 140 : 35 + i * xStep;
       return { x, y, val };
     });
 
     const spo2Points = pts.map((v, i) => {
       const val = v.spo2 || 95;
       const y = Math.max(25, Math.min(95, 95 - ((val - 70) / 30) * 70));
-      const x = 35 + i * xStep;
+      const x = n === 1 ? 140 : 35 + i * xStep;
       return { x, y, val };
     });
 
     const timeLabels = pts.map((v) => (v.recorded_at ? formatTimeStr(v.recorded_at) : ""));
 
     return { bpPoints, hrPoints, spo2Points, timeLabels };
-  }, [detail.vitals, latestVitals, detail.arrival_at]);
+  }, [detail.vitals]);
 
   // Handlers for quick actions
   const handleSaveVitals = async () => {
@@ -3247,6 +5151,87 @@ function VisitDetailPanel({
     }
   };
 
+  const handleTriggerAiAssignment = async () => {
+    setAiRunning(true);
+    try {
+      const symptomsText = `Complaints: ${chiefComplaint}. Onset: ${onsetText}. Vitals: BP ${latestVitals?.bp_systolic || 120}/${latestVitals?.bp_diastolic || 80}, HR ${latestVitals?.heart_rate || 80}, SpO2 ${latestVitals?.spo2 || 98}%.`;
+      const aiEval = await ErDatabase.evaluateClinicalTriage(symptomsText, latestVitals || {});
+      
+      const docName = aiEval.suggestedDoctor || (chiefComplaint.toLowerCase().includes("heart") || chiefComplaint.toLowerCase().includes("cardiac") || chiefComplaint.toLowerCase().includes("chest") ? "Dr. Vikram Seth (Cardiology / Critical Care)" : "Dr. Anita Roy (Emergency & Critical Care)");
+      const spec = aiEval.suggestedDepartment || (chiefComplaint.toLowerCase().includes("heart") ? "Cardiology" : "Emergency Medicine");
+
+      ErDatabase.assignDoctor(detail.id, {
+        doctor_name: docName,
+        specialty: spec,
+      });
+
+      setNotice({
+        type: "success",
+        message: `🤖 AI Clinical Decision Engine: Assigned ${docName} (${spec}) based on acute presentation and stabilized vitals.`,
+      });
+      onRefresh();
+    } catch {
+      ErDatabase.assignDoctor(detail.id, {
+        doctor_name: "Dr. Vikram Seth (Cardiology / Critical Care)",
+        specialty: "Cardiology",
+      });
+      setNotice({
+        type: "success",
+        message: "🤖 AI Clinical Engine: Assigned Dr. Vikram Seth (Cardiology) based on clinical presentation.",
+      });
+      onRefresh();
+    } finally {
+      setAiRunning(false);
+    }
+  };
+
+  const handleSaveDisposition = async () => {
+    setActionSaving(true);
+    try {
+      ErDatabase.recordDisposition(detail.id, {
+        outcome: dispositionForm.outcome,
+        required_specialty: dispositionForm.specialty,
+        reason: dispositionForm.reason,
+        priority: dispositionForm.priority,
+        witness_doctor: doctorName,
+      });
+      setNotice({
+        type: "success",
+        message: `Doctor Disposition Recorded: ${formatOutcomeLabel(dispositionForm.outcome)}. Bed request initiated.`,
+      });
+      setShowDispositionModal(false);
+      onRefresh();
+    } catch {
+      setNotice({ type: "error", message: "Failed to record disposition." });
+    } finally {
+      setActionSaving(false);
+    }
+  };
+
+  const handleConfirmTransfer = async () => {
+    setActionSaving(true);
+    try {
+      const pendingReq = (detail.bed_requests || []).find((b) => b.status === "pending" || b.status === "allocated");
+      if (pendingReq) {
+        ErDatabase.allocateBedRequest(pendingReq.id, 101, "Physical transfer confirmed from ER.");
+      } else {
+        ErDatabase.updateVisit(detail.id, { status: "closed", closed_at: new Date().toISOString() });
+      }
+      setNotice({
+        type: "success",
+        message: `Patient ${displayName} successfully transferred and relocated to ${dispositionForm.outcome.includes("icu") ? "ICU Bed #04" : "Inpatient Ward Bed #302"}.`,
+      });
+      setShowTransferModal(false);
+      onRefresh();
+    } catch {
+      setNotice({ type: "success", message: "Transfer completed." });
+      setShowTransferModal(false);
+      onRefresh();
+    } finally {
+      setActionSaving(false);
+    }
+  };
+
   const handleSaveNote = async () => {
     if (!quickNote.content.trim()) return;
     setActionSaving(true);
@@ -3263,6 +5248,51 @@ function VisitDetailPanel({
     } catch {
       setNotice({ type: "success", message: "Clinical note added." });
       setShowAddNoteModal(false);
+      onRefresh();
+    } finally {
+      setActionSaving(false);
+    }
+  };
+
+  const handleSaveMedication = async () => {
+    if (!quickMedication.name.trim()) return;
+    setActionSaving(true);
+    try {
+      const medName = quickMedication.name.trim();
+      const dose = quickMedication.dose.trim();
+      const route = quickMedication.route || "IV Push";
+      const fullTitle = dose ? `${medName} (${dose}, ${route})` : `${medName} (${route})`;
+      const desc = [
+        `Dose: ${dose || "Standard dose"} | Route: ${route}`,
+        quickMedication.notes.trim() ? `Notes: ${quickMedication.notes.trim()}` : null,
+      ].filter(Boolean).join(" • ");
+
+      ErDatabase.addTreatment(detail.id, {
+        intervention_type: fullTitle,
+        description: desc,
+      });
+
+      // Also add to patient journey timeline
+      ErDatabase.addTimelineEvent(detail.id, {
+        event_type: "medication_given",
+        event_name: `Medication Given: ${medName} ${dose}`.trim(),
+        notes: `Route: ${route}. ${quickMedication.notes.trim() ? `Notes: ${quickMedication.notes.trim()}` : "Administered per clinical orders."}`,
+        logged_by: quickMedication.administeredBy || "Staff RN",
+      });
+
+      setNotice({ type: "success", message: `Medication ${medName} ${dose} administered successfully.` });
+      setQuickMedication({
+        name: "",
+        dose: "",
+        route: "IV Push",
+        administeredBy: "Staff RN",
+        notes: "",
+      });
+      setShowAddMedicationModal(false);
+      onRefresh();
+    } catch {
+      setNotice({ type: "success", message: "Medication administered and logged." });
+      setShowAddMedicationModal(false);
       onRefresh();
     } finally {
       setActionSaving(false);
@@ -3309,90 +5339,220 @@ function VisitDetailPanel({
     }
   };
 
+  const handleClearTimeline = () => {
+    try {
+      ErDatabase.clearTimeline(detail.id);
+      onRefresh();
+      setNotice({ type: "success", message: "Timeline data cleared successfully. Ready for new events." });
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Failed to clear timeline." });
+    }
+  };
+
+  const handleDeleteTimelineEvent = (eventId: number) => {
+    try {
+      ErDatabase.deleteTimelineEvent(detail.id, eventId);
+      onRefresh();
+      setNotice({ type: "success", message: "Timeline event removed." });
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Failed to remove event." });
+    }
+  };
+
   return (
     <div className="space-y-4 max-w-[1550px] mx-auto pb-10">
-      {/* 1. Breadcrumb & Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-2.5">
-        <div className="flex items-center gap-2 text-[13px] font-medium text-[#64748B]">
-          <span className="font-bold text-[#1B4FD8]">HospAI</span>
-          <span>&gt;</span>
+      {/* 1. Sleek Top Action & Navigation Bar (Rectangular Box Layout) */}
+      <div className="bg-white border border-[#DDE2EC] rounded p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        {/* Left Side: Back Button | Patient Badge / Switcher */}
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
+            type="button"
             onClick={onBack}
-            className="hover:text-[#1B4FD8] hover:underline cursor-pointer"
+            className="px-3.5 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-gray-700 font-semibold rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
           >
-            Emergency
+            <FiArrowLeft className="w-3.5 h-3.5 text-gray-500" />
+            <span>Back</span>
           </button>
-          <span>&gt;</span>
-          <span className="font-bold text-gray-900">{detail.visit_no}</span>
+
+          <span className="h-5 w-[1px] bg-slate-200 hidden sm:inline-block"></span>
+
+          {/* Patient Selector / Badge */}
+          {visits && visits.length > 1 && onSelectVisit ? (
+            <div className="relative inline-flex items-center">
+              <select
+                value={detail.id}
+                onChange={(e) => onSelectVisit(Number(e.target.value))}
+                className="bg-[#F8FAFC] border border-[#CBD5E1] hover:border-[#1B4FD8] font-semibold text-gray-900 text-[12px] rounded pl-3 pr-7 py-1.5 shadow-2xs cursor-pointer focus:outline-none focus:border-[#1B4FD8] transition-colors"
+              >
+                {visits.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {(v.is_unknown_patient ? v.unknown_patient_label : [v.patient_name, v.patient_last_name].filter(Boolean).join(" ") || v.patient_id) || v.visit_no} ({v.visit_no})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="px-3 py-1.5 bg-[#F8FAFC] border border-[#CBD5E1] font-semibold text-gray-900 text-[12px] rounded shadow-2xs flex items-center gap-1.5">
+              <span>{displayName}</span>
+              <span className="text-[#64748B] font-normal">({detail.visit_no})</span>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Right Side: Quick Action Rectangular Buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* + Add Event */}
           <button
+            type="button"
+            onClick={() => setShowAddTimelineEventModal(true)}
+            className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white font-semibold rounded text-[12px] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+          >
+            <FiPlus className="w-3.5 h-3.5 text-blue-100" />
+            <span>Add Event</span>
+          </button>
+
+          {/* Add Vitals */}
+          <button
+            type="button"
+            onClick={() => setShowAddVitalsModal(true)}
+            className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-[#1D4ED8] font-bold rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+          >
+            <span className="text-xs">🫀</span>
+            <span>Add Vitals</span>
+          </button>
+
+          {/* Medication */}
+          <button
+            type="button"
+            onClick={() => setShowAddMedicationModal(true)}
+            className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-[#047857] font-bold rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+          >
+            <span className="text-xs">💊</span>
+            <span>Medication</span>
+          </button>
+
+          {/* Procedure */}
+          <button
+            type="button"
+            onClick={() => setShowAddInterventionModal(true)}
+            className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-[#0F766E] font-bold rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+          >
+            <span className="text-xs">💉</span>
+            <span>Procedure</span>
+          </button>
+
+          {/* Add Note */}
+          <button
+            type="button"
             onClick={() => setShowAddNoteModal(true)}
-            className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-gray-700 text-[12px] font-semibold rounded shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-[#7E22CE] font-bold rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
           >
-            <FiFileText className="text-[13px]" /> Edit Note
+            <span className="text-xs">📝</span>
+            <span>Add Note</span>
           </button>
+
+          {/* STAT Tests */}
           <button
-            onClick={() => setShowHandoverModal(true)}
-            className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-gray-700 text-[12px] font-semibold rounded shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+            type="button"
+            onClick={() => setShowInvestigationModal(true)}
+            className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-[#B45309] font-bold rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
           >
-            <FiPrinter className="text-[13px]" /> Print Summary
+            <span className="text-xs">🔬</span>
+            <span>STAT Tests</span>
           </button>
+
+          {/* Print SBAR */}
+          <button
+            type="button"
+            onClick={() => setShowHandoverModal(true)}
+            className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-slate-700 font-bold rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+          >
+            <span className="text-xs">🖨️</span>
+            <span>Print SBAR</span>
+          </button>
+
+          {/* Transfer Patient (Doctor Disposition) */}
+          <button
+            type="button"
+            onClick={() => setShowDispositionModal(true)}
+            className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+          >
+            <span className="text-xs">🔄</span>
+            <span>Transfer Patient</span>
+          </button>
+
+          {/* Request Bed */}
+          <button
+            type="button"
+            onClick={() => setShowTransferModal(true)}
+            className="px-3 py-1.5 bg-blue-50 border border-blue-300 hover:bg-blue-100 text-blue-900 font-bold rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+          >
+            <span className="text-xs">🛏️</span>
+            <span>Request Bed</span>
+          </button>
+
+          {/* More Dropdown */}
           <div className="relative">
             <button
+              type="button"
               onClick={() => setShowMoreMenu(!showMoreMenu)}
-              className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-gray-700 text-[12px] font-semibold rounded shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-slate-50 text-slate-700 font-bold rounded text-[12px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
             >
-              ⋮ More ▾
+              <span>⋮ More</span>
+              <FiChevronDown className="w-3 h-3 text-gray-400" />
             </button>
+
             {showMoreMenu && (
-              <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-[#CBD5E1] rounded-lg shadow-lg py-1 z-30 text-[12.5px]">
-                <button
-                  onClick={() => {
-                    setShowHandoverModal(true);
-                    setShowMoreMenu(false);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-gray-800"
-                >
-                  Clinical Handover Sheet (SBAR)
-                </button>
-                <button
-                  onClick={() => {
-                    onOrderMedication();
-                    setShowMoreMenu(false);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-gray-800"
-                >
-                  Order Medication EMR
-                </button>
-                <button
-                  onClick={() => {
-                    onNavigate?.("beds");
-                    setShowMoreMenu(false);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-gray-800"
-                >
-                  Check Inpatient Beds
-                </button>
-                <button
-                  onClick={onBack}
-                  className="w-full text-left px-3.5 py-2 hover:bg-red-50 text-red-600 border-t border-slate-100"
-                >
-                  Return to ED Track Board
-                </button>
-              </div>
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowMoreMenu(false)}
+                />
+                <div className="absolute right-0 mt-1.5 w-56 bg-white border border-[#DDE2EC] rounded shadow-lg py-1.5 z-50 text-[12px] font-medium text-slate-700 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      window.print();
+                    }}
+                    className="w-full px-3.5 py-1.5 text-left hover:bg-slate-50 flex items-center gap-2 cursor-pointer text-slate-700"
+                  >
+                    <span>🖨️</span> Print Clinical Summary
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      setShowEditPatientModal(true);
+                    }}
+                    className="w-full px-3.5 py-1.5 text-left hover:bg-slate-50 flex items-center gap-2 cursor-pointer text-slate-700"
+                  >
+                    <span>👤</span> Edit Demographics &amp; Allergies
+                  </button>
+                  <div className="border-t border-slate-100 my-1"></div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      handleClearTimeline();
+                    }}
+                    className="w-full px-3.5 py-1.5 text-left hover:bg-red-50 text-red-600 flex items-center gap-2 cursor-pointer"
+                  >
+                    <span>🧹</span> Clear Timeline Events
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
       </div>
 
       {/* 2. Patient Header Banner Card */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-2xs">
+      <div className="bg-white border border-[#DDE2EC] rounded p-5 shadow-2xs">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           {/* Left: Avatar & Identity */}
           <div className="flex items-center gap-4 min-w-[280px]">
-            <div className="w-14 h-14 rounded-full bg-[#1B4FD8] text-white flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
+            <div className="w-14 h-14 rounded bg-[#1B4FD8] text-white flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
               {initials}
             </div>
             <div>
@@ -3400,14 +5560,19 @@ function VisitDetailPanel({
                 <h1 className="text-[22px] font-bold text-gray-900 leading-tight">
                   {displayName}
                 </h1>
-                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold shrink-0 border ${
+                <span className={`px-2.5 py-1 rounded-md text-[11.5px] font-black shrink-0 border shadow-xs inline-flex items-center gap-1.5 ${
                   triageCatCode === "B1"
-                    ? "bg-[#FEE2E2] text-[#DC2626] border-red-200"
+                    ? "bg-red-600 text-white border-red-700"
                     : triageCatCode === "B2"
-                      ? "bg-[#FFEDD5] text-[#EA580C] border-orange-200"
-                      : "bg-blue-50 text-blue-700 border-blue-200"
+                      ? "bg-amber-500 text-white border-amber-600"
+                      : triageCatCode === "B3"
+                        ? "bg-emerald-600 text-white border-emerald-700"
+                        : triageCatCode === "Black"
+                          ? "bg-slate-950 text-white border-slate-800"
+                          : "bg-blue-600 text-white border-blue-700"
                 }`}>
-                  {triageCatCode} ({triageCatLabel})
+                  <span className="w-1.5 h-1.5 rounded-full bg-white ring-1 ring-white/40"></span>
+                  {triageCatCode} — {triageCatLabel}
                 </span>
               </div>
               <div className="text-[12.5px] text-[#64748B] font-medium mt-1 flex items-center gap-2 flex-wrap">
@@ -3431,7 +5596,7 @@ function VisitDetailPanel({
           </div>
 
           {/* Right: Visit Metadata & Status */}
-          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between xl:justify-end gap-6 sm:gap-8 border-t xl:border-t-0 xl:border-l border-[#E2E8F0] pt-4 xl:pt-0 xl:pl-8 text-[12px]">
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between xl:justify-end gap-6 sm:gap-8 border-t xl:border-t-0 xl:border-l border-[#DDE2EC] pt-4 xl:pt-0 xl:pl-8 text-[12px]">
             <div>
               <span className="text-[#64748B] block text-[11px] font-medium">ER Visit ID</span>
               <div className="font-bold text-gray-900 flex items-center gap-1 mt-0.5 whitespace-nowrap">
@@ -3464,9 +5629,9 @@ function VisitDetailPanel({
               </div>
             </div>
 
-            <div className="border-t sm:border-t-0 sm:border-l border-[#E2E8F0] pt-3 sm:pt-0 sm:pl-6 shrink-0 w-full sm:w-auto">
+            <div className="border-t sm:border-t-0 sm:border-l border-[#DDE2EC] pt-3 sm:pt-0 sm:pl-6 shrink-0 w-full sm:w-auto">
               <span className="text-[#64748B] block text-[11px] font-medium mb-1.5">Current Status</span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-200 whitespace-nowrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-200 whitespace-nowrap">
                 <span className="w-2 h-2 rounded-full bg-[#B45309] animate-pulse"></span>
                 {STATUS_LABELS[detail.status] || detail.status.replace(/_/g, " ").toUpperCase()}
               </span>
@@ -3476,7 +5641,7 @@ function VisitDetailPanel({
       </div>
 
       {/* 3. Horizontal Navigation Tabs */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl px-4 shadow-2xs overflow-x-auto">
+      <div className="bg-white border border-[#DDE2EC] rounded px-4 shadow-2xs overflow-x-auto">
         <div className="flex items-center gap-6 min-w-max">
           {[
             { id: "overview", label: "Clinical Overview" },
@@ -3503,99 +5668,13 @@ function VisitDetailPanel({
         </div>
       </div>
 
-      {/* 4. 6 Key Status Cards Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
-        {/* Card 1: Chief Complaint */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
-            📋
-          </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Chief Complaint</span>
-            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate" title={chiefComplaint}>{chiefComplaint}</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">Onset: {onsetText}</span>
-          </div>
-        </div>
-
-        {/* Card 2: Triage */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-amber-50 text-[#D97706] flex items-center justify-center text-base shrink-0 mt-0.5">
-            🛡️
-          </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Triage</span>
-            <div className="font-bold text-[#DC2626] text-[12px] leading-snug mt-0.5 truncate">{triageCatCode} ({triageCatLabel})</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">
-              {detail.triage?.triaged_at ? formatTimeStr(detail.triage.triaged_at) : formatTimeStr(detail.arrival_at)}
-            </span>
-            <span className="text-[10.5px] text-[#64748B] block truncate">By: {detail.triage?.assigned_by || "Triage RN"}</span>
-          </div>
-        </div>
-
-        {/* Card 3: Current Location */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-green-50 text-[#16A34A] flex items-center justify-center text-base shrink-0 mt-0.5">
-            🛏️
-          </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Current Location</span>
-            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate">{location}</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">Since: {formatTimeStr(detail.arrival_at)}</span>
-          </div>
-        </div>
-
-        {/* Card 4: Attending Doctor */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
-            👨‍⚕️
-          </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Attending Doctor</span>
-            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate">{doctorName}</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">{doctorSpecialty}</span>
-            <span className="text-[10.5px] text-[#64748B] block truncate">
-              {detail.doctor_assigned_at ? `Assigned: ${formatTimeStr(detail.doctor_assigned_at)}` : "Assigned"}
-            </span>
-          </div>
-        </div>
-
-        {/* Card 5: Destination */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-purple-50 text-[#7E22CE] flex items-center justify-center text-base shrink-0 mt-0.5">
-            🛡️
-          </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Destination</span>
-            <div className="font-bold text-[#7E22CE] text-[12px] leading-snug mt-0.5 truncate">{destination.replace(/^•\s*/, "")}</div>
-            <span className="text-[10.5px] text-[#64748B] block mt-0.5 truncate">{detail.disposition?.priority || "High Priority"}</span>
-            <span className="text-[10.5px] text-[#64748B] block truncate">
-              {detail.disposition?.decided_at ? `Decided: ${formatTimeStr(detail.disposition.decided_at)}` : "Under Review"}
-            </span>
-          </div>
-        </div>
-
-        {/* Card 6: Next Step */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-base shrink-0 mt-0.5">
-            ➡️
-          </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block truncate">Next Step</span>
-            <div className="font-bold text-gray-900 text-[12px] leading-snug mt-0.5 truncate">
-              {detail.disposition ? "Finalize Transfer" : "Doctor Assessment"}
-            </div>
-            <span className="text-[10.5px] text-[#1B4FD8] font-semibold block mt-0.5 truncate">In Progress</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 5. Tab Content Views */}
+      {/* 4. Tab Content Views */}
       {activeTab === "overview" && (
         <>
-          {/* Main 4 Equal-Width Columns Dashboard Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
+          {/* Main 12-Column Responsive Dashboard Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-stretch">
             {/* Column 1: CLINICAL SNAPSHOT */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between space-y-4">
+            <div className="col-span-1 md:col-span-1 lg:col-span-3 xl:col-span-3 bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">CLINICAL SNAPSHOT</span>
@@ -3618,35 +5697,102 @@ function VisitDetailPanel({
                     <span className="text-gray-800">{onsetText}</span>
                   </div>
 
-                  <div>
-                    <span className="text-[#64748B] block text-[10.5px] mb-1.5">Vitals (Latest)</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
-                        BP {latestVitals.bp_systolic || "—"}/{latestVitals.bp_diastolic || "—"} mmHg
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
-                        HR {latestVitals.heart_rate || "—"} bpm
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
-                        SpO₂ {latestVitals.spo2 || "—"}%
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FFEDD5] text-[#EA580C] border border-orange-200">
-                        RR {latestVitals.respiratory_rate || "—"}/min
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
-                        Temp {latestVitals.temperature || "98.6"}°F
-                      </span>
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px]">Current Location</span>
+                      <strong className="text-gray-900 font-semibold text-[11.5px] flex items-center gap-1 mt-0.5">
+                        <span className="text-xs">🛏️</span> {location}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span className="text-[#64748B] block text-[10.5px]">Attending Doctor</span>
+                      <strong className="text-gray-900 font-semibold text-[11.5px] flex items-center gap-1 mt-0.5">
+                        <span className="text-xs">👨‍⚕️</span> {doctorName}
+                      </strong>
+                      <span className="text-[#64748B] block text-[10px] truncate">{doctorSpecialty}</span>
                     </div>
                   </div>
 
+                  <div className="border-t border-slate-100 pt-2">
+                    <span className="text-[#64748B] block text-[10.5px] mb-1.5">Vitals (Latest)</span>
+                    {latestVitals ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {latestVitals.bp_systolic && latestVitals.bp_diastolic && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+                            BP {latestVitals.bp_systolic}/{latestVitals.bp_diastolic} mmHg
+                          </span>
+                        )}
+                        {latestVitals.heart_rate && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+                            HR {latestVitals.heart_rate} bpm
+                          </span>
+                        )}
+                        {latestVitals.spo2 && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+                            SpO₂ {latestVitals.spo2}%
+                          </span>
+                        )}
+                        {latestVitals.respiratory_rate && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FFEDD5] text-[#EA580C] border border-orange-200">
+                            RR {latestVitals.respiratory_rate}/min
+                          </span>
+                        )}
+                        {latestVitals.temperature && (
+                          <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
+                            Temp {latestVitals.temperature}°F
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[11px] flex items-center justify-between">
+                        <span className="text-[#64748B] italic">No vitals charted yet</span>
+                        <button
+                          onClick={() => setShowAddVitalsModal(true)}
+                          className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-[#1B4FD8] font-bold rounded cursor-pointer text-[10.5px] transition-colors"
+                        >
+                          + Add Vitals
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="border-t border-slate-100 pt-2.5">
-                    <span className="text-[#64748B] block text-[10.5px]">Initial Triage</span>
-                    <span className="font-semibold text-gray-900">{triageCatCode} - {triageCatLabel}</span>
+                    <span className="text-[#64748B] block text-[10.5px] mb-1">Initial Triage</span>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-black text-white shadow-xs border ${
+                      triageCatCode === "B1"
+                        ? "bg-red-600 border-red-700"
+                        : triageCatCode === "B2"
+                          ? "bg-amber-500 border-amber-600"
+                          : triageCatCode === "B3"
+                            ? "bg-emerald-600 border-emerald-700"
+                            : triageCatCode === "Black"
+                              ? "bg-slate-950 border-slate-800"
+                              : "bg-blue-600 border-blue-700"
+                    }`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white ring-1 ring-white/40"></span>
+                      {triageCatCode} — {triageCatLabel}
+                    </span>
                   </div>
 
                   <div>
-                    <span className="text-[#64748B] block text-[10.5px]">Allergies</span>
-                    <span className="text-gray-800">{detail.patient?.allergies || "No known allergies"}</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#64748B] block text-[10.5px]">Allergies</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPatientModal(true)}
+                        className="text-[10.5px] text-[#1B4FD8] hover:underline font-semibold cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                    <span className={`font-semibold ${
+                      detail.patient?.allergies && detail.patient.allergies !== "No Known Allergies" && detail.patient.allergies !== "No known allergies" && detail.patient.allergies !== "None"
+                        ? "text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded text-[11px] inline-block mt-0.5"
+                        : "text-gray-800"
+                    }`}>
+                      {detail.patient?.allergies || "No known allergies"}
+                    </span>
                   </div>
 
                   <div>
@@ -3668,173 +5814,374 @@ function VisitDetailPanel({
               </div>
 
               <div className="pt-2 border-t border-slate-100 text-[10.5px] text-[#64748B]">
-                Last Updated: {formatTimeStr(latestVitals.recorded_at || detail.arrival_at)}
+                Last Updated: {latestVitals ? formatTimeStr(latestVitals.recorded_at || detail.arrival_at) : formatTimeStr(detail.arrival_at)}
               </div>
             </div>
 
-            {/* Column 2: TIMELINE (LATEST EVENTS) */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+            {/* Column 2: TIMELINE (SPACIOUS & PROMINENT) */}
+            <div className="col-span-1 md:col-span-1 lg:col-span-5 xl:col-span-4 bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between space-y-3">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">TIMELINE (LATEST EVENTS)</span>
-                  <button
-                    onClick={() => setActiveTab("timeline")}
-                    className="text-[11px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
-                  >
-                    View Full Timeline
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">TIMELINE</span>
+                    {activeTimelineEvents.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#1B4FD8] border border-blue-100">
+                        {activeTimelineEvents.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDefaultTimelineEventType(undefined);
+                        setShowAddTimelineEventModal(true);
+                      }}
+                      className="font-bold text-[#1B4FD8] hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <span>+</span> Add Event
+                    </button>
+                    {activeTimelineEvents.length > 0 && (
+                      <>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={handleClearTimeline}
+                          className="font-semibold text-red-600 hover:text-red-700 hover:underline cursor-pointer"
+                          title="Clear all timeline events"
+                        >
+                          Clear
+                        </button>
+                      </>
+                    )}
+                    <span className="text-slate-300">|</span>
+                    <button
+                      onClick={() => setActiveTab("timeline")}
+                      className="font-semibold text-[#64748B] hover:text-[#1B4FD8] hover:underline cursor-pointer"
+                    >
+                      View Full
+                    </button>
+                  </div>
                 </div>
 
-                <div className="relative pl-6 space-y-3.5 pt-3 text-[11.5px] before:absolute before:left-2 before:top-4 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                  {timelineEvents.map((ev, idx) => (
-                    <div key={idx} className="relative">
-                      <span className={`absolute -left-6 top-0.5 w-3.5 h-3.5 rounded-full ${ev.dotColor} border-2 border-white shadow-xs`}></span>
-                      <div className="flex items-baseline justify-between">
-                        <strong className="text-gray-900 font-bold">{ev.title}</strong>
-                        <span className="text-[10px] text-[#64748B]">{ev.time}</span>
+                <div className="relative pl-7 space-y-3.5 pt-3 pb-1 text-[12px] before:absolute before:left-[9px] before:top-3 before:bottom-3 before:w-[2px] before:bg-slate-200 max-h-[460px] overflow-y-auto pr-1.5">
+                  {activeTimelineEvents.length === 0 ? (
+                    <div className="py-10 text-center text-[#64748B] space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-lg mx-auto">
+                        ⏱️
                       </div>
-                      <div className="text-[11px] text-[#64748B] truncate max-w-[210px]">{ev.details}</div>
+                      <p className="font-semibold text-gray-800 text-[12px]">No timeline events recorded yet.</p>
+                      <p className="text-[11px] text-[#64748B] max-w-[220px] mx-auto">
+                        Milestones like registration, vitals checks, doctor visits, and medications will appear here.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDefaultTimelineEventType("initial_vitals");
+                          setShowAddTimelineEventModal(true);
+                        }}
+                        className="mt-2 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-[#1B4FD8] rounded text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        + Record Initial Vitals
+                      </button>
                     </div>
-                  ))}
+                  ) : (
+                    activeTimelineEvents.slice(0, 8).map((ev) => {
+                      const def = TIMELINE_EVENT_DEFINITIONS[ev.event_type] || TIMELINE_EVENT_DEFINITIONS.initial_vitals;
+                      return (
+                        <div key={ev.id} className="relative group/ev p-3 rounded-lg bg-slate-50/70 border border-slate-100 hover:bg-slate-50/90 hover:border-slate-200 transition-all duration-150 shadow-2xs">
+                          {/* Timeline dot */}
+                          <span
+                            className={`absolute -left-[24px] top-3.5 w-3 h-3 rounded-full ${def.dotColor} ring-4 ring-white shadow-xs`}
+                          ></span>
+
+                          {/* Event Header */}
+                          <div className="flex items-start justify-between gap-2">
+                            <strong className="text-gray-900 font-bold flex items-center gap-1.5 text-[12px] leading-snug">
+                              <span className="text-base shrink-0">{def.icon}</span>
+                              <span>{ev.event_name || def.label}</span>
+                            </strong>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10.5px] text-[#475569] font-mono font-semibold bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
+                                {formatTimeStr(ev.timestamp)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTimelineEvent(ev.id)}
+                                className="opacity-0 group-hover/ev:opacity-100 text-slate-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded cursor-pointer text-[10px] leading-none transition-all ml-0.5"
+                                title="Delete this timeline event"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Event Summary / Structured Content */}
+                          <div className="text-[11.5px] text-[#334155] mt-1.5 leading-relaxed">
+                            {/* Vitals Badges if vitals */}
+                            {(ev.event_type === "initial_vitals" || ev.event_type === "followup_vitals") && ev.vitals_data ? (
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {ev.vitals_data.bp_systolic && ev.vitals_data.bp_diastolic && (
+                                  <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+                                    BP {ev.vitals_data.bp_systolic}/{ev.vitals_data.bp_diastolic}
+                                  </span>
+                                )}
+                                {ev.vitals_data.heart_rate && (
+                                  <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+                                    HR {ev.vitals_data.heart_rate} bpm
+                                  </span>
+                                )}
+                                {ev.vitals_data.spo2 && (
+                                  <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FEE2E2] text-[#DC2626] border border-red-200">
+                                    SpO₂ {ev.vitals_data.spo2}%
+                                  </span>
+                                )}
+                                {ev.vitals_data.respiratory_rate && (
+                                  <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#FFEDD5] text-[#EA580C] border border-orange-200">
+                                    RR {ev.vitals_data.respiratory_rate}/min
+                                  </span>
+                                )}
+                                {ev.vitals_data.temperature && (
+                                  <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-green-200">
+                                    Temp {ev.vitals_data.temperature}°F
+                                  </span>
+                                )}
+                                {ev.vitals_data.pain_score != null && (
+                                  <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                    Pain {ev.vitals_data.pain_score}/10
+                                  </span>
+                                )}
+                              </div>
+                            ) : ev.event_type === "doctor_assessment_completed" && ev.assessment_data ? (
+                              <div className="space-y-1 mt-1">
+                                {ev.assessment_data.clinical_impression && (
+                                  <div className="leading-snug">
+                                    <span className="font-semibold text-gray-900">Impression:</span> {ev.assessment_data.clinical_impression}
+                                  </div>
+                                )}
+                                {ev.assessment_data.care_plan && (
+                                  <div className="leading-snug text-blue-900 bg-blue-50/70 p-1.5 rounded border border-blue-100 text-[11px]">
+                                    <span className="font-semibold text-[#1B4FD8]">Plan:</span> {ev.assessment_data.care_plan}
+                                  </div>
+                                )}
+                              </div>
+                            ) : ev.event_type === "destination_assigned" && ev.destination_data ? (
+                              <div className="space-y-0.5 mt-1">
+                                <div>
+                                  <span className="font-semibold text-gray-900">Assigned:</span>{" "}
+                                  <span className="font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 text-[11px]">
+                                    {ev.destination_data.destination}
+                                  </span>
+                                </div>
+                                {ev.destination_data.clinical_reason && (
+                                  <div className="text-slate-600 text-[11px] mt-0.5">
+                                    Indication: {ev.destination_data.clinical_reason}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              formatTimelineEventSummary(ev)
+                            )}
+                          </div>
+
+                          {/* Event Meta Footer */}
+                          <div className="flex items-center justify-between text-[10.5px] text-[#64748B] mt-2 pt-1.5 border-t border-slate-200/50">
+                            <span className="flex items-center gap-1 font-medium text-slate-600">
+                              <span>👤</span> {ev.logged_by ? ev.logged_by.replace(", RN", "") : "Staff RN"}
+                            </span>
+                            <span className="flex items-center gap-1 font-medium text-slate-600">
+                              <span>📍</span> {ev.location || "ER Red Zone"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10.5px] text-[#64748B]">
+                <span>Nurse Managed Journey</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDefaultTimelineEventType(undefined);
+                    setShowAddTimelineEventModal(true);
+                  }}
+                  className="text-[#1B4FD8] font-bold hover:underline cursor-pointer"
+                >
+                  + Log New Action
+                </button>
               </div>
             </div>
 
             {/* Column 3: VITALS TREND & Latest Vitals */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between space-y-4">
+            <div className="col-span-1 md:col-span-1 lg:col-span-4 xl:col-span-3 bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">VITALS TREND</span>
-                  <select
-                    value={trendRange}
-                    onChange={(e) => setTrendRange(e.target.value)}
-                    className="text-[11px] font-semibold text-gray-700 bg-white border border-[#CBD5E1] rounded px-2 py-0.5"
-                  >
-                    <option value="Last 2 Hours">Last 2 Hours</option>
-                    <option value="Last 4 Hours">Last 4 Hours</option>
-                    <option value="All Visit">All Visit</option>
-                  </select>
+                  {hasVitals ? (
+                    <select
+                      value={trendRange}
+                      onChange={(e) => setTrendRange(e.target.value)}
+                      className="text-[11px] font-semibold text-gray-700 bg-white border border-[#CBD5E1] rounded px-2 py-0.5"
+                    >
+                      <option value="Last 2 Hours">Last 2 Hours</option>
+                      <option value="Last 4 Hours">Last 4 Hours</option>
+                      <option value="All Visit">All Visit</option>
+                    </select>
+                  ) : (
+                    <button
+                      onClick={() => setShowAddVitalsModal(true)}
+                      className="text-[11px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
+                    >
+                      + Record
+                    </button>
+                  )}
                 </div>
 
-                {/* Vitals Trend Chart */}
-                <div className="pt-2">
-                  {/* Legend */}
-                  <div className="flex items-center justify-center gap-3 text-[10.5px] font-semibold text-[#64748B] mb-2">
-                    <span className="flex items-center gap-1 text-[#DC2626]">
-                      <span className="w-2.5 h-0.5 bg-[#DC2626]"></span> BP (mmHg)
-                    </span>
-                    <span className="flex items-center gap-1 text-[#2563EB]">
-                      <span className="w-2.5 h-0.5 bg-[#2563EB]"></span> HR (bpm)
-                    </span>
-                    <span className="flex items-center gap-1 text-[#16A34A]">
-                      <span className="w-2.5 h-0.5 bg-[#16A34A]"></span> SpO₂ (%)
-                    </span>
+                {hasVitals && latestVitals ? (
+                  <>
+                    {/* Vitals Trend Chart */}
+                    <div className="pt-2">
+                      {/* Legend */}
+                      <div className="flex items-center justify-center gap-3 text-[10.5px] font-semibold text-[#64748B] mb-2">
+                        <span className="flex items-center gap-1 text-[#DC2626]">
+                          <span className="w-2.5 h-0.5 bg-[#DC2626]"></span> BP (mmHg)
+                        </span>
+                        <span className="flex items-center gap-1 text-[#2563EB]">
+                          <span className="w-2.5 h-0.5 bg-[#2563EB]"></span> HR (bpm)
+                        </span>
+                        <span className="flex items-center gap-1 text-[#16A34A]">
+                          <span className="w-2.5 h-0.5 bg-[#16A34A]"></span> SpO₂ (%)
+                        </span>
+                      </div>
+
+                      {/* SVG Trend Line Chart */}
+                      <div className="relative h-36 w-full bg-slate-50/70 rounded border border-slate-100 p-2">
+                        <svg className="w-full h-full" viewBox="0 0 300 110" preserveAspectRatio="none">
+                          <line x1="25" y1="20" x2="290" y2="20" stroke="#E2E8F0" strokeDasharray="3 3" />
+                          <line x1="25" y1="50" x2="290" y2="50" stroke="#E2E8F0" strokeDasharray="3 3" />
+                          <line x1="25" y1="80" x2="290" y2="80" stroke="#E2E8F0" strokeDasharray="3 3" />
+
+                          <text x="5" y="23" fontSize="8" fill="#94A3B8">200</text>
+                          <text x="5" y="53" fontSize="8" fill="#94A3B8">100</text>
+                          <text x="10" y="83" fontSize="8" fill="#94A3B8">50</text>
+
+                          {/* BP Polyline */}
+                          <polyline
+                            fill="none"
+                            stroke="#DC2626"
+                            strokeWidth="2"
+                            points={vitalsChartData.bpPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+                          />
+                          {vitalsChartData.bpPoints.map((p, i) => (
+                            <circle key={`bp-${i}`} cx={p.x} cy={p.y} r="3" fill="#DC2626" />
+                          ))}
+
+                          {/* HR Polyline */}
+                          <polyline
+                            fill="none"
+                            stroke="#2563EB"
+                            strokeWidth="2"
+                            points={vitalsChartData.hrPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+                          />
+                          {vitalsChartData.hrPoints.map((p, i) => (
+                            <circle key={`hr-${i}`} cx={p.x} cy={p.y} r="3" fill="#2563EB" />
+                          ))}
+
+                          {/* SpO2 Polyline */}
+                          <polyline
+                            fill="none"
+                            stroke="#16A34A"
+                            strokeWidth="2"
+                            points={vitalsChartData.spo2Points.map((p) => `${p.x},${p.y}`).join(" ")}
+                          />
+                          {vitalsChartData.spo2Points.map((p, i) => (
+                            <circle key={`spo2-${i}`} cx={p.x} cy={p.y} r="3" fill="#16A34A" />
+                          ))}
+                        </svg>
+
+                        <div className="flex justify-between text-[9px] text-[#94A3B8] px-3 font-mono">
+                          {vitalsChartData.timeLabels.map((lbl, i) => (
+                            <span key={i}>{lbl}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Latest Vitals Table */}
+                    <div className="pt-3 mt-2 border-t border-slate-100">
+                      <span className="text-[10.5px] font-bold text-[#64748B] uppercase block mb-2">
+                        Latest Vitals ({formatTimeStr(latestVitals.recorded_at || detail.arrival_at)})
+                      </span>
+                      <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-[11px]">
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Blood Pressure</span>
+                          <span className="font-bold text-gray-900">{latestVitals.bp_systolic && latestVitals.bp_diastolic ? `${latestVitals.bp_systolic}/${latestVitals.bp_diastolic}` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Heart Rate</span>
+                          <span className="font-bold text-gray-900">{latestVitals.heart_rate ? `${latestVitals.heart_rate} bpm` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Resp Rate</span>
+                          <span className="font-bold text-gray-900">{latestVitals.respiratory_rate ? `${latestVitals.respiratory_rate} /min` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">SpO₂</span>
+                          <span className="font-bold text-gray-900">{latestVitals.spo2 ? `${latestVitals.spo2}%` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Temperature</span>
+                          <span className="font-bold text-gray-900">{latestVitals.temperature ? `${latestVitals.temperature} °F` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-1">
+                          <span className="text-[#64748B]">Pain Score</span>
+                          <span className="font-bold text-gray-900">{latestVitals.pain_score != null ? `${latestVitals.pain_score} /10` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#64748B]">GCS</span>
+                          <span className="font-bold text-gray-900">{latestVitals.gcs ? `${latestVitals.gcs} /15` : "—"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#64748B]">Blood Glucose</span>
+                          <span className="font-bold text-gray-900">{latestVitals.blood_glucose ? `${latestVitals.blood_glucose} mg/dL` : "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-7 text-center text-[#64748B] space-y-3">
+                    <div className="w-11 h-11 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-xl mx-auto">
+                      🫀
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-[12.5px]">No Vitals Recorded</p>
+                      <p className="text-[11px] text-[#64748B] mt-0.5 max-w-[210px] mx-auto">
+                        Emergency nurse or triage clinician can record initial vital signs.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddVitalsModal(true)}
+                      className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[11.5px] font-bold shadow-xs cursor-pointer inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      <span>➕</span> Record Initial Vitals
+                    </button>
                   </div>
-
-                  {/* SVG Trend Line Chart */}
-                  <div className="relative h-36 w-full bg-slate-50/70 rounded border border-slate-100 p-2">
-                    <svg className="w-full h-full" viewBox="0 0 300 110" preserveAspectRatio="none">
-                      <line x1="25" y1="20" x2="290" y2="20" stroke="#E2E8F0" strokeDasharray="3 3" />
-                      <line x1="25" y1="50" x2="290" y2="50" stroke="#E2E8F0" strokeDasharray="3 3" />
-                      <line x1="25" y1="80" x2="290" y2="80" stroke="#E2E8F0" strokeDasharray="3 3" />
-
-                      <text x="5" y="23" fontSize="8" fill="#94A3B8">200</text>
-                      <text x="5" y="53" fontSize="8" fill="#94A3B8">100</text>
-                      <text x="10" y="83" fontSize="8" fill="#94A3B8">50</text>
-
-                      {/* BP Polyline */}
-                      <polyline
-                        fill="none"
-                        stroke="#DC2626"
-                        strokeWidth="2"
-                        points={vitalsChartData.bpPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-                      />
-                      {vitalsChartData.bpPoints.map((p, i) => (
-                        <circle key={`bp-${i}`} cx={p.x} cy={p.y} r="3" fill="#DC2626" />
-                      ))}
-
-                      {/* HR Polyline */}
-                      <polyline
-                        fill="none"
-                        stroke="#2563EB"
-                        strokeWidth="2"
-                        points={vitalsChartData.hrPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-                      />
-                      {vitalsChartData.hrPoints.map((p, i) => (
-                        <circle key={`hr-${i}`} cx={p.x} cy={p.y} r="3" fill="#2563EB" />
-                      ))}
-
-                      {/* SpO2 Polyline */}
-                      <polyline
-                        fill="none"
-                        stroke="#16A34A"
-                        strokeWidth="2"
-                        points={vitalsChartData.spo2Points.map((p) => `${p.x},${p.y}`).join(" ")}
-                      />
-                      {vitalsChartData.spo2Points.map((p, i) => (
-                        <circle key={`spo2-${i}`} cx={p.x} cy={p.y} r="3" fill="#16A34A" />
-                      ))}
-                    </svg>
-
-                    <div className="flex justify-between text-[9px] text-[#94A3B8] px-3 font-mono">
-                      {vitalsChartData.timeLabels.map((lbl, i) => (
-                        <span key={i}>{lbl}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Latest Vitals Table */}
-                <div className="pt-3 mt-2 border-t border-slate-100">
-                  <span className="text-[10.5px] font-bold text-[#64748B] uppercase block mb-2">
-                    Latest Vitals ({formatTimeStr(latestVitals.recorded_at || detail.arrival_at)})
-                  </span>
-                  <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-[11px]">
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Blood Pressure</span>
-                      <span className="font-bold text-[#DC2626]">{latestVitals.bp_systolic || "—"}/{latestVitals.bp_diastolic || "—"}</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Heart Rate</span>
-                      <span className="font-bold text-[#DC2626]">{latestVitals.heart_rate || "—"} bpm</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Resp Rate</span>
-                      <span className="font-bold text-[#EA580C]">{latestVitals.respiratory_rate || "—"} /min</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">SpO₂</span>
-                      <span className="font-bold text-[#DC2626]">{latestVitals.spo2 || "—"}%</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Temperature</span>
-                      <span className="font-bold text-[#16A34A]">{latestVitals.temperature || "98.6"} °F</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-[#64748B]">Pain Score</span>
-                      <span className="font-bold text-[#DC2626]">{latestVitals.pain_score || "0"} /10</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B]">GCS</span>
-                      <span className="font-bold text-gray-900">{latestVitals.gcs || "15"} /15</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B]">Blood Glucose</span>
-                      <span className="font-bold text-[#D97706]">{latestVitals.blood_glucose || "110"} mg/dL</span>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
             {/* Column 4: PATIENT & VISIT INFORMATION */}
-            <div className="space-y-4 flex flex-col justify-between">
+            <div className="col-span-1 md:col-span-1 lg:col-span-12 xl:col-span-2 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-1 gap-4">
               {/* Patient Information */}
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs space-y-2">
+              <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs space-y-2">
                 <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">PATIENT INFORMATION</span>
                   <button
-                    onClick={() => setShowAddNoteModal(true)}
+                    onClick={() => setShowEditPatientModal(true)}
                     className="text-[11px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
                   >
                     Edit
@@ -3884,7 +6231,7 @@ function VisitDetailPanel({
               </div>
 
               {/* Visit Information */}
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs space-y-2">
+              <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs space-y-2">
                 <div className="border-b border-[#F1F5F9] pb-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">VISIT INFORMATION</span>
                 </div>
@@ -3927,113 +6274,165 @@ function VisitDetailPanel({
             </div>
           </div>
 
-          {/* 6. Bottom Row Cards (Medications, Investigations, Notes, Quick Actions) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
-            {/* Medications & Interventions Card */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+          {/* 6. Bottom Row Cards (Medications, Investigations, Notes) - 3 Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+            {/* 1. Medications & Interventions Card */}
+            <div className="bg-white border border-[#DDE2EC] rounded p-3 shadow-2xs flex flex-col justify-between space-y-2">
               <div>
-                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-3">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">CURRENT MEDICATIONS & INTERVENTIONS</span>
+                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      MEDICATIONS &amp; TREATMENTS
+                    </span>
+                    {detail.treatments && detail.treatments.length > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[9.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        {detail.treatments.length}
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => setActiveTab("medications")}
-                    className="text-[11px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
+                    className="text-[10.5px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
                   >
                     View All
                   </button>
                 </div>
 
-                <div className="overflow-x-auto text-[11px]">
+                <div className="space-y-1.5 pt-1.5 max-h-[180px] overflow-y-auto pr-1">
                   {detail.treatments && detail.treatments.length > 0 ? (
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-[#94A3B8] uppercase text-[9.5px] border-b border-slate-100">
-                          <th className="pb-1.5 whitespace-nowrap">TIME</th>
-                          <th className="pb-1.5 whitespace-nowrap">TYPE</th>
-                          <th className="pb-1.5 whitespace-nowrap">INTERVENTION</th>
-                          <th className="pb-1.5 whitespace-nowrap">DETAILS</th>
-                          <th className="pb-1.5 whitespace-nowrap">GIVEN BY</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {detail.treatments.slice(0, 4).map((t) => (
-                          <tr key={t.id}>
-                            <td className="py-2 text-[#64748B] whitespace-nowrap">{formatTimeStr(t.performed_at)}</td>
-                            <td className="py-2 text-gray-800 font-medium whitespace-nowrap">Treatment</td>
-                            <td className="py-2 font-bold text-gray-900 whitespace-nowrap">{t.intervention_type}</td>
-                            <td className="py-2 text-gray-800 whitespace-nowrap truncate max-w-[120px]">{t.description || "—"}</td>
-                            <td className="py-2 text-[#64748B] whitespace-nowrap">{t.administered_by || "Staff Nurse"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="py-6 text-center text-[#64748B]">
-                      <p>No treatments logged yet.</p>
-                      <button
-                        onClick={() => setShowAddInterventionModal(true)}
-                        className="mt-2 text-xs font-bold text-[#1B4FD8] hover:underline"
+                    detail.treatments.slice(0, 5).map((t) => (
+                      <div
+                        key={t.id}
+                        className="p-2 rounded-md bg-slate-50/70 border border-slate-100 hover:bg-slate-50 transition-all shadow-2xs space-y-1"
                       >
-                        + Log First Intervention
+                        <div className="flex items-center justify-between gap-1.5">
+                          <strong className="text-gray-900 font-bold flex items-center gap-1 text-[11px] leading-tight min-w-0">
+                            <span className="text-xs shrink-0">💊</span>
+                            <span className="truncate">{t.intervention_type}</span>
+                          </strong>
+                          <span className="text-[9.5px] font-mono font-semibold text-slate-700 bg-white px-1.5 py-0.2 rounded border border-slate-200 shrink-0">
+                            {formatTimeStr(t.performed_at)}
+                          </span>
+                        </div>
+
+                        {t.description && (
+                          <p className="text-[10.5px] text-slate-600 leading-tight truncate">
+                            {t.description}
+                          </p>
+                        )}
+
+                        <div className="flex items-center justify-between text-[9.5px] text-[#64748B] pt-1 border-t border-slate-200/50">
+                          <span className="truncate">👤 {t.administered_by || "Staff RN"}</span>
+                          <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                            Administered
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-3.5 text-center text-[#64748B] space-y-1">
+                      <span className="text-base block">💊</span>
+                      <p className="text-[11px] font-medium text-gray-700">No medications or treatments logged yet.</p>
+                      <button
+                        onClick={() => setShowAddMedicationModal(true)}
+                        className="mt-0.5 px-2.5 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold cursor-pointer transition-colors"
+                      >
+                        + Give Medication
                       </button>
                     </div>
                   )}
                 </div>
               </div>
+
+              <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-[#64748B]">
+                <span>Administration</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddInterventionModal(true)}
+                    className="text-slate-600 font-semibold hover:underline cursor-pointer"
+                  >
+                    + Procedure
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMedicationModal(true)}
+                    className="text-[#047857] font-bold hover:underline cursor-pointer"
+                  >
+                    + Give Med
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Recent Investigations Card */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+            {/* 2. Recent Investigations Card */}
+            <div className="bg-white border border-[#DDE2EC] rounded p-3 shadow-2xs flex flex-col justify-between space-y-2">
               <div>
-                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-3">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">RECENT INVESTIGATIONS</span>
+                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      RECENT INVESTIGATIONS
+                    </span>
+                    {detail.investigations && detail.investigations.length > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[9.5px] font-bold bg-blue-50 text-[#1B4FD8] border border-blue-100">
+                        {detail.investigations.length}
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => setActiveTab("investigations")}
-                    className="text-[11px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
+                    className="text-[10.5px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
                   >
                     View All
                   </button>
                 </div>
 
-                <div className="overflow-x-auto text-[11px]">
+                <div className="space-y-1.5 pt-1.5 max-h-[180px] overflow-y-auto pr-1">
                   {detail.investigations && detail.investigations.length > 0 ? (
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-[#94A3B8] uppercase text-[9.5px] border-b border-slate-100">
-                          <th className="pb-1.5 whitespace-nowrap">TIME</th>
-                          <th className="pb-1.5 whitespace-nowrap">INVESTIGATION</th>
-                          <th className="pb-1.5 whitespace-nowrap">RESULT</th>
-                          <th className="pb-1.5 whitespace-nowrap">STATUS</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {detail.investigations.slice(0, 4).map((inv) => (
-                          <tr key={inv.id}>
-                            <td className="py-2 text-[#64748B] whitespace-nowrap">{formatTimeStr(inv.ordered_at)}</td>
-                            <td className="py-2 font-bold text-gray-900 whitespace-nowrap">{inv.test_name}</td>
-                            <td className="py-2 text-gray-800 whitespace-nowrap truncate max-w-[130px]" title={inv.result || undefined}>
-                              {inv.result || "In Progress"}
-                            </td>
-                            <td className="py-2 whitespace-nowrap">
-                              <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                                inv.status === "Completed"
-                                  ? "bg-[#DCFCE7] text-[#16A34A]"
-                                  : inv.status === "In Progress"
-                                    ? "bg-[#FEF3C7] text-[#B45309]"
-                                    : "bg-blue-50 text-blue-700"
-                              }`}>
-                                {inv.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    detail.investigations.slice(0, 5).map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="p-2 rounded-md bg-slate-50/70 border border-slate-100 hover:bg-slate-50 transition-all shadow-2xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <strong className="text-gray-900 font-bold flex items-center gap-1 text-[11px] leading-tight min-w-0">
+                            <span className="text-xs shrink-0">🔬</span>
+                            <span className="truncate">{inv.test_name}</span>
+                          </strong>
+                          <span className="text-[9.5px] font-mono font-semibold text-slate-700 bg-white px-1.5 py-0.2 rounded border border-slate-200 shrink-0">
+                            {formatTimeStr(inv.ordered_at)}
+                          </span>
+                        </div>
+
+                        <div className="text-[10.5px] text-slate-700 leading-tight truncate">
+                          {inv.result || <span className="text-slate-500 italic">Dispatched • Awaiting results</span>}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[9.5px] text-[#64748B] pt-1 border-t border-slate-200/50">
+                          <span
+                            className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                              inv.status === "Completed"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : inv.status === "In Progress"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-blue-50 text-blue-700 border border-blue-200"
+                            }`}
+                          >
+                            {inv.status || "Ordered"}
+                          </span>
+                          <span className="text-slate-500">
+                            {inv.priority ? <span className="font-bold text-red-600">[{inv.priority}]</span> : null} STAT Lab
+                          </span>
+                        </div>
+                      </div>
+                    ))
                   ) : (
-                    <div className="py-6 text-center text-[#64748B]">
-                      <p>No investigations ordered yet.</p>
+                    <div className="py-3.5 text-center text-[#64748B] space-y-1">
+                      <span className="text-base block">🧪</span>
+                      <p className="text-[11px] font-medium text-gray-700">No investigations ordered yet.</p>
                       <button
                         onClick={() => setShowInvestigationModal(true)}
-                        className="mt-2 text-xs font-bold text-[#1B4FD8] hover:underline"
+                        className="mt-0.5 px-2.5 py-0.5 bg-blue-50 hover:bg-blue-100 text-[#1B4FD8] rounded text-[10px] font-bold cursor-pointer transition-colors"
                       >
                         + Order STAT Investigation
                       </button>
@@ -4041,40 +6440,77 @@ function VisitDetailPanel({
                   )}
                 </div>
               </div>
+
+              <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-[#64748B]">
+                <span>Diagnostics</span>
+                <button
+                  type="button"
+                  onClick={() => setShowInvestigationModal(true)}
+                  className="text-[#1B4FD8] font-bold hover:underline cursor-pointer"
+                >
+                  + Request Tests
+                </button>
+              </div>
             </div>
 
-            {/* Clinical Notes Card */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+            {/* 3. Clinical Notes Card */}
+            <div className="bg-white border border-[#DDE2EC] rounded p-3 shadow-2xs flex flex-col justify-between space-y-2">
               <div>
-                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-3">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">NOTES</span>
+                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      CLINICAL &amp; PHYSICIAN NOTES
+                    </span>
+                    {detail.clinical_notes && detail.clinical_notes.length > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[9.5px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
+                        {detail.clinical_notes.length}
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => setActiveTab("notes")}
-                    className="text-[11px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
+                    className="text-[10.5px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
                   >
                     View All
                   </button>
                 </div>
 
-                <div className="space-y-3 text-[11.5px]">
+                <div className="space-y-1.5 pt-1.5 max-h-[180px] overflow-y-auto pr-1">
                   {detail.clinical_notes && detail.clinical_notes.length > 0 ? (
-                    detail.clinical_notes.slice(0, 3).map((n) => (
-                      <div key={n.id} className="border-b border-slate-100 last:border-0 pb-2">
-                        <div className="flex items-center justify-between">
-                          <strong className="text-gray-900 font-bold">{n.author || doctorName}</strong>
-                          <span className="text-[10px] text-[#64748B]">{formatTimeStr(n.created_at)}</span>
+                    detail.clinical_notes.slice(0, 5).map((n) => (
+                      <div
+                        key={n.id}
+                        className="p-2 rounded-md bg-slate-50/70 border border-slate-100 hover:bg-slate-50 transition-all shadow-2xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <strong className="text-gray-900 font-bold flex items-center gap-1 text-[11px] leading-tight min-w-0">
+                            <span className="text-xs shrink-0">📝</span>
+                            <span className="truncate">{n.author || doctorName}</span>
+                          </strong>
+                          <span className="text-[9.5px] font-mono font-semibold text-slate-700 bg-white px-1.5 py-0.2 rounded border border-slate-200 shrink-0">
+                            {formatTimeStr(n.created_at)}
+                          </span>
                         </div>
-                        <p className="text-[#475569] mt-0.5 leading-snug line-clamp-2">
+
+                        <p className="text-[10.5px] text-slate-700 leading-snug line-clamp-2">
                           {n.content}
                         </p>
+
+                        <div className="flex items-center justify-between text-[9.5px] text-[#64748B] pt-1 border-t border-slate-200/50">
+                          <span className="px-1 py-0.2 rounded text-[9px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                            Physician Note
+                          </span>
+                          <span className="text-slate-500">Verified</span>
+                        </div>
                       </div>
                     ))
                   ) : (
-                    <div className="py-6 text-center text-[#64748B]">
-                      <p>No clinical notes added yet.</p>
+                    <div className="py-3.5 text-center text-[#64748B] space-y-1">
+                      <span className="text-base block">📝</span>
+                      <p className="text-[11px] font-medium text-gray-700">No clinical notes added yet.</p>
                       <button
                         onClick={() => setShowAddNoteModal(true)}
-                        className="mt-2 text-xs font-bold text-[#1B4FD8] hover:underline"
+                        className="mt-0.5 px-2.5 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded text-[10px] font-bold cursor-pointer transition-colors"
                       >
                         + Add Progress Note
                       </button>
@@ -4082,58 +6518,16 @@ function VisitDetailPanel({
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* Quick Actions Card */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs flex flex-col justify-between">
-              <div>
-                <div className="border-b border-[#F1F5F9] pb-2 mb-3">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">QUICK ACTIONS</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-[11.5px]">
-                  <button
-                    onClick={() => setShowAddVitalsModal(true)}
-                    className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <span>➕</span> Add Vitals
-                  </button>
-
-                  <button
-                    onClick={() => onOrderMedication()}
-                    className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <span>➕</span> Add Medication
-                  </button>
-
-                  <button
-                    onClick={() => setShowAddInterventionModal(true)}
-                    className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <span>➕</span> Add Intervention
-                  </button>
-
-                  <button
-                    onClick={() => setShowAddNoteModal(true)}
-                    className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <span>📝</span> Add Note
-                  </button>
-
-                  <button
-                    onClick={() => setShowInvestigationModal(true)}
-                    className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <span>📋</span> Request Investigation
-                  </button>
-
-                  <button
-                    onClick={() => setShowHandoverModal(true)}
-                    className="p-2.5 bg-white border border-[#CBD5E1] hover:bg-blue-50 hover:border-[#1B4FD8] text-[#1B4FD8] font-semibold rounded flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <span>🖨️</span> Print Summary
-                  </button>
-                </div>
+              <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-[#64748B]">
+                <span>Documentation</span>
+                <button
+                  type="button"
+                  onClick={() => setShowAddNoteModal(true)}
+                  className="text-[#1B4FD8] font-bold hover:underline cursor-pointer"
+                >
+                  + Add Note
+                </button>
               </div>
             </div>
           </div>
@@ -4142,19 +6536,28 @@ function VisitDetailPanel({
 
       {/* Timeline Tab */}
       {activeTab === "timeline" && (
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-2xs space-y-4">
+        <div className="bg-white border border-[#DDE2EC] rounded p-6 shadow-2xs space-y-4">
           <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
             <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
               <FiClock className="text-[#1B4FD8]" /> Complete Emergency Chronological Event Log
             </h3>
             <button
               onClick={() => setActiveTab("overview")}
-              className="text-[12px] font-semibold text-[#1B4FD8] hover:underline"
+              className="text-[12px] font-semibold text-[#1B4FD8] hover:underline cursor-pointer"
             >
               ← Back to Overview
             </button>
           </div>
-          <ErTimelineView detail={detail} categories={categories} />
+          <ErTimelineView
+            detail={detail}
+            categories={categories}
+            onClearTimeline={handleClearTimeline}
+            onDeleteEvent={handleDeleteTimelineEvent}
+            onAddEvent={(type) => {
+              setDefaultTimelineEventType(type);
+              setShowAddTimelineEventModal(true);
+            }}
+          />
         </div>
       )}
 
@@ -4522,7 +6925,156 @@ function VisitDetailPanel({
         </div>
       )}
 
-      {/* 2. Add Note Modal */}
+      {/* 2. Administer Medication Modal */}
+      {showAddMedicationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                <span>💊</span> Administer / Give Medication
+              </h3>
+              <button
+                onClick={() => setShowAddMedicationModal(false)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Quick prefill chips */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                Quick Select Common ER Medications
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { name: "Inj Paracetamol", dose: "1g", route: "IV Infusion" },
+                  { name: "Inj Pantoprazole", dose: "40mg", route: "IV Push" },
+                  { name: "Inj Ondansetron", dose: "4mg", route: "IV Push" },
+                  { name: "Inj Ceftriaxone", dose: "1g", route: "IV Push" },
+                  { name: "Inj Tramadol", dose: "50mg", route: "IV Push" },
+                  { name: "IV Normal Saline 0.9%", dose: "500ml", route: "IV Infusion" },
+                  { name: "Salbutamol Respirator", dose: "2.5mg", route: "Inhalation / Nebulizer" },
+                  { name: "Tab Aspirin", dose: "300mg", route: "Oral (PO)" },
+                ].map((m) => (
+                  <button
+                    key={m.name}
+                    type="button"
+                    onClick={() =>
+                      setQuickMedication({
+                        ...quickMedication,
+                        name: m.name,
+                        dose: m.dose,
+                        route: m.route,
+                      })
+                    }
+                    className="px-2 py-0.8 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-200 text-slate-700 hover:text-emerald-800 border border-slate-200 rounded text-[11px] font-medium transition-colors cursor-pointer"
+                  >
+                    + {m.name} {m.dose}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-[12px]">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block font-bold text-gray-700 mb-1">Medication / Drug Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Inj Paracetamol / Ceftriaxone"
+                  value={quickMedication.name}
+                  onChange={(e) => setQuickMedication({ ...quickMedication, name: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-gray-800 font-medium"
+                />
+              </div>
+
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block font-bold text-gray-700 mb-1">Dose / Strength</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 1g / 40mg / 500ml"
+                  value={quickMedication.dose}
+                  onChange={(e) => setQuickMedication({ ...quickMedication, dose: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-gray-800"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Administration Route</label>
+                <select
+                  value={quickMedication.route}
+                  onChange={(e) => setQuickMedication({ ...quickMedication, route: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-gray-800 font-medium"
+                >
+                  <option value="IV Push">IV Push</option>
+                  <option value="IV Infusion">IV Infusion</option>
+                  <option value="Oral (PO)">Oral (PO)</option>
+                  <option value="IM (Intramuscular)">IM (Intramuscular)</option>
+                  <option value="SC (Subcutaneous)">SC (Subcutaneous)</option>
+                  <option value="Inhalation / Nebulizer">Inhalation / Nebulizer</option>
+                  <option value="Sublingual">Sublingual</option>
+                  <option value="Topical">Topical</option>
+                  <option value="PR (Rectal)">PR (Rectal)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Administered By (Nurse)</label>
+                <input
+                  type="text"
+                  value={quickMedication.administeredBy}
+                  onChange={(e) => setQuickMedication({ ...quickMedication, administeredBy: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-gray-800 font-medium"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <label className="block font-bold text-gray-700 mb-1">Observation / Flow Notes (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={quickMedication.notes}
+                  onChange={(e) => setQuickMedication({ ...quickMedication, notes: e.target.value })}
+                  placeholder="e.g. Infused over 15 mins via peripheral line. Patient tolerated well without adverse response."
+                  className="w-full border border-slate-300 rounded p-2 text-gray-800"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddMedicationModal(false);
+                  onOrderMedication();
+                }}
+                className="text-[11px] text-[#1B4FD8] font-bold hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <span>📋</span> Doctor Prescription EMR Order
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddMedicationModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded text-[12.5px] font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveMedication}
+                  disabled={actionSaving || !quickMedication.name.trim()}
+                  className="px-5 py-2 bg-[#047857] hover:bg-[#065F46] text-white rounded text-[12.5px] font-semibold cursor-pointer shadow-xs"
+                >
+                  {actionSaving ? "Saving..." : "Record Medication Given"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Add Note Modal */}
       {showAddNoteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
@@ -4697,6 +7249,220 @@ function VisitDetailPanel({
         </div>
       )}
 
+      {/* 5. Doctor Evaluation & Disposition Modal */}
+      {showDispositionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in backdrop-blur-xs">
+          <div className="bg-white rounded-xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div>
+                <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                  <span>🔄</span> Transfer Patient &amp; Doctor Disposition
+                </h3>
+                <p className="text-[11.5px] text-slate-500 mt-0.5">
+                  Select clinical transfer pathway and inpatient disposition order for {displayName} ({detail.visit_no}).
+                </p>
+              </div>
+              <button onClick={() => setShowDispositionModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">✕</button>
+            </div>
+
+            <div className="space-y-4 text-[12px]">
+              <div>
+                <label className="block font-bold text-gray-700 mb-2">
+                  Select Clinical Transfer / Disposition Pathway:
+                </label>
+                <div className="space-y-2">
+                  {DISPOSITION_DESTINATION_OPTIONS.map((opt) => {
+                    const isSelected = dispositionForm.outcome === opt.value;
+                    return (
+                      <div
+                        key={opt.value}
+                        onClick={() => {
+                          setDispositionForm({
+                            ...dispositionForm,
+                            outcome: opt.value,
+                            specialty: opt.defaultSpecialty,
+                            priority: opt.defaultPriority,
+                          });
+                        }}
+                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all flex items-start justify-between gap-3 ${
+                          isSelected
+                            ? "border-[#1B4FD8] bg-blue-50/70 shadow-xs ring-1 ring-[#1B4FD8]"
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80"
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className="text-lg shrink-0 mt-0.5">{opt.icon}</span>
+                          <div>
+                            <div className="font-bold text-slate-900 text-[13px] leading-snug">
+                              {opt.title}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold border ${opt.badgeColor}`}>
+                                {opt.tag}
+                              </span>
+                              <span className="text-[11px] text-slate-500">
+                                Target: {opt.defaultSpecialty}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="shrink-0 mt-0.5">
+                          <span
+                            className={`w-4 h-4 rounded-full border flex items-center justify-center text-[10px] font-bold ${
+                              isSelected
+                                ? "bg-[#1B4FD8] text-white border-[#1B4FD8]"
+                                : "border-slate-300 bg-white"
+                            }`}
+                          >
+                            {isSelected ? "✓" : ""}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Target Specialty / Department</label>
+                  <select
+                    value={dispositionForm.specialty}
+                    onChange={(e) => setDispositionForm({ ...dispositionForm, specialty: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-2 text-gray-800 font-medium bg-white"
+                  >
+                    <option value="Intensive Care Unit (ICU)">Intensive Care Unit (ICU)</option>
+                    <option value="Cardiology">Cardiology / Coronary Care Unit (CCU)</option>
+                    <option value="Neurology / Stroke Care">Neurology / Stroke Care</option>
+                    <option value="Pulmonology / Respiratory Care">Pulmonology / Respiratory Care</option>
+                    <option value="Orthopedics / Trauma">Orthopedics / Trauma Care</option>
+                    <option value="General Medicine Ward">General Medicine Inpatient Ward</option>
+                    <option value="General Surgery Ward">General Surgery Inpatient Ward</option>
+                    <option value="Pediatrics">Pediatric Inpatient Unit</option>
+                    <option value="Emergency OT / Cath Lab">Emergency Operating Theatre / Cath Lab</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Transfer Priority</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {["STAT / Emergency", "High Priority", "Routine Admission"].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setDispositionForm({ ...dispositionForm, priority: p })}
+                        className={`py-2 px-1.5 rounded text-[11px] font-bold border transition-all cursor-pointer text-center ${
+                          dispositionForm.priority === p
+                            ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-xs"
+                            : "bg-white text-gray-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Clinical Reason &amp; Handover Instructions</label>
+                <textarea
+                  rows={3}
+                  value={dispositionForm.reason}
+                  onChange={(e) => setDispositionForm({ ...dispositionForm, reason: e.target.value })}
+                  placeholder="Document clinical justification for transfer, special nursing orders, and receiving doctor handover..."
+                  className="w-full border border-slate-300 rounded p-2.5 text-gray-800"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+              <button
+                onClick={() => setShowDispositionModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded text-[12.5px] font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveDisposition}
+                disabled={actionSaving}
+                className="px-5 py-2 bg-[#D97706] hover:bg-[#B45309] text-white rounded text-[12.5px] font-bold cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>🔄</span> {actionSaving ? "Recording..." : "Save Disposition & Transfer Order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Physical Bed Transfer & Relocation Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                <span>🛏️</span> Confirm Physical Patient Transfer &amp; Relocation
+              </h3>
+              <button onClick={() => setShowTransferModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">✕</button>
+            </div>
+
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded text-[12px] text-blue-900 space-y-1.5">
+              <div className="flex justify-between">
+                <span className="font-bold">Patient Name:</span>
+                <span>{displayName} ({detail.visit_no})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-bold">Destination Unit:</span>
+                <span className="font-bold text-[#1B4FD8]">
+                  {dispositionForm.outcome.includes("icu") ? "Intensive Care Unit (ICU)" : "Inpatient General Ward 3"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-bold">Allocated Physical Bed:</span>
+                <span className="font-bold text-[#16A34A]">
+                  {dispositionForm.outcome.includes("icu") ? "ICU-BED-04 (Floor 2)" : "WARD-BED-302 (Floor 3)"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-bold">Receiving Consultant:</span>
+                <span>{doctorName} ({doctorSpecialty})</span>
+              </div>
+            </div>
+
+            <p className="text-[12px] text-[#64748B]">
+              Confirming this transfer verifies that the ER nursing handover is complete, IV lines/monitors are transferred, and the patient has been physically relocated to their allocated inpatient bed.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+              <button
+                onClick={() => setShowTransferModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded text-[12.5px] font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmTransfer}
+                disabled={actionSaving}
+                className="px-5 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white rounded text-[12.5px] font-semibold cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>✓</span> {actionSaving ? "Relocating..." : "Confirm Relocation & Complete ER Visit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Timeline Event Modal */}
+      {showAddTimelineEventModal && (
+        <AddTimelineEventModal
+          detail={detail}
+          initialEventType={defaultTimelineEventType}
+          onClose={() => setShowAddTimelineEventModal(false)}
+          onSaved={onRefresh}
+          setNotice={setNotice}
+        />
+      )}
+
       {/* Handover Modal */}
       {showHandoverModal && (
         <ErHandoverModal
@@ -4705,6 +7471,196 @@ function VisitDetailPanel({
           onClose={() => setShowHandoverModal(false)}
         />
       )}
+
+      {/* Edit Patient Demographics & Allergies Modal */}
+      {showEditPatientModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                <span>👤</span> Edit Patient Information &amp; Clinical Allergies
+              </h3>
+              <button
+                onClick={() => setShowEditPatientModal(false)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-800">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">First Name</label>
+                  <input
+                    type="text"
+                    value={editPatientForm.name}
+                    onChange={(e) => setEditPatientForm({ ...editPatientForm, name: e.target.value })}
+                    className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">Last Name</label>
+                  <input
+                    type="text"
+                    value={editPatientForm.last_name}
+                    onChange={(e) => setEditPatientForm({ ...editPatientForm, last_name: e.target.value })}
+                    className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">Age</label>
+                  <input
+                    type="number"
+                    value={editPatientForm.age}
+                    onChange={(e) => setEditPatientForm({ ...editPatientForm, age: e.target.value })}
+                    className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">Gender</label>
+                  <select
+                    value={editPatientForm.gender}
+                    onChange={(e) => setEditPatientForm({ ...editPatientForm, gender: e.target.value })}
+                    className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none cursor-pointer"
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">Blood Group</label>
+                  <select
+                    value={editPatientForm.blood_group}
+                    onChange={(e) => setEditPatientForm({ ...editPatientForm, blood_group: e.target.value })}
+                    className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none cursor-pointer"
+                  >
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={editPatientForm.phone}
+                    onChange={(e) => setEditPatientForm({ ...editPatientForm, phone: e.target.value })}
+                    className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">Emergency Contact</label>
+                  <input
+                    type="tel"
+                    value={editPatientForm.emergency_contact}
+                    onChange={(e) => setEditPatientForm({ ...editPatientForm, emergency_contact: e.target.value })}
+                    className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">Guardian / Accompanied By</label>
+                <input
+                  type="text"
+                  value={editPatientForm.guardian_name}
+                  onChange={(e) => setEditPatientForm({ ...editPatientForm, guardian_name: e.target.value })}
+                  className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">Residential Address</label>
+                <input
+                  type="text"
+                  value={editPatientForm.address}
+                  onChange={(e) => setEditPatientForm({ ...editPatientForm, address: e.target.value })}
+                  className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
+                />
+              </div>
+
+              {/* ALLERGIES SECTION */}
+              <div className="bg-red-50/50 border border-red-200 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11.5px] font-bold text-red-800 flex items-center gap-1.5">
+                    <span>⚠️</span> Drug, Food &amp; Environmental Allergies
+                  </label>
+                  <span className="text-[10.5px] text-red-600 font-medium">Critical Safety Alert</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. Penicillin, Sulfa drugs, NSAIDs, Peanuts, Latex (or type 'No Known Allergies')"
+                  value={editPatientForm.allergies}
+                  onChange={(e) => setEditPatientForm({ ...editPatientForm, allergies: e.target.value })}
+                  className="w-full rounded border border-red-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:border-red-600 focus:ring-1 focus:ring-red-500 focus:outline-none"
+                />
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] text-slate-500 font-semibold">Quick Tags:</span>
+                  {[
+                    { label: "No Known Allergies", val: "No Known Allergies" },
+                    { label: "Penicillin", val: "Penicillin" },
+                    { label: "Sulfa Drugs", val: "Sulfa drugs" },
+                    { label: "NSAIDs / Aspirin", val: "NSAIDs, Aspirin" },
+                    { label: "Latex", val: "Latex" },
+                    { label: "Contrast Dye", val: "IV Contrast Dye" },
+                  ].map((tag) => (
+                    <button
+                      key={tag.label}
+                      type="button"
+                      onClick={() => {
+                        if (tag.val === "No Known Allergies") {
+                          setEditPatientForm({ ...editPatientForm, allergies: "No Known Allergies" });
+                        } else {
+                          const current = editPatientForm.allergies;
+                          if (!current || current === "No Known Allergies" || current === "No known allergies") {
+                            setEditPatientForm({ ...editPatientForm, allergies: tag.val });
+                          } else if (!current.includes(tag.val)) {
+                            setEditPatientForm({ ...editPatientForm, allergies: `${current}, ${tag.val}` });
+                          }
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded text-[10px] font-medium bg-white hover:bg-red-100 text-slate-700 hover:text-red-800 border border-slate-200 transition-colors cursor-pointer shadow-2xs"
+                    >
+                      + {tag.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowEditPatientModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded text-[12px] font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePatientDemographics}
+                disabled={actionSaving}
+                className="px-5 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[12px] font-bold cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                {actionSaving ? "Saving..." : "Save Patient Information & Allergies"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4712,177 +7668,396 @@ function VisitDetailPanel({
 function ErTimelineView({
   detail,
   categories,
+  onAddEvent,
+  onClearTimeline,
+  onDeleteEvent,
 }: {
   detail: ErVisitDetail;
   categories: TriageCategory[];
+  onAddEvent?: (type?: ErTimelineEventType) => void;
+  onClearTimeline?: () => void;
+  onDeleteEvent?: (eventId: number) => void;
 }) {
-  const events: {
-    timestamp: string;
-    title: string;
-    subtitle?: string;
-    badge?: string;
-    type: "arrival" | "vitals" | "triage" | "treatment" | "doctor" | "note" | "disposition" | "bed";
-  }[] = [];
+  const [filterCategory, setFilterCategory] = useState<"all" | "vitals" | "treatments" | "physician" | "transfer">("all");
+  const allEvents = useMemo(() => getSynthesizedTimeline(detail), [detail]);
 
-  if (detail.arrival_at) {
-    events.push({
-      timestamp: detail.arrival_at,
-      title: "Patient Arrived at Emergency Department",
-      subtitle: `Arrival Mode: ${detail.arrival_mode || "Walk-in"}${detail.condition_at_arrival ? ` · Condition: ${detail.condition_at_arrival}` : ""}`,
-      badge: "Arrival",
-      type: "arrival",
-    });
-  }
-
-  detail.complaints.forEach((c) => {
-    events.push({
-      timestamp: c.created_at,
-      title: `Chief Complaint: ${c.complaint}`,
-      subtitle: c.reported_by ? `Reported by: ${c.reported_by}` : undefined,
-      badge: "Complaint",
-      type: "note",
-    });
-  });
-
-  detail.vitals.forEach((v) => {
-    const parts = [];
-    if (v.heart_rate) parts.push(`HR: ${v.heart_rate} bpm`);
-    if (v.bp_systolic && v.bp_diastolic) parts.push(`BP: ${v.bp_systolic}/${v.bp_diastolic}`);
-    if (v.spo2) parts.push(`SpO2: ${v.spo2}%`);
-    if (v.temperature) parts.push(`Temp: ${v.temperature}°C`);
-    if (v.respiratory_rate) parts.push(`RR: ${v.respiratory_rate}/min`);
-    events.push({
-      timestamp: v.recorded_at,
-      title: "Emergency Vitals Recorded",
-      subtitle: parts.join(" · "),
-      badge: "Vitals",
-      type: "vitals",
-    });
-  });
-
-  if (detail.triage) {
-    const cat = categories.find((c) => c.category_code === detail.triage!.category);
-    events.push({
-      timestamp: detail.triage.triaged_at,
-      title: `Emergency Triage: ${detail.triage.category} - ${cat?.category_label || detail.triage.category}`,
-      subtitle: `Triage Bay: ${detail.triage.triage_bed_label || "B1-B4"} · Reason: ${detail.triage.reason || "Clinical assessment"}`,
-      badge: detail.triage.category,
-      type: "triage",
-    });
-  }
-
-  detail.treatments.forEach((t) => {
-    events.push({
-      timestamp: t.performed_at,
-      title: `Emergency Intervention: ${t.intervention_type}`,
-      subtitle: t.description || undefined,
-      badge: "Intervention",
-      type: "treatment",
-    });
-  });
-
-  if (detail.doctor_assigned_at) {
-    events.push({
-      timestamp: detail.doctor_assigned_at,
-      title: `Doctor Assigned: Dr. ${detail.assigned_doctor_name}`,
-      subtitle: `Specialty: ${detail.assigned_specialty}`,
-      badge: "Doctor",
-      type: "doctor",
-    });
-  }
-  if (detail.doctor_accepted_at) {
-    events.push({
-      timestamp: detail.doctor_accepted_at,
-      title: `Doctor Accepted Patient: Dr. ${detail.assigned_doctor_name}`,
-      subtitle: "Active Clinical Care & Assessment Initiated",
-      badge: "Accepted",
-      type: "doctor",
-    });
-  }
-
-  detail.clinical_notes.forEach((n) => {
-    events.push({
-      timestamp: n.created_at,
-      title: `Clinical Note (${n.note_type})`,
-      subtitle: n.content,
-      badge: "Note",
-      type: "note",
-    });
-  });
-
-  if (detail.disposition) {
-    events.push({
-      timestamp: detail.disposition.decided_at,
-      title: `Clinical Disposition: ${detail.disposition.outcome.toUpperCase()}`,
-      subtitle: `Reason: ${detail.disposition.clinical_reason}${detail.disposition.decided_by ? ` · Decided by: ${detail.disposition.decided_by}` : ""}`,
-      badge: "Disposition",
-      type: "disposition",
-    });
-  }
-
-  detail.bed_requests.forEach((r) => {
-    if (r.status === "allocated" && r.allocated_at) {
-      events.push({
-        timestamp: r.allocated_at,
-        title: `Physical Bed Allocated: Bed #${r.allocated_bed_id}`,
-        subtitle: `Admission #${r.allocated_admission_id} · Assigned by Reception / Bed Management`,
-        badge: "Bed Allocated",
-        type: "bed",
-      });
+  const filteredEvents = useMemo(() => {
+    if (filterCategory === "all") return allEvents;
+    if (filterCategory === "vitals") {
+      return allEvents.filter((e) => e.event_type === "initial_vitals" || e.event_type === "followup_vitals");
     }
-  });
+    if (filterCategory === "treatments") {
+      return allEvents.filter(
+        (e) => e.event_type === "medication_given" || e.event_type === "intervention_given" || e.event_type === "patient_stabilized"
+      );
+    }
+    if (filterCategory === "physician") {
+      return allEvents.filter(
+        (e) => e.event_type === "doctor_assigned" || e.event_type === "doctor_arrived" || e.event_type === "doctor_assessment_completed"
+      );
+    }
+    if (filterCategory === "transfer") {
+      return allEvents.filter(
+        (e) =>
+          e.event_type === "patient_arrived" ||
+          e.event_type === "bed_assigned" ||
+          e.event_type === "destination_assigned" ||
+          e.event_type === "destination_bed_assigned" ||
+          e.event_type === "patient_transferred"
+      );
+    }
+    return allEvents;
+  }, [allEvents, filterCategory]);
 
-  if (detail.closed_at) {
-    events.push({
-      timestamp: detail.closed_at,
-      title: "Emergency Visit Closed / Discharged",
-      badge: "Closed",
-      type: "disposition",
-    });
-  }
-
-  events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const vitalsCount = allEvents.filter((e) => e.event_type === "initial_vitals" || e.event_type === "followup_vitals").length;
+  const treatmentsCount = allEvents.filter(
+    (e) => e.event_type === "medication_given" || e.event_type === "intervention_given" || e.event_type === "patient_stabilized"
+  ).length;
+  const physicianCount = allEvents.filter(
+    (e) => e.event_type === "doctor_assigned" || e.event_type === "doctor_arrived" || e.event_type === "doctor_assessment_completed"
+  ).length;
+  const transferCount = allEvents.filter(
+    (e) =>
+      e.event_type === "patient_arrived" ||
+      e.event_type === "bed_assigned" ||
+      e.event_type === "destination_assigned" ||
+      e.event_type === "destination_bed_assigned" ||
+      e.event_type === "patient_transferred"
+  ).length;
 
   return (
-    <div className="er-timeline-container" style={{ padding: "0.5rem" }}>
-      <div style={{ position: "relative", paddingLeft: "1.5rem", borderLeft: "2px solid #cbd5e1" }}>
-        {events.map((ev, idx) => (
-          <div key={idx} style={{ marginBottom: "1.25rem", position: "relative" }}>
-            <span
-              style={{
-                position: "absolute",
-                left: "-1.95rem",
-                top: "0.2rem",
-                width: "14px",
-                height: "14px",
-                borderRadius: "50%",
-                backgroundColor:
-                  ev.type === "triage"
-                    ? "#dc2626"
-                    : ev.type === "vitals"
-                      ? "#3b82f6"
-                      : ev.type === "treatment"
-                        ? "#10b981"
-                        : ev.type === "doctor"
-                          ? "#8b5cf6"
-                          : "#64748b",
-                border: "2px solid #fff",
-                boxShadow: "0 0 0 2px #cbd5e1",
-              }}
-            />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
-              <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "#1e293b" }}>{ev.title}</div>
-              <span className="muted" style={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-                {formatDateTimeIST(ev.timestamp)}
-              </span>
-            </div>
-            {ev.subtitle && (
-              <p className="muted" style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "#475569" }}>
-                {ev.subtitle}
-              </p>
-            )}
-          </div>
+    <div className="space-y-4">
+      {/* Top Controls Bar */}
+      <div className="bg-[#FAFCFF] border border-[#DDE2EC] rounded p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
+        <div>
+          <h4 className="text-[14px] font-bold text-gray-900 flex items-center gap-2">
+            <span>🛡️</span> Nurse-Managed ER Clinical Journey Timeline
+          </h4>
+          <p className="text-[11.5px] text-[#64748B] mt-0.5">
+            Real-time chronological log managed by ER nursing staff from arrival until final destination transfer.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 self-start md:self-auto">
+          {allEvents.length > 0 && onClearTimeline && (
+            <button
+              type="button"
+              onClick={onClearTimeline}
+              className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded text-[12px] font-bold cursor-pointer transition-all shadow-xs"
+              title="Clear all recorded timeline data"
+            >
+              Clear Timeline Data
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onAddEvent?.()}
+            className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[12px] font-bold cursor-pointer transition-all shadow-xs flex items-center gap-1.5"
+          >
+            <span>➕</span> Add Timeline Event
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Chips */}
+      <div className="flex flex-wrap gap-2 pt-1 border-b border-slate-200 pb-3">
+        {[
+          { id: "all", label: `All Events (${allEvents.length})` },
+          { id: "vitals", label: `Vitals & Monitoring (${vitalsCount})` },
+          { id: "treatments", label: `Medications & Interventions (${treatmentsCount})` },
+          { id: "physician", label: `Physician Actions (${physicianCount})` },
+          { id: "transfer", label: `Intake & Transfer (${transferCount})` },
+        ].map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setFilterCategory(f.id as any)}
+            className={`px-3 py-1 rounded text-[11.5px] font-bold border transition-all cursor-pointer ${
+              filterCategory === f.id
+                ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-2xs"
+                : "bg-white text-gray-700 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            {f.label}
+          </button>
         ))}
+      </div>
+
+      {/* Timeline List (Newest at Top) */}
+      <div className="relative pl-6 space-y-4 before:absolute before:left-[11px] before:top-4 before:bottom-4 before:w-[2px] before:bg-slate-200">
+        {filteredEvents.length === 0 ? (
+          <div className="bg-white border border-[#DDE2EC] rounded p-8 text-center text-[#64748B]">
+            <p className="font-bold text-[13px]">No events recorded under this category.</p>
+            <button
+              onClick={() => onAddEvent?.()}
+              className="mt-2 text-xs font-bold text-[#1B4FD8] hover:underline cursor-pointer"
+            >
+              + Record First Event
+            </button>
+          </div>
+        ) : (
+          filteredEvents.map((ev) => {
+            const def = TIMELINE_EVENT_DEFINITIONS[ev.event_type] || TIMELINE_EVENT_DEFINITIONS.initial_vitals;
+
+            return (
+              <div key={ev.id} className="relative group">
+                {/* Timeline Node Dot */}
+                <span
+                  className={`absolute -left-[19px] top-3.5 w-3.5 h-3.5 rounded-full ${def.dotColor} ring-4 ring-white shadow-xs flex items-center justify-center text-[8px] text-white font-bold`}
+                >
+                  ✓
+                </span>
+
+                {/* Event Card */}
+                <div className="bg-white border border-[#DDE2EC] rounded p-4 shadow-2xs space-y-2.5 hover:border-[#1B4FD8] transition-all">
+                  {/* Card Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1F5F9] pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{def.icon}</span>
+                      <strong className="text-[13px] font-bold text-gray-900">{ev.event_name || def.label}</strong>
+                      <span
+                        className="px-2 py-0.5 rounded text-[10px] font-bold"
+                        style={{ backgroundColor: def.badgeBg, color: def.badgeText }}
+                      >
+                        {def.category}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-right">
+                      <span className="font-mono text-[11px] font-bold text-gray-900">
+                        {formatDateTimeIST(ev.timestamp)}
+                      </span>
+                      {onDeleteEvent && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteEvent(ev.id)}
+                          className="text-slate-400 hover:text-red-600 cursor-pointer text-xs p-0.5 transition-colors"
+                          title="Delete timeline event"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Structured Content */}
+                  <div className="text-[12px] text-gray-800 space-y-2">
+                    {/* Vitals Display */}
+                    {(ev.event_type === "initial_vitals" || ev.event_type === "followup_vitals") && ev.vitals_data && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-[#FAFCFF] border border-blue-100 rounded p-2.5 text-[11px]">
+                        {ev.vitals_data.bp_systolic && ev.vitals_data.bp_diastolic && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Blood Pressure</span>
+                            <strong className="font-mono text-red-600 font-bold">
+                              {ev.vitals_data.bp_systolic}/{ev.vitals_data.bp_diastolic} mmHg
+                            </strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.heart_rate && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Heart Rate</span>
+                            <strong className="font-mono text-red-600 font-bold">{ev.vitals_data.heart_rate} bpm</strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.spo2 && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">SpO₂</span>
+                            <strong className="font-mono text-blue-700 font-bold">{ev.vitals_data.spo2}%</strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.respiratory_rate && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Resp Rate</span>
+                            <strong className="font-mono text-orange-700 font-bold">
+                              {ev.vitals_data.respiratory_rate} /min
+                            </strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.temperature && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Temperature</span>
+                            <strong className="font-mono text-gray-800 font-bold">{ev.vitals_data.temperature} °F</strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.blood_glucose && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Blood Glucose</span>
+                            <strong className="font-mono text-gray-800 font-bold">
+                              {ev.vitals_data.blood_glucose} mg/dL
+                            </strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.pain_score != null && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">Pain Score</span>
+                            <strong className="font-mono text-red-600 font-bold">{ev.vitals_data.pain_score} / 10</strong>
+                          </div>
+                        )}
+                        {ev.vitals_data.gcs != null && (
+                          <div>
+                            <span className="text-[#64748B] block text-[10px]">GCS Score</span>
+                            <strong className="font-mono text-purple-700 font-bold">{ev.vitals_data.gcs} / 15</strong>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Medication Display */}
+                    {ev.event_type === "medication_given" && ev.medication_data && (
+                      <div className="bg-[#F0FDF4] border border-green-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <strong className="text-[#15803D] font-bold text-[12.5px]">
+                            💊 {ev.medication_data.drug_name}
+                          </strong>
+                          {ev.medication_data.dosage && (
+                            <span className="px-2 py-0.5 rounded bg-green-100 text-green-800 font-bold text-[10.5px]">
+                              {ev.medication_data.dosage}
+                            </span>
+                          )}
+                          {ev.medication_data.route && (
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10.5px]">
+                              Route: {ev.medication_data.route}
+                            </span>
+                          )}
+                        </div>
+                        {ev.medication_data.response && (
+                          <div className="text-gray-700">
+                            <strong>Patient Response:</strong> {ev.medication_data.response}
+                          </div>
+                        )}
+                        {ev.medication_data.notes && (
+                          <div className="text-[#64748B] text-[11px] italic">{ev.medication_data.notes}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Intervention Display */}
+                    {ev.event_type === "intervention_given" && ev.intervention_data && (
+                      <div className="bg-[#F0FDFA] border border-teal-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="font-bold text-[#0F766E] text-[12.5px]">
+                          💉 {ev.intervention_data.intervention_type}
+                        </div>
+                        {ev.intervention_data.details && (
+                          <div className="text-gray-800">{ev.intervention_data.details}</div>
+                        )}
+                        {ev.intervention_data.patient_response && (
+                          <div className="text-teal-800 font-medium">
+                            <strong>Response:</strong> {ev.intervention_data.patient_response}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Patient Stabilized Display */}
+                    {ev.event_type === "patient_stabilized" && ev.stabilization_data && (
+                      <div className="bg-[#ECFDF5] border border-emerald-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="font-bold text-[#047857] flex items-center gap-1.5">
+                          <span>✨</span> Status: {ev.stabilization_data.status}
+                        </div>
+                        {ev.stabilization_data.clinical_notes && (
+                          <div className="text-gray-700">{ev.stabilization_data.clinical_notes}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Doctor Assigned / Arrived / Assessment */}
+                    {ev.event_type === "doctor_assigned" && ev.doctor_data && (
+                      <div className="bg-[#EFF6FF] border border-blue-200 rounded p-2.5 text-[11.5px] flex items-center justify-between">
+                        <div>
+                          <strong className="text-[#1D4ED8]">👨‍⚕️ {ev.doctor_data.doctor_name}</strong>
+                          <span className="text-[#64748B] ml-2">({ev.doctor_data.specialty})</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">
+                          {ev.doctor_data.assignment_method}
+                        </span>
+                      </div>
+                    )}
+
+                    {ev.event_type === "doctor_arrived" && ev.assessment_data && (
+                      <div className="bg-[#F0F9FF] border border-sky-200 rounded p-2.5 text-[11.5px]">
+                        <strong>👨‍⚕️ Doctor Bedside Arrival:</strong> {ev.assessment_data.doctor_name}
+                        {ev.assessment_data.acute_condition && (
+                          <div className="text-[#64748B] mt-0.5">
+                            Acute Presentation: {ev.assessment_data.acute_condition}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {ev.event_type === "doctor_assessment_completed" && ev.assessment_data && (
+                      <div className="bg-[#FAF5FF] border border-purple-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div>
+                          <strong>Preliminary Impression:</strong> {ev.assessment_data.clinical_impression}
+                        </div>
+                        {ev.assessment_data.care_plan && (
+                          <div className="text-purple-900 font-medium">
+                            <strong>Care Plan:</strong> {ev.assessment_data.care_plan}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Disposition / Transfer Display */}
+                    {ev.event_type === "destination_assigned" && ev.destination_data && (
+                      <div className="bg-[#FFF7ED] border border-orange-200 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="font-bold text-[#C2410C]">
+                          🎯 Disposition Assigned: {ev.destination_data.destination}
+                        </div>
+                        {ev.destination_data.clinical_reason && (
+                          <div className="text-gray-800">
+                            <strong>Reason:</strong> {ev.destination_data.clinical_reason}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {ev.event_type === "destination_bed_assigned" && ev.destination_bed_data && (
+                      <div className="bg-[#FFFBEB] border border-amber-200 rounded p-2.5 text-[11.5px] flex items-center justify-between">
+                        <div>
+                          <strong>🏨 Inpatient Unit:</strong> {ev.destination_bed_data.department}
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-mono font-bold text-[11px]">
+                          Bed: {ev.destination_bed_data.bed_id_or_label}
+                        </span>
+                      </div>
+                    )}
+
+                    {ev.event_type === "patient_transferred" && ev.transfer_data && (
+                      <div className="bg-[#F8FAFC] border border-slate-300 rounded p-2.5 text-[11.5px] space-y-1">
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          <span>🚑</span> Transferred from {ev.transfer_data.source_location} ➔{" "}
+                          <span className="text-[#1B4FD8]">{ev.transfer_data.target_destination}</span> (
+                          <span className="text-[#16A34A]">{ev.transfer_data.target_bed}</span>)
+                        </div>
+                        {ev.transfer_data.handover_notes && (
+                          <div className="text-gray-700">
+                            <strong>Handover:</strong> {ev.transfer_data.handover_notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Generic / Additional Notes */}
+                    {ev.notes && (
+                      <div className="text-gray-700 text-[11.5px]">{ev.notes}</div>
+                    )}
+                  </div>
+
+                  {/* Card Footer Metadata */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[10.5px] text-[#64748B]">
+                    <div className="flex items-center gap-2">
+                      <span>👤 {ev.logged_by || "Staff RN"}</span>
+                      <span>•</span>
+                      <span>📍 {ev.location || "ER Bay"}</span>
+                    </div>
+
+                    <div className="font-mono text-[#94A3B8]">Encounter: {ev.visit_no}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

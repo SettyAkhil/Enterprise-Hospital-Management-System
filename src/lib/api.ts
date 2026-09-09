@@ -130,7 +130,7 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
     ErDatabase.setTriage(visitId, {
       category: body.category,
       reason: body.reason,
-      bedLabel: body.triage_bed_label,
+      bedLabel: body.triage_bed_label || body.bedLabel,
     });
     return { success: true } as T;
   }

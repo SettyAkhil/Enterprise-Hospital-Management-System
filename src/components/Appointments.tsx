@@ -110,7 +110,22 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
             </div>
             <div>
               <label className="block text-[12px] font-semibold text-gray-700 mb-1">Phone Number</label>
-              <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full h-9 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]" placeholder="(555) 000-0000" />
+              <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                value={phone}
+                onChange={e => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                onKeyDown={e => {
+                  if (
+                    ["Backspace", "Delete", "Tab", "Escape", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key) ||
+                    e.ctrlKey || e.metaKey
+                  ) return;
+                  if (!/^\d$/.test(e.key)) e.preventDefault();
+                }}
+                className="w-full h-9 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]"
+                placeholder="e.g. 9876543210 (Numbers only)"
+              />
             </div>
           </div>
 

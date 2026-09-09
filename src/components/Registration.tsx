@@ -94,6 +94,44 @@ export default function Registration({
     }));
   };
 
+  // Handle Numeric Only Phone Input (strictly numbers only, max 10 digits)
+  const handlePhoneChange = (val: string) => {
+    const digitsOnly = val.replace(/\D/g, "").slice(0, 10);
+    setFormData(prev => ({ ...prev, phone: digitsOnly }));
+  };
+
+  const handleEmergencyPhoneChange = (val: string) => {
+    const digitsOnly = val.replace(/\D/g, "").slice(0, 10);
+    setFormData(prev => ({ ...prev, emergencyPhone: digitsOnly }));
+  };
+
+  const handleNumericKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Allow navigation and edit keys (Backspace, Tab, Delete, Arrow keys, Enter, Ctrl+A/C/V/X)
+    if (
+      [
+        "Backspace",
+        "Delete",
+        "Tab",
+        "Escape",
+        "Enter",
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
+        "Home",
+        "End",
+      ].includes(e.key) ||
+      e.ctrlKey ||
+      e.metaKey
+    ) {
+      return;
+    }
+    // Block any non-digit character (words, letters, symbols)
+    if (!/^\d$/.test(e.key)) {
+      e.preventDefault();
+    }
+  };
+
   // Duplicate / Existing Patient Check via Matching Logic
   const enteredFullName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(" ").trim();
   const matchResult = findMatchingPatient(patients, {
@@ -112,6 +150,10 @@ export default function Registration({
   const handleRegisterNewPatient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.dob) return;
+    if (formData.phone.length !== 10) {
+      alert("Please enter a valid 10-digit mobile phone number (numbers only).");
+      return;
+    }
 
     // If ALL entered details match an existing record -> Route through Revisit under existing UMR
     if (matchingExistingPatient) {
@@ -129,7 +171,7 @@ export default function Registration({
       dob: formData.dob,
       age: computedAge,
       sex: (formData.sex as "Male" | "Female" | "Other") || "Male",
-      phone: formData.phone.trim() || "(617) 555-0199",
+      phone: formData.phone.trim() || "9876543210",
       address: formData.address.trim() || "Boston, MA",
     });
 
@@ -531,9 +573,14 @@ export default function Registration({
                       Mobile Phone <span className="text-red-500">*</span>
                     </label>
                     <Input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]{10}"
+                      maxLength={10}
                       value={formData.phone}
-                      onChange={v => setFormData({ ...formData, phone: v })}
-                      placeholder="(617) 555-XXXX"
+                      onChange={handlePhoneChange}
+                      onKeyDown={handleNumericKeyDown}
+                      placeholder="e.g. 9876543210"
                       required
                     />
                   </div>
@@ -600,9 +647,14 @@ export default function Registration({
                       Emergency Phone
                     </label>
                     <Input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]{10}"
+                      maxLength={10}
                       value={formData.emergencyPhone}
-                      onChange={v => setFormData({ ...formData, emergencyPhone: v })}
-                      placeholder="(617) 555-XXXX"
+                      onChange={handleEmergencyPhoneChange}
+                      onKeyDown={handleNumericKeyDown}
+                      placeholder="e.g. 9876543210"
                     />
                   </div>
                 </div>
@@ -618,7 +670,7 @@ export default function Registration({
                 <Btn
                   variant="primary"
                   type="submit"
-                  disabled={!formData.firstName.trim() || !formData.lastName.trim() || !formData.dob || !formData.sex || !formData.phone.trim()}
+                  disabled={!formData.firstName.trim() || !formData.lastName.trim() || !formData.dob || !formData.sex || formData.phone.length !== 10}
                 >
                   <span>✓</span> Create Patient Record, Generate Patient ID &amp; Proceed to Next Step →
                 </Btn>

@@ -25,13 +25,13 @@ const STATUS_MAP: Record<string, { dot: string; bg: string; text: string; label?
   appeal: { dot: "#D97706", bg: "#FEF3C7", text: "#B45309" },
 };
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, className }: { status: string; className?: string }) {
   const key = status.toLowerCase().replace(/[\s-]/g, "");
   const s = STATUS_MAP[key] || { dot: "#6B7280", bg: "#F3F4F6", text: "#4B5563" };
   const label = STATUS_MAP[key]?.label || status.charAt(0).toUpperCase() + status.slice(1).replace(/([A-Z])/g, " $1");
   return (
     <span style={{ backgroundColor: s.bg, color: s.text }}
-      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap">
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${className || ""}`}>
       <span className="status-dot" style={{ backgroundColor: s.dot }} />
       {label}
     </span>
@@ -164,7 +164,7 @@ export function Btn({ children, variant = "primary", size = "sm", onClick, class
 }
 
 // ─── Input ────────────────────────────────────────────────────────────────────
-export function Input({ placeholder, value, onChange, icon, className, type = "text", required, disabled, name, readOnly }: {
+export function Input({ placeholder, value, onChange, icon, className, type = "text", required, disabled, name, readOnly, maxLength, inputMode, pattern, onKeyDown }: {
   placeholder?: string;
   value?: string;
   onChange?: (v: string) => void;
@@ -175,6 +175,10 @@ export function Input({ placeholder, value, onChange, icon, className, type = "t
   disabled?: boolean;
   name?: string;
   readOnly?: boolean;
+  maxLength?: number;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  pattern?: string;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
 }) {
   return (
     <div className={`relative ${className || ""}`}>
@@ -186,6 +190,10 @@ export function Input({ placeholder, value, onChange, icon, className, type = "t
         name={name}
         readOnly={readOnly}
         value={value}
+        maxLength={maxLength}
+        inputMode={inputMode}
+        pattern={pattern}
+        onKeyDown={onKeyDown}
         onChange={e => onChange?.(e.target.value)}
         placeholder={placeholder}
         className={`w-full border border-[#DDE2EC] rounded bg-white text-[12.5px] text-gray-800 placeholder:text-[#94A3B8] focus:border-[#1B4FD8] focus:outline-none py-1.5 ${icon ? "pl-8 pr-3" : "px-3"}`}
