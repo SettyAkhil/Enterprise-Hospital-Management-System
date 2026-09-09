@@ -5548,19 +5548,19 @@ export function VisitDetailPanel({
       </div>
 
       {/* 2. Patient Header Banner Card */}
-      <div className="bg-white border border-[#DDE2EC] rounded p-5 shadow-2xs">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+      <div className="bg-white border border-[#DDE2EC] rounded-xl p-4 sm:p-5 shadow-2xs overflow-hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-6 min-w-0">
           {/* Left: Avatar & Identity */}
-          <div className="flex items-center gap-4 min-w-[280px]">
-            <div className="w-14 h-14 rounded bg-[#1B4FD8] text-white flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-[#1B4FD8] text-white flex items-center justify-center font-bold text-lg sm:text-xl shadow-xs shrink-0">
               {initials}
             </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-[22px] font-bold text-gray-900 leading-tight">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-[18px] sm:text-[21px] font-bold text-gray-900 leading-tight truncate">
                   {displayName}
                 </h1>
-                <span className={`px-2.5 py-1 rounded-md text-[11.5px] font-black shrink-0 border shadow-xs inline-flex items-center gap-1.5 ${
+                <span className={`px-2.5 py-0.5 rounded-md text-[11px] sm:text-[11.5px] font-black shrink-0 border shadow-xs inline-flex items-center gap-1.5 ${
                   triageCatCode === "B1"
                     ? "bg-red-600 text-white border-red-700"
                     : triageCatCode === "B2"
@@ -5575,8 +5575,8 @@ export function VisitDetailPanel({
                   {triageCatCode} — {triageCatLabel}
                 </span>
               </div>
-              <div className="text-[12.5px] text-[#64748B] font-medium mt-1 flex items-center gap-2 flex-wrap">
-                <span>{detail.patient_id || detail.patient?.patient_id || "P-000000"}</span>
+              <div className="text-[12px] sm:text-[12.5px] text-[#64748B] font-medium mt-0.5 flex items-center gap-2 flex-wrap">
+                <span className="font-mono font-semibold text-slate-700">{detail.patient_id || detail.patient?.patient_id || "P-000000"}</span>
                 <span>•</span>
                 <span>{detail.patient?.gender || detail.patient_gender || "Male"}</span>
                 <span>•</span>
@@ -5584,8 +5584,8 @@ export function VisitDetailPanel({
                   {Number(detail.patient?.age || detail.patient_age || 30)}y (DOB: {new Date().getFullYear() - Number(detail.patient?.age || detail.patient_age || 30)})
                 </span>
               </div>
-              <div className="text-[12px] text-[#64748B] mt-1 flex items-center gap-3 flex-wrap">
-                <span className="flex items-center gap-1">
+              <div className="text-[11.5px] text-[#64748B] mt-1 flex items-center gap-3 flex-wrap">
+                <span className="flex items-center gap-1 font-mono">
                   <span>📞</span> {detail.patient?.phone || detail.patient_phone || "—"}
                 </span>
                 <span className="flex items-center gap-1">
@@ -5596,14 +5596,14 @@ export function VisitDetailPanel({
           </div>
 
           {/* Right: Visit Metadata & Status */}
-          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between xl:justify-end gap-6 sm:gap-8 border-t xl:border-t-0 xl:border-l border-[#DDE2EC] pt-4 xl:pt-0 xl:pl-8 text-[12px]">
-            <div>
-              <span className="text-[#64748B] block text-[11px] font-medium">ER Visit ID</span>
-              <div className="font-bold text-gray-900 flex items-center gap-1 mt-0.5 whitespace-nowrap">
-                <span>{detail.visit_no}</span>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 border-t lg:border-t-0 lg:border-l border-[#DDE2EC] pt-3 lg:pt-0 lg:pl-6 text-[12px] min-w-0 flex-shrink-0">
+            <div className="min-w-0">
+              <span className="text-[#64748B] block text-[10.5px] font-medium uppercase tracking-wider">ER Visit ID</span>
+              <div className="font-bold text-gray-900 flex items-center gap-1 mt-0.5 min-w-0">
+                <span className="font-mono truncate">{detail.visit_no}</span>
                 <button
                   onClick={() => navigator.clipboard?.writeText(detail.visit_no)}
-                  className="text-gray-400 hover:text-[#1B4FD8] text-[11px] cursor-pointer"
+                  className="text-gray-400 hover:text-[#1B4FD8] text-[11px] cursor-pointer shrink-0"
                   title="Copy ID"
                 >
                   📋
@@ -5611,29 +5611,33 @@ export function VisitDetailPanel({
               </div>
             </div>
 
-            <div>
-              <span className="text-[#64748B] block text-[11px] font-medium">Arrival</span>
-              <div className="font-bold text-gray-900 mt-0.5 whitespace-nowrap">{formatDateTimeIST(detail.arrival_at)}</div>
-              <span className="text-[11px] text-[#64748B]">{elapsedSince(detail.arrival_at)}</span>
+            <div className="min-w-0">
+              <span className="text-[#64748B] block text-[10.5px] font-medium uppercase tracking-wider">Arrival</span>
+              <div className="font-bold text-gray-900 mt-0.5 text-[11.5px] leading-tight truncate" title={formatDateTimeIST(detail.arrival_at)}>
+                {formatDateTimeIST(detail.arrival_at)}
+              </div>
+              <span className="text-[10.5px] text-[#64748B] block truncate">{elapsedSince(detail.arrival_at)}</span>
             </div>
 
-            <div>
-              <span className="text-[#64748B] block text-[11px] font-medium">Accompanied By</span>
-              <div className="font-bold text-gray-900 mt-0.5 whitespace-nowrap">{detail.patient?.guardian_name || "Self / Family"}</div>
+            <div className="min-w-0">
+              <span className="text-[#64748B] block text-[10.5px] font-medium uppercase tracking-wider">Accompanied By</span>
+              <div className="font-bold text-gray-900 mt-0.5 text-[11.5px] truncate" title={detail.patient?.guardian_name || "Self / Family"}>
+                {detail.patient?.guardian_name || "Self / Family"}
+              </div>
             </div>
 
-            <div>
-              <span className="text-[#64748B] block text-[11px] font-medium">Brought By</span>
-              <div className="font-bold text-gray-900 mt-0.5 whitespace-nowrap">
+            <div className="min-w-0">
+              <span className="text-[#64748B] block text-[10.5px] font-medium uppercase tracking-wider">Brought By</span>
+              <div className="font-bold text-gray-900 mt-0.5 text-[11.5px] truncate" title={formatArrivalModeLabel(detail.arrival_mode)}>
                 {formatArrivalModeLabel(detail.arrival_mode)}
               </div>
             </div>
 
-            <div className="border-t sm:border-t-0 sm:border-l border-[#DDE2EC] pt-3 sm:pt-0 sm:pl-6 shrink-0 w-full sm:w-auto">
-              <span className="text-[#64748B] block text-[11px] font-medium mb-1.5">Current Status</span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-200 whitespace-nowrap">
-                <span className="w-2 h-2 rounded-full bg-[#B45309] animate-pulse"></span>
-                {STATUS_LABELS[detail.status] || detail.status.replace(/_/g, " ").toUpperCase()}
+            <div className="min-w-0 col-span-2 sm:col-span-1 flex flex-col justify-start">
+              <span className="text-[#64748B] block text-[10.5px] font-medium uppercase tracking-wider mb-1">Current Status</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-200 max-w-full truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#B45309] animate-pulse shrink-0"></span>
+                <span className="truncate">{STATUS_LABELS[detail.status] || detail.status.replace(/_/g, " ").toUpperCase()}</span>
               </span>
             </div>
           </div>
