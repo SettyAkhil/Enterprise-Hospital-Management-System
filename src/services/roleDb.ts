@@ -43,6 +43,21 @@ const INITIAL_ROLES: AppRole[] = [
     name: "Receptionist", 
     allowedModules: ["dashboard", "patients", "register", "appointments", "outpatient", "queue", "op_management"] 
   },
+  {
+    id: "ROLE_PHARMACY_MANAGER",
+    name: "Pharmacy Manager",
+    allowedModules: ["dashboard", "pharmacy", "reports", "inventory"]
+  },
+  {
+    id: "ROLE_PHARMACIST",
+    name: "Pharmacist",
+    allowedModules: ["dashboard", "pharmacy"]
+  },
+  {
+    id: "ROLE_PHARMACY_ASSISTANT",
+    name: "Pharmacy Assistant",
+    allowedModules: ["dashboard", "pharmacy"]
+  }
 ];
 
 const INITIAL_USERS: AppUser[] = [

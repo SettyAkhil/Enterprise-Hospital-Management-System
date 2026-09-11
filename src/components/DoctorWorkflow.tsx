@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "./icons";
 import { Btn, Input, StatusBadge } from "./shared";
 import { db, DBOPEncounter, DBPatient } from "../services/db";
+import { PharmacyDatabase, AppPrescription, AppPrescriptionItem, PrescriptionSource, AppPharmacyBill } from "../services/pharmacyDb";
+import { AuditDatabase } from "../services/auditDb";
 
 interface DoctorProfile {
   id: string;
@@ -104,11 +106,14 @@ export default function DoctorWorkflow({
   const [diagnosis, setDiagnosis] = useState("");
   const [icd10, setIcd10] = useState("");
   const [medications, setMedications] = useState<
-    { medicine: string; dosage: string; frequency: string; duration: string; instructions?: string }[]
+    { medicine: string; strength: string; dosage: string; frequency: string; route: string; duration: string; instructions?: string; remarks?: string; quantity: number }[]
   >([
-    { medicine: "Aspirin 81mg", dosage: "1 tab", frequency: "OD (Once Daily)", duration: "30 days", instructions: "Take after breakfast" },
-    { medicine: "Atorvastatin 40mg", dosage: "1 tab", frequency: "HS (Bedtime)", duration: "30 days", instructions: "Take at bedtime" }
+    { medicine: "Aspirin", strength: "81mg", dosage: "1 tab", frequency: "OD (Once Daily)", route: "Oral", duration: "30 days", instructions: "Take after breakfast", quantity: 30 },
+    { medicine: "Atorvastatin", strength: "40mg", dosage: "1 tab", frequency: "HS (Bedtime)", route: "Oral", duration: "30 days", instructions: "Take at bedtime", quantity: 30 }
   ]);
+  const [rxMode, setRxMode] = useState<"DIGITAL" | "UPLOAD">("DIGITAL");
+  const [uploadedRxImage, setUploadedRxImage] = useState<string | null>(null);
+  const [patientMedHistory, setPatientMedHistory] = useState<AppPharmacyBill[]>([]);
   const [investigations, setInvestigations] = useState<string[]>([
     "ECG 12-Lead",
     "Complete Blood Count (CBC)",
@@ -131,7 +136,20 @@ export default function DoctorWorkflow({
     setDiagnosis(tmpl.diagnosis);
     setIcd10(tmpl.icd10);
     setClinicalAssessment(tmpl.assessment);
-    setMedications(tmpl.medications);
+    setMedications(tmpl.medications.map(m => {
+      // Basic parse of dummy string
+      const match = m.medicine.match(/^(.*?) (\d+mg|mcg|ml)/);
+      return {
+        medicine: match ? match[1] : m.medicine,
+        strength: match ? match[2] : "",
+        dosage: m.dosage,
+        frequency: m.frequency,
+        route: "Oral",
+        duration: m.duration,
+        instructions: m.instructions,
+        quantity: parseInt(m.duration) || 10
+      };
+    }));
     setInvestigations(tmpl.investigations);
     setAdvice(tmpl.advice);
   };
@@ -178,7 +196,9 @@ export default function DoctorWorkflow({
     setDiagnosis(enc.diagnosis || (enc.dept === "Cardiology" ? "Stable Angina / Rule-out ACS" : "Musculoskeletal Lumbar Strain"));
     setIcd10(enc.icd10 || (enc.dept === "Cardiology" ? "I20.9" : "M54.5"));
     if (enc.prescription && enc.prescription.length > 0) {
-      setMedications(enc.prescription);
+      setMedications(enc.prescription as any);
+    } else {
+      setMedications([]);
     }
     if (enc.investigations && enc.investigations.length > 0) {
       setInvestigations(enc.investigations);
@@ -209,12 +229,19 @@ export default function DoctorWorkflow({
     if (enc.status === "Awaiting Doctor" || enc.status === "Doctor Assigned" || enc.status === "In Queue") {
       db.updateEncounter(enc.id, { status: "Under Consultation" });
     }
+
+    // Load Med History
+    if (enc.umr) {
+       const allBills = PharmacyDatabase.getBills();
+       const ptBills = allBills.filter(b => b.uhid === enc.umr);
+       setPatientMedHistory(ptBills);
+    }
   };
 
   const handleAddMedication = () => {
     setMedications(prev => [
       ...prev,
-      { medicine: "Pantoprazole 40mg", dosage: "1 tab", frequency: "OD (Before Food)", duration: "14 days", instructions: "Before breakfast" }
+      { medicine: "Pantoprazole", strength: "40mg", dosage: "1 tab", frequency: "OD", route: "Oral", duration: "14 days", instructions: "Before breakfast", quantity: 14 }
     ]);
   };
 
@@ -256,11 +283,70 @@ export default function DoctorWorkflow({
         }
       });
 
+      // Create Pharmacy Prescription
+      const rxId = "RX-" + Math.floor(100000 + Math.random() * 900000);
+      let rxItems: AppPrescriptionItem[] = [];
+      let source: PrescriptionSource = "DIGITAL";
+      let status: any = "Sent To Pharmacy";
+
+      if (rxMode === "DIGITAL") {
+        rxItems = medications.map((m, idx) => ({
+          id: `RX-ITEM-${idx + 1}`,
+          medicineName: m.medicine,
+          strength: m.strength,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          duration: m.duration,
+          route: m.route,
+          instructions: m.instructions,
+          remarks: m.remarks,
+          quantity: m.quantity,
+          substitutionAllowed: true
+        }));
+      } else {
+        source = "UPLOADED_IMAGE";
+        status = "OCR Processing";
+      }
+
+      const rx: AppPrescription = {
+        id: rxId,
+        patientId: activeEncounter.umr,
+        patientName: activeEncounter.patientName,
+        uhid: activeEncounter.umr,
+        age: activeEncounter.age,
+        gender: activeEncounter.sex,
+        visitId: activeEncounter.opNumber,
+        doctorId: selectedDoctor.id,
+        doctorName: selectedDoctor.name,
+        department: selectedDoctor.specialty,
+        diagnosis: diagnosis,
+        date: new Date().toISOString().split("T")[0],
+        sourceType: source,
+        priority: "Normal",
+        status: status,
+        dispensingStatus: "Waiting",
+        imageUrl: uploadedRxImage || undefined,
+        items: rxItems,
+        createdAt: new Date().toISOString()
+      };
+
+      const existingRx = PharmacyDatabase.getPrescriptions();
+      PharmacyDatabase.savePrescriptions([...existingRx, rx]);
+
+      AuditDatabase.logEvent(
+        "Prescription Created",
+        "Clinical",
+        `Doctor created prescription ${rxId} for patient ${activeEncounter.patientName}`,
+        "Success",
+        selectedDoctor.id,
+        selectedDoctor.name
+      );
+
       setSubmittedAlert({
         patientName: activeEncounter.patientName,
         umr: activeEncounter.umr,
         opNumber: activeEncounter.opNumber,
-        medCount: medications.length
+        medCount: rxMode === "DIGITAL" ? medications.length : 1
       });
       setSubmitSuccess(true);
 
@@ -270,6 +356,13 @@ export default function DoctorWorkflow({
     } catch (err: any) {
       console.error("Failed to submit consultation:", err);
       alert(`Error saving consultation: ${err?.message || "Please try again."}`);
+    }
+  };
+
+  const handleUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const url = URL.createObjectURL(e.target.files[0]);
+      setUploadedRxImage(url);
     }
   };
 
@@ -528,6 +621,47 @@ export default function DoctorWorkflow({
                 )}
               </div>
 
+              {/* Medication History */}
+              <div className="bg-[#FFFBEB] border border-[#FCD34D] rounded p-4.5 space-y-2.5 shadow-2xs">
+                <div className="flex justify-between items-center">
+                  <div className="text-[12.5px] font-bold text-gray-900 flex items-center gap-1.5">
+                    <span>💊</span> Patient Medication History (Pharmacy Records)
+                  </div>
+                </div>
+                {patientMedHistory.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px] text-left border-collapse bg-white border border-[#FDE68A]">
+                      <thead className="bg-[#FEF3C7] text-gray-800">
+                        <tr>
+                          <th className="p-2 border-b border-r border-[#FDE68A]">Date</th>
+                          <th className="p-2 border-b border-r border-[#FDE68A]">Medicine</th>
+                          <th className="p-2 border-b border-r border-[#FDE68A]">Quantity Dispensed</th>
+                          <th className="p-2 border-b border-r border-[#FDE68A]">Batch</th>
+                          <th className="p-2 border-b border-[#FDE68A]">Pharmacist</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {patientMedHistory.map(b => 
+                          b.items?.map((item: any, i: number) => (
+                            <tr key={`${b.id}-${item.medicineId || i}`} className="border-b border-[#FDE68A]">
+                              <td className="p-2 border-r border-[#FDE68A]">{new Date(b.createdAt).toLocaleDateString()}</td>
+                              <td className="p-2 border-r border-[#FDE68A] font-semibold">{item.medicineName}</td>
+                              <td className="p-2 border-r border-[#FDE68A]">{item.quantity}</td>
+                              <td className="p-2 border-r border-[#FDE68A] font-mono">{item.batchNumber}</td>
+                              <td className="p-2">{b.createdBy}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                   <div className="text-[11px] text-[#92400E] italic bg-white p-2.5 rounded border border-[#FDE68A]">
+                    No past dispensed medications found in Pharmacy records for this patient.
+                   </div>
+                )}
+              </div>
+
               {/* 2. Nurse-Recorded Vital Signs (Pre-Consultation Assessment) */}
               <div className="bg-white border-2 border-[#93C5FD] rounded p-5 shadow-xs space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8F0] pb-3">
@@ -689,87 +823,137 @@ export default function DoctorWorkflow({
                 <div className="space-y-3 pt-1">
                   <div className="flex justify-between items-center">
                     <label className="text-[12px] font-bold text-gray-800">
-                      Prescribed Medications (Rx Pad)
+                      Prescription Entry
                     </label>
-                    <button
-                      type="button"
-                      onClick={handleAddMedication}
-                      className="text-[12px] font-semibold text-[#1B4FD8] hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      + Add Medication
-                    </button>
+                    <div className="flex items-center bg-[#F1F5F9] rounded p-1">
+                      <button 
+                        type="button" 
+                        onClick={() => setRxMode("DIGITAL")}
+                        className={`px-3 py-1 text-[11px] font-bold rounded transition-colors ${rxMode === "DIGITAL" ? "bg-white text-[#1B4FD8] shadow-sm" : "text-[#64748B]"}`}
+                      >
+                        Digital Entry
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setRxMode("UPLOAD")}
+                        className={`px-3 py-1 text-[11px] font-bold rounded transition-colors ${rxMode === "UPLOAD" ? "bg-white text-[#1B4FD8] shadow-sm" : "text-[#64748B]"}`}
+                      >
+                        Upload Image
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="space-y-2.5">
-                    {medications.map((med, idx) => (
-                      <div key={idx} className="bg-[#F8FAFC] border border-[#CBD5E1] rounded p-3 grid grid-cols-1 sm:grid-cols-5 gap-2.5 items-center text-[12px]">
-                        <div className="sm:col-span-2">
-                          <span className="text-[10px] uppercase font-bold text-[#64748B] block">Medicine Name</span>
-                          <input
-                            value={med.medicine}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setMedications(prev => prev.map((m, i) => i === idx ? { ...m, medicine: val } : m));
-                            }}
-                            placeholder="Medicine Name (e.g. Aspirin 81mg)"
-                            className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] font-semibold focus:outline-none focus:border-[#1B4FD8]"
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-[#64748B] block">Dosage</span>
-                          <input
-                            value={med.dosage}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setMedications(prev => prev.map((m, i) => i === idx ? { ...m, dosage: val } : m));
-                            }}
-                            placeholder="1 tab"
-                            className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-[#64748B] block">Frequency</span>
-                          <select
-                            value={med.frequency}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setMedications(prev => prev.map((m, i) => i === idx ? { ...m, frequency: val } : m));
-                            }}
-                            className="w-full bg-white border border-[#DDE2EC] rounded px-2 py-1.5 text-[12px] focus:outline-none focus:border-[#1B4FD8]"
-                          >
-                            <option>OD (Once Daily)</option>
-                            <option>BD (Twice Daily)</option>
-                            <option>TDS (Thrice Daily)</option>
-                            <option>QID (Four Times Daily)</option>
-                            <option>HS (Bedtime)</option>
-                            <option>PRN (As Needed)</option>
-                          </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1">
-                            <span className="text-[10px] uppercase font-bold text-[#64748B] block">Duration</span>
+                  {rxMode === "DIGITAL" ? (
+                    <div className="space-y-2.5">
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleAddMedication}
+                          className="text-[11px] font-semibold bg-blue-50 text-[#1B4FD8] px-2 py-1 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+                        >
+                          + Add Medicine
+                        </button>
+                      </div>
+                      {medications.map((med, idx) => (
+                        <div key={idx} className="bg-[#F8FAFC] border border-[#CBD5E1] rounded p-3 grid grid-cols-1 sm:grid-cols-4 gap-2.5 items-start text-[12px]">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#64748B] block">Medicine Name</span>
                             <input
-                              value={med.duration}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setMedications(prev => prev.map((m, i) => i === idx ? { ...m, duration: val } : m));
-                              }}
-                              placeholder="30 days"
+                              value={med.medicine}
+                              onChange={(e) => setMedications(prev => prev.map((m, i) => i === idx ? { ...m, medicine: e.target.value } : m))}
+                              className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] font-semibold focus:outline-none focus:border-[#1B4FD8]"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#64748B] block">Strength</span>
+                            <input
+                              value={med.strength}
+                              onChange={(e) => setMedications(prev => prev.map((m, i) => i === idx ? { ...m, strength: e.target.value } : m))}
                               className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
                             />
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveMedication(idx)}
-                            className="text-red-500 hover:text-red-700 p-1.5 rounded text-sm mt-3.5 cursor-pointer"
-                            title="Remove"
-                          >
-                            ✕
-                          </button>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#64748B] block">Dosage</span>
+                            <input
+                              value={med.dosage}
+                              onChange={(e) => setMedications(prev => prev.map((m, i) => i === idx ? { ...m, dosage: e.target.value } : m))}
+                              className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#64748B] block">Frequency</span>
+                            <input
+                              value={med.frequency}
+                              onChange={(e) => setMedications(prev => prev.map((m, i) => i === idx ? { ...m, frequency: e.target.value } : m))}
+                              className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#64748B] block">Duration</span>
+                            <input
+                              value={med.duration}
+                              onChange={(e) => setMedications(prev => prev.map((m, i) => i === idx ? { ...m, duration: e.target.value } : m))}
+                              className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#64748B] block">Route</span>
+                            <input
+                              value={med.route}
+                              onChange={(e) => setMedications(prev => prev.map((m, i) => i === idx ? { ...m, route: e.target.value } : m))}
+                              className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#64748B] block">Instructions</span>
+                            <input
+                              value={med.instructions || ""}
+                              onChange={(e) => setMedications(prev => prev.map((m, i) => i === idx ? { ...m, instructions: e.target.value } : m))}
+                              className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <div className="flex-1">
+                               <span className="text-[10px] uppercase font-bold text-[#64748B] block">Total Qty</span>
+                               <input
+                                 type="number"
+                                 value={med.quantity}
+                                 onChange={(e) => setMedications(prev => prev.map((m, i) => i === idx ? { ...m, quantity: parseInt(e.target.value)||0 } : m))}
+                                 className="w-full bg-white border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[12.5px] focus:outline-none focus:border-[#1B4FD8]"
+                               />
+                             </div>
+                             <button
+                              type="button"
+                              onClick={() => handleRemoveMedication(idx)}
+                              className="text-red-500 hover:text-red-700 p-1 rounded bg-red-50 border border-red-200 mt-3.5 cursor-pointer"
+                              title="Remove"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-[#F8FAFC] border-2 border-dashed border-[#CBD5E1] rounded-xl p-8 text-center flex flex-col items-center justify-center">
+                       <span className="text-4xl mb-3">📸</span>
+                       <h4 className="text-[14px] font-bold text-gray-900">Upload Handwritten Prescription</h4>
+                       <p className="text-[12px] text-[#64748B] mb-4 max-w-sm">
+                          Upload an image of a handwritten prescription. The Pharmacy will use OCR AI to extract the contents.
+                       </p>
+                       <input 
+                         type="file" 
+                         accept="image/*"
+                         onChange={handleUploadImage}
+                         className="block w-full text-[12px] text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-[#1B4FD8] hover:file:bg-blue-100"
+                       />
+                       {uploadedRxImage && (
+                          <div className="mt-4 p-2 border border-gray-300 bg-white rounded shadow-sm">
+                             <img src={uploadedRxImage} alt="Uploaded Rx" className="max-h-40 object-contain" />
+                          </div>
+                       )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Investigations / Diagnostic Orders */}
