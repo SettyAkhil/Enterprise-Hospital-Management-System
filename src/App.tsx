@@ -43,6 +43,8 @@ import Admissions from "./components/Admissions";
 import Readmission from "./components/Readmission";
 import PaymentCollection from "./components/PaymentCollection";
 import RevenueReports from "./components/RevenueReports";
+import Administration from "./components/Administration";
+import { AuditDatabase } from "./services/auditDb";
 
 type Module =
   | "dashboard" | "patients" | "appointments" | "emergency"
@@ -108,10 +110,10 @@ const NAV: NavItem[] = [
       { key: "beds", label: "Bed Management" },
       { key: "admissions", label: "Admissions" },
       { key: "readmission", label: "Readmission" },
-      { key: "icu", label: "ICU" },
       { key: "discharge", label: "Discharge" },
     ]
   },
+  { key: "icu", label: "ICU", Icon: Icon.Heart },
   { key: "nursing", label: "Nursing", Icon: Icon.Nursing },
   { key: "laboratory", label: "Laboratory", Icon: Icon.Lab, badge: 3 },
   { key: "radiology", label: "Radiology", Icon: Icon.Radiology },
@@ -311,6 +313,29 @@ export default function App() {
 
   const isNurse = userRole === "rn";
 
+  // Check route access
+  useEffect(() => {
+    if (loggedIn && module !== "dashboard" && !userPermissions.includes(module)) {
+      // Check if it matches a child module
+      const parentMatch = NAV.find(n => n.children?.some(c => c.key === module));
+      if (!parentMatch || !userPermissions.includes(parentMatch.key)) {
+        setModule("dashboard");
+      }
+    }
+  }, [module, loggedIn, userPermissions]);
+
+  const handleLogout = () => {
+    AuditDatabase.logEvent(
+      "Logout",
+      "Authentication",
+      `User ${activeStaff.name} logged out.`,
+      "Success",
+      activeStaff.id,
+      activeStaff.name
+    );
+    setLoggedIn(false);
+  };
+
   const handleLogin = (userData: { user: string; role: string; staffId: string; permissions: string[] }) => {
     setUserRole(userData.role);
     setUserPermissions(userData.permissions);
@@ -445,7 +470,7 @@ export default function App() {
                   <div className="text-[11.5px] font-medium text-white leading-tight">{activeStaff.name}</div>
                   <div className="text-[10px] text-[#93C5FD]">{activeStaff.title} · {activeStaff.activeShift}</div>
                 </div>
-                <button onClick={() => setLoggedIn(false)} className="ml-1 text-[#64748B] hover:text-white text-[11px] font-medium transition-colors px-1.5 py-1 rounded hover:bg-white/10">
+                <button onClick={handleLogout} className="ml-1 text-[#64748B] hover:text-white text-[11px] font-medium transition-colors px-1.5 py-1 rounded hover:bg-white/10">
                   Sign out
                 </button>
               </div>
@@ -472,15 +497,14 @@ export default function App() {
                 />
               </div>
               <div className="flex-1 py-2 px-2">
-                {((isNurse
-                  ? [
-                      { key: "dashboard" as Module, label: "Nurse Dashboard", Icon: Icon.Dashboard },
-                      { key: "nursing" as Module, label: "Nursing & My Patients", Icon: Icon.Nursing },
-                      { key: "chart" as Module, label: "Patient Chart", Icon: Icon.Clinical },
-                    ]
-                  : NAV
-                ) as NavItem[]).map((item) => {
-                  const isActive = module === item.key || (item.children?.some(c => c.key === module));
+                {NAV.map((item) => {
+                  // Module-based Access Control Filtering
+                  const hasAccess = userPermissions.includes(item.key);
+                  if (!hasAccess) return null;
+
+                  const filteredChildren = item.children?.filter(c => userPermissions.includes(c.key));
+
+                  const isActive = module === item.key || (filteredChildren?.some(c => c.key === module));
                   const isExpanded = expanded.includes(item.key);
 
                   return (
@@ -488,13 +512,13 @@ export default function App() {
                       <div
                         className={`nav-item ${isActive ? "active" : ""}`}
                         onClick={() => {
-                          if (item.children) {
+                          if (filteredChildren && filteredChildren.length > 0) {
                             toggleExpand(item.key);
                             if (!expanded.includes(item.key)) {
                               if (item.key === "intelligence") {
                                 setModule("intelligence");
                               } else {
-                                setModule(item.children[0].key);
+                                setModule(filteredChildren[0].key);
                               }
                             }
                           }
@@ -507,7 +531,7 @@ export default function App() {
                             {item.badge && !isActive && (
                               <span className="badge bg-[#DC2626] text-white">{item.badge}</span>
                             )}
-                            {item.children && (
+                            {filteredChildren && filteredChildren.length > 0 && (
                               <span className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}>
                                 <Icon.ChevronRight />
                               </span>
@@ -515,9 +539,9 @@ export default function App() {
                           </>
                         )}
                       </div>
-                      {!sidebarCollapsed && item.children && isExpanded && (
+                      {!sidebarCollapsed && filteredChildren && filteredChildren.length > 0 && isExpanded && (
                         <div>
-                          {item.children.map((child, ci) => (
+                          {filteredChildren.map((child, ci) => (
                             <div key={ci}
                               className={`nav-item sub ${module === child.key && isActive ? "active" : ""}`}
                               onClick={() => setModule(child.key)}>
@@ -646,7 +670,7 @@ export default function App() {
               {module === "insurance" && <Insurance />}
               {module === "clinical" && <PlaceholderModule title="Clinical" sub="Encounters, orders, results, and care plans" />}
               {module === "reports" && <PlaceholderModule title="Reports" sub="Operational and clinical reporting" />}
-              {module === "admin" && <PlaceholderModule title="Administration" sub="Users, roles, departments, and system configuration" />}
+              {module === "admin" && <Administration />}
 
               {/* New modules */}
               {module === "queue" && (
