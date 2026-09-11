@@ -1,15 +1,15 @@
 import React, { useState } from "react";
-import { API_BASE } from "../lib/constants";
-import { withAuthHeaders } from "../lib/api";
+import { apiFetch } from "../lib/api";
+import { AuditDatabase } from "../services/auditDb";
 
 interface LoginProps {
   onLogin: (userData: { user: string; role: string; staffId: string; permissions: string[] }) => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
-  const [user, setUser] = useState("admin@generalhospital.org");
+  const [user, setUser] = useState("admin");
   const [pass, setPass] = useState("password123");
-  const [role, setRole] = useState("admin");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -19,47 +19,42 @@ export default function Login({ onLogin }: LoginProps) {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const data = await apiFetch("/api/auth/login", {
         method: "POST",
-        credentials: "include",
-        headers: withAuthHeaders({ "Content-Type": "application/json" }, "POST"),
         body: JSON.stringify({ username: user, password: pass }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || "Invalid credentials.");
-      }
-      const effectiveRole = data.user?.role || role;
-      const staffId = data.user?.employee_id ||
-        (effectiveRole === "admin" ? "ADM-001" : effectiveRole === "rn" ? "RN-8821" : "DOC-4401");
-      onLogin({ user: user.trim(), role: effectiveRole, staffId, permissions: data.user?.permissions || [] });
-    } catch (err) {
-      // If backend API is unreachable (connection refused / offline), fallback to standalone client-side authentication
-      const isConnectionError = err instanceof TypeError || (err instanceof Error && (err.message.includes("fetch") || err.message.includes("network") || err.message.includes("Is the backend running")));
+      
+      AuditDatabase.logEvent(
+        "Login Successful",
+        "Authentication",
+        `User ${user.trim()} logged in successfully.`,
+        "Success",
+        data.user.employee_id,
+        user.trim()
+      );
 
-      if (isConnectionError) {
-        const effectiveRole = role;
-        const staffId = effectiveRole === "admin" ? "ADM-001" : effectiveRole === "rn" ? "RN-8821" : "DOC-4401";
-        // No real backend to check permissions against in this fallback --
-        // nothing that needs beds.write etc. can actually save without the
-        // backend anyway, so this is never a real privilege escalation.
-        onLogin({ user: user.trim(), role: effectiveRole, staffId, permissions: [] });
-        return;
-      }
+      onLogin({ 
+        user: user.trim(), 
+        role: data.user.role, 
+        staffId: data.user.employee_id, 
+        permissions: data.user.permissions || [] 
+      });
+    } catch (err) {
+      AuditDatabase.logEvent(
+        "Login Failed",
+        "Authentication",
+        `Failed login attempt for user ${user.trim()}.`,
+        "Failed",
+        "system",
+        user.trim()
+      );
       setError(err instanceof Error ? err.message : "Unable to sign in. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   };
 
-  const ROLES = [
-    { key: "physician", label: "Physician", dept: "Internal Medicine" },
-    { key: "rn", label: "Registered Nurse", dept: "3N Medical" },
-    { key: "pharmacist", label: "Pharmacist", dept: "Inpatient Pharmacy" },
-    { key: "lab", label: "Lab Technician", dept: "Clinical Laboratory" },
-    { key: "billing", label: "Billing Specialist", dept: "Revenue Cycle" },
-    { key: "admin", label: "System Admin", dept: "IT Administration" },
-  ];
+
 
   return (
     <div className="h-screen flex" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -164,19 +159,7 @@ export default function Login({ onLogin }: LoginProps) {
               </div>
             </div>
 
-            <div>
-              <label className="block text-[12px] font-semibold text-[#374151] mb-1.5">Role</label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {ROLES.map(r => (
-                  <button key={r.key} type="button" onClick={() => setRole(r.key)}
-                    className={`text-left px-3 py-2 rounded border text-[12px] transition-colors
-                      ${role === r.key ? "border-[#1B4FD8] bg-[#EFF6FF] text-[#1B4FD8]" : "border-[#DDE2EC] bg-white text-[#64748B] hover:border-[#94A3B8]"}`}>
-                    <div className="font-medium">{r.label}</div>
-                    <div className={`text-[10.5px] ${role === r.key ? "text-[#93C5FD]" : "text-[#94A3B8]"}`}>{r.dept}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
+
 
             <div className="flex items-center gap-2 mt-1">
               <input type="checkbox" id="mfa" className="w-3.5 h-3.5 accent-[#1B4FD8]" defaultChecked />

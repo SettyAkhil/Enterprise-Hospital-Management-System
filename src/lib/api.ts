@@ -2,6 +2,7 @@ import { API_BASE } from "./constants";
 import type { Notice } from "../types";
 import { ErDatabase } from "../services/erDb";
 import { BedDatabase } from "../services/bedDb";
+import { RoleDatabase } from "../services/roleDb";
 
 const HOSPITAL_CODE_KEY = "hospai_hospital_code";
 const DEFAULT_HOSPITAL_CODE = "hosp-default";
@@ -324,6 +325,22 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
   const consentDocMatch = pathname.match(/^\/api\/er\/consents\/(\d+)\/document$/);
   if (consentDocMatch && method === "POST") {
     return { success: true, message: "Document uploaded successfully" } as T;
+  }
+
+  // POST /api/auth/login
+  if (pathname === "/api/auth/login" && method === "POST") {
+    const auth = RoleDatabase.authenticate(body.username, body.password);
+    if (!auth) throw new Error("Invalid credentials.");
+    return {
+      user: {
+        id: auth.user.id,
+        employee_id: auth.user.staffId,
+        username: auth.user.username,
+        role: auth.role.id,
+        name: auth.user.name,
+        permissions: auth.role.allowedModules,
+      }
+    } as T;
   }
 
   // GET /api/auth/session
