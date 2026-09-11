@@ -36,6 +36,38 @@ export function WardBedBoard<T extends BedCardData>({
 
   if (roomNames.length === 0) return null;
 
+  if (roomNames.length <= 2) {
+    return (
+      <div className={`pt-2 ${roomNames.length === 2 ? "grid grid-cols-2 gap-6" : ""}`}>
+        {roomNames.map((room) => {
+          const roomBeds = rooms.get(room)!;
+          const occupied = roomBeds.filter((b) => b.status === "Occupied").length;
+          return (
+            <div key={room}>
+              {roomNames.length === 2 && (
+                <div className="flex items-center gap-2 mb-3 px-1">
+                  <span className="text-[13px] font-bold text-gray-700 uppercase tracking-wide">Room {room}</span>
+                  <span className="text-[11px] bg-[#F1F5F9] text-[#64748B] px-2 py-0.5 rounded font-mono font-bold">{occupied}/{roomBeds.length}</span>
+                </div>
+              )}
+              <div className="bed-info-card-grid">
+                {roomBeds.map((bed) => (
+                  <BedCard
+                    key={bed.id}
+                    bed={bed}
+                    readOnly={readOnly}
+                    onClick={onBedClick ? () => onBedClick(bed) : undefined}
+                    onPatientClick={onPatientClick}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="ward-room-tabs">
