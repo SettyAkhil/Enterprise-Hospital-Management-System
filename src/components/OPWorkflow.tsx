@@ -1085,7 +1085,7 @@ export default function OPWorkflow({
             {aiAnalysisResult && (
               <div className="space-y-5 animate-in fade-in">
                 {/* 1. Clinical AI Triage & Specialty Recommendation Cards */}
-                <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded-lg p-5 shadow-xs space-y-4">
+                <div className="bg-[#F8FAFC] border-2 border-[#93C5FD] rounded-none p-5 shadow-xs space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8F0] pb-3">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span className="text-[11px] font-bold uppercase tracking-wider bg-[#1D4ED8] text-white px-2.5 py-1 rounded">
@@ -1238,7 +1238,7 @@ export default function OPWorkflow({
 
                   {/* 3. Nurse Manual Booking Action Panel */}
                   {!bookingConfirmed && selectedDoctorForBooking && (
-                    <div className="bg-[#EFF6FF] border-2 border-[#60A5FA] rounded-lg p-4 space-y-3.5 mt-4">
+                    <div className="bg-[#EFF6FF] border-2 border-[#60A5FA] rounded-none p-4 space-y-3.5 mt-4">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-200/80 pb-3">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-[#1B4FD8] text-white flex items-center justify-center font-bold text-[14px]">
@@ -1291,7 +1291,7 @@ export default function OPWorkflow({
             {(bookingConfirmed || (patient.status !== "Registered" && patient.assignedDoctor)) && (
               <div className="space-y-4 animate-in fade-in">
                 {/* Appointment Booked & Queue Success Banner */}
-                <div className="bg-[#F0FDF4] border-2 border-[#86EFAC] rounded-lg p-5 shadow-sm space-y-4">
+                <div className="bg-[#F0FDF4] border-2 border-[#86EFAC] rounded-none p-5 shadow-sm space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-green-200/80 pb-3.5">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded bg-[#16A34A] text-white flex items-center justify-center text-lg font-bold shadow-xs">

@@ -733,7 +733,7 @@ export default function NursingPortal() {
                   {activeTab === "overview" && (
                     <div className="space-y-6">
                       {/* Priority Alerts */}
-                      <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-none p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                           <div className="text-[11px] font-bold uppercase tracking-wider text-[#1B4FD8]">
                             Current Nursing Priorities
@@ -766,22 +766,22 @@ export default function NursingPortal() {
                           Latest Clinical Observations
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                          <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+                          <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-none">
                             <span className="text-[11px] text-[#64748B] block">Blood Pressure</span>
                             <strong className="text-lg font-mono text-[#0F172A] block mt-0.5">128/82</strong>
                             <span className="text-[10px] text-[#16A34A] font-semibold">Normal Baseline</span>
                           </div>
-                          <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+                          <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-none">
                             <span className="text-[11px] text-[#64748B] block">Heart Rate</span>
                             <strong className="text-lg font-mono text-[#0F172A] block mt-0.5">78 bpm</strong>
                             <span className="text-[10px] text-[#16A34A] font-semibold">Sinus Rhythm</span>
                           </div>
-                          <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+                          <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-none">
                             <span className="text-[11px] text-[#64748B] block">Oxygen (SpO₂)</span>
                             <strong className="text-lg font-mono text-[#0F172A] block mt-0.5">97%</strong>
                             <span className="text-[10px] text-[#16A34A] font-semibold">Room Air</span>
                           </div>
-                          <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+                          <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-none">
                             <span className="text-[11px] text-[#64748B] block">Temperature</span>
                             <strong className="text-lg font-mono text-[#0F172A] block mt-0.5">98.4°F</strong>
                             <span className="text-[10px] text-[#16A34A] font-semibold">Afebrile</span>
@@ -795,7 +795,7 @@ export default function NursingPortal() {
                           Latest Shift Update
                         </div>
                         {patientNotes.length > 0 ? (
-                          <div className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg p-4">
+                          <div className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-none p-4">
                             <div className="flex items-center justify-between text-xs mb-2">
                               <span className="font-bold text-[#0F172A]">
                                 {patientNotes[0].authorNurseName} ({patientNotes[0].authorNurseId})
@@ -842,7 +842,7 @@ export default function NursingPortal() {
                       </div>
 
                       {patientInstructions.length === 0 ? (
-                        <div className="p-8 text-center text-[#64748B] bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
+                        <div className="p-8 text-center text-[#64748B] bg-[#F8FAFC] rounded-none border border-[#E2E8F0]">
                           <p className="text-xs font-medium">No pending doctor instructions for this patient.</p>
                         </div>
                       ) : (
@@ -967,13 +967,13 @@ export default function NursingPortal() {
                       </div>
 
                       {patientNotes.length === 0 ? (
-                        <div className="p-8 text-center text-[#64748B] bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
+                        <div className="p-8 text-center text-[#64748B] bg-[#F8FAFC] rounded-none border border-[#E2E8F0]">
                           <p className="text-xs font-medium">No nursing notes entered yet. Click "+ Add Nursing Note" above.</p>
                         </div>
                       ) : (
                         <div className="space-y-3">
                           {patientNotes.map((n) => (
-                            <div key={n.id} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+                            <div key={n.id} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-none">
                               <div className="flex items-center justify-between text-xs pb-2 border-b border-[#E2E8F0]">
                                 <div>
                                   <strong className="text-[#0F172A]">{n.authorNurseName}</strong>
@@ -1033,7 +1033,7 @@ export default function NursingPortal() {
                       </div>
 
                       {/* Chat Messages Thread */}
-                      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-4 h-80 overflow-y-auto space-y-3">
+                      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-none p-4 h-80 overflow-y-auto space-y-3">
                         {patientMessages.length === 0 ? (
                           <div className="h-full flex items-center justify-center text-xs text-[#64748B]">
                             No clinical messages exchanged yet for this patient.
@@ -1095,7 +1095,7 @@ export default function NursingPortal() {
                   {activeTab === "handover" && (
                     <div className="space-y-6">
                       {/* Handover Action Banner */}
-                      <div className="bg-[#F0FDF4] border border-[#BBF7D0] rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="bg-[#F0FDF4] border border-[#BBF7D0] rounded-none p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                           <div className="text-[11px] font-bold uppercase tracking-wider text-[#166534]">
                             Shift Handover Protocol

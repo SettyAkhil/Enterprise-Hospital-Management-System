@@ -35,6 +35,8 @@ import IntelligenceHub from "./components/IntelligenceHub";
 import QueueManagement from "./components/QueueManagement";
 import OPManagement from "./components/OPManagement";
 import DoctorWorkflow from "./components/DoctorWorkflow";
+import DoctorPortal from "./components/doctor/DoctorPortal";
+import LabBillingQueue from "./components/LabBillingQueue";
 import DoctorScheduling from "./components/DoctorScheduling";
 import PatientExperience from "./components/PatientExperience";
 import HRMS from "./components/HRMS";
@@ -43,16 +45,27 @@ import Admissions from "./components/Admissions";
 import Readmission from "./components/Readmission";
 import PaymentCollection from "./components/PaymentCollection";
 import RevenueReports from "./components/RevenueReports";
+import Administration from "./components/Administration";
+import { AuditDatabase } from "./services/auditDb";
+import { ALL_SYSTEM_MODULES, RoleDatabase } from "./services/roleDb";
+import { DoctorAccount, DoctorPortalDatabase, resolveDoctorAccount } from "./services/doctorPortalDb";
+import { LabOrderDatabase } from "./services/labOrdersDb";
+import { PharmacyDatabase } from "./services/pharmacyDb";
 
 type Module =
   | "dashboard" | "patients" | "appointments" | "emergency"
   | "clinical" | "inpatient" | "nursing" | "laboratory"
-  | "radiology" | "pharmacy" | "surgery" | "billing"
+  | "radiology" | "pharmacy"
+  | "pharmacy_dispensing" | "pharmacy_rx" | "pharmacy_ocr" | "pharmacy_returns"
+  | "pharmacy_medicine" | "pharmacy_category" | "pharmacy_suppliers"
+  | "pharmacy_po" | "pharmacy_grn" | "pharmacy_ledger"
+  | "pharmacy_transfers" | "pharmacy_expiry" | "pharmacy_analytics"
+  | "surgery" | "billing"
   | "icu" | "discharge" | "triage" | "insurance" | "analytics"
   | "reports" | "admin"
   | "chart" | "register"
   | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow"
-  | "doctor_workflow" | "scheduling"
+  | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing"
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
   | "hrms" | "employees" | "patient_exp"
@@ -64,11 +77,12 @@ interface NavItem {
   label: string;
   Icon: React.FC<IconProps>;
   badge?: number;
-  children?: { key: Module; label: string }[];
+  children?: { key: Module; label: string; group?: string }[];
 }
 
 const NAV: NavItem[] = [
   { key: "dashboard", label: "Dashboard", Icon: Icon.Dashboard },
+  { key: "doctor_portal", label: "My Doctor Portal", Icon: Icon.Stethoscope },
   {
     key: "patients", label: "Patients", Icon: Icon.Patients,
     children: [
@@ -89,8 +103,6 @@ const NAV: NavItem[] = [
     key: "clinical", label: "Clinical", Icon: Icon.Clinical,
     children: [
       { key: "chart", label: "Encounters" },
-      { key: "chart", label: "Orders" },
-      { key: "chart", label: "Results" },
       { key: "doctor_workflow", label: "Doctor Workflow" },
     ]
   },
@@ -108,19 +120,38 @@ const NAV: NavItem[] = [
       { key: "beds", label: "Bed Management" },
       { key: "admissions", label: "Admissions" },
       { key: "readmission", label: "Readmission" },
-      { key: "icu", label: "ICU" },
       { key: "discharge", label: "Discharge" },
     ]
   },
+  { key: "icu", label: "ICU", Icon: Icon.Heart },
   { key: "nursing", label: "Nursing", Icon: Icon.Nursing },
-  { key: "laboratory", label: "Laboratory", Icon: Icon.Lab, badge: 3 },
+  { key: "laboratory", label: "Laboratory", Icon: Icon.Lab },
   { key: "radiology", label: "Radiology", Icon: Icon.Radiology },
-  { key: "pharmacy", label: "Pharmacy", Icon: Icon.Pharmacy, badge: 8 },
+  {
+    key: "pharmacy", label: "Pharmacy", Icon: Icon.Pharmacy,
+    children: [
+      { key: "pharmacy", label: "Dashboard" },
+      { key: "pharmacy_dispensing", label: "Dispensing & Billing", group: "Sales & Dispensing" },
+      { key: "pharmacy_rx", label: "Prescription Queue", group: "Sales & Dispensing" },
+      { key: "pharmacy_ocr", label: "OCR Verification", group: "Sales & Dispensing" },
+      { key: "pharmacy_returns", label: "Returns", group: "Sales & Dispensing" },
+      { key: "pharmacy_medicine", label: "Medicine Master", group: "Catalog" },
+      { key: "pharmacy_category", label: "Category Master", group: "Catalog" },
+      { key: "pharmacy_suppliers", label: "Suppliers", group: "Procurement" },
+      { key: "pharmacy_po", label: "Purchase Orders", group: "Procurement" },
+      { key: "pharmacy_grn", label: "GRN Receiving", group: "Procurement" },
+      { key: "pharmacy_ledger", label: "Inventory Ledger", group: "Inventory" },
+      { key: "pharmacy_transfers", label: "Stock Transfers", group: "Inventory" },
+      { key: "pharmacy_expiry", label: "Expiry Management", group: "Inventory" },
+      { key: "pharmacy_analytics", label: "Analytics & Reports", group: "Reporting" },
+    ]
+  },
   { key: "surgery", label: "Surgery", Icon: Icon.Surgery },
   {
     key: "billing", label: "Billing", Icon: Icon.Billing,
     children: [
       { key: "billing", label: "Invoices" },
+      { key: "lab_billing", label: "Lab Test Billing" },
       { key: "payments", label: "Payment Collection" },
     ]
   },
@@ -281,11 +312,39 @@ const DEFAULT_STAFF: StaffProfile = {
   department: "Administration",
 };
 
+function getRoleProfile(roleId: string, username?: string): StaffProfile {
+  const r = (roleId || "").toLowerCase();
+  const u = (username || "").toLowerCase();
+
+  if (r.includes("superadmin") || u === "superadmin") {
+    return { id: "SUP-001", name: "Dr. Alexander Vance", role: "ROLE_SUPERADMIN", title: "Super Administrator", department: "Executive Control" };
+  }
+  if (r.includes("doctor") || u === "doctor") {
+    return { id: "DOC-402", name: "Dr. Sarah Jenkins", role: "ROLE_DOCTOR", title: "Attending Physician / EMR", department: "Cardiology & ICU" };
+  }
+  if (r.includes("reception") || u === "reception") {
+    return { id: "REC-102", name: "Elena Torres", role: "ROLE_RECEPTION", title: "Front Desk Receptionist", department: "Patient Services" };
+  }
+  if (r.includes("pharmacy") || u === "pharmacy") {
+    return { id: "PHM-844", name: "Robert Williams, RPh", role: "ROLE_PHARMACY", title: "Chief Pharmacist", department: "Pharmacy Dept" };
+  }
+  if (r.includes("lab") || u === "lab") {
+    return { id: "LAB-512", name: "Michael Chang, CLS", role: "ROLE_LAB", title: "Lead Lab Technician", department: "Pathology & Radiology" };
+  }
+  if (r.includes("nurse") || r.includes("rn") || u === "nurse") {
+    return { id: "RN-8821", name: "Jessica Carter, RN", role: "ROLE_NURSE", title: "Registered Nurse", department: "Inpatient & ICU" };
+  }
+  return { id: "ADM-001", name: "Hospital Administrator", role: "ROLE_ADMIN", title: "System Administrator", department: "Administration" };
+}
+
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
-  const [userRole, setUserRole] = useState<string>("admin");
+  const [userRole, setUserRole] = useState<string>("ROLE_ADMIN");
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [activeStaff, setActiveStaff] = useState<StaffProfile>(DEFAULT_STAFF);
+  // Set when a physician signs in: their portal is scoped to this one doctor.
+  const [activeDoctor, setActiveDoctor] = useState<DoctorAccount | null>(null);
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [module, setModule] = useState<Module>("dashboard");
   // Set alongside setModule("chart") when another page (e.g. a bed card's
@@ -296,14 +355,43 @@ export default function App() {
     setClinicalPatientId(patientId);
     setModule("chart");
   };
-  const [expanded, setExpanded] = useState<string[]>(["patients", "outpatient"]);
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [subBadges, setSubBadges] = useState<Record<string, number>>({});
+  // Bumped whenever the doctor inbox or the lab-order queue changes, so the
+  // sidebar counts move without waiting for the next navigation.
+  const [badgeTick, setBadgeTick] = useState(0);
+  useEffect(() => DoctorPortalDatabase.subscribe(() => setBadgeTick(t => t + 1)), []);
+  useEffect(() => LabOrderDatabase.subscribe(() => setBadgeTick(t => t + 1)), []);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Keppler OCR is a whole separate React app in an iframe: unmounting it on
+  // every nav away means re-downloading its module graph and re-running its
+  // silent sign-in on every return (~3s cold). Mount it once, then just hide
+  // it, so going back is instant.
+  const [ocrMounted, setOcrMounted] = useState(false);
+  useEffect(() => {
+    if (module === "dpi_ocr") setOcrMounted(true);
+  }, [module]);
   const [orderOpen, setOrderOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomLevel, setZoomLevel] = useState(() => {
+    // Persisted so a chosen text size survives a reload; storage can throw in
+    // private windows, and a bad/stale value must not scale the whole app.
+    try {
+      const saved = parseFloat(localStorage.getItem("hms.zoomLevel") ?? "");
+      if (Number.isFinite(saved)) return Math.min(1.2, Math.max(0.7, saved));
+    } catch {}
+    return 1;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("hms.zoomLevel", String(zoomLevel));
+    } catch {}
+  }, [zoomLevel]);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [workflowInitialStep, setWorkflowInitialStep] = useState<number>(2);
   const [selectedWorkflowEncounterId, setSelectedWorkflowEncounterId] = useState<string | undefined>();
@@ -311,11 +399,70 @@ export default function App() {
 
   const isNurse = userRole === "rn";
 
-  const handleLogin = (userData: { user: string; role: string; staffId: string; permissions: string[] }) => {
+  // Check route access
+  useEffect(() => {
+    if (loggedIn && module !== "dashboard" && !userPermissions.includes(module)) {
+      // Check if it matches a child module
+      const parentMatch = NAV.find(n => n.children?.some(c => c.key === module));
+      if (!parentMatch || !userPermissions.includes(parentMatch.key)) {
+        setModule("dashboard");
+      }
+    }
+  }, [module, loggedIn, userPermissions]);
+
+  const handleLogout = () => {
+    AuditDatabase.logEvent(
+      "Logout",
+      "Authentication",
+      `User ${activeStaff.name} logged out.`,
+      "Success",
+      activeStaff.id,
+      activeStaff.name
+    );
+    setLoggedIn(false);
+  };
+
+  const switchRole = (targetRole: string, targetUsername: string, permissions: string[]) => {
+    setUserRole(targetRole);
+    setUserPermissions(permissions);
+    setActiveStaff(getRoleProfile(targetRole, targetUsername));
+    const doctor = targetRole === "ROLE_DOCTOR" ? resolveDoctorAccount({ username: targetUsername }) : null;
+    setActiveDoctor(doctor);
+    setModule(doctor ? "doctor_portal" : "dashboard");
+    setRoleMenuOpen(false);
+  };
+
+  const handleLogin = (userData: {
+    user: string;
+    role: string;
+    staffId: string;
+    permissions: string[];
+    doctorId?: string;
+  }) => {
     setUserRole(userData.role);
     setUserPermissions(userData.permissions);
+
+    const isDoctor = userData.role === "ROLE_DOCTOR" || userData.user.toLowerCase().startsWith("doctor");
+    const doctor = isDoctor
+      ? resolveDoctorAccount({ doctorId: userData.doctorId, username: userData.user, name: userData.user })
+      : null;
+    setActiveDoctor(doctor);
+
+    setActiveStaff(
+      doctor
+        ? {
+            id: doctor.staffId,
+            name: doctor.name,
+            role: "ROLE_DOCTOR",
+            title: doctor.qualification,
+            department: `${doctor.specialty} · ${doctor.room}`,
+          }
+        : getRoleProfile(userData.role, userData.user)
+    );
     setLoggedIn(true);
-    setModule("dashboard");
+    // A physician's home is their own portal -- the inbox of patients appointed
+    // to them -- not the hospital-wide dashboard.
+    setModule(doctor ? "doctor_portal" : "dashboard");
   };
 
   const toggleFullscreen = () => {
@@ -342,6 +489,56 @@ export default function App() {
     if (sub === "register") setModule("register");
     setCmdOpen(false);
   };
+
+  // Counts on the nav itself, so a pharmacist sees what needs attention without opening each page.
+  // Recomputed whenever the module changes, which is also when pharmacy data has just been written.
+  useEffect(() => {
+    if (!loggedIn) return;
+    try {
+      const prescriptions = PharmacyDatabase.getPrescriptions();
+      const batches = PharmacyDatabase.getBatches();
+      const medicines = PharmacyDatabase.getMedicines();
+      const active = batches.filter(b => b.availableQuantity > 0);
+      const expiringSoon = active.filter(b => {
+        const days = Math.ceil((new Date(b.expiryDate).getTime() - Date.now()) / 86400000);
+        return days <= 90;
+      }).length;
+      const lowStock = medicines.filter(m =>
+        batches.filter(b => b.medicineId === m.id).reduce((a, b) => a + b.availableQuantity, 0) <= m.reorderLevel
+      ).length;
+
+      setSubBadges({
+        doctor_portal: activeDoctor ? DoctorPortalDatabase.getUnreadCount(activeDoctor.id) : 0,
+        lab_billing: LabOrderDatabase.getBillingQueue().length,
+        laboratory: LabOrderDatabase.getLabWorklist().filter(o => o.status !== "Completed").length,
+        pharmacy_rx: prescriptions.filter(p => p.status === "Verification Pending" || p.status === "OCR Processing").length,
+        pharmacy_ocr: prescriptions.filter(
+          p => (p.sourceType === "OCR" || p.sourceType === "UPLOADED_IMAGE") && p.items.some(i => !i.medicineId)
+        ).length,
+        pharmacy_dispensing: prescriptions.filter(p => p.status === "Verified" || p.status === "Approved").length,
+        pharmacy_expiry: expiringSoon,
+        pharmacy_medicine: lowStock,
+      });
+    } catch {
+      setSubBadges({});
+    }
+  }, [module, loggedIn, badgeTick, activeDoctor]);
+
+  // Landing on a sub-module from anywhere but the sidebar (command palette, a shortcut button)
+  // should still reveal where you are in the tree.
+  useEffect(() => {
+    const parent = NAV.find(n => n.children?.some(c => c.key === module && c.key !== n.key));
+    if (!parent) return;
+    setExpanded(prev => (prev.includes(parent.key) ? prev : [...prev, parent.key]));
+    const group = parent.children?.find(c => c.key === module)?.group;
+    if (group) {
+      const groupKey = `${parent.key}:${group}`;
+      setExpandedGroups(prev => (prev.includes(groupKey) ? prev : [...prev, groupKey]));
+    }
+  }, [module]);
+
+  const toggleGroup = (groupKey: string) =>
+    setExpandedGroups(prev => (prev.includes(groupKey) ? prev.filter(g => g !== groupKey) : [...prev, groupKey]));
 
   const toggleExpand = (key: string) => {
     setExpanded(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -410,9 +607,16 @@ export default function App() {
             <div className="ml-auto flex items-center gap-1">
               {/* Font Controls */}
               <div className="flex items-center bg-white/5 rounded px-1 mr-1">
-                <button onClick={() => setZoomLevel(z => Math.max(0.7, z - 0.1))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[10px] font-bold">A-</button>
-                <button onClick={() => setZoomLevel(1)} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[12px] font-bold">A</button>
-                <button onClick={() => setZoomLevel(z => Math.min(1.2, z + 0.1))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[14px] font-bold">A+</button>
+                <button title="Smaller text" onClick={() => setZoomLevel(z => Math.max(0.7, Math.round((z - 0.1) * 10) / 10))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[10px] font-bold">A-</button>
+                <button
+                  title="Reset text size to 100%"
+                  onClick={() => setZoomLevel(1)}
+                  className={`h-6 min-w-6 px-1 flex items-center justify-center font-bold hover:text-white ${
+                    zoomLevel === 1 ? "text-[#94A3B8] text-[12px]" : "text-[#F59E0B] text-[10px]"
+                  }`}>
+                  {zoomLevel === 1 ? "A" : `${Math.round(zoomLevel * 100)}%`}
+                </button>
+                <button title="Larger text" onClick={() => setZoomLevel(z => Math.min(1.2, Math.round((z + 0.1) * 10) / 10))} className="w-6 h-6 flex items-center justify-center text-[#94A3B8] hover:text-white text-[14px] font-bold">A+</button>
               </div>
 
               {/* Fullscreen */}
@@ -439,18 +643,70 @@ export default function App() {
               {/* Help */}
               <button className="w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white rounded hover:bg-white/10 transition-colors text-[13px] font-bold">?</button>
 
-              {/* User */}
-              <div className="flex items-center gap-2 ml-1 pl-3 border-l border-white/10">
-                <div className="w-7 h-7 rounded-full bg-[#1B4FD8] flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0">
-                  {activeStaff.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                </div>
-                <div className="hidden md:block">
-                  <div className="text-[11.5px] font-medium text-white leading-tight">{activeStaff.name}</div>
-                  <div className="text-[10px] text-[#93C5FD]">{activeStaff.title} · {activeStaff.activeShift}</div>
-                </div>
-                <button onClick={() => setLoggedIn(false)} className="ml-1 text-[#64748B] hover:text-white text-[11px] font-medium transition-colors px-1.5 py-1 rounded hover:bg-white/10">
-                  Sign out
+              {/* Role Switcher Menu */}
+              <div className="relative ml-1 pl-3 border-l border-white/10">
+                <button
+                  onClick={() => setRoleMenuOpen(!roleMenuOpen)}
+                  className="flex items-center gap-2 text-left hover:bg-white/10 p-1.5 rounded transition-colors cursor-pointer"
+                >
+                  <div className="w-7 h-7 rounded-full bg-[#1B4FD8] flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0">
+                    {activeStaff.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                  </div>
+                  <div className="hidden md:block">
+                    <div className="text-[11.5px] font-medium text-white leading-tight flex items-center gap-1">
+                      <span>{activeStaff.name}</span>
+                      <span className="text-[9px] bg-blue-500/30 text-blue-200 px-1 rounded font-mono">▼ Role</span>
+                    </div>
+                    <div className="text-[10px] text-[#93C5FD]">{activeStaff.title}</div>
+                  </div>
                 </button>
+
+                {roleMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-[#CBD5E1] shadow-2xl rounded-none z-50 p-2 text-[12px] space-y-1">
+                    <div className="px-2 py-1 text-[10px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#E2E8F0]">
+                      Switch Active Portal / Role
+                    </div>
+                    {[
+                      { roleId: "ROLE_SUPERADMIN", username: "superadmin", label: "Super Administrator", icon: "👑" },
+                      { roleId: "ROLE_ADMIN", username: "admin", label: "Hospital Administrator", icon: "🏢" },
+                      { roleId: "ROLE_DOCTOR", username: "doctor", label: "Doctor / Physician", icon: "👨‍⚕️" },
+                      { roleId: "ROLE_RECEPTION", username: "reception", label: "Receptionist / Front Desk", icon: "📋" },
+                      { roleId: "ROLE_PHARMACY", username: "pharmacy", label: "Pharmacy Staff", icon: "💊" },
+                      { roleId: "ROLE_LAB", username: "lab", label: "Laboratory Staff", icon: "🔬" },
+                      { roleId: "ROLE_NURSE", username: "nurse", label: "Registered Nurse", icon: "👩‍⚕️" },
+                    ].map((r) => {
+                      const permissions =
+                        r.roleId === "ROLE_SUPERADMIN" || r.roleId === "ROLE_ADMIN"
+                          ? ALL_SYSTEM_MODULES
+                          : RoleDatabase.getRoles().find(role => role.id === r.roleId)?.allowedModules || ["dashboard"];
+
+                      return (
+                        <button
+                          key={r.roleId}
+                          type="button"
+                          onClick={() => switchRole(r.roleId, r.username, permissions)}
+                          className={`w-full text-left px-2.5 py-1.5 rounded flex items-center justify-between transition-colors cursor-pointer ${
+                            userRole === r.roleId ? "bg-[#EFF6FF] text-[#1B4FD8] font-bold" : "hover:bg-[#F8FAFC] text-[#334155]"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span>{r.icon}</span>
+                            <span>{r.label}</span>
+                          </span>
+                          {userRole === r.roleId && <span className="text-[10px] text-[#15803D]">● Active</span>}
+                        </button>
+                      );
+                    })}
+                    <div className="border-t border-[#E2E8F0] pt-1 mt-1">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-2.5 py-1 text-[11px] text-[#B91C1C] hover:bg-red-50 font-semibold"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </header>
@@ -475,16 +731,23 @@ export default function App() {
                 />
               </div>
               <div className={`flex-1 py-2 ${sidebarCollapsed ? "px-1" : "px-2"}`}>
-                {((isNurse
-                  ? [
-                      { key: "dashboard" as Module, label: "Nurse Dashboard", Icon: Icon.Dashboard },
-                      { key: "nursing" as Module, label: "Nursing & My Patients", Icon: Icon.Nursing },
-                      { key: "chart" as Module, label: "Patient Chart", Icon: Icon.Clinical },
-                    ]
-                  : NAV
-                ) as NavItem[]).map((item) => {
-                  const isActive = module === item.key || (item.children?.some(c => c.key === module));
+                {NAV.map((item) => {
+                  // Module-based Access Control Filtering
+                  const hasAccess = userPermissions.includes(item.key);
+                  if (!hasAccess) return null;
+
+                  // Sub-items inherit the parent's access unless the role actually enumerates
+                  // sub-module keys -- otherwise a role granted only "pharmacy" would collapse
+                  // the whole Pharmacy tree down to its Dashboard entry.
+                  const subModulesGranted = item.children?.some(c => c.key !== item.key && userPermissions.includes(c.key));
+                  const filteredChildren = item.children?.filter(
+                    c => c.key === item.key || !subModulesGranted || userPermissions.includes(c.key)
+                  );
+
+                  const isActive = module === item.key || (filteredChildren?.some(c => c.key === module));
                   const isExpanded = expanded.includes(item.key);
+                  const childBadgeTotal = filteredChildren?.reduce((a, c) => a + (subBadges[c.key] || 0), 0) || 0;
+                  const navBadge = childBadgeTotal > 0 ? childBadgeTotal : subBadges[item.key] || item.badge;
 
                   return (
                     <div key={item.key} className="relative group">
@@ -499,12 +762,12 @@ export default function App() {
                             : `nav-item ${isActive ? "active" : ""}`
                         }
                         onClick={() => {
-                          if (item.children) {
+                          if (filteredChildren && filteredChildren.length > 0) {
                             if (sidebarCollapsed) {
                               if (item.key === "intelligence") {
                                 setModule("intelligence");
                               } else {
-                                setModule(item.children[0].key);
+                                setModule(filteredChildren[0].key);
                               }
                             } else {
                               toggleExpand(item.key);
@@ -512,12 +775,13 @@ export default function App() {
                                 if (item.key === "intelligence") {
                                   setModule("intelligence");
                                 } else {
-                                  setModule(item.children[0].key);
+                                  setModule(filteredChildren[0].key);
                                 }
                               }
                             }
+                          } else {
+                            setModule(item.key);
                           }
-                          else setModule(item.key);
                         }}
                         title={sidebarCollapsed ? item.label : undefined}
                       >
@@ -546,10 +810,10 @@ export default function App() {
                         {!sidebarCollapsed && (
                           <>
                             <span className="flex-1 truncate">{item.label}</span>
-                            {item.badge && !isActive && (
-                              <span className="badge bg-[#DC2626] text-white">{item.badge}</span>
+                            {navBadge && !isActive && (
+                              <span className="badge bg-[#DC2626] text-white">{navBadge}</span>
                             )}
-                            {item.children && (
+                            {filteredChildren && filteredChildren.length > 0 && (
                               <span className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}>
                                 <Icon.ChevronRight />
                               </span>
@@ -557,15 +821,60 @@ export default function App() {
                           </>
                         )}
                       </div>
-                      {!sidebarCollapsed && item.children && isExpanded && (
-                        <div>
-                          {item.children.map((child, ci) => (
-                            <div key={ci}
+                      {!sidebarCollapsed && filteredChildren && filteredChildren.length > 0 && isExpanded && (
+                        <div className="space-y-0.5 my-1">
+                          {/* Ungrouped children (a module's own Dashboard) sit directly under the parent. */}
+                          {filteredChildren.filter(c => !c.group).map(child => (
+                            <div
+                              key={`${child.key}_${child.label}`}
                               className={`nav-item sub ${module === child.key && isActive ? "active" : ""}`}
-                              onClick={() => setModule(child.key)}>
+                              onClick={() => setModule(child.key)}
+                            >
                               {child.label}
                             </div>
                           ))}
+
+                          {[...new Set(filteredChildren.filter(c => c.group).map(c => c.group as string))].map(group => {
+                            const groupKey = `${item.key}:${group}`;
+                            const groupOpen = expandedGroups.includes(groupKey);
+                            const groupChildren = filteredChildren.filter(c => c.group === group);
+                            const groupHasActive = groupChildren.some(c => c.key === module);
+
+                            return (
+                              <div key={groupKey}>
+                                <div
+                                  className={`nav-item sub justify-between font-semibold ${groupHasActive && !groupOpen ? "!text-[#93C5FD]" : "!text-[#94A3B8]"}`}
+                                  onClick={() => toggleGroup(groupKey)}
+                                >
+                                  <span className="flex-1 truncate">{group}</span>
+                                  {!groupOpen && groupChildren.reduce((a, c) => a + (subBadges[c.key] || 0), 0) > 0 && (
+                                    <span className="badge bg-[#334155] text-[#CBD5E1]">
+                                      {groupChildren.reduce((a, c) => a + (subBadges[c.key] || 0), 0)}
+                                    </span>
+                                  )}
+                                  <span className={`transition-transform ${groupOpen ? "rotate-90" : ""}`}>
+                                    <Icon.ChevronRight className="w-3.5 h-3.5" />
+                                  </span>
+                                </div>
+                                {groupOpen && (
+                                  <div className="ml-[22px] border-l border-[#1E2D42] pl-1 my-0.5 space-y-0.5">
+                                    {groupChildren.map(child => (
+                                      <div
+                                        key={`${child.key}_${child.label}`}
+                                        className={`nav-item sub !pl-3 justify-between ${module === child.key && isActive ? "active" : ""}`}
+                                        onClick={() => setModule(child.key)}
+                                      >
+                                        <span className="flex-1 truncate">{child.label}</span>
+                                        {(subBadges[child.key] || 0) > 0 && module !== child.key && (
+                                          <span className="badge bg-[#334155] text-[#CBD5E1]">{subBadges[child.key]}</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -609,6 +918,8 @@ export default function App() {
                           module === "op_management" ? "OP Management" :
                             module === "op_workflow" ? "OP Clinical Journey" :
                                 module === "patient_exp" ? "Patient Experience" :
+                                  module === "doctor_portal" ? "My Doctor Portal" :
+                                  module === "lab_billing" ? "Lab Test Billing" :
                                   module === "doctor_workflow" ? "Doctor Workflow" :
                                     module === "scheduling" ? "Doctor Scheduling" :
                                       module === "revenue_reports" ? "Revenue Reports" :
@@ -622,7 +933,7 @@ export default function App() {
               </div>
 
               {/* Module Content */}
-              {module === "dashboard" && <Dashboard navigate={navigate} />}
+              {module === "dashboard" && <Dashboard navigate={navigate} userRole={userRole} activeStaff={activeStaff} switchRole={switchRole} />}
               {module === "patients" && (
                 <PatientSearch
                   onSelect={(p) => {
@@ -680,14 +991,12 @@ export default function App() {
                 />
               )}
               {module === "nursing" && <NursingPortal />}
-              {module === "laboratory" && <Laboratory />}
-              {module === "pharmacy" && <Pharmacy />}
+              {module === "laboratory" && <Laboratory technician={activeStaff.name} />}
+              {(module === "pharmacy" || module.startsWith("pharmacy_")) && <Pharmacy activeModule={module} onNavigate={(m) => setModule(m as Module)} />}
               {module === "surgery" && <Surgery />}
               {module === "billing" && <Billing />}
               {module === "radiology" && <Radiology />}
-              {module === "icu" && (
-                <ICU navigate={navigate} onOpenPatientClinical={openPatientClinical} permissions={userPermissions} />
-              )}
+              {module === "icu" && <ICU />}
               {module === "analytics" && <Analytics />}
               {module === "discharge" && <Discharge setNotice={setNotice} onComplete={() => setModule("inpatient")} />}
               {module === "triage" && (
@@ -701,7 +1010,7 @@ export default function App() {
               {module === "insurance" && <Insurance />}
               {module === "clinical" && <PlaceholderModule title="Clinical" sub="Encounters, orders, results, and care plans" />}
               {module === "reports" && <PlaceholderModule title="Reports" sub="Operational and clinical reporting" />}
-              {module === "admin" && <PlaceholderModule title="Administration" sub="Users, roles, departments, and system configuration" />}
+              {module === "admin" && <Administration />}
 
               {/* New modules */}
               {module === "queue" && (
@@ -766,6 +1075,10 @@ export default function App() {
                   }}
                 />
               )}
+              {module === "doctor_portal" && (
+                <DoctorPortal doctor={activeDoctor || resolveDoctorAccount({ name: activeStaff.name })} />
+              )}
+              {module === "lab_billing" && <LabBillingQueue collectedBy={activeStaff.name} />}
               {module === "scheduling" && <DoctorScheduling />}
               {module === "admissions" && <Admissions setNotice={setNotice} navigate={navigate} />}
               {module === "readmission" && <Readmission setNotice={setNotice} />}
@@ -774,7 +1087,11 @@ export default function App() {
               {module === "hrms" && <HRMS />}
               {module === "employees" && <Employees />}
               {module === "ocr" && <SmartOCR setNotice={setNotice} />}
-              {module === "dpi_ocr" && <DpiOcrPortal />}
+              {ocrMounted && (
+                <div className={module === "dpi_ocr" ? "h-full w-full" : "hidden"}>
+                  <DpiOcrPortal />
+                </div>
+              )}
               {module === "symptom_ai" && <SymptomAI setNotice={setNotice} />}
               {module === "clinical_rag" && <ClinicalRAG />}
               {module === "clinical_summaries" && <ClinicalSummaries />}

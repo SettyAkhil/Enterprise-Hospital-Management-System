@@ -4,6 +4,7 @@ import { ErDatabase } from "../services/erDb";
 import { BedDatabase } from "../services/bedDb";
 import { db } from "../services/db";
 import { BillingDatabase } from "../services/billingDb";
+import { RoleDatabase } from "../services/roleDb";
 
 const HOSPITAL_CODE_KEY = "hospai_hospital_code";
 const DEFAULT_HOSPITAL_CODE = "hosp-default";
@@ -378,6 +379,22 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
   const consentDocMatch = pathname.match(/^\/api\/er\/consents\/(\d+)\/document$/);
   if (consentDocMatch && method === "POST") {
     return { success: true, message: "Document uploaded successfully" } as T;
+  }
+
+  // POST /api/auth/login
+  if (pathname === "/api/auth/login" && method === "POST") {
+    const auth = RoleDatabase.authenticate(body.username, body.password);
+    if (!auth) throw new Error("Invalid credentials.");
+    return {
+      user: {
+        id: auth.user.id,
+        employee_id: auth.user.staffId,
+        username: auth.user.username,
+        role: auth.role.id,
+        name: auth.user.name,
+        permissions: auth.role.allowedModules,
+      }
+    } as T;
   }
 
   // GET /api/auth/session
@@ -787,9 +804,12 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
   return null;
 }
 
+/** Default per-request budget. Overridable via options.timeoutMs. */
+export const DEFAULT_TIMEOUT_MS = 15000;
+
 export async function apiFetch<T = any>(
   path: string,
-  options: RequestInit & { cache?: RequestCache } = {},
+  options: RequestInit & { cache?: RequestCache; timeoutMs?: number } = {},
 ): Promise<T> {
   const method = (options.method || "GET").toUpperCase();
   const csrfToken = getCsrfToken();
@@ -800,16 +820,29 @@ export async function apiFetch<T = any>(
     ...(options.headers || {}),
   };
 
+  // Pulled out of the spread below: `...options` used to land after `headers`
+  // and `signal`, so any caller passing its own headers silently dropped the
+  // hospital-code/CSRF headers computed above.
+  const { headers: _ignoredHeaders, signal: callerSignal, timeoutMs, cache, ...rest } = options;
+
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    // A fetch() that loses the race for one of the browser's ~6 connections per
+    // origin sits in a queue with this timer already running, so a budget that
+    // is too tight aborts requests that never reached the server at all. Hence
+    // seconds, not milliseconds -- the server itself answers in ~10ms.
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    if (callerSignal) {
+      if (callerSignal.aborted) controller.abort();
+      else callerSignal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
 
     const response = await fetch(`${API_BASE}${path}`, {
+      ...rest,
       headers,
       credentials: "include",
-      cache: options.cache || (method === "GET" ? "no-store" : "default"),
+      cache: cache || (method === "GET" ? "no-store" : "default"),
       signal: controller.signal,
-      ...options,
     });
 
     clearTimeout(timeoutId);

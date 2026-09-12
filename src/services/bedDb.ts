@@ -78,7 +78,7 @@ export interface BedTransferNotification {
   is_read: boolean;
 }
 
-const STORAGE_KEY = "hospai_inpatient_beds_v3";
+const STORAGE_KEY = "hospai_inpatient_beds_v9";
 const DISCHARGED_STORAGE_KEY = "hospai_discharged_patients_v3";
 const NOTIFICATIONS_STORAGE_KEY = "hospai_bed_transfer_notifications_v3";
 
@@ -374,6 +374,82 @@ const INITIAL_BEDS: BedRecord[] = [
     admission_notes: null,
     room_charges_so_far: null,
   },
+  // ── 2nd Floor ──
+  ...Array.from({ length: 14 }).map((_, idx) => {
+    let roomNum = 0;
+    let bedNum = 0;
+    let type: "Semi-Private" | "Private" = "Private";
+    let rate = 4000;
+    
+    if (idx < 2) { roomNum = 201; bedNum = idx + 1; type = "Semi-Private"; rate = 2500; }
+    else if (idx < 4) { roomNum = 202; bedNum = idx - 1; type = "Semi-Private"; rate = 2500; }
+    else { roomNum = 203 + (idx - 4); bedNum = 1; type = "Private"; rate = 4000; }
+    
+    return {
+      id: 11 + idx,
+      ward: "2nd Floor",
+      room_no: String(roomNum),
+      bed_no: `${roomNum}-${bedNum}`,
+      bed_type: type,
+      status: "Available" as const,
+      daily_rate: rate,
+      allocation_id: null, admission_id: null, allocated_at: null, admission_date: null, expected_discharge_date: null, patient_id: null, patient_name: null, patient_last_name: null, patient_phone: null, patient_age: null, patient_gender: null, admission_notes: null, room_charges_so_far: null,
+    };
+  }),
+  // ── 4th Floor ──
+  ...Array.from({ length: 9 }).map((_, idx) => ({
+    id: 25 + idx,
+    ward: "4th Floor",
+    room_no: "ICU",
+    bed_no: `ICU-${idx + 1}`,
+    bed_type: "ICU" as const,
+    status: "Available" as const,
+    daily_rate: 8000,
+    allocation_id: null, admission_id: null, allocated_at: null, admission_date: null, expected_discharge_date: null, patient_id: null, patient_name: null, patient_last_name: null, patient_phone: null, patient_age: null, patient_gender: null, admission_notes: null, room_charges_so_far: null,
+  })),
+  ...Array.from({ length: 5 }).map((_, idx) => ({
+    id: 34 + idx,
+    ward: "4th Floor",
+    room_no: "SICU",
+    bed_no: `SICU-${idx + 1}`,
+    bed_type: "ICU" as const,
+    status: "Available" as const,
+    daily_rate: 8000,
+    allocation_id: null, admission_id: null, allocated_at: null, admission_date: null, expected_discharge_date: null, patient_id: null, patient_name: null, patient_last_name: null, patient_phone: null, patient_age: null, patient_gender: null, admission_notes: null, room_charges_so_far: null,
+  })),
+  // ── 3rd Floor ──
+  ...Array.from({ length: 12 }).map((_, idx) => ({
+    id: 39 + idx,
+    ward: "3rd Floor",
+    room_no: String(301 + idx),
+    bed_no: `${301 + idx}-1`,
+    bed_type: "Private" as const,
+    status: "Available" as const,
+    daily_rate: 6000,
+    allocation_id: null, admission_id: null, allocated_at: null, admission_date: null, expected_discharge_date: null, patient_id: null, patient_name: null, patient_last_name: null, patient_phone: null, patient_age: null, patient_gender: null, admission_notes: null, room_charges_so_far: null,
+  })),
+  // ── 6th Floor ──
+  ...Array.from({ length: 5 }).map((_, idx) => ({
+    id: 51 + idx,
+    ward: "6th Floor",
+    room_no: "Pediatric ICU",
+    bed_no: `PICU-${idx + 1}`,
+    bed_type: "ICU" as const,
+    status: "Available" as const,
+    daily_rate: 8000,
+    allocation_id: null, admission_id: null, allocated_at: null, admission_date: null, expected_discharge_date: null, patient_id: null, patient_name: null, patient_last_name: null, patient_phone: null, patient_age: null, patient_gender: null, admission_notes: null, room_charges_so_far: null,
+  })),
+  // ── 5th Floor ──
+  ...["OT", "Recovery Room", "General Ward", "Endoscopy"].map((room, idx) => ({
+    id: 56 + idx,
+    ward: "5th Floor",
+    room_no: room,
+    bed_no: `${room.substring(0, 3).toUpperCase()}-1`,
+    bed_type: "General" as const,
+    status: "Available" as const,
+    daily_rate: 2500,
+    allocation_id: null, admission_id: null, allocated_at: null, admission_date: null, expected_discharge_date: null, patient_id: null, patient_name: null, patient_last_name: null, patient_phone: null, patient_age: null, patient_gender: null, admission_notes: null, room_charges_so_far: null,
+  })),
 ];
 
 const INITIAL_DISCHARGED: DischargedPatientRecord[] = [

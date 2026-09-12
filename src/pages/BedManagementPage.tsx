@@ -515,6 +515,11 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
   // so the dropdown always lists every ward that exists.
   const wardOptions = useMemo(() => {
     const names = new Set(beds.map((bed) => bed.ward || "Unassigned Ward"));
+    names.add("2nd Floor");
+    names.add("3rd Floor");
+    names.add("4th Floor");
+    names.add("5th Floor");
+    names.add("6th Floor");
     return Array.from(names).sort();
   }, [beds]);
 

@@ -43,6 +43,15 @@ export default defineConfig({
     },
     // Allows access via the cloudflared quick-tunnel URL used for remote browser access.
     allowedHosts: true,
+
+    // This app is opened from inside the HMS shell, so the first click on the
+    // "Keppler OCR" tab is what pays for Vite's on-demand transform of the
+    // whole module graph (~3s cold vs ~0.5s warm). Transform the entry and the
+    // app/page modules at server start instead, in the background, so that
+    // cost is already paid by the time anyone opens the tab.
+    warmup: {
+      clientFiles: ['./src/main.tsx', './src/app/**/*.tsx'],
+    },
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.

@@ -28,7 +28,7 @@ const CRITICAL_RESULTS = [
   { patient: "Ann Martinez", mrn: "100088", test: "Lactic Acid", value: "4.2 mmol/L", threshold: "> 4.0", provider: "Dr. Chen", notified: "Pending", paymentStatus: "Paid" },
 ];
 
-export default function Laboratory() {
+export default function Laboratory({ technician = "Laboratory" }: { technician?: string } = {}) {
   const [activeQueue, setActiveQueue] = useState(0);
   const [labOrders, setLabOrders] = useState<LabOrderRecord[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -132,7 +132,7 @@ export default function Laboratory() {
             </span>
           </div>
           <p className="text-[11.5px] text-[#64748B]">
-            Clinical Laboratory · Requires Central Billing Pre-Payment before sample collection
+            Clinical Laboratory · Requires Central Billing Pre-Payment before sample collection · Operator: {technician}
           </p>
         </div>
         <div className="flex gap-2">
@@ -194,7 +194,6 @@ export default function Laboratory() {
       </div>
 
       <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: Order List */}
         <div className="lg:col-span-2 space-y-4">
           {activeQueue === 5 ? (
             <Card title="Critical Values — Requires Immediate Action">
@@ -210,17 +209,18 @@ export default function Laboratory() {
                             ✓ Paid
                           </span>
                         </div>
-                        <div className="flex items-center gap-3 mt-1 text-[12px]">
-                          <span className="font-medium text-[#B91C1C]">{c.test}: <span className="font-mono">{c.value}</span></span>
-                          <span className="text-[#64748B]">Threshold: {c.threshold}</span>
-                          <span className="text-[#64748B]">Provider: {c.provider}</span>
+                        <div className="text-[12px] font-semibold text-[#B91C1C] mt-1">
+                          {c.test}: <span className="font-mono">{c.value}</span> (Threshold: {c.threshold})
+                        </div>
+                        <div className="text-[11.5px] text-[#64748B] mt-0.5">
+                          Ordered by: {c.provider}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex gap-2">
                         {c.notified === "Pending" ? (
                           <Btn variant="danger" size="xs">Notify Provider</Btn>
                         ) : (
-                          <span className="text-[11.5px] text-[#16A34A] font-medium">✓ Notified {c.notified}</span>
+                          <span className="text-[11px] text-emerald-700 font-semibold">Notified {c.notified}</span>
                         )}
                       </div>
                     </div>
@@ -425,6 +425,25 @@ export default function Laboratory() {
               <Btn variant="primary" size="xs">Verify Result</Btn>
               <Btn variant="outline" size="xs">Add Comment</Btn>
               <Btn variant="outline" size="xs">Notify</Btn>
+            </div>
+          </Card>
+
+          <Card title="Turnaround Time">
+            <div className="space-y-2 text-[12px]">
+              {[
+                { test: "Troponin", target: "60m", actual: "45m", ok: true },
+                { test: "CBC", target: "90m", actual: "88m", ok: true },
+                { test: "BMP", target: "90m", actual: "72m", ok: true },
+                { test: "Blood Culture", target: "24h", actual: "Pending", ok: true },
+              ].map((row, index) => (
+                <div key={index} className="flex justify-between items-center py-0.5 border-b border-[#F8FAFC] last:border-0">
+                  <span className="text-gray-700">{row.test}</span>
+                  <span className="text-[#94A3B8] text-[11px]">Target: {row.target}</span>
+                  <span className={`font-mono font-semibold text-[11.5px] ${row.ok ? "text-[#16A34A]" : "text-[#DC2626]"}`}>
+                    {row.actual}
+                  </span>
+                </div>
+              ))}
             </div>
           </Card>
         </div>

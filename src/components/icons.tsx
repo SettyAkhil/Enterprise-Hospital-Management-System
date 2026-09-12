@@ -114,4 +114,56 @@ export const Icon: Record<string, React.FC<IconProps>> = {
   Heart: ({ className, size }) => (
     <svg className={className} width={size || "13"} height={size || "13"} viewBox="0 0 13 13" fill="none"><path d="M6.5 11.5L1.5 6.5C0.3 5.3 0.3 3.3 1.5 2.1C2.7 0.9 4.7 0.9 5.9 2.1L6.5 2.7L7.1 2.1C8.3 0.9 10.3 0.9 11.5 2.1C12.7 3.3 12.7 5.3 11.5 6.5L6.5 11.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
   ),
+  Clock: ({ className, size }) => (
+    <svg className={className} width={size || "15"} height={size || "15"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  ),
+  Activity: ({ className, size }) => (
+    <svg className={className} width={size || "15"} height={size || "15"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  ),
+  Rupee: ({ className, size }) => (
+    <svg className={className} width={size || "15"} height={size || "15"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3h12" />
+      <path d="M6 8h12" />
+      <path d="M6 13h5a4 4 0 0 0 0-8H6" />
+      <path d="M6 13l9 8" />
+    </svg>
+  ),
+  Check: ({ className, size }) => (
+    <svg className={className} width={size || "15"} height={size || "15"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  ),
+  Discharge: ({ className, size }) => (
+    <svg className={className} width={size || "15"} height={size || "15"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  ),
+  Ambulance: ({ className, size }) => (
+    <svg className={className} width={size || "15"} height={size || "15"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="6" width="14" height="11" rx="2" />
+      <path d="M15 9h4l3 4v4h-7V9z" />
+      <circle cx="6" cy="18" r="2" />
+      <circle cx="18" cy="18" r="2" />
+      <path d="M8 10h4" />
+      <path d="M10 8v4" />
+    </svg>
+  ),
+  Pause: ({ className, size }) => (
+    <svg className={className} width={size || "15"} height={size || "15"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="4" width="4" height="16" rx="1" />
+      <rect x="14" y="4" width="4" height="16" rx="1" />
+    </svg>
+  ),
+  Play: ({ className, size }) => (
+    <svg className={className} width={size || "15"} height={size || "15"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" />
+    </svg>
+  ),
 };

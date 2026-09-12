@@ -1,1304 +1,1456 @@
-import { useEffect, useMemo, useState } from "react"
-import type { ReactNode } from "react"
-import { LineChart, Line, Tooltip, ResponsiveContainer } from "recharts"
-import {
-  FiActivity,
-  FiAlertCircle,
-  FiArrowRight,
-  FiDroplet,
-  FiFileText,
-  FiHeart,
-  FiMoon,
-  FiPlus,
-  FiTrendingUp,
-  FiUsers,
-  FiWind,
-  FiZap,
-} from "react-icons/fi"
-import { Btn, Card } from "./shared"
-import AddEvaluationModal from "./AddEvaluationModal"
-import {
-  bedGenderVariant,
-  bedOccupantName,
-  type BedCardData,
-} from "./bed/BedCard"
-import { apiFetch, reportError } from "../lib/api"
-import { formatDateTimeIST } from "../lib/format"
-import type { Notice } from "../types"
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Btn } from "./shared";
+import IcuFlowsheet, { flowsheetSummary, fetchDays, onFlowsheetSync, broadcastSave, type FlowsheetDay, type FlowsheetRecord } from "./icu/IcuFlowsheet";
+import { ensureMultiDaySeedData, getPatientStayDays, generateSeedRecord, getCurrentDateTimeFormatted, getPatientSuggestedMedications, SAMPLE_HANDWRITTEN_PRESCRIPTIONS, type ExtractedRxItem, type SampleHandwrittenRx, type SuggestedMed } from "./icu/icuSeedData";
+import { Area, AreaChart, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer } from "recharts";
 
-// Same census-bar + 3-column flowsheet layout as the very first ICU page,
-// restored on request -- but every field on it now comes from a real table
-// a nurse/doctor actually recorded (see ensure_icu_tables() in the backend)
-// instead of a hardcoded demo patient. Anything the old page showed with no
-// real source (SOFA/APACHE, MRN, code status, fixed I&O line items) was
-// dropped rather than faked; RASS/ventilator/infusions/I&O/labs/consults are
-// now real, editable data entered right from this page.
-type Bed = BedCardData & {
-  ward: string
-  room_no: string
-  admission_id: number | null
-}
-type Summary = {
-  total: number
-  available: number
-  occupied: number
-  maintenance: number
-}
+export type IcuPatient = {
+  bed: string;
+  unit: string;
+  unitType: "MICU" | "SICU" | "CCU" | "NICU" | "PICU" | "Floor 1" | "Floor 2" | "Floor 3" | "ER";
+  name: string | null;
+  mrn: string;
+  age: number | null;
+  sex: "M" | "F" | null;
+  dx: string | null;
+  provider: string;
+  nurse: string;
+  los: string;
+  totalDays: number;
+  code: string;
+  vitals: { bp: string; hr: string; rr: string; temp: string; spo2: string; cvp: string } | null;
+  vent: { mode: string; fio2: string; peep: string; tv: string; rr: string; pip: string } | null;
+  infusions: { drug: string; rate: string; concentration: string }[];
+  alerts: string[];
+  score: { sofa: number; apache: number; rass: number };
+  hrTrend: { t: string; v: number }[];
+  bpTrend: { t: string; v: number }[];
+};
 
-type VitalRow = {
-  id: number
-  bp?: string | null
-  pulse?: string | null
-  temperature?: string | null
-  spo2?: string | null
-  respiratory_rate?: string | null
-  created_at: string
-}
-type DiagnosisRow = {
-  id: number
-  diagnosis_name: string
-  created_at: string
-}
-type ObservationNoteRow = {
-  id: number
-  role?: string | null
-  doctor_name?: string | null
-  note: string
-  created_at: string
-}
-type AdmissionRow = { id: number; admission_date: string }
-type EmrSnapshot = {
-  admissions: AdmissionRow[]
-  vitals: VitalRow[]
-  diagnoses: DiagnosisRow[]
-  observation_notes: ObservationNoteRow[]
-}
+const ALL_BEDS_DATASET: IcuPatient[] = [
+  // ── Medical ICU (MICU) ──────────────────────────────────────────────────
+  {
+    bed: "MICU-1", unit: "Medical ICU", unitType: "MICU", name: "Thomas Reed", mrn: "100301", age: 68, sex: "M",
+    dx: "STEMI — Anterior wall, s/p PCI to LAD",
+    provider: "Dr. Shah", nurse: "RN Murphy",
+    los: "10d 4h", totalDays: 10, code: "Full Code",
+    vitals: { bp: "98/62", hr: "112", rr: "22", temp: "38.6°C", spo2: "91%", cvp: "12" },
+    vent: { mode: "A/C-VC", fio2: "60%", peep: "8", tv: "480mL", rr: "18", pip: "32" },
+    infusions: [
+      { drug: "Norepinephrine", rate: "0.12 mcg/kg/min", concentration: "8mg/250mL" },
+      { drug: "Heparin Drip", rate: "1,200 u/hr", concentration: "25,000u/250mL" },
+      { drug: "Propofol", rate: "20 mcg/kg/min", concentration: "10mg/mL" },
+    ],
+    alerts: ["⚠ BP trending down — 3 readings < 100 systolic", "🧪 Troponin rising — peak 18.4 ng/mL"],
+    score: { sofa: 9, apache: 22, rass: -2 },
+    hrTrend: [{ t: "07", v: 104 }, { t: "08", v: 108 }, { t: "09", v: 112 }, { t: "10", v: 118 }, { t: "11", v: 112 }],
+    bpTrend: [{ t: "07", v: 105 }, { t: "08", v: 100 }, { t: "09", v: 98 }, { t: "10", v: 96 }, { t: "11", v: 98 }],
+  },
+  {
+    bed: "MICU-2", unit: "Medical ICU", unitType: "MICU", name: "Ann Martinez", mrn: "100088", age: 52, sex: "F",
+    dx: "Septic shock — Klebsiella pneumonia",
+    provider: "Dr. Shah", nurse: "RN Davis",
+    los: "8d 12h", totalDays: 8, code: "Full Code",
+    vitals: { bp: "104/68", hr: "98", rr: "20", temp: "38.2°C", spo2: "94%", cvp: "9" },
+    vent: { mode: "A/C-VC", fio2: "45%", peep: "6", tv: "420mL", rr: "16", pip: "28" },
+    infusions: [
+      { drug: "Norepinephrine", rate: "0.06 mcg/kg/min", concentration: "8mg/250mL" },
+      { drug: "Vancomycin", rate: "1g Q12H", concentration: "1g/200mL" },
+      { drug: "Pip-Tazo", rate: "3.375g Q6H", concentration: "3.375g/100mL" },
+    ],
+    alerts: ["✓ Improving: BP stable > 6h", "🧪 Blood culture pending 36h"],
+    score: { sofa: 7, apache: 18, rass: -1 },
+    hrTrend: [{ t: "07", v: 118 }, { t: "08", v: 112 }, { t: "09", v: 108 }, { t: "10", v: 102 }, { t: "11", v: 98 }],
+    bpTrend: [{ t: "07", v: 88 }, { t: "08", v: 92 }, { t: "09", v: 98 }, { t: "10", v: 102 }, { t: "11", v: 104 }],
+  },
+  {
+    bed: "MICU-3", unit: "Medical ICU", unitType: "MICU", name: "James Liu", mrn: "100412", age: 61, sex: "M",
+    dx: "Post-cardiac arrest monitoring, s/p TTM",
+    provider: "Dr. Patel", nurse: "RN Jenkins",
+    los: "4d 6h", totalDays: 4, code: "Full Code",
+    vitals: { bp: "118/72", hr: "78", rr: "16", temp: "36.8°C", spo2: "97%", cvp: "8" },
+    vent: { mode: "SIMV+PS", fio2: "35%", peep: "5", tv: "450mL", rr: "14", pip: "22" },
+    infusions: [{ drug: "Propofol", rate: "15 mcg/kg/min", concentration: "10mg/mL" }],
+    alerts: ["✓ EEG stable, no subclinical seizures"],
+    score: { sofa: 5, apache: 14, rass: -1 },
+    hrTrend: [{ t: "07", v: 82 }, { t: "08", v: 80 }, { t: "09", v: 78 }, { t: "10", v: 76 }, { t: "11", v: 78 }],
+    bpTrend: [{ t: "07", v: 115 }, { t: "08", v: 118 }, { t: "09", v: 120 }, { t: "10", v: 118 }, { t: "11", v: 118 }],
+  },
+  {
+    bed: "MICU-4", unit: "Medical ICU", unitType: "MICU", name: "Elena Park", mrn: "100518", age: 44, sex: "F",
+    dx: "Severe DKA — pH 7.15, Anion Gap 24",
+    provider: "Dr. Shah", nurse: "RN Murphy",
+    los: "3d 2h", totalDays: 3, code: "Full Code",
+    vitals: { bp: "112/70", hr: "92", rr: "18", temp: "37.1°C", spo2: "99%", cvp: "7" },
+    vent: { mode: "Nasal Cannula", fio2: "21%", peep: "0", tv: "—", rr: "18", pip: "—" },
+    infusions: [
+      { drug: "Insulin Drip", rate: "0.05 u/kg/hr", concentration: "100u/100mL" },
+      { drug: "D5 1/2 NS + 20 KCl", rate: "150 mL/hr", concentration: "1000mL" },
+    ],
+    alerts: ["✓ Anion gap closed to 10", "🧪 Potassium 4.5 mEq/L"],
+    score: { sofa: 3, apache: 10, rass: 0 },
+    hrTrend: [{ t: "07", v: 102 }, { t: "08", v: 98 }, { t: "09", v: 95 }, { t: "10", v: 92 }, { t: "11", v: 92 }],
+    bpTrend: [{ t: "07", v: 108 }, { t: "08", v: 110 }, { t: "09", v: 112 }, { t: "10", v: 112 }, { t: "11", v: 112 }],
+  },
+  {
+    bed: "MICU-5", unit: "Medical ICU", unitType: "MICU", name: null, mrn: "", age: null, sex: null, dx: null, provider: "", nurse: "", los: "", totalDays: 0, code: "", vitals: null, vent: null, infusions: [], alerts: [], score: { sofa: 0, apache: 0, rass: 0 }, hrTrend: [], bpTrend: []
+  },
+  {
+    bed: "MICU-6", unit: "Medical ICU", unitType: "MICU", name: null, mrn: "", age: null, sex: null, dx: null, provider: "", nurse: "", los: "", totalDays: 0, code: "", vitals: null, vent: null, infusions: [], alerts: [], score: { sofa: 0, apache: 0, rass: 0 }, hrTrend: [], bpTrend: []
+  },
 
-type VentilatorRow = {
-  id: number
-  mode?: string | null
-  fio2?: string | null
-  peep?: string | null
-  tidal_volume?: string | null
-  resp_rate?: string | null
-  pip?: string | null
-  created_at: string
-}
-type InfusionRow = {
-  id: number
-  medication_name: string
-  rate?: string | null
-  unit?: string | null
-  status: string
-  started_at: string
-}
-type IoRow = {
-  id: number
-  intake_ml?: number | null
-  output_ml?: number | null
-  recorded_at: string
-}
-type RassRow = { id: number; score: number; created_at: string }
-type LabRow = {
-  id: number
-  test_name: string
-  value?: string | null
-  unit?: string | null
-  flag?: string | null
-  created_at: string
-}
-type ConsultRow = {
-  id: number
-  specialty: string
-  consultant_name?: string | null
-  status: string
-  notes?: string | null
-  created_at: string
-}
-type IcuSnapshot = {
-  ventilator_settings: VentilatorRow[]
-  infusions: InfusionRow[]
-  io_records: IoRow[]
-  rass_scores: RassRow[]
-  lab_results: LabRow[]
-  consults: ConsultRow[]
-}
+  // ── Surgical ICU (SICU) ─────────────────────────────────────────────────
+  {
+    bed: "SICU-1", unit: "Surgical ICU", unitType: "SICU", name: "Robert Taylor", mrn: "200105", age: 71, sex: "M",
+    dx: "Post-op CABG x 3 (LIMA-LAD, SVG-RCA, SVG-OM)",
+    provider: "Dr. Vance (Cardiothoracic)", nurse: "RN O'Connor",
+    los: "5d 8h", totalDays: 5, code: "Full Code",
+    vitals: { bp: "110/64", hr: "84", rr: "16", temp: "37.3°C", spo2: "96%", cvp: "10" },
+    vent: { mode: "CPAP/PS", fio2: "35%", peep: "5", tv: "420mL", rr: "14", pip: "18" },
+    infusions: [{ drug: "Nitroglycerin Drip", rate: "10 mcg/min", concentration: "50mg/250mL" }],
+    alerts: ["✓ Chest tube output < 30mL/hr", "⚠ Pacing wires in situ"],
+    score: { sofa: 6, apache: 16, rass: 0 },
+    hrTrend: [{ t: "07", v: 90 }, { t: "08", v: 88 }, { t: "09", v: 86 }, { t: "10", v: 84 }, { t: "11", v: 84 }],
+    bpTrend: [{ t: "07", v: 105 }, { t: "08", v: 108 }, { t: "09", v: 110 }, { t: "10", v: 110 }, { t: "11", v: 110 }],
+  },
+  {
+    bed: "SICU-2", unit: "Surgical ICU", unitType: "SICU", name: "Maria Garcia", mrn: "200220", age: 59, sex: "F",
+    dx: "Exploratory Laparotomy s/p Perforated Diverticulitis",
+    provider: "Dr. Vance", nurse: "RN O'Connor",
+    los: "3d 14h", totalDays: 3, code: "Full Code",
+    vitals: { bp: "116/74", hr: "90", rr: "18", temp: "37.8°C", spo2: "95%", cvp: "8" },
+    vent: { mode: "HFNC", fio2: "40%", peep: "0", tv: "—", rr: "18", pip: "—" },
+    infusions: [{ drug: "Hydromorphone PCA", rate: "0.2 mg/hr", concentration: "1mg/mL" }],
+    alerts: ["✓ Abdominal drain output serosanguinous"],
+    score: { sofa: 5, apache: 12, rass: 0 },
+    hrTrend: [{ t: "07", v: 94 }, { t: "08", v: 92 }, { t: "09", v: 90 }, { t: "10", v: 90 }, { t: "11", v: 90 }],
+    bpTrend: [{ t: "07", v: 112 }, { t: "08", v: 114 }, { t: "09", v: 116 }, { t: "10", v: 116 }, { t: "11", v: 116 }],
+  },
+  {
+    bed: "SICU-3", unit: "Surgical ICU", unitType: "SICU", name: null, mrn: "", age: null, sex: null, dx: null, provider: "", nurse: "", los: "", totalDays: 0, code: "", vitals: null, vent: null, infusions: [], alerts: [], score: { sofa: 0, apache: 0, rass: 0 }, hrTrend: [], bpTrend: []
+  },
 
-const RASS_SCALE = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4]
-function rassLabel(score: number): string {
-  if (score <= -4) return "Deep sedation"
-  if (score <= -1) return "Light sedation"
-  if (score === 0) return "Alert & calm"
-  return "Agitated"
-}
+  // ── Cardiac ICU (CCU) ───────────────────────────────────────────────────
+  {
+    bed: "CCU-1", unit: "Cardiac ICU", unitType: "CCU", name: "Sarah Jenkins", mrn: "300101", age: 64, sex: "F",
+    dx: "Acute Cardiogenic Shock s/p IABP placement",
+    provider: "Dr. Patel (Cardiology)", nurse: "RN Miller",
+    los: "6d 10h", totalDays: 6, code: "Full Code",
+    vitals: { bp: "102/64", hr: "106", rr: "20", temp: "37.4°C", spo2: "93%", cvp: "14" },
+    vent: { mode: "A/C-VC", fio2: "50%", peep: "8", tv: "440mL", rr: "18", pip: "30" },
+    infusions: [
+      { drug: "Dobutamine Drip", rate: "5 mcg/kg/min", concentration: "250mg/250mL" },
+      { drug: "Norepinephrine", rate: "0.08 mcg/kg/min", concentration: "8mg/250mL" },
+    ],
+    alerts: ["⚠ IABP 1:1 augmentation active", "🧪 Cardiac Index 2.1 L/min/m²"],
+    score: { sofa: 8, apache: 20, rass: -2 },
+    hrTrend: [{ t: "07", v: 112 }, { t: "08", v: 110 }, { t: "09", v: 106 }, { t: "10", v: 106 }, { t: "11", v: 106 }],
+    bpTrend: [{ t: "07", v: 98 }, { t: "08", v: 100 }, { t: "09", v: 102 }, { t: "10", v: 102 }, { t: "11", v: 102 }],
+  },
+  {
+    bed: "CCU-2", unit: "Cardiac ICU", unitType: "CCU", name: null, mrn: "", age: null, sex: null, dx: null, provider: "", nurse: "", los: "", totalDays: 0, code: "", vitals: null, vent: null, infusions: [], alerts: [], score: { sofa: 0, apache: 0, rass: 0 }, hrTrend: [], bpTrend: []
+  },
 
-function losLabel(admissionDate: string): string {
-  const ms = Math.max(0, Date.now() - new Date(admissionDate).getTime())
-  const days = Math.floor(ms / 86400000)
-  const hours = Math.floor((ms % 86400000) / 3600000)
-  return `${days}d ${hours}h`
-}
+  // ── Neuro ICU (NICU) ────────────────────────────────────────────────────
+  {
+    bed: "NICU-1", unit: "Neuro ICU", unitType: "NICU", name: "Charles Adams", mrn: "400101", age: 67, sex: "M",
+    dx: "Acute Basilar Artery Stroke s/p Mechanical Thrombectomy",
+    provider: "Dr. Wong (Neurosurgery)", nurse: "RN Harris",
+    los: "7d 4h", totalDays: 7, code: "Full Code",
+    vitals: { bp: "138/82", hr: "76", rr: "16", temp: "36.9°C", spo2: "98%", cvp: "8" },
+    vent: { mode: "Nasal Cannula", fio2: "28%", peep: "0", tv: "—", rr: "16", pip: "—" },
+    infusions: [{ drug: "Labetalol Drip", rate: "2 mg/min", concentration: "200mg/200mL" }],
+    alerts: ["✓ EVD closed, ICP 11 mmHg", "🧠 NIHSS improved to 4"],
+    score: { sofa: 4, apache: 13, rass: 0 },
+    hrTrend: [{ t: "07", v: 78 }, { t: "08", v: 76 }, { t: "09", v: 76 }, { t: "10", v: 76 }, { t: "11", v: 76 }],
+    bpTrend: [{ t: "07", v: 142 }, { t: "08", v: 140 }, { t: "09", v: 138 }, { t: "10", v: 138 }, { t: "11", v: 138 }],
+  },
+  {
+    bed: "NICU-2", unit: "Neuro ICU", unitType: "NICU", name: null, mrn: "", age: null, sex: null, dx: null, provider: "", nurse: "", los: "", totalDays: 0, code: "", vitals: null, vent: null, infusions: [], alerts: [], score: { sofa: 0, apache: 0, rass: 0 }, hrTrend: [], bpTrend: []
+  },
 
-function VitalCell({
-  label,
-  value,
-  sub,
-  alert,
+  // ── Pediatric ICU (PICU) ────────────────────────────────────────────────
+  {
+    bed: "PICU-1", unit: "Pediatric ICU", unitType: "PICU", name: "Baby Emma Davis", mrn: "500101", age: 2, sex: "F",
+    dx: "RSV Bronchiolitis with Severe Respiratory Distress",
+    provider: "Dr. Lin (Pediatric ICU)", nurse: "RN Taylor",
+    los: "4d 18h", totalDays: 4, code: "Full Code",
+    vitals: { bp: "90/55", hr: "128", rr: "36", temp: "38.1°C", spo2: "96%", cvp: "6" },
+    vent: { mode: "Pediatric HFNC", fio2: "35%", peep: "0", tv: "—", rr: "36", pip: "—" },
+    infusions: [{ drug: "D5 1/4 NS", rate: "25 mL/hr", concentration: "500mL" }],
+    alerts: ["✓ Work of breathing improved"],
+    score: { sofa: 2, apache: 8, rass: 0 },
+    hrTrend: [{ t: "07", v: 135 }, { t: "08", v: 130 }, { t: "09", v: 128 }, { t: "10", v: 128 }, { t: "11", v: 128 }],
+    bpTrend: [{ t: "07", v: 88 }, { t: "08", v: 90 }, { t: "09", v: 90 }, { t: "10", v: 90 }, { t: "11", v: 90 }],
+  },
+
+  // ── Floor 1 Ward (General Ward) ──────────────────────────────────────────
+  {
+    bed: "F1-101", unit: "Floor 1 Ward", unitType: "Floor 1", name: "John Miller", mrn: "600101", age: 58, sex: "M",
+    dx: "Cellulitis Right Lower Leg",
+    provider: "Dr. Evans", nurse: "RN Clark",
+    los: "3d 4h", totalDays: 3, code: "Full Code",
+    vitals: { bp: "124/78", hr: "72", rr: "16", temp: "36.8°C", spo2: "98%", cvp: "—" },
+    vent: null,
+    infusions: [{ drug: "Cefazolin IV", rate: "1g Q8H", concentration: "1g/100mL" }],
+    alerts: ["✓ Redness receding"],
+    score: { sofa: 1, apache: 5, rass: 0 },
+    hrTrend: [{ t: "07", v: 74 }, { t: "08", v: 72 }, { t: "09", v: 72 }, { t: "10", v: 72 }, { t: "11", v: 72 }],
+    bpTrend: [{ t: "07", v: 122 }, { t: "08", v: 124 }, { t: "09", v: 124 }, { t: "10", v: 124 }, { t: "11", v: 124 }],
+  },
+
+  // ── Floor 2 Ward (Special Ward) ──────────────────────────────────────────
+  {
+    bed: "F2-201", unit: "Floor 2 Ward", unitType: "Floor 2", name: "William Brown", mrn: "700101", age: 66, sex: "M",
+    dx: "Elective Total Knee Arthroplasty (TKA)",
+    provider: "Dr. Ortho", nurse: "RN White",
+    los: "2d 10h", totalDays: 2, code: "Full Code",
+    vitals: { bp: "128/80", hr: "76", rr: "16", temp: "36.7°C", spo2: "98%", cvp: "—" },
+    vent: null,
+    infusions: [{ drug: "Ancef", rate: "1g Q8H", concentration: "1g/100mL" }],
+    alerts: ["✓ PT ambulating 50 feet"],
+    score: { sofa: 1, apache: 4, rass: 0 },
+    hrTrend: [{ t: "07", v: 78 }, { t: "08", v: 76 }, { t: "09", v: 76 }, { t: "10", v: 76 }, { t: "11", v: 76 }],
+    bpTrend: [{ t: "07", v: 126 }, { t: "08", v: 128 }, { t: "09", v: 128 }, { t: "10", v: 128 }, { t: "11", v: 128 }],
+  },
+
+  // ── Floor 3 Ward (Deluxe Ward) ───────────────────────────────────────────
+  {
+    bed: "F3-301", unit: "Floor 3 Ward", unitType: "Floor 3", name: "Patricia Davis", mrn: "800101", age: 50, sex: "F",
+    dx: "Laparoscopic Cholecystectomy",
+    provider: "Dr. Vance", nurse: "RN Lee",
+    los: "1d 8h", totalDays: 1, code: "Full Code",
+    vitals: { bp: "118/74", hr: "70", rr: "14", temp: "36.6°C", spo2: "99%", cvp: "—" },
+    vent: null,
+    infusions: [],
+    alerts: ["✓ Tolerating regular diet"],
+    score: { sofa: 0, apache: 3, rass: 0 },
+    hrTrend: [{ t: "07", v: 72 }, { t: "08", v: 70 }, { t: "09", v: 70 }, { t: "10", v: 70 }, { t: "11", v: 70 }],
+    bpTrend: [{ t: "07", v: 116 }, { t: "08", v: 118 }, { t: "09", v: 118 }, { t: "10", v: 118 }, { t: "11", v: 118 }],
+  },
+
+  // ── Emergency Room (ER) ──────────────────────────────────────────────────
+  {
+    bed: "ER-1", unit: "Emergency Room", unitType: "ER", name: "Michael Clark", mrn: "900101", age: 39, sex: "M",
+    dx: "Polytrauma — MVC, Closed Femur Fracture",
+    provider: "Dr. ER Chief", nurse: "RN Trauma",
+    los: "0d 6h", totalDays: 1, code: "Full Code",
+    vitals: { bp: "108/66", hr: "104", rr: "22", temp: "37.2°C", spo2: "95%", cvp: "—" },
+    vent: { mode: "Non-rebreather Mask", fio2: "100%", peep: "0", tv: "—", rr: "22", pip: "—" },
+    infusions: [{ drug: "Normal Saline Bolus", rate: "1000 mL", concentration: "1000mL" }],
+    alerts: ["⚠ Pending OR for ORIF Femur"],
+    score: { sofa: 5, apache: 12, rass: 0 },
+    hrTrend: [{ t: "07", v: 110 }, { t: "08", v: 106 }, { t: "09", v: 104 }, { t: "10", v: 104 }, { t: "11", v: 104 }],
+    bpTrend: [{ t: "07", v: 102 }, { t: "08", v: 106 }, { t: "09", v: 108 }, { t: "10", v: 108 }, { t: "11", v: 108 }],
+  },
+];
+
+function PharmacyOrderModal({
+  patient,
+  isOpen,
+  onClose,
+  onOrderSubmitted,
 }: {
-  label: string
-  value: string
-  sub?: string
-  alert?: boolean
+  patient: IcuPatient;
+  isOpen: boolean;
+  onClose: () => void;
+  onOrderSubmitted: (order: { drug: string; dose: string; route: string; freq: string; urgency: string; notes: string }) => void;
 }) {
+  const { dateStr, timeStr } = getCurrentDateTimeFormatted();
+  const [selectedRx, setSelectedRx] = useState<SampleHandwrittenRx>(SAMPLE_HANDWRITTEN_PRESCRIPTIONS[0]);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [extractedItems, setExtractedItems] = useState<ExtractedRxItem[] | null>(null);
+  const [showManualFallback, setShowManualFallback] = useState(false);
+
+  // Single manual order fallback state
+  const [manualDrug, setManualDrug] = useState("");
+  const [manualDose, setManualDose] = useState("");
+  const [manualRoute, setManualRoute] = useState("IV");
+  const [manualFreq, setManualFreq] = useState("Continuous");
+
+  const suggestedMeds = useMemo(() => getPatientSuggestedMedications(patient.dx), [patient.dx]);
+
+  if (!isOpen) return null;
+
+  const handleRunOcrScan = () => {
+    setIsScanning(true);
+    setExtractedItems(null);
+    setTimeout(() => {
+      setIsScanning(false);
+      setExtractedItems(selectedRx.extractedItems);
+    }, 1000);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedFileName(file.name);
+      // Auto-trigger OCR extraction on upload
+      setIsScanning(true);
+      setExtractedItems(null);
+      setTimeout(() => {
+        setIsScanning(false);
+        setExtractedItems(selectedRx.extractedItems);
+      }, 1100);
+    }
+  };
+
+  const handleItemChange = (idx: number, field: keyof ExtractedRxItem, val: string | number) => {
+    if (!extractedItems) return;
+    const updated = [...extractedItems];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setExtractedItems(updated);
+  };
+
+  const handleRemoveItem = (idx: number) => {
+    if (!extractedItems) return;
+    setExtractedItems(extractedItems.filter((_, i) => i !== idx));
+  };
+
+  const handleAddBlankItem = () => {
+    const newItem: ExtractedRxItem = {
+      drug: "New Prescribed Drug",
+      dose: "100 mg",
+      route: "PO",
+      freq: "OD",
+      instructions: "Take after food",
+      confidence: 99,
+    };
+    setExtractedItems(extractedItems ? [...extractedItems, newItem] : [newItem]);
+  };
+
+  const handleSubmitOcrBulk = () => {
+    if (!extractedItems || extractedItems.length === 0) return;
+    extractedItems.forEach((item) => {
+      onOrderSubmitted({
+        drug: item.drug,
+        dose: item.dose,
+        route: item.route,
+        freq: item.freq,
+        urgency: "STAT",
+        notes: `Digitized via Keppler OCR from ${selectedRx.doctorName} handwritten prescription sheet (${dateStr} ${timeStr}). ${item.instructions}`,
+      });
+    });
+    onClose();
+  };
+
+  const handleManualSubmitSingle = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualDrug) return;
+    onOrderSubmitted({
+      drug: manualDrug,
+      dose: manualDose || "Standard",
+      route: manualRoute,
+      freq: manualFreq,
+      urgency: "STAT",
+      notes: `Single order submitted manually by ${patient.provider || "Doctor"}.`,
+    });
+    onClose();
+  };
+
   return (
-    <div
-      className={`text-center p-2 border ${
-        alert
-          ? "border-[#FECACA] bg-[#FEF2F2]"
-          : "border-[#DDE2EC] bg-[#F8FAFC]"
-      }`}
-    >
-      <div className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wide mb-0.5">
-        {label}
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white border border-[#CBD5E1] shadow-2xl w-full max-w-3xl overflow-hidden rounded-none">
+        {/* Header */}
+        <div className="bg-[#1B4FD8] text-white px-5 py-3.5 flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[18px]">📄</span>
+              <h3 className="text-[16px] font-bold tracking-tight">Prescription Upload & AI Digitization Portal</h3>
+              <span className="bg-[#DCFCE7] text-[#15803D] text-[10px] font-extrabold px-2 py-0.5 rounded-none">OCR ACTIVE</span>
+            </div>
+            <p className="text-[11.5px] text-blue-100 mt-0.5">
+              Upload doctor&apos;s handwritten prescription sheet containing multiple medications for automatic digitization & pharmacy dispatch.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="text-white hover:text-blue-200 font-bold text-[20px] cursor-pointer">✕</button>
+        </div>
+
+        {/* Patient Info Bar */}
+        <div className="bg-[#F8FAFC] border-b border-[#E2E8F0] px-5 py-2.5 flex items-center justify-between text-[11.5px] text-[#334155]">
+          <div>
+            Patient: <strong className="text-[#0F172A]">{patient.name || "Bed Occupant"}</strong> ({patient.bed} · MRN <span className="font-mono">{patient.mrn}</span>)
+            <span className="ml-2 text-[#64748B]">· Diagnosis: {patient.dx || "ICU Care"}</span>
+          </div>
+          <div className="font-mono text-[#1E3A8A]">
+            Auto-Timestamp: <strong>{dateStr}</strong> at <strong>{timeStr}</strong>
+          </div>
+        </div>
+
+        <div className="p-5 overflow-y-auto max-h-[82vh] space-y-4">
+          {/* Main Upload Box */}
+          <div className="border-2 border-dashed border-[#1B4FD8]/40 bg-[#F0F5FF] p-6 text-center space-y-3">
+            <div className="text-[14px] font-bold text-[#1E3A8A]">
+              📷 Upload Doctor&apos;s Paper Prescription Sheet (PNG, JPG, PDF)
+            </div>
+            <p className="text-[12px] text-[#475569] max-w-lg mx-auto">
+              Upload or capture a photo of the doctor&apos;s handwritten paper prescription sheet. Keppler AI OCR will read all prescribed medications simultaneously into structured orders.
+            </p>
+
+            <div className="flex flex-col items-center justify-center gap-3 pt-2">
+              <label className="bg-[#1B4FD8] hover:bg-[#1541B0] text-white px-6 py-2.5 text-[13px] font-bold shadow-md cursor-pointer transition-colors inline-flex items-center gap-2">
+                <span>📁 Upload / Capture Prescription Photo</span>
+                <input type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
+              </label>
+              {uploadedFileName ? (
+                <span className="text-[12px] font-mono bg-white text-[#15803D] border border-[#BBF7D0] px-3 py-1 font-bold">
+                  ✓ {uploadedFileName}
+                </span>
+              ) : (
+                <span className="text-[11px] text-[#64748B]">Supported formats: JPG, PNG, WEBP, PDF</span>
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-center">
+              <Btn variant="primary" size="sm" onClick={handleRunOcrScan} disabled={isScanning}>
+                {isScanning ? "Processing Document AI OCR…" : "⚡ Digitize Uploaded Prescription Sheet"}
+              </Btn>
+            </div>
+          </div>
+
+          {/* OCR Processing Overlay */}
+          {isScanning && (
+            <div className="p-6 bg-[#EFF6FF] border border-[#BFDBFE] text-center space-y-2">
+              <div className="inline-block w-6 h-6 border-2 border-[#1B4FD8] border-t-transparent animate-spin" />
+              <div className="font-bold text-[#1E3A8A] text-[13px]">Keppler AI OCR & Medical Text Summarizer Active</div>
+              <div className="text-[11.5px] text-[#475569]">
+                Reading doctor handwriting, deciphering multi-medication names, dosages, routes, and clinical instructions...
+              </div>
+            </div>
+          )}
+
+          {/* Extracted Multiple Medications Table */}
+          {extractedItems && !isScanning && (
+            <div className="border border-[#BBF7D0] bg-[#F0FDF4] p-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-[#BBF7D0] pb-2.5">
+                <div>
+                  <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-[#15803D] bg-[#DCFCE7] px-2 py-0.5 mr-2">
+                    DIGITIZED PRESCRIPTION SHEET
+                  </span>
+                  <strong className="text-[#0F172A] text-[13px]">{selectedRx.doctorName}</strong>
+                  <span className="text-[#64748B] text-[11.5px] ml-2 font-mono">({selectedRx.specialty})</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] text-[#15803D] font-bold block">
+                    ✓ {extractedItems.length} Multiple Medications Extracted
+                  </span>
+                  <span className="text-[10px] text-[#64748B]">Verify and edit details before dispatching</span>
+                </div>
+              </div>
+
+              {/* Table of extracted multiple medications */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11.5px] border-collapse bg-white shadow-xs">
+                  <thead>
+                    <tr className="bg-[#F8FAFC]">
+                      <th className="border border-[#CBD5E1] px-2.5 py-1.5 text-left font-bold text-[#475569]">Medication Name</th>
+                      <th className="border border-[#CBD5E1] px-2.5 py-1.5 text-left font-bold text-[#475569]">Dose</th>
+                      <th className="border border-[#CBD5E1] px-2.5 py-1.5 text-left font-bold text-[#475569]">Route</th>
+                      <th className="border border-[#CBD5E1] px-2.5 py-1.5 text-left font-bold text-[#475569]">Frequency</th>
+                      <th className="border border-[#CBD5E1] px-2.5 py-1.5 text-left font-bold text-[#475569]">Special Instructions</th>
+                      <th className="border border-[#CBD5E1] px-2.5 py-1.5 text-center font-bold text-[#475569]">AI Confidence</th>
+                      <th className="border border-[#CBD5E1] px-1.5 py-1.5 text-center font-bold text-[#475569]">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {extractedItems.map((item, idx) => (
+                      <tr key={idx} className="border-b border-[#CBD5E1] hover:bg-[#F8FAFC]">
+                        <td className="border border-[#CBD5E1] p-1">
+                          <input
+                            type="text"
+                            value={item.drug}
+                            onChange={(e) => handleItemChange(idx, "drug", e.target.value)}
+                            className="w-full font-bold text-[#0F172A] border-0 outline-none px-1 bg-transparent"
+                          />
+                        </td>
+                        <td className="border border-[#CBD5E1] p-1 font-mono">
+                          <input
+                            type="text"
+                            value={item.dose}
+                            onChange={(e) => handleItemChange(idx, "dose", e.target.value)}
+                            className="w-full border-0 outline-none px-1 bg-transparent"
+                          />
+                        </td>
+                        <td className="border border-[#CBD5E1] p-1 font-mono">
+                          <select
+                            value={item.route}
+                            onChange={(e) => handleItemChange(idx, "route", e.target.value)}
+                            className="w-full border-0 outline-none px-1 bg-transparent"
+                          >
+                            <option value="IV">IV</option>
+                            <option value="PO">PO</option>
+                            <option value="SC">SC</option>
+                            <option value="IM">IM</option>
+                            <option value="Neb">Neb</option>
+                            <option value="NG/RT">NG/RT</option>
+                          </select>
+                        </td>
+                        <td className="border border-[#CBD5E1] p-1 font-mono">
+                          <select
+                            value={item.freq}
+                            onChange={(e) => handleItemChange(idx, "freq", e.target.value)}
+                            className="w-full border-0 outline-none px-1 bg-transparent"
+                          >
+                            <option value="Continuous">Continuous</option>
+                            <option value="STAT">STAT</option>
+                            <option value="OD">OD</option>
+                            <option value="BD">BD</option>
+                            <option value="Q8H">Q8H</option>
+                            <option value="Q6H">Q6H</option>
+                            <option value="Q12H">Q12H</option>
+                          </select>
+                        </td>
+                        <td className="border border-[#CBD5E1] p-1 text-[#475569]">
+                          <input
+                            type="text"
+                            value={item.instructions}
+                            onChange={(e) => handleItemChange(idx, "instructions", e.target.value)}
+                            className="w-full border-0 outline-none px-1 bg-transparent text-[11px]"
+                          />
+                        </td>
+                        <td className="border border-[#CBD5E1] p-1 text-center">
+                          <span className="bg-[#DCFCE7] text-[#15803D] font-mono text-[10.5px] font-bold px-1.5 py-0.5">
+                            {item.confidence}% 🟢
+                          </span>
+                        </td>
+                        <td className="border border-[#CBD5E1] p-1 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(idx)}
+                            className="text-[#B91C1C] hover:text-red-800 font-bold text-[12px] px-1"
+                            title="Remove drug"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={handleAddBlankItem}
+                  className="text-[11.5px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
+                >
+                  + Add another drug to this prescription sheet
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <Btn variant="outline" size="sm" onClick={onClose}>
+                    Cancel
+                  </Btn>
+                  <Btn variant="primary" size="sm" onClick={handleSubmitOcrBulk}>
+                    🚀 Approve & Dispatch All {extractedItems.length} Medications to Pharmacy
+                  </Btn>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Secondary Collapsible: Single Order Fallback */}
+          <div className="pt-2 border-t border-[#E2E8F0]">
+            <button
+              type="button"
+              onClick={() => setShowManualFallback(!showManualFallback)}
+              className="text-[11px] font-bold text-[#64748B] hover:text-[#0F172A] cursor-pointer flex items-center gap-1"
+            >
+              <span>{showManualFallback ? "▼ Hide" : "▶ Need to order a single custom medication manually without paper upload?"}</span>
+            </button>
+
+            {showManualFallback && (
+              <form onSubmit={handleManualSubmitSingle} className="mt-3 p-3 bg-[#F8FAFC] border border-[#CBD5E1] text-[12px] space-y-3">
+                <div className="text-[11px] font-bold text-[#475569] uppercase">Single Custom Drug Order</div>
+
+                {/* Doctor suggested pills */}
+                <div>
+                  <span className="text-[10.5px] text-[#64748B] block mb-1">Click diagnosis suggested medication:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {suggestedMeds.map((m) => (
+                      <button
+                        key={m.drug}
+                        type="button"
+                        onClick={() => {
+                          setManualDrug(m.drug);
+                          setManualDose(m.dose);
+                          setManualRoute(m.route);
+                          setManualFreq(m.freq);
+                        }}
+                        className="px-2 py-0.5 bg-white border border-[#CBD5E1] hover:border-[#1B4FD8] text-[10.5px] font-medium"
+                      >
+                        {m.drug} ({m.dose})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Drug Name"
+                    value={manualDrug}
+                    onChange={(e) => setManualDrug(e.target.value)}
+                    className="border border-[#CBD5E1] px-2 py-1 bg-white"
+                    required
+                  />
+                  <input
+                    type="text"
+                    placeholder="Dose"
+                    value={manualDose}
+                    onChange={(e) => setManualDose(e.target.value)}
+                    className="border border-[#CBD5E1] px-2 py-1 bg-white font-mono"
+                    required
+                  />
+                  <select
+                    value={manualRoute}
+                    onChange={(e) => setManualRoute(e.target.value)}
+                    className="border border-[#CBD5E1] px-2 py-1 bg-white"
+                  >
+                    <option value="IV">IV</option>
+                    <option value="PO">PO</option>
+                    <option value="SC">SC</option>
+                    <option value="IM">IM</option>
+                  </select>
+                  <select
+                    value={manualFreq}
+                    onChange={(e) => setManualFreq(e.target.value)}
+                    className="border border-[#CBD5E1] px-2 py-1 bg-white"
+                  >
+                    <option value="Continuous">Continuous</option>
+                    <option value="STAT">STAT</option>
+                    <option value="OD">OD</option>
+                    <option value="BD">BD</option>
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <Btn variant="primary" size="sm" type="submit">
+                    Submit Single Order
+                  </Btn>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       </div>
-      <div
-        className={`font-mono font-bold text-[13px] ${
-          alert ? "text-[#DC2626]" : "text-gray-900"
-        }`}
-      >
-        {value}
-      </div>
-      {sub && <div className="text-[10px] text-[#94A3B8]">{sub}</div>}
     </div>
-  )
+  );
 }
 
-function MiniTrend({
-  data,
-  color,
-}: {
-  data: { t: string; v: number }[]
-  color: string
-}) {
-  if (data.length < 2)
-    return (
-      <p className="text-[11px] text-[#94A3B8] py-3 text-center">
-        Not enough readings yet for a trend.
-      </p>
-    )
+function MiniTrend({ data, color, unit }: { data: { t: string; v: number }[]; color: string; unit?: string }) {
+  const id = `grad-${color.replace("#", "")}`;
+  const values = data.map((d) => d.v);
+  // Pad the domain so a flat-ish trend still reads as a line rather than a
+  // stripe glued to the top of the panel.
+  const pad = Math.max(2, Math.round((Math.max(...values) - Math.min(...values)) * 0.4));
   return (
-    <ResponsiveContainer width="100%" height={40}>
-      <LineChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-        <Line
-          type="monotone"
-          dataKey="v"
-          stroke={color}
-          strokeWidth={1.5}
-          dot={false}
+    <ResponsiveContainer width="100%" height={128}>
+      <AreaChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke="#EDF1F7" vertical={false} />
+        <XAxis dataKey="t" tick={{ fontSize: 10, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
+        <YAxis
+          domain={[Math.min(...values) - pad, Math.max(...values) + pad]}
+          tick={{ fontSize: 10, fill: "#94A3B8" }}
+          axisLine={false}
+          tickLine={false}
+          width={42}
         />
-        <Tooltip contentStyle={{ fontSize: 10, padding: "2px 6px" }} />
-      </LineChart>
+        <Tooltip
+          contentStyle={{ fontSize: 11, padding: "4px 8px", border: "1px solid #E2E8F0", borderRadius: 0 }}
+          formatter={(v) => [`${v}${unit ? ` ${unit}` : ""}`, ""]}
+          labelFormatter={(l) => `${l}:00`}
+        />
+        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#${id})`} dot={{ r: 2.5, fill: color }} activeDot={{ r: 4 }} isAnimationActive={false} />
+      </AreaChart>
     </ResponsiveContainer>
-  )
+  );
 }
 
-// Custom-skinned room-scope dropdown -- tints itself by whichever room is
-// selected (ICU/SICU/IICU) so the choice reads at a glance instead of
-// disappearing into a plain browser <select>.
-function RoomSelect({
-  value,
-  onChange,
-}: {
-  value: "ICU" | "SICU" | "IICU"
-  onChange: (v: "ICU" | "SICU" | "IICU") => void
-}) {
-  const tint =
-    value === "SICU"
-      ? "icu-select-sicu"
-      : value === "IICU"
-        ? "icu-select-iicu"
-        : "icu-select-icu"
-  return (
-    <div className="icu-select-wrap">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as "ICU" | "SICU" | "IICU")}
-        className={`icu-select ${tint}`}
-      >
-        <option value="ICU">ICU (all)</option>
-        <option value="SICU">SICU</option>
-        <option value="IICU">IICU</option>
-      </select>
-    </div>
-  )
-}
-
-// Colored, icon-labeled card shell for one flowsheet section -- a thin
-// accent strip + icon give each section (vitals, ventilator, infusions...)
-// its own identity at a glance, on top of the same white-card/Card styling
-// used everywhere else in this app.
-function SectionCard({
-  icon,
-  color,
+/** Flat, square panel used across the redesigned ICU overview. */
+function Panel({
   title,
   actions,
   children,
+  className,
+  accent,
 }: {
-  icon: ReactNode
-  color: string
-  title: string
-  actions?: ReactNode
-  children: ReactNode
+  title: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  accent?: string;
 }) {
   return (
-    <div className="bg-white border border-[#DDE2EC] overflow-hidden">
-      <div className="icu-section-accent" style={{ background: color }} />
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-[#DDE2EC] flex-wrap gap-2">
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-          <span style={{ color }}>{icon}</span> {title}
-        </span>
+    <section className={`bg-white border border-[#E2E8F0] shadow-sm flex flex-col ${className ?? ""}`}>
+      <header className="px-4 py-2.5 border-b border-[#EDF1F7] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {accent && <span className="w-1 h-4 flex-shrink-0" style={{ backgroundColor: accent }} />}
+          <h3 className="text-[12.5px] font-bold text-[#1E293B] tracking-tight truncate">{title}</h3>
+        </div>
         {actions}
+      </header>
+      <div className="p-4 flex-1">{children}</div>
+    </section>
+  );
+}
+
+/** Single vital reading, colour-coded against its normal range. */
+function Vital({ label, value, unit, state }: { label: string; value: string; unit?: string; state: "ok" | "warn" | "crit" }) {
+  const tone =
+    state === "crit"
+      ? { text: "text-[#B91C1C]", bg: "bg-[#FEF2F2]", border: "border-[#FECACA]" }
+      : state === "warn"
+      ? { text: "text-[#B45309]", bg: "bg-[#FFFBEB]", border: "border-[#FDE68A]" }
+      : { text: "text-[#0F172A]", bg: "bg-white", border: "border-[#E2E8F0]" };
+  return (
+    <div className={`border ${tone.border} ${tone.bg} px-3 py-2.5`}>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">{label}</div>
+      <div className="flex items-baseline gap-1 mt-1">
+        <span className={`font-mono text-[19px] font-extrabold leading-none ${tone.text}`}>{value}</span>
+        {unit && <span className="text-[10.5px] text-[#94A3B8] font-medium">{unit}</span>}
       </div>
-      <div className="p-3.5">{children}</div>
     </div>
-  )
+  );
 }
 
-// One small reusable "+ Add" control -- click to reveal a row of inputs,
-// Save posts them and collapses back. Used for every ICU flowsheet section
-// that needs real data entry (ventilator, infusions, I/O, labs, consults).
-function QuickAddForm({
-  fields,
-  submitLabel,
-  onSubmit,
+const num = (s: string) => parseFloat(String(s).replace(/[^\d.-]/g, ""));
+
+// Bed colour is clinical, not decorative: the census strip is read at a glance
+// from across the unit, so acuity drives the colour and an empty bed reads as
+// capacity rather than as another patient.
+const ACUITY = {
+  critical: { label: "Critical", color: "#DC2626", tint: "#FEF2F2", border: "#FECACA" },
+  watch: { label: "Watch", color: "#D97706", tint: "#FFFBEB", border: "#FDE68A" },
+  stable: { label: "Stable", color: "#16A34A", tint: "#F0FDF4", border: "#BBF7D0" },
+  empty: { label: "Available", color: "#64748B", tint: "#F8FAFC", border: "#CBD5E1" },
+} as const;
+
+function acuityOf(p: { name?: string | null; vitals?: { spo2: string; hr: string } | null }) {
+  if (!p.name || !p.vitals) return ACUITY.empty;
+  const spo2 = num(p.vitals.spo2);
+  const hr = num(p.vitals.hr);
+  if (spo2 < 93 || hr > 110) return ACUITY.critical;
+  if (spo2 < 96 || hr > 100) return ACUITY.watch;
+  return ACUITY.stable;
+}
+
+function MultiDayFlowchartMatrix({
+  patientId,
+  patientName,
+  totalDays = 10,
+  onSelectDate,
 }: {
-  fields: { key: string; label: string; placeholder?: string }[]
-  submitLabel: string
-  onSubmit: (values: Record<string, string>) => Promise<void>
+  patientId: string;
+  patientName: string;
+  totalDays?: number;
+  onSelectDate: (dateStr: string) => void;
 }) {
-  const [open, setOpen] = useState(false)
-  const [values, setValues] = useState<Record<string, string>>({})
-  const [saving, setSaving] = useState(false)
+  const stayDays = useMemo(() => getPatientStayDays(totalDays), [totalDays]);
 
-  if (!open) {
-    return (
-      <Btn variant="primary" size="xs" onClick={() => setOpen(true)}>
-        <FiPlus aria-hidden /> {submitLabel}
-      </Btn>
-    )
-  }
-  return (
-    <div className="flex items-end gap-1.5 flex-wrap justify-end">
-      {fields.map((f) => (
-        <div key={f.key}>
-          <label className="text-[10px] text-[#94A3B8] block mb-0.5">
-            {f.label}
-          </label>
-          <input
-            className="border border-[#DDE2EC] px-2 py-1 text-[11.5px] w-24"
-            placeholder={f.placeholder}
-            value={values[f.key] || ""}
-            onChange={(e) =>
-              setValues((v) => ({ ...v, [f.key]: e.target.value }))
-            }
-          />
-        </div>
-      ))}
-      <Btn
-        variant="primary"
-        size="xs"
-        disabled={saving}
-        onClick={async () => {
-          setSaving(true)
-          try {
-            await onSubmit(values)
-            setValues({})
-            setOpen(false)
-          } finally {
-            setSaving(false)
-          }
-        }}
-      >
-        {saving ? "Saving..." : "Save"}
-      </Btn>
-      <Btn variant="ghost" size="xs" onClick={() => setOpen(false)}>
-        Cancel
-      </Btn>
-    </div>
-  )
-}
-
-type Props = {
-  navigate?: (page: string, sub?: string) => void
-  onOpenPatientClinical?: (patientId: string) => void
-  permissions?: string[]
-  // Set by Inpatient.tsx when this renders inline as the "ICU" ward's drill-
-  // down instead of the plain bed board -- suppresses the page header/back
-  // link since the surrounding ward page already has one.
-  embedded?: boolean
-}
-
-export default function ICU({
-  navigate,
-  onOpenPatientClinical,
-  permissions,
-  embedded,
-}: Props) {
-  const [beds, setBeds] = useState<Bed[]>([])
-  const [loading, setLoading] = useState(true)
-  const [notice, setNotice] = useState<Notice | null>(null)
-  const [roomScope, setRoomScope] = useState<"ICU" | "IICU" | "SICU">("ICU")
-
-  const [selectedBed, setSelectedBed] = useState<Bed | null>(null)
-  const [emr, setEmr] = useState<EmrSnapshot | null>(null)
-  const [icu, setIcu] = useState<IcuSnapshot | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [addEvalOpen, setAddEvalOpen] = useState(false)
-
-  const canEdit =
-    !permissions ||
-    permissions.length === 0 ||
-    permissions.includes("patients.clinical.write")
-
-  useEffect(() => {
-    ;(async () => {
-      setLoading(true)
+  const records = useMemo(() => {
+    return stayDays.map((sd) => {
+      let rec: FlowsheetRecord;
       try {
-        const res = await apiFetch<{ beds: Bed[]; summary: Summary }>(
-          "/api/beds",
-        )
-        setBeds((res.beds || []).filter((b) => b.ward === "ICU"))
-      } catch (error: any) {
-        reportError(setNotice, error, "Failed to load ICU beds.")
-      } finally {
-        setLoading(false)
+        const raw = localStorage.getItem(`icu.flowsheet.${patientId}.${sd.dateStr}`);
+        if (raw) rec = JSON.parse(raw);
+        else rec = generateSeedRecord(patientId, sd.dayNumber, sd.dateStr, totalDays);
+      } catch {
+        rec = generateSeedRecord(patientId, sd.dayNumber, sd.dateStr, totalDays);
       }
-    })()
-  }, [])
-
-  const scopedBeds = useMemo(
-    () =>
-      roomScope === "ICU" ? beds : beds.filter((b) => b.room_no === roomScope),
-    [beds, roomScope],
-  )
-  const scopedSummary = useMemo(
-    () =>
-      scopedBeds.reduce(
-        (acc, b) => {
-          acc.total += 1
-          if (b.status === "Available") acc.available += 1
-          else if (b.status === "Occupied") acc.occupied += 1
-          else acc.maintenance += 1
-          return acc
-        },
-        { total: 0, available: 0, occupied: 0, maintenance: 0 } as Summary,
-      ),
-    [scopedBeds],
-  )
-
-  const loadDetail = async (bed: Bed) => {
-    setSelectedBed(bed)
-    setEmr(null)
-    setIcu(null)
-    if (!bed.patient_id) return
-    setDetailLoading(true)
-    try {
-      const [emrRes, icuRes] = await Promise.all([
-        apiFetch<EmrSnapshot>(`/api/emr/${bed.patient_id}`),
-        apiFetch<IcuSnapshot>(`/api/icu/${bed.patient_id}`),
-      ])
-      setEmr(emrRes)
-      setIcu(icuRes)
-    } catch (error: any) {
-      reportError(setNotice, error, "Failed to load this patient's ICU record.")
-    } finally {
-      setDetailLoading(false)
-    }
-  }
-  const refreshDetail = () => selectedBed && loadDetail(selectedBed)
-
-  const admission = emr?.admissions?.[0]
-  const admissionId = admission?.id
-  const vitalsHistory = emr?.vitals || []
-  const latestVitals = vitalsHistory[0]
-  const latestDiagnosis = emr?.diagnoses?.[0]
-  const provider = emr?.observation_notes?.find((o) => o.role === "doctor")
-    ?.doctor_name
-  const nurse = emr?.observation_notes?.find((o) => o.role === "nurse")
-    ?.doctor_name
-
-  const hrTrend = useMemo(
-    () =>
-      vitalsHistory
-        .filter((v) => v.pulse)
-        .slice(0, 8)
-        .reverse()
-        .map((v) => ({
-          t: new Date(v.created_at).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          v: parseInt(v.pulse!, 10),
-        }))
-        .filter((p) => !isNaN(p.v)),
-    [vitalsHistory],
-  )
-  const bpTrend = useMemo(
-    () =>
-      vitalsHistory
-        .filter((v) => v.bp)
-        .slice(0, 8)
-        .reverse()
-        .map((v) => ({
-          t: new Date(v.created_at).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          v: parseInt(v.bp!, 10),
-        }))
-        .filter((p) => !isNaN(p.v)),
-    [vitalsHistory],
-  )
-
-  // Real alerts, not scripted ones -- derived the same way the mixed-gender
-  // room alert on the Inpatient board is: read a real value, flag it if it
-  // crosses a clinically standard threshold.
-  const alerts = useMemo(() => {
-    const list: string[] = []
-    if (latestVitals?.spo2 && parseFloat(latestVitals.spo2) < 93)
-      list.push(`⚠ SpO2 low -- ${latestVitals.spo2}%`)
-    if (latestVitals?.pulse && parseInt(latestVitals.pulse, 10) > 110)
-      list.push(`⚠ Heart rate elevated -- ${latestVitals.pulse} bpm`)
-    if (latestVitals?.bp && parseInt(latestVitals.bp, 10) < 100)
-      list.push(`⚠ BP trending low -- ${latestVitals.bp}`)
-    for (const lab of icu?.lab_results || []) {
-      if (lab.flag === "HH" || lab.flag === "H" || lab.flag === "L")
-        list.push(
-          `🧪 ${lab.test_name} ${
-            lab.flag === "L" ? "low" : "critical"
-          } -- ${lab.value ?? ""}${lab.unit || ""}`,
-        )
-    }
-    return list
-  }, [latestVitals, icu])
-
-  const latestVent = icu?.ventilator_settings?.[0]
-  const activeInfusions =
-    icu?.infusions?.filter((i) => i.status === "active") || []
-  const latestRass = icu?.rass_scores?.[0]
-  const ioToday = (icu?.io_records || []).filter(
-    (r) => new Date(r.recorded_at).toDateString() === new Date().toDateString(),
-  )
-  const totalIn = ioToday.reduce((sum, r) => sum + (r.intake_ml || 0), 0)
-  const totalOut = ioToday.reduce((sum, r) => sum + (r.output_ml || 0), 0)
-
-  const recordedBy = "Current user"
+      const summary = flowsheetSummary(patientId, sd.dateStr);
+      return { sd, rec, summary };
+    });
+  }, [patientId, stayDays, totalDays]);
 
   return (
-    <div className={embedded ? "" : "flex-1 bg-[#F0F2F5]"}>
-      {notice && (
-        <div
-          className={`mx-4 mt-3 px-3.5 py-2.5 text-[12.5px] ${
-            notice.type === "error"
-              ? "bg-[#FEF2F2] text-[#B91C1C] border border-[#FECACA]"
-              : "bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]"
-          }`}
-        >
-          {notice.message}
-        </div>
-      )}
+    <Panel
+      title={`Complete Day-by-Day Flow Chart History & Parameters (${totalDays}-Day ICU Stay)`}
+      accent="#1B4FD8"
+      className="col-span-full"
+      actions={
+        <span className="text-[11px] font-semibold text-[#1B4FD8] bg-[#EFF6FF] px-2 py-0.5 border border-[#BFDBFE]">
+          {records.length} Days Recorded
+        </span>
+      }
+    >
+      <div className="text-[11.5px] text-[#64748B] mb-3">
+        Detailed day-by-day clinical parameters, hemodynamics, ventilation settings, neurological scores, 24-hr fluid balances, and labs for {patientName}&apos;s complete stay. Click any day to open or update its full chart.
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[11.5px] border-collapse min-w-[920px]">
+          <thead>
+            <tr className="bg-[#F8FAFC]">
+              <th className="border border-[#E2E8F0] px-2.5 py-1.5 text-left font-bold text-[#334155] uppercase text-[10px] tracking-wide">Stay Day</th>
+              <th className="border border-[#E2E8F0] px-2.5 py-1.5 text-left font-bold text-[#334155] uppercase text-[10px] tracking-wide">Hemodynamics</th>
+              <th className="border border-[#E2E8F0] px-2.5 py-1.5 text-left font-bold text-[#334155] uppercase text-[10px] tracking-wide">Ventilator</th>
+              <th className="border border-[#E2E8F0] px-2.5 py-1.5 text-left font-bold text-[#334155] uppercase text-[10px] tracking-wide">GCS / RASS</th>
+              <th className="border border-[#E2E8F0] px-2.5 py-1.5 text-left font-bold text-[#334155] uppercase text-[10px] tracking-wide">24h Fluid Balance</th>
+              <th className="border border-[#E2E8F0] px-2.5 py-1.5 text-left font-bold text-[#334155] uppercase text-[10px] tracking-wide">Cum. Balance</th>
+              <th className="border border-[#E2E8F0] px-2.5 py-1.5 text-left font-bold text-[#334155] uppercase text-[10px] tracking-wide">Key Labs</th>
+              <th className="border border-[#E2E8F0] px-2.5 py-1.5 text-left font-bold text-[#334155] uppercase text-[10px] tracking-wide">Entries</th>
+              <th className="border border-[#E2E8F0] px-2.5 py-1.5 text-center font-bold text-[#334155] uppercase text-[10px] tracking-wide">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {records.map(({ sd, rec, summary }) => {
+              const hr = rec.hourly.observations?.[`12:00|hr`] || "104";
+              const bp = rec.hourly.observations?.[`12:00|bp`] || "110/70";
+              const temp = rec.hourly.observations?.[`12:00|temp`] || "37.5";
+              const ventMode = rec.hourly.observations?.[`12:00|vent_mode`] || "A/C-VC";
+              const fio2 = rec.hourly.observations?.[`12:00|fio2`] || "45";
+              const peep = rec.hourly.observations?.[`12:00|peep`] || "6";
+              const rass = rec.hourly.rass?.[`12:00|score`] || "0 Alert and calm";
+              const gcsTotal = rec.scales.gcs?.[`12:00|eyes`] ? "14" : "12";
+              const intake = rec.fields["balance_24h.intake"] || "2800";
+              const output = rec.fields["balance_24h.output"] || "1850";
+              const netBal = Number(rec.fields["balance_24h.balance"] || (Number(intake) - Number(output)));
+              const cumBal = Number(rec.fields["balance_24h.cumulative_balance"] || netBal);
+              const creat = rec.tables.labs?.[0]?.creatinine || "1.8";
+              const hb = rec.tables.labs?.[0]?.hb || "9.6";
 
-      {!embedded && (
-        <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <h1 className="text-base font-semibold text-gray-900">
-              ICU Department
-            </h1>
-            <p className="text-[11.5px] text-[#64748B]">
-              {scopedSummary.total} beds · {scopedSummary.occupied} occupied ·{" "}
-              {scopedSummary.available} available
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <RoomSelect value={roomScope} onChange={setRoomScope} />
-            {navigate && (
-              <Btn variant="outline" size="sm" onClick={() => navigate("beds")}>
-                Bed Management <FiArrowRight aria-hidden />
-              </Btn>
-            )}
-          </div>
-        </div>
-      )}
-      {embedded && (
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[12px] text-[#64748B]">
-            {scopedSummary.total} beds · {scopedSummary.occupied} occupied ·{" "}
-            {scopedSummary.available} available
-          </span>
-          <RoomSelect value={roomScope} onChange={setRoomScope} />
-        </div>
-      )}
-
-      {loading ? (
-        <p className="text-[13px] text-[#64748B] px-6 py-4">
-          Loading ICU beds...
-        </p>
-      ) : scopedBeds.length === 0 ? (
-        <p className="text-[13px] text-[#64748B] px-6 py-4">
-          No beds in this scope.
-        </p>
-      ) : (
-        <>
-          {/* ICU census bar */}
-          <div className="bg-[#0C1524] border-b border-[#1E2D42] px-6 py-2 flex items-center gap-3 overflow-x-auto">
-            {scopedBeds.map((bed) => {
-              const isSelected = selectedBed?.id === bed.id
-              const hasPatient = !!bed.patient_id
-              const genderAccent = hasPatient
-                ? `icu-census-card-${bedGenderVariant(bed)}`
-                : ""
               return (
-                <div
-                  key={bed.id}
-                  onClick={() => loadDetail(bed)}
-                  className={`icu-census-card flex-shrink-0 w-40 border p-2.5 cursor-pointer transition-colors ${genderAccent} ${
-                    !hasPatient
-                      ? "border-[#1E2D42] bg-[#0F1F30]"
-                      : isSelected
-                        ? "border-[#1B4FD8] bg-[#1B4FD8]/20"
-                        : "border-[#1E2D42] bg-[#0F2040] hover:border-[#334155]"
-                  }`}
-                >
-                  <div className="text-[10.5px] font-semibold text-[#64748B] mb-0.5">
-                    {bed.room_no} · Bed {bed.bed_no}
-                  </div>
-                  {hasPatient ? (
-                    <>
-                      <div className="text-[12px] font-semibold text-white truncate">
-                        {bedOccupantName(bed)}
-                      </div>
-                      <div className="text-[10.5px] text-[#64748B] truncate">
-                        {bed.patient_age ? `${bed.patient_age}y` : ""}{" "}
-                        {bed.patient_gender || ""}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-[11px] text-[#334155] mt-0.5">
-                      {bed.status}
+                <tr key={sd.dateStr} className={`border-b border-[#E2E8F0] hover:bg-[#F8FAFC] transition-colors ${sd.isToday ? "bg-[#EFF6FF]" : ""}`}>
+                  <td className="border border-[#E2E8F0] px-2.5 py-2 whitespace-nowrap">
+                    <div className="font-mono font-bold text-[#0F172A] flex items-center gap-1.5">
+                      <span>Day {sd.dayNumber}</span>
+                      {sd.isToday && <span className="text-[9px] bg-[#1B4FD8] text-white px-1 font-sans font-bold">TODAY</span>}
+                    </div>
+                    <div className="text-[10px] text-[#64748B] font-mono">{sd.dateStr}</div>
+                  </td>
+                  <td className="border border-[#E2E8F0] px-2.5 py-2 font-mono">
+                    <div className="font-semibold text-[#0F172A]">HR {hr} bpm · {bp}</div>
+                    <div className="text-[10.5px] text-[#64748B]">Temp {temp}°C</div>
+                  </td>
+                  <td className="border border-[#E2E8F0] px-2.5 py-2 font-mono">
+                    <div className="font-semibold text-[#0369A1]">{ventMode}</div>
+                    <div className="text-[10.5px] text-[#64748B]">FiO₂ {fio2}% · PEEP {peep}</div>
+                  </td>
+                  <td className="border border-[#E2E8F0] px-2.5 py-2 font-mono">
+                    <div className="font-semibold text-[#7C3AED]">GCS {gcsTotal}</div>
+                    <div className="text-[10.5px] text-[#64748B] truncate max-w-[130px]">{rass}</div>
+                  </td>
+                  <td className="border border-[#E2E8F0] px-2.5 py-2 font-mono">
+                    <div className="text-[#64748B]">In {intake}ml · Out {output}ml</div>
+                    <div className={`font-bold ${netBal >= 0 ? "text-[#059669]" : "text-[#DC2626]"}`}>
+                      Net {netBal >= 0 ? `+${netBal}` : netBal} ml
+                    </div>
+                  </td>
+                  <td className="border border-[#E2E8F0] px-2.5 py-2 font-mono font-bold text-[#0F172A]">
+                    {cumBal >= 0 ? `+${cumBal}` : cumBal} ml
+                  </td>
+                  <td className="border border-[#E2E8F0] px-2.5 py-2 font-mono">
+                    <div>Hb {hb} g/dL</div>
+                    <div className="text-[#64748B]">Cr {creat} mg/dL</div>
+                  </td>
+                  <td className="border border-[#E2E8F0] px-2.5 py-2 whitespace-nowrap">
+                    <div className="font-mono font-bold text-[#1B4FD8]">{summary.total} entries</div>
+                    <div className="w-16 h-1.5 bg-[#EDF1F7] mt-1 overflow-hidden">
+                      <div className="h-full bg-[#1B4FD8]" style={{ width: `${Math.min(100, Math.max(10, (summary.total / 120) * 100))}%` }} />
+                    </div>
+                  </td>
+                  <td className="border border-[#E2E8F0] px-2.5 py-2 text-center whitespace-nowrap">
+                    <Btn variant="primary" size="xs" onClick={() => onSelectDate(sd.dateStr)}>
+                      Edit / View Chart
+                    </Btn>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+export default function ICU() {
+  const [selectedBedIndex, setSelectedBedIndex] = useState(0);
+  const [selectedUnit, setSelectedUnit] = useState<string>("All");
+  const [selectedStatus, setSelectedStatus] = useState<string>("All");
+  const [selectedFlowsheetDate, setSelectedFlowsheetDate] = useState<string>("");
+  const [view, setView] = useState<"overview" | "flowsheet">("overview");
+  const [showPharmacyModal, setShowPharmacyModal] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+
+  const filteredBeds = useMemo(() => {
+    return ALL_BEDS_DATASET.filter((b) => {
+      if (selectedUnit !== "All" && b.unitType !== selectedUnit) return false;
+      const a = acuityOf(b);
+      if (selectedStatus === "Occupied" && !b.name) return false;
+      if (selectedStatus === "Available" && b.name) return false;
+      if (selectedStatus === "Critical" && a.label !== "Critical") return false;
+      if (selectedStatus === "Watch" && a.label !== "Watch") return false;
+      if (selectedStatus === "Stable" && a.label !== "Stable") return false;
+      return true;
+    });
+  }, [selectedUnit, selectedStatus]);
+
+  const pt = ALL_BEDS_DATASET[selectedBedIndex] || ALL_BEDS_DATASET[0];
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Seed multi-day data for active patient
+  useEffect(() => {
+    if (pt.mrn) {
+      ensureMultiDaySeedData(pt.mrn, pt.totalDays || 10);
+    }
+  }, [pt.mrn, pt.totalDays]);
+
+  // Charting progress for today
+  const [chartTick, setChartTick] = useState(0);
+  const summary = useMemo(() => flowsheetSummary(pt.mrn || "100301", today), [pt.mrn, today, chartTick]);
+
+  // Day-wise history comes from the clinical record
+  const [history, setHistory] = useState<FlowsheetDay[]>([]);
+  const refreshHistory = useCallback(() => {
+    if (!pt.mrn) return;
+    fetchDays(pt.mrn)
+      .then((d) => setHistory(d.slice(0, 6)))
+      .catch(() => setHistory([]));
+  }, [pt.mrn]);
+  useEffect(refreshHistory, [refreshHistory, chartTick]);
+  useEffect(() => onFlowsheetSync(() => { refreshHistory(); setChartTick((n) => n + 1); }), [refreshHistory]);
+
+  const spo2 = pt.vitals ? num(pt.vitals.spo2) : 98;
+  const hr = pt.vitals ? num(pt.vitals.hr) : 75;
+  const temp = pt.vitals ? num(pt.vitals.temp) : 37.0;
+  const sys = pt.vitals ? num(pt.vitals.bp.split("/")[0]) : 120;
+
+  const handlePharmacyOrderSubmitted = (order: { drug: string; dose: string; route: string; freq: string; urgency: string; notes: string }) => {
+    const { dateStr, timeStr } = getCurrentDateTimeFormatted();
+    const key = `icu.flowsheet.${pt.mrn}.${dateStr}`;
+    let rec: FlowsheetRecord;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) rec = JSON.parse(raw);
+      else rec = generateSeedRecord(pt.mrn, 10, dateStr, pt.totalDays || 10);
+    } catch {
+      rec = generateSeedRecord(pt.mrn, 10, dateStr, pt.totalDays || 10);
+    }
+
+    const drugTable = rec.tables.drug_chart ?? [];
+    drugTable.unshift({
+      drug: `${order.drug} (${order.urgency})`,
+      dose: order.dose,
+      route: order.route,
+      freq: order.freq,
+      times: timeStr,
+      nurse_sign: "PharmD Sent",
+    });
+    rec.tables.drug_chart = drugTable;
+    rec.updatedAt = new Date().toISOString();
+
+    localStorage.setItem(key, JSON.stringify(rec));
+    broadcastSave(pt.mrn, dateStr);
+
+    if (pt.infusions) {
+      pt.infusions.unshift({
+        drug: order.drug,
+        rate: order.dose,
+        concentration: `${order.route} ${order.freq}`,
+      });
+    }
+
+    setNotification(`✓ Pharmacy Order #${Math.floor(1000 + Math.random() * 9000)} for ${order.drug} (${order.dose}) submitted to Pharmacy at ${timeStr}!`);
+    setChartTick((t) => t + 1);
+  };
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 bg-[#F5F7FB]">
+      {/* Pharmacy Medication Order Modal */}
+      <PharmacyOrderModal
+        patient={pt}
+        isOpen={showPharmacyModal}
+        onClose={() => setShowPharmacyModal(false)}
+        onOrderSubmitted={handlePharmacyOrderSubmitted}
+      />
+
+      {/* Notification Toast */}
+      {notification && (
+        <div className="bg-[#15803D] text-white px-6 py-2.5 text-[12px] font-bold flex items-center justify-between shadow-md">
+          <span>{notification}</span>
+          <button type="button" onClick={() => setNotification(null)} className="text-white hover:text-green-200 font-bold ml-4">✕</button>
+        </div>
+      )}
+
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 bg-white border-b border-[#E2E8F0] px-6 py-3 flex flex-wrap items-center gap-4">
+        <div>
+          <h1 className="text-[16px] font-bold text-[#0F172A] tracking-tight">ICU & Bed Management Portal</h1>
+          <div className="flex items-center gap-3 mt-1 text-[11.5px]">
+            <span className="text-[#64748B]">General Hospital</span>
+            <span className="flex items-center gap-1.5 text-[#334155]">
+              <span className="w-1.5 h-1.5 bg-[#DC2626]" /> {ALL_BEDS_DATASET.filter((b) => b.name).length} occupied
+            </span>
+            <span className="flex items-center gap-1.5 text-[#334155]">
+              <span className="w-1.5 h-1.5 bg-[#16A34A]" /> {ALL_BEDS_DATASET.filter((b) => !b.name).length} available
+            </span>
+            <span className="text-[#94A3B8]">{ALL_BEDS_DATASET.length} total beds</span>
+          </div>
+        </div>
+        <div className="flex gap-2 ml-auto">
+          <Btn
+            variant={view === "flowsheet" ? "primary" : "outline"}
+            size="sm"
+            onClick={() => {
+              if (view === "flowsheet") setChartTick((t) => t + 1);
+              setView(view === "flowsheet" ? "overview" : "flowsheet");
+            }}
+          >
+            {view === "flowsheet" ? "Back to Overview" : "Daily Flowsheet"}
+          </Btn>
+          <Btn variant="primary" size="sm" onClick={() => setShowPharmacyModal(true)}>
+            + New Order
+          </Btn>
+        </div>
+      </div>
+
+      {/* ── Unit & Floor Filter Pills Bar ──────────────────────────────── */}
+      <div className="flex-shrink-0 bg-[#F8FAFC] border-b border-[#E2E8F0] px-6 py-2 flex items-center justify-between gap-4 overflow-x-auto">
+        <div className="flex items-center gap-1.5 flex-nowrap">
+          <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#64748B] mr-1">
+            ICUs & Wards:
+          </span>
+          {[
+            { id: "All", label: "All ICUs & Wards" },
+            { id: "MICU", label: "Medical ICU (MICU)" },
+            { id: "SICU", label: "Surgical ICU (SICU)" },
+            { id: "CCU", label: "Cardiac ICU (CCU)" },
+            { id: "NICU", label: "Neuro ICU (NICU)" },
+            { id: "PICU", label: "Pediatric ICU (PICU)" },
+            { id: "Floor 1", label: "Floor 1 Ward" },
+            { id: "Floor 2", label: "Floor 2 Ward" },
+            { id: "Floor 3", label: "Floor 3 Ward" },
+            { id: "ER", label: "ER Beds" },
+          ].map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => setSelectedUnit(u.id)}
+              className={`px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap border transition-all cursor-pointer ${
+                selectedUnit === u.id
+                  ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-sm"
+                  : "bg-white text-[#475569] border-[#CBD5E1] hover:border-[#1B4FD8]"
+              }`}
+            >
+              {u.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5 flex-nowrap">
+          <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#64748B] mr-1">
+            Status:
+          </span>
+          {["All", "Critical", "Watch", "Stable", "Available"].map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setSelectedStatus(st)}
+              className={`px-2 py-0.5 text-[10.5px] font-semibold border transition-all cursor-pointer ${
+                selectedStatus === st
+                  ? "bg-[#334155] text-white border-[#334155]"
+                  : "bg-white text-[#64748B] border-[#CBD5E1] hover:border-[#334155]"
+              }`}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Multi-unit & Multi-floor Bed census strip ──────────────────── */}
+      <div className="flex-shrink-0 bg-white border-b border-[#E2E8F0] px-6 py-2.5 flex items-stretch gap-2 overflow-x-auto">
+        {filteredBeds.map((p) => {
+          const globalIdx = ALL_BEDS_DATASET.findIndex((b) => b.bed === p.bed);
+          const selected = selectedBedIndex === globalIdx;
+          const a = acuityOf(p);
+          const occupied = Boolean(p.name);
+          const spo2 = p.vitals ? num(p.vitals.spo2) : null;
+          const hr = p.vitals ? num(p.vitals.hr) : null;
+          return (
+            <button
+              key={p.bed}
+              type="button"
+              disabled={!occupied}
+              onClick={() => occupied && setSelectedBedIndex(globalIdx)}
+              className={`relative flex-shrink-0 w-48 text-left border pl-3 pr-2.5 py-2 transition-all ${
+                occupied ? "hover:shadow-sm cursor-pointer" : "border-dashed cursor-default opacity-60"
+              } ${selected ? "ring-2 ring-offset-0" : ""}`}
+              style={{
+                backgroundColor: selected ? a.tint : occupied ? "#FFFFFF" : ACUITY.empty.tint,
+                borderColor: selected ? a.color : occupied ? a.border : ACUITY.empty.border,
+                ...(selected ? ({ "--tw-ring-color": a.color } as React.CSSProperties) : {}),
+              }}
+            >
+              {/* acuity spine */}
+              <span
+                className="absolute left-0 top-0 bottom-0 w-1"
+                style={{ backgroundColor: occupied ? a.color : "transparent" }}
+              />
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#1B4FD8]">
+                  {p.bed} · {p.unitType}
+                </span>
+                {occupied && (
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-wider px-1 py-px"
+                    style={{ backgroundColor: a.tint, color: a.color }}
+                  >
+                    {a.label}
+                  </span>
+                )}
+              </div>
+              {occupied ? (
+                <>
+                  <div className="text-[12px] font-bold text-[#0F172A] truncate mt-0.5">{p.name}</div>
+                  <div className="text-[10.5px] text-[#64748B] truncate">{p.dx}</div>
+                  {p.vitals && (
+                    <div className="flex gap-2 mt-1 font-mono text-[10.5px]">
+                      <span
+                        className="font-semibold"
+                        style={{ color: spo2 !== null && spo2 < 93 ? ACUITY.critical.color : spo2 !== null && spo2 < 96 ? ACUITY.watch.color : "#15803D" }}
+                      >
+                        SpO₂ {p.vitals.spo2}
+                      </span>
+                      <span style={{ color: hr !== null && hr > 110 ? ACUITY.critical.color : hr !== null && hr > 100 ? ACUITY.watch.color : "#64748B" }}>
+                        HR {p.vitals.hr}
+                      </span>
                     </div>
                   )}
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="w-1.5 h-1.5" style={{ backgroundColor: "#16A34A" }} />
+                  <span className="text-[11px] font-medium text-[#64748B]">Available</span>
                 </div>
-              )
-            })}
-          </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-          <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {!selectedBed ? (
-              <div className="lg:col-span-3">
-                <Card>
-                  <p className="text-[12.5px] text-[#64748B] text-center py-8">
-                    Select a bed from the census above to view the flowsheet.
-                  </p>
-                </Card>
-              </div>
-            ) : !selectedBed.patient_id ? (
-              <div className="lg:col-span-3">
-                <Card>
-                  <p className="text-[12.5px] text-[#64748B] text-center py-8">
-                    {selectedBed.room_no} Bed {selectedBed.bed_no} is{" "}
-                    {selectedBed.status.toLowerCase()} -- no patient to display.
-                    {navigate && (
-                      <>
-                        {" "}
-                        <button
-                          className="text-[#1B4FD8] font-semibold hover:underline"
-                          onClick={() => navigate("beds")}
-                        >
-                          Allocate in Bed Management
-                        </button>
-                      </>
-                    )}
-                  </p>
-                </Card>
-              </div>
-            ) : detailLoading ? (
-              <div className="lg:col-span-3">
-                <Card>
-                  <p className="text-[12.5px] text-[#64748B] text-center py-8">
-                    Loading patient record...
-                  </p>
-                </Card>
-              </div>
-            ) : (
-              <>
-                {/* Left: Patient info + vitals + RASS */}
-                <div className="space-y-3">
-                  <div className="bg-white border border-[#DDE2EC] p-3.5">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <div className="text-[14px] font-bold text-gray-900">
-                          {bedOccupantName(selectedBed)}
-                        </div>
-                        <div className="text-[11.5px] text-[#64748B]">
-                          {selectedBed.patient_age
-                            ? `${selectedBed.patient_age}y`
-                            : "Age N/A"}{" "}
-                          · {selectedBed.patient_gender || "Gender N/A"} ·{" "}
-                          {selectedBed.patient_id}
-                        </div>
-                        <div className="text-[11.5px] font-medium text-gray-700 mt-0.5">
-                          {latestDiagnosis?.diagnosis_name ||
-                            "No diagnosis on record"}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="bg-[#FEE2E2] text-[#B91C1C] text-[11px] font-semibold px-2 py-0.5 ">
-                          ICU
-                        </span>
-                        <span className="text-[10.5px] text-[#64748B]">
-                          {selectedBed.room_no}-{selectedBed.bed_no}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5 text-[11.5px]">
-                      {[
-                        {
-                          l: "LOS",
-                          v: admission
-                            ? losLabel(admission.admission_date)
-                            : "—",
-                        },
-                        { l: "Attending", v: provider || "—" },
-                        { l: "Nurse", v: nurse || "—" },
-                        {
-                          l: "Admitted",
-                          v: admission
-                            ? formatDateTimeIST(admission.admission_date)
-                            : "—",
-                        },
-                      ].map(({ l, v }) => (
-                        <div key={l}>
-                          <div className="text-[#94A3B8] text-[10px] uppercase tracking-wide">
-                            {l}
-                          </div>
-                          <div className="font-semibold text-gray-800">{v}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {alerts.map((a, i) => (
-                    <div
-                      key={i}
-                      className={`text-[12px] px-3 py-2 border font-medium ${
-                        a.startsWith("⚠")
-                          ? "bg-[#FEF2F2] border-[#FECACA] text-[#B91C1C]"
-                          : "bg-[#FFFBEB] border-[#FDE68A] text-[#92400E]"
-                      }`}
-                    >
-                      {a}
-                    </div>
-                  ))}
-
-                  <SectionCard
-                    icon={<FiActivity aria-hidden />}
-                    color="#059669"
-                    title="Current Vitals"
-                  >
-                    {!latestVitals ? (
-                      <p className="text-[12px] text-[#94A3B8]">
-                        No vitals recorded yet.
-                      </p>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          <VitalCell
-                            label="BP"
-                            value={latestVitals.bp || "—"}
-                            alert={
-                              !!latestVitals.bp &&
-                              parseInt(latestVitals.bp, 10) < 100
-                            }
-                          />
-                          <VitalCell
-                            label="Pulse"
-                            value={latestVitals.pulse || "—"}
-                            sub="bpm"
-                            alert={
-                              !!latestVitals.pulse &&
-                              parseInt(latestVitals.pulse, 10) > 110
-                            }
-                          />
-                          <VitalCell
-                            label="Resp. Rate"
-                            value={latestVitals.respiratory_rate || "—"}
-                            sub="/min"
-                          />
-                          <VitalCell
-                            label="SpO2"
-                            value={
-                              latestVitals.spo2 ? `${latestVitals.spo2}%` : "—"
-                            }
-                            alert={
-                              !!latestVitals.spo2 &&
-                              parseFloat(latestVitals.spo2) < 93
-                            }
-                          />
-                          <VitalCell
-                            label="Temp"
-                            value={latestVitals.temperature || "—"}
-                          />
-                        </div>
-                        <div className="text-[10.5px] text-[#94A3B8] text-right mt-2">
-                          Updated {formatDateTimeIST(latestVitals.created_at)}
-                        </div>
-                      </>
-                    )}
-                  </SectionCard>
-
-                  <SectionCard
-                    icon={<FiMoon aria-hidden />}
-                    color="#4F46E5"
-                    title="Sedation -- RASS Score"
-                  >
-                    <div className="flex items-center justify-between">
-                      {RASS_SCALE.map((score) => (
-                        <button
-                          key={score}
-                          type="button"
-                          disabled={!canEdit}
-                          onClick={async () => {
-                            try {
-                              await apiFetch(
-                                `/api/icu/${selectedBed.patient_id}/rass`,
-                                {
-                                  method: "POST",
-                                  body: JSON.stringify({
-                                    admission_id: admissionId,
-                                    score,
-                                    recorded_by: recordedBy,
-                                  }),
-                                },
-                              )
-                              refreshDetail()
-                            } catch (error: any) {
-                              reportError(
-                                setNotice,
-                                error,
-                                "Failed to record RASS score.",
-                              )
-                            }
-                          }}
-                          className={`w-7 h-7 text-[11px] font-bold flex items-center justify-center disabled:cursor-not-allowed ${
-                            latestRass?.score === score
-                              ? "bg-[#1B4FD8] text-white"
-                              : score < 0
-                                ? "bg-[#F1F5F9] text-[#94A3B8]"
-                                : "bg-[#FEF3C7] text-[#B45309]"
-                          }`}
-                        >
-                          {score}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="text-[11px] text-[#64748B] mt-2">
-                      {latestRass ? (
-                        <>
-                          RASS {latestRass.score} --{" "}
-                          {rassLabel(latestRass.score)} ·{" "}
-                          {formatDateTimeIST(latestRass.created_at)}
-                        </>
-                      ) : (
-                        "Not yet recorded -- click a score to record."
-                      )}
-                    </div>
-                  </SectionCard>
-                </div>
-
-                {/* Center: Trends + Ventilator + I&O */}
-                <div className="space-y-3">
-                  <SectionCard
-                    icon={<FiHeart aria-hidden />}
-                    color="#DC2626"
-                    title="Heart Rate Trend"
-                  >
-                    <MiniTrend data={hrTrend} color="#DC2626" />
-                  </SectionCard>
-                  <SectionCard
-                    icon={<FiTrendingUp aria-hidden />}
-                    color="#0284C7"
-                    title="Blood Pressure (Systolic) Trend"
-                  >
-                    <MiniTrend data={bpTrend} color="#0284C7" />
-                  </SectionCard>
-
-                  <SectionCard
-                    icon={<FiWind aria-hidden />}
-                    color="#7C3AED"
-                    title="Mechanical Ventilation"
-                    actions={
-                      canEdit ? (
-                        <QuickAddForm
-                          submitLabel="Record"
-                          fields={[
-                            {
-                              key: "mode",
-                              label: "Mode",
-                              placeholder: "A/C-VC",
-                            },
-                            { key: "fio2", label: "FiO2", placeholder: "40%" },
-                            { key: "peep", label: "PEEP", placeholder: "5" },
-                            {
-                              key: "tidal_volume",
-                              label: "Tidal Vol",
-                              placeholder: "450mL",
-                            },
-                            {
-                              key: "resp_rate",
-                              label: "Set RR",
-                              placeholder: "14",
-                            },
-                            { key: "pip", label: "PIP", placeholder: "22" },
-                          ]}
-                          onSubmit={async (v) => {
-                            await apiFetch(
-                              `/api/icu/${selectedBed.patient_id}/ventilator`,
-                              {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  admission_id: admissionId,
-                                  recorded_by: recordedBy,
-                                  ...v,
-                                }),
-                              },
-                            )
-                            refreshDetail()
-                          }}
-                        />
-                      ) : undefined
-                    }
-                  >
-                    {!latestVent ? (
-                      <p className="text-[12px] text-[#94A3B8]">
-                        No ventilator settings recorded.
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { l: "Mode", v: latestVent.mode },
-                          { l: "FiO2", v: latestVent.fio2 },
-                          { l: "PEEP", v: latestVent.peep },
-                          { l: "Tidal Vol", v: latestVent.tidal_volume },
-                          { l: "Set RR", v: latestVent.resp_rate },
-                          { l: "PIP", v: latestVent.pip },
-                        ].map(({ l, v }) => (
-                          <div key={l} className="bg-[#F8FAFC] p-2 text-center">
-                            <div className="text-[10px] text-[#94A3B8] uppercase tracking-wide mb-0.5">
-                              {l}
-                            </div>
-                            <div className="font-mono font-semibold text-[12px] text-gray-900">
-                              {v || "—"}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </SectionCard>
-
-                  <SectionCard
-                    icon={<FiDroplet aria-hidden />}
-                    color="#D97706"
-                    title="Intake / Output -- Today"
-                    actions={
-                      canEdit ? (
-                        <QuickAddForm
-                          submitLabel="Record"
-                          fields={[
-                            {
-                              key: "intake_ml",
-                              label: "Intake (mL)",
-                              placeholder: "500",
-                            },
-                            {
-                              key: "output_ml",
-                              label: "Output (mL)",
-                              placeholder: "300",
-                            },
-                          ]}
-                          onSubmit={async (v) => {
-                            await apiFetch(
-                              `/api/icu/${selectedBed.patient_id}/io`,
-                              {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  admission_id: admissionId,
-                                  recorded_by: recordedBy,
-                                  intake_ml: v.intake_ml
-                                    ? Number(v.intake_ml)
-                                    : undefined,
-                                  output_ml: v.output_ml
-                                    ? Number(v.output_ml)
-                                    : undefined,
-                                }),
-                              },
-                            )
-                            refreshDetail()
-                          }}
-                        />
-                      ) : undefined
-                    }
-                  >
-                    {ioToday.length === 0 ? (
-                      <p className="text-[12px] text-[#94A3B8]">
-                        No intake/output recorded today.
-                      </p>
-                    ) : (
-                      <div className="text-center text-[12px] font-semibold flex justify-around">
-                        <span>
-                          <span className="text-[#64748B]">In: </span>
-                          <span className="font-mono text-[#1B4FD8]">
-                            {totalIn} mL
-                          </span>
-                        </span>
-                        <span>
-                          <span className="text-[#64748B]">Out: </span>
-                          <span className="font-mono text-[#DC2626]">
-                            {totalOut} mL
-                          </span>
-                        </span>
-                        <span>
-                          <span className="text-[#64748B]">Net: </span>
-                          <span className="font-mono text-[#D97706]">
-                            {totalIn - totalOut >= 0 ? "+" : ""}
-                            {totalIn - totalOut} mL
-                          </span>
-                        </span>
-                      </div>
-                    )}
-                  </SectionCard>
-                </div>
-
-                {/* Right: Infusions + Labs + Consults */}
-                <div className="space-y-3">
-                  <SectionCard
-                    icon={<FiZap aria-hidden />}
-                    color="#E11D48"
-                    title="Active Infusions"
-                    actions={
-                      canEdit ? (
-                        <QuickAddForm
-                          submitLabel="Add Drip"
-                          fields={[
-                            {
-                              key: "medication_name",
-                              label: "Medication",
-                              placeholder: "Norepinephrine",
-                            },
-                            { key: "rate", label: "Rate", placeholder: "0.05" },
-                            {
-                              key: "unit",
-                              label: "Unit",
-                              placeholder: "mcg/kg/min",
-                            },
-                          ]}
-                          onSubmit={async (v) => {
-                            await apiFetch(
-                              `/api/icu/${selectedBed.patient_id}/infusions`,
-                              {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  admission_id: admissionId,
-                                  recorded_by: recordedBy,
-                                  ...v,
-                                }),
-                              },
-                            )
-                            refreshDetail()
-                          }}
-                        />
-                      ) : undefined
-                    }
-                  >
-                    {activeInfusions.length === 0 ? (
-                      <p className="text-[12px] text-[#94A3B8]">
-                        No active infusions.
-                      </p>
-                    ) : (
-                      activeInfusions.map((inf) => (
-                        <div
-                          key={inf.id}
-                          className="py-2.5 border-b border-[#F1F5F9] last:border-0"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="text-[12.5px] font-semibold text-gray-900">
-                                {inf.medication_name}
-                              </div>
-                              <div className="font-mono text-[11.5px] text-[#DC2626] font-bold mt-0.5">
-                                {inf.rate} {inf.unit}
-                              </div>
-                              <div className="text-[10.5px] text-[#94A3B8]">
-                                Started {formatDateTimeIST(inf.started_at)}
-                              </div>
-                            </div>
-                            {canEdit && (
-                              <Btn
-                                variant="ghost"
-                                size="xs"
-                                onClick={async () => {
-                                  try {
-                                    await apiFetch(
-                                      `/api/icu/${selectedBed.patient_id}/infusions/${inf.id}/stop`,
-                                      { method: "POST" },
-                                    )
-                                    refreshDetail()
-                                  } catch (error: any) {
-                                    reportError(
-                                      setNotice,
-                                      error,
-                                      "Failed to stop infusion.",
-                                    )
-                                  }
-                                }}
-                              >
-                                D/C
-                              </Btn>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </SectionCard>
-
-                  <SectionCard
-                    icon={<FiAlertCircle aria-hidden />}
-                    color="#EA580C"
-                    title="Critical Labs"
-                    actions={
-                      canEdit ? (
-                        <QuickAddForm
-                          submitLabel="Add Result"
-                          fields={[
-                            {
-                              key: "test_name",
-                              label: "Test",
-                              placeholder: "Lactate",
-                            },
-                            {
-                              key: "value",
-                              label: "Value",
-                              placeholder: "2.1",
-                            },
-                            {
-                              key: "unit",
-                              label: "Unit",
-                              placeholder: "mmol/L",
-                            },
-                            {
-                              key: "flag",
-                              label: "Flag (H/HH/L)",
-                              placeholder: "H",
-                            },
-                          ]}
-                          onSubmit={async (v) => {
-                            await apiFetch(
-                              `/api/icu/${selectedBed.patient_id}/labs`,
-                              {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  admission_id: admissionId,
-                                  recorded_by: recordedBy,
-                                  ...v,
-                                }),
-                              },
-                            )
-                            refreshDetail()
-                          }}
-                        />
-                      ) : undefined
-                    }
-                  >
-                    {!icu?.lab_results?.length ? (
-                      <p className="text-[12px] text-[#94A3B8]">
-                        No lab results recorded.
-                      </p>
-                    ) : (
-                      icu.lab_results.map((l) => (
-                        <div
-                          key={l.id}
-                          className="flex items-center justify-between py-1.5 border-b border-[#F8FAFC] last:border-0"
-                        >
-                          <span className="text-[12px] text-gray-700 w-28 truncate">
-                            {l.test_name}
-                          </span>
-                          <span
-                            className={`font-mono font-bold text-[12px] ${
-                              l.flag === "HH"
-                                ? "text-[#B91C1C] bg-[#FEE2E2] px-1.5 py-0.5 "
-                                : l.flag === "H"
-                                  ? "text-[#D97706]"
-                                  : l.flag === "L"
-                                    ? "text-[#0284C7]"
-                                    : "text-gray-900"
-                            }`}
-                          >
-                            {l.value} {l.unit}
-                          </span>
-                          <span className="text-[10.5px] text-[#94A3B8] font-mono">
-                            {new Date(l.created_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </SectionCard>
-
-                  <SectionCard
-                    icon={<FiUsers aria-hidden />}
-                    color="#0D9488"
-                    title="Consults & Teams"
-                    actions={
-                      canEdit ? (
-                        <QuickAddForm
-                          submitLabel="Request Consult"
-                          fields={[
-                            {
-                              key: "specialty",
-                              label: "Specialty",
-                              placeholder: "Cardiology",
-                            },
-                            {
-                              key: "consultant_name",
-                              label: "Consultant",
-                              placeholder: "Dr. Rao",
-                            },
-                          ]}
-                          onSubmit={async (v) => {
-                            await apiFetch(
-                              `/api/icu/${selectedBed.patient_id}/consults`,
-                              {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  admission_id: admissionId,
-                                  requested_by: recordedBy,
-                                  ...v,
-                                }),
-                              },
-                            )
-                            refreshDetail()
-                          }}
-                        />
-                      ) : undefined
-                    }
-                  >
-                    {!icu?.consults?.length ? (
-                      <p className="text-[12px] text-[#94A3B8]">
-                        No consults requested.
-                      </p>
-                    ) : (
-                      icu.consults.map((c) => (
-                        <div
-                          key={c.id}
-                          className="flex items-start gap-2.5 py-2 border-b border-[#F1F5F9] last:border-0"
-                        >
-                          <div className="w-7 h-7 bg-[#E8EDF5] flex items-center justify-center text-[10px] font-bold text-[#1E3A6E] flex-shrink-0">
-                            {c.specialty[0]}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[12px] font-medium text-gray-800">
-                              {c.specialty}
-                            </div>
-                            <div className="text-[11px] text-[#64748B]">
-                              {c.consultant_name || "Unassigned"}
-                              {c.notes ? ` · ${c.notes}` : ""}
-                            </div>
-                          </div>
-                          {canEdit && c.status !== "completed" ? (
-                            <button
-                              className="text-[11px] font-semibold text-[#D97706] hover:underline"
-                              onClick={async () => {
-                                try {
-                                  await apiFetch(
-                                    `/api/icu/${selectedBed.patient_id}/consults/${c.id}`,
-                                    {
-                                      method: "PATCH",
-                                      body: JSON.stringify({
-                                        status: "completed",
-                                      }),
-                                    },
-                                  )
-                                  refreshDetail()
-                                } catch (error: any) {
-                                  reportError(
-                                    setNotice,
-                                    error,
-                                    "Failed to update consult.",
-                                  )
-                                }
-                              }}
-                            >
-                              {c.status === "requested"
-                                ? "Requested"
-                                : c.status}{" "}
-                              · Mark done
-                            </button>
-                          ) : (
-                            <span className="text-[11px] font-semibold text-[#16A34A]">
-                              {c.status}
-                            </span>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </SectionCard>
-
-                  <SectionCard
-                    icon={<FiFileText aria-hidden />}
-                    color="#1B4FD8"
-                    title="Evaluations"
-                    actions={
-                      canEdit ? (
-                        <Btn
-                          variant="primary"
-                          size="xs"
-                          onClick={() => setAddEvalOpen(true)}
-                        >
-                          <FiPlus aria-hidden /> Add Evaluation
-                        </Btn>
-                      ) : undefined
-                    }
-                  >
-                    <button
-                      className="text-[#1B4FD8] text-[12px] font-semibold hover:underline"
-                      onClick={() =>
-                        onOpenPatientClinical?.(selectedBed.patient_id!)
-                      }
-                    >
-                      Open Full Clinical Chart{" "}
-                      <FiArrowRight className="inline" aria-hidden />
-                    </button>
-                  </SectionCard>
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
-
-      {addEvalOpen && selectedBed?.patient_id && (
-        <AddEvaluationModal
-          patientId={selectedBed.patient_id}
-          admissionId={admissionId}
-          setNotice={setNotice}
-          onClose={() => setAddEvalOpen(false)}
-          onSaved={() => {
-            setAddEvalOpen(false)
-            refreshDetail()
+      {view === "flowsheet" ? (
+        <IcuFlowsheet
+          patientId={pt.mrn}
+          patientName={pt.name || "Patient"}
+          bed={pt.bed}
+          initialDate={selectedFlowsheetDate || today}
+          totalDays={pt.totalDays || 10}
+          onClose={() => {
+            setChartTick((t) => t + 1);
+            setView("overview");
           }}
         />
+      ) : (
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+          {/* ── Patient banner ──────────────────────────────────────────── */}
+          <div className="bg-white border border-[#E2E8F0] shadow-sm">
+            <div className="px-4 py-3 flex flex-wrap items-start gap-4 border-b border-[#EDF1F7]">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[16px] font-bold text-[#0F172A] tracking-tight">{pt.name}</h2>
+                  <span className="bg-[#FEE2E2] text-[#B91C1C] text-[10px] font-bold px-1.5 py-0.5 uppercase tracking-wider">ICU</span>
+                  <span className="bg-[#F1F5F9] text-[#475569] text-[10px] font-bold px-1.5 py-0.5">{pt.bed}</span>
+                </div>
+                <div className="text-[11.5px] text-[#64748B] mt-0.5">
+                  {pt.age}y {pt.sex === "M" ? "Male" : "Female"} · MRN {pt.mrn}
+                </div>
+                <div className="text-[12.5px] font-semibold text-[#1E293B] mt-1">{pt.dx}</div>
+              </div>
+              <div className="ml-auto grid grid-cols-3 sm:grid-cols-6 gap-x-5 gap-y-2">
+                {[
+                  { l: "LOS", v: pt.los },
+                  { l: "Code", v: pt.code },
+                  { l: "Provider", v: pt.provider },
+                  { l: "Nurse", v: pt.nurse },
+                  { l: "SOFA", v: `${pt.score.sofa}/24` },
+                  { l: "APACHE II", v: String(pt.score.apache) },
+                ].map((x) => (
+                  <div key={x.l}>
+                    <div className="text-[9.5px] font-bold uppercase tracking-wider text-[#94A3B8]">{x.l}</div>
+                    <div className="text-[12px] font-semibold text-[#1E293B] mt-0.5">{x.v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Vitals strip */}
+            {pt.vitals && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-[#EDF1F7]">
+                <Vital label="Temp" value={pt.vitals.temp.replace("°C", "")} unit="°C" state={temp >= 38.5 ? "crit" : temp >= 37.8 ? "warn" : "ok"} />
+                <Vital label="Heart Rate" value={pt.vitals.hr} unit="bpm" state={hr > 110 ? "crit" : hr > 100 ? "warn" : "ok"} />
+                <Vital label="Blood Pressure" value={pt.vitals.bp} unit="mmHg" state={sys < 100 ? "crit" : sys < 110 ? "warn" : "ok"} />
+                <Vital label="Resp Rate" value={pt.vitals.rr} unit="/min" state={num(pt.vitals.rr) > 22 ? "warn" : "ok"} />
+                <Vital label="SpO₂" value={pt.vitals.spo2.replace("%", "")} unit="%" state={spo2 < 92 ? "crit" : spo2 < 95 ? "warn" : "ok"} />
+                <Vital label="CVP" value={pt.vitals.cvp} unit="mmHg" state="ok" />
+              </div>
+            )}
+          </div>
+
+          {/* ── Alerts ──────────────────────────────────────────────────── */}
+          {pt.alerts.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {pt.alerts.map((a, i) => {
+                const good = a.startsWith("✓");
+                return (
+                  <div
+                    key={i}
+                    className={`border px-3.5 py-2.5 text-[12px] font-medium flex items-start gap-2 ${
+                      good ? "border-[#A7F3D0] bg-[#ECFDF5] text-[#065F46]" : "border-[#FDE68A] bg-[#FFFBEB] text-[#92400E]"
+                    }`}
+                  >
+                    <span>{a}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Multi-Day Stay Flow Chart History & Parameters Matrix ──── */}
+          <MultiDayFlowchartMatrix
+            patientId={pt.mrn}
+            patientName={pt.name || "Patient"}
+            totalDays={pt.totalDays || 10}
+            onSelectDate={(d) => {
+              setSelectedFlowsheetDate(d);
+              setView("flowsheet");
+            }}
+          />
+
+          {/* ── Main grid ───────────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+            {/* Daily flow chart — charting status for today */}
+            <Panel
+              title="Daily Flow Chart"
+              accent="#1B4FD8"
+              className="lg:col-span-1"
+              actions={
+                <Btn variant="primary" size="xs" onClick={() => setView("flowsheet")}>
+                  Open Chart
+                </Btn>
+              }
+            >
+              <div className="flex items-baseline justify-between mb-3">
+                <div>
+                  <div className="font-mono text-[24px] font-extrabold text-[#0F172A] leading-none">{summary.total}</div>
+                  <div className="text-[10.5px] text-[#64748B] mt-1">entries recorded today</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Date</div>
+                  <div className="font-mono text-[11.5px] font-semibold text-[#334155]">{today}</div>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {summary.tabs.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2">
+                    <span className="text-[11.5px] text-[#475569] w-32 truncate">{t.label}</span>
+                    <div className="flex-1 h-1.5 bg-[#EDF1F7] overflow-hidden">
+                      <div
+                        className="h-full bg-[#1B4FD8] transition-all"
+                        style={{ width: `${Math.min(100, t.count === 0 ? 0 : Math.max(8, (t.count / 40) * 100))}%` }}
+                      />
+                    </div>
+                    <span className={`font-mono text-[11px] w-7 text-right ${t.count ? "font-bold text-[#1B4FD8]" : "text-[#CBD5E1]"}`}>
+                      {t.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-[#EDF1F7]">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Recent days</div>
+                {history.length === 0 ? (
+                  <div className="text-[11.5px] text-[#94A3B8]">No charts recorded yet.</div>
+                ) : (
+                  <div className="space-y-1">
+                    {history.map((d) => (
+                      <button
+                        key={d.chart_date}
+                        type="button"
+                        onClick={() => {
+                          setSelectedFlowsheetDate(d.chart_date);
+                          setView("flowsheet");
+                        }}
+                        className={`w-full flex items-center justify-between gap-2 px-2 py-1 border text-left transition-colors cursor-pointer ${
+                          d.chart_date === today
+                            ? "border-[#1B4FD8] bg-[#EFF6FF]"
+                            : "border-[#E2E8F0] bg-[#F8FAFC] hover:border-[#94A3B8]"
+                        }`}
+                      >
+                        <span className={`font-mono text-[10.5px] ${d.chart_date === today ? "text-[#1B4FD8] font-bold" : "text-[#475569]"}`}>
+                          {d.chart_date}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-mono text-[10.5px] font-bold text-[#0F172A]">{d.entry_count ?? 0}</span>
+                          <span className="text-[9.5px] text-[#94A3B8]">entries</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Panel>
+
+            {/* Trends */}
+            <Panel title="Heart Rate — Last 5h" accent="#DC2626">
+              <MiniTrend data={pt.hrTrend && pt.hrTrend.length > 0 ? pt.hrTrend : [{ t: "12", v: 75 }]} color="#DC2626" unit="bpm" />
+              <div className="flex justify-between mt-2 text-[11px] text-[#64748B] font-mono">
+                <span>Min {Math.min(...(pt.hrTrend || [{ t: "12", v: 75 }]).map((d: { t: string; v: number }) => d.v))}</span>
+                <span>Max {Math.max(...(pt.hrTrend || [{ t: "12", v: 75 }]).map((d: { t: string; v: number }) => d.v))}</span>
+                <span className="font-bold text-[#0F172A]">Now {pt.hrTrend && pt.hrTrend.length > 0 ? pt.hrTrend[pt.hrTrend.length - 1].v : 75} bpm</span>
+              </div>
+            </Panel>
+
+            <Panel title="Systolic BP — Last 5h" accent="#7C3AED">
+              <MiniTrend data={pt.bpTrend && pt.bpTrend.length > 0 ? pt.bpTrend : [{ t: "12", v: 120 }]} color="#7C3AED" unit="mmHg" />
+              <div className="flex justify-between mt-2 text-[11px] text-[#64748B] font-mono">
+                <span>Min {Math.min(...(pt.bpTrend || [{ t: "12", v: 120 }]).map((d: { t: string; v: number }) => d.v))}</span>
+                <span>Max {Math.max(...(pt.bpTrend || [{ t: "12", v: 120 }]).map((d: { t: string; v: number }) => d.v))}</span>
+                <span className="font-bold text-[#0F172A]">Now {pt.bpTrend && pt.bpTrend.length > 0 ? pt.bpTrend[pt.bpTrend.length - 1].v : 120} mmHg</span>
+              </div>
+            </Panel>
+
+            {/* Ventilation */}
+            <Panel title="Mechanical Ventilation" accent="#0EA5E9" actions={<span className="text-[10.5px] font-semibold text-[#0369A1] bg-[#E0F2FE] px-1.5 py-0.5">{pt.vent ? pt.vent.mode : "Room Air"}</span>}>
+              <div className="grid grid-cols-3 gap-px bg-[#EDF1F7] border border-[#EDF1F7]">
+                {[
+                  { l: "FiO₂", v: pt.vent ? pt.vent.fio2 : "21%" },
+                  { l: "PEEP", v: pt.vent ? `${pt.vent.peep} cmH₂O` : "0 cmH₂O" },
+                  { l: "Tidal Vol", v: pt.vent ? pt.vent.tv : "—" },
+                  { l: "Set RR", v: pt.vent ? `${pt.vent.rr}/min` : "16/min" },
+                  { l: "PIP", v: pt.vent ? `${pt.vent.pip} cmH₂O` : "—" },
+                  { l: "Mode", v: pt.vent ? pt.vent.mode : "Room Air" },
+                ].map((x) => (
+                  <div key={x.l} className="bg-white px-2.5 py-2">
+                    <div className="text-[9.5px] font-bold uppercase tracking-wider text-[#94A3B8]">{x.l}</div>
+                    <div className="font-mono text-[12.5px] font-bold text-[#0F172A] mt-0.5">{x.v}</div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+
+            {/* Sedation */}
+            <Panel title="Sedation — RASS" accent="#7C3AED">
+              <div className="flex items-center gap-4">
+                <div
+                  className={`w-14 h-14 flex items-center justify-center font-mono text-[22px] font-extrabold ${
+                    pt.score.rass <= -3 || pt.score.rass >= 2 ? "bg-[#FEF3C7] text-[#B45309]" : "bg-[#DCFCE7] text-[#15803D]"
+                  }`}
+                >
+                  {pt.score.rass}
+                </div>
+                <div className="text-[11.5px] text-[#475569] leading-relaxed">
+                  <div className="font-semibold text-[#1E293B]">
+                    {pt.score.rass === -1 ? "Drowsy" : pt.score.rass === -2 ? "Light sedation" : "Sedation level"}
+                  </div>
+                  <div>Target -1 to -2. Reassess two-hourly on the flow chart.</div>
+                </div>
+              </div>
+            </Panel>
+
+            {/* Intake / Output */}
+            <Panel title="Intake / Output — 24h" accent="#0891B2">
+              <div className="grid grid-cols-2 gap-4 text-[11.5px]">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Intake</div>
+                  {[["IV Fluids", "2,840 mL"], ["Medications", "380 mL"], ["Blood Products", "2 units"]].map(([l, v]) => (
+                    <div key={l} className="flex justify-between py-0.5">
+                      <span className="text-[#64748B]">{l}</span>
+                      <span className="font-mono font-semibold text-[#1E293B]">{v}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-1.5 mt-1 border-t border-[#EDF1F7] font-bold">
+                    <span className="text-[#334155]">Total In</span>
+                    <span className="font-mono text-[#0F172A]">3,220 mL</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Output</div>
+                  {[["Urine", "880 mL"], ["NG Tube", "120 mL"], ["Drains", "—"]].map(([l, v]) => (
+                    <div key={l} className="flex justify-between py-0.5">
+                      <span className="text-[#64748B]">{l}</span>
+                      <span className="font-mono font-semibold text-[#1E293B]">{v}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-1.5 mt-1 border-t border-[#EDF1F7] font-bold">
+                    <span className="text-[#334155]">Total Out</span>
+                    <span className="font-mono text-[#0F172A]">1,000 mL</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 px-3 py-2 bg-[#FFFBEB] border border-[#FDE68A] text-[12px] font-bold text-[#92400E] text-center">
+                Net Balance +2,220 mL
+              </div>
+            </Panel>
+
+            {/* Infusions */}
+            <Panel title="Active Infusions" accent="#DB2777" actions={<Btn variant="outline" size="xs">+ Add Drip</Btn>}>
+              <div className="space-y-2">
+                {pt.infusions.map((inf, i) => (
+                  <div key={i} className="border border-[#E2E8F0] px-3 py-2 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-bold text-[#0F172A] truncate">{inf.drug}</div>
+                      <div className="text-[10.5px] text-[#94A3B8] font-mono truncate">{inf.concentration}</div>
+                    </div>
+                    <div className="font-mono text-[11.5px] font-semibold text-[#1B4FD8] whitespace-nowrap">{inf.rate}</div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+
+            {/* Labs */}
+            <Panel title="Critical Labs" accent="#D97706" actions={<Btn variant="outline" size="xs">+ Order</Btn>}>
+              <div className="divide-y divide-[#EDF1F7]">
+                {[
+                  ["Troponin I", "18.4 ng/mL", "10:02", true],
+                  ["Lactic Acid", "4.2 mmol/L", "09:45", true],
+                  ["WBC", "18.4 K/μL", "09:10", true],
+                  ["Creatinine", "2.1 mg/dL", "09:10", true],
+                  ["Hemoglobin", "8.2 g/dL", "09:10", false],
+                  ["pH (ABG)", "7.28", "08:55", true],
+                ].map(([l, v, t, abn]) => (
+                  <div key={String(l)} className="flex items-center justify-between py-1.5">
+                    <span className="text-[11.5px] text-[#475569]">{l}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-mono text-[11.5px] font-bold ${abn ? "text-[#DC2626]" : "text-[#1E293B]"}`}>{v}</span>
+                      <span className="font-mono text-[10px] text-[#94A3B8] w-9 text-right">{t}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+
+            {/* Consults */}
+            <Panel title="Consults & Teams" accent="#059669">
+              <div className="space-y-2">
+                {[
+                  { team: "Cardiology", doc: "Dr. Patel", note: "Cath lab post-PCI monitoring", status: "Active" },
+                  { team: "Pulm/Critical Care", doc: "Dr. Shah", note: "Primary ICU team", status: "Active" },
+                  { team: "Nephrology", doc: "Dr. Wong", note: "AKI — creatinine rising", status: "Pending" },
+                  { team: "Pharmacy ICU", doc: "PharmD Lee", note: "Vasoactive titration", status: "Active" },
+                ].map((c) => (
+                  <div key={c.team} className="flex items-start justify-between gap-3 border-b border-[#EDF1F7] pb-2 last:border-0 last:pb-0">
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-semibold text-[#1E293B]">{c.team}</div>
+                      <div className="text-[10.5px] text-[#64748B] truncate">{c.doc} · {c.note}</div>
+                    </div>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 whitespace-nowrap ${c.status === "Active" ? "bg-[#DCFCE7] text-[#15803D]" : "bg-[#FEF3C7] text-[#B45309]"}`}>
+                      {c.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+        </div>
       )}
     </div>
-  )
+  );
 }
