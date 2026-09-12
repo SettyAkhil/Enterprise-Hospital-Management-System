@@ -3,7 +3,7 @@ import { FiBell, FiClock, FiUsers } from "react-icons/fi";
 import { Btn } from "./shared";
 import { bedGenderVariant, bedOccupantName } from "./bed/BedCard";
 import { WardBedBoard } from "./bed/WardBedBoard";
-import IcuDepartment from "./IcuDepartment";
+import { BedTransferNotificationPanel } from "./bed/BedTransferNotificationPanel";
 import { apiFetch } from "../lib/api";
 import { formatDateTimeIST } from "../lib/format";
 
@@ -217,7 +217,14 @@ export default function Inpatient({ navigate, onOpenPatientClinical, permissions
             Hospital-wide occupancy &amp; alerts &middot; read-only &mdash; use Bed Management to allocate, transfer, or discharge
           </p>
         </div>
-        <Btn variant="primary" size="sm" onClick={goToBedManagement}>Open Bed Management →</Btn>
+        <div className="flex items-center gap-3">
+          <BedTransferNotificationPanel
+            onAllocateTransfer={() => goToBedManagement()}
+            onViewPatientChart={onOpenPatientClinical}
+            canManageBeds={!permissions || permissions.includes("beds.write")}
+          />
+          <Btn variant="primary" size="sm" onClick={goToBedManagement}>Open Bed Management →</Btn>
+        </div>
       </div>
 
       {/* Summary */}

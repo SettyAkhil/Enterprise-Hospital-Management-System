@@ -1,27 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { QueueTab, Table, TR, TD, StatusBadge, Btn, Card } from "./shared";
-import { LabOrder, LabOrderDatabase, LabOrderTest } from "../services/labOrdersDb";
-import { AuditDatabase } from "../services/auditDb";
+import { BillingDatabase, LabOrderRecord } from "../services/billingDb";
 
-/**
- * Laboratory worklist.
- *
- * Orders reach this screen from the doctor portal, but only after reception has
- * billed them -- `LabOrderDatabase.getLabWorklist()` excludes anything still
- * awaiting payment, so an unpaid investigation is invisible here by design.
- *
- * The static sample below is the original demo content; it is shown only while
- * no real order exists, so a fresh install still has something to look at.
- */
-
-const SAMPLE_ORDERS = [
-  { patient: "Thomas Reed", mrn: "100301", test: "Troponin I", priority: "STAT", collected: "09:28", status: "Processing", provider: "Dr. Shah" },
-  { patient: "John Smith", mrn: "100245", test: "BMP", priority: "Routine", collected: "08:42", status: "Completed", provider: "Dr. Anderson" },
-  { patient: "Mary Jones", mrn: "100246", test: "CBC w/ Diff", priority: "Routine", collected: "09:10", status: "Collected", provider: "Dr. Lee" },
-  { patient: "Ann Martinez", mrn: "100088", test: "Lactic Acid", priority: "STAT", collected: "10:02", status: "Processing", provider: "Dr. Chen" },
-  { patient: "Patricia Okonkwo", mrn: "100149", test: "X-Match T&S", priority: "STAT", collected: "10:15", status: "Pending", provider: "Dr. Williams" },
-  { patient: "Elena Vasquez", mrn: "100198", test: "UA w/ Culture", priority: "Routine", collected: "09:45", status: "Pending", provider: "Dr. Chen" },
-  { patient: "Marcus Kim", mrn: "100377", test: "TSH", priority: "Routine", collected: "—", status: "Pending", provider: "Dr. Park" },
+const QUEUES = [
+  { label: "All Orders", key: "all" },
+  { label: "Payment Cleared (Ready)", key: "paid" },
+  { label: "Payment Pending (Locked)", key: "unpaid" },
+  { label: "Collected", key: "collected" },
+  { label: "Processing", key: "processing" },
+  { label: "Critical", key: "critical" },
 ];
 
 const RESULTS_DETAIL = [
@@ -36,89 +23,116 @@ const RESULTS_DETAIL = [
 ];
 
 const CRITICAL_RESULTS = [
-  { patient: "John Smith", mrn: "100245", test: "Potassium", value: "6.2 mmol/L", threshold: "> 6.0", provider: "Dr. Anderson", notified: "10:15 AM" },
-  { patient: "Thomas Reed", mrn: "100301", test: "Troponin I", value: "1.8 ng/mL", threshold: "> 0.4", provider: "Dr. Shah", notified: "Pending" },
-  { patient: "Ann Martinez", mrn: "100088", test: "Lactic Acid", value: "4.2 mmol/L", threshold: "> 4.0", provider: "Dr. Chen", notified: "Pending" },
+  { patient: "John Smith", mrn: "100245", test: "Potassium", value: "6.2 mmol/L", threshold: "> 6.0", provider: "Dr. Anderson", notified: "10:15 AM", paymentStatus: "Paid" },
+  { patient: "Thomas Reed", mrn: "100301", test: "Troponin I", value: "1.8 ng/mL", threshold: "> 0.4", provider: "Dr. Shah", notified: "Pending", paymentStatus: "Paid" },
+  { patient: "Ann Martinez", mrn: "100088", test: "Lactic Acid", value: "4.2 mmol/L", threshold: "> 4.0", provider: "Dr. Chen", notified: "Pending", paymentStatus: "Paid" },
 ];
 
-type WorklistQueue = "Billed" | "Sample Collected" | "In Progress" | "Completed";
+export default function Laboratory({ technician = "Laboratory" }: { technician?: string } = {}) {
+  const [activeQueue, setActiveQueue] = useState(0);
+  const [labOrders, setLabOrders] = useState<LabOrderRecord[]>([]);
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
-const QUEUE_ORDER: WorklistQueue[] = ["Billed", "Sample Collected", "In Progress", "Completed"];
-const QUEUE_LABELS: Record<WorklistQueue, string> = {
-  Billed: "Paid · Awaiting Sample",
-  "Sample Collected": "Sample Collected",
-  "In Progress": "Processing",
-  Completed: "Completed",
-};
-
-export default function Laboratory({ technician = "Laboratory" }: { technician?: string }) {
-  const [tick, setTick] = useState(0);
-  const [activeQueue, setActiveQueue] = useState<WorklistQueue>("Billed");
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [sampleSelected, setSampleSelected] = useState(1);
-  const [resultDrafts, setResultDrafts] = useState<Record<string, { value: string; unit: string; ref: string; flag: LabOrderTest["flag"] }>>({});
-
-  useEffect(() => LabOrderDatabase.subscribe(() => setTick(t => t + 1)), []);
-
-  const worklist = useMemo(() => LabOrderDatabase.getLabWorklist(), [tick]);
-  const queued = useMemo(() => worklist.filter(order => order.status === activeQueue), [worklist, activeQueue]);
-  const selected = useMemo(
-    () => worklist.find(order => order.id === selectedOrderId) || queued[0],
-    [worklist, queued, selectedOrderId]
-  );
-
-  const criticalCount = useMemo(
-    () => worklist.filter(order => order.tests.some(test => test.flag === "Critical")).length,
-    [worklist]
-  );
-  const statCount = useMemo(
-    () => worklist.filter(order => order.status !== "Completed" && order.tests.some(test => test.urgency === "STAT")).length,
-    [worklist]
-  );
-
-  const advance = (order: LabOrder, status: LabOrder["status"]) => {
-    LabOrderDatabase.advanceStatus(order.id, status, technician);
-    AuditDatabase.logEvent(
-      "Lab Order Updated",
-      "Laboratory",
-      `${order.id} for ${order.patientName} (${order.umr}) moved to ${status}.`,
-      "Success"
-    );
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
   };
 
-  const saveResult = (order: LabOrder, test: LabOrderTest) => {
-    const draft = resultDrafts[`${order.id}:${test.id}`];
-    if (!draft?.value.trim()) return;
-    LabOrderDatabase.recordResult(
-      order.id,
-      test.id,
-      { value: draft.value.trim(), unit: draft.unit, referenceRange: draft.ref, flag: draft.flag },
-      technician
-    );
-    setResultDrafts(previous => {
-      const next = { ...previous };
-      delete next[`${order.id}:${test.id}`];
-      return next;
-    });
+  const refreshData = () => {
+    const orders = BillingDatabase.getLabOrders();
+    setLabOrders(orders);
   };
 
-  const draftFor = (order: LabOrder, test: LabOrderTest) =>
-    resultDrafts[`${order.id}:${test.id}`] || { value: "", unit: test.resultUnit || "", ref: test.referenceRange || "", flag: "" as LabOrderTest["flag"] };
+  useEffect(() => {
+    refreshData();
+    const unsub = BillingDatabase.onUpdate(refreshData);
+    return () => unsub();
+  }, []);
 
-  const setDraft = (order: LabOrder, test: LabOrderTest, patch: Partial<{ value: string; unit: string; ref: string; flag: LabOrderTest["flag"] }>) =>
-    setResultDrafts(previous => ({
-      ...previous,
-      [`${order.id}:${test.id}`]: { ...draftFor(order, test), ...patch },
-    }));
+  const filteredOrders = useMemo(() => {
+    const queue = QUEUES[activeQueue];
+    if (queue.key === "all") return labOrders;
+    if (queue.key === "paid") return labOrders.filter((o) => o.paymentStatus === "Paid");
+    if (queue.key === "unpaid") return labOrders.filter((o) => o.paymentStatus === "Payment Pending");
+    if (queue.key === "collected") return labOrders.filter((o) => o.status === "Collected");
+    if (queue.key === "processing") return labOrders.filter((o) => o.status === "Processing");
+    return labOrders;
+  }, [labOrders, activeQueue]);
+
+  const selectedOrder = filteredOrders[selectedIdx] || labOrders[0];
+
+  const handleCollectSample = (order: LabOrderRecord) => {
+    if (order.paymentStatus !== "Paid") {
+      showToast(`⚠ Cannot collect sample for ${order.patient}! Payment of ₹${order.price} is pending at Central Billing Counter.`, "error");
+      return;
+    }
+
+    try {
+      const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      BillingDatabase.updateLabOrder(order.id, {
+        status: "Collected",
+        collected: now,
+      });
+      showToast(`✓ Sample collected successfully for ${order.patient} (${order.test})`, "success");
+      refreshData();
+    } catch {
+      showToast("Failed to update order status", "error");
+    }
+  };
+
+  const handleStartProcessing = (order: LabOrderRecord) => {
+    try {
+      BillingDatabase.updateLabOrder(order.id, {
+        status: "Processing",
+      });
+      showToast(`✓ Processing initiated for ${order.patient} (${order.test})`, "info");
+      refreshData();
+    } catch {
+      showToast("Failed to update order status", "error");
+    }
+  };
+
+  const counts = useMemo(() => {
+    return {
+      all: labOrders.length,
+      paid: labOrders.filter((o) => o.paymentStatus === "Paid").length,
+      unpaid: labOrders.filter((o) => o.paymentStatus === "Payment Pending").length,
+      collected: labOrders.filter((o) => o.status === "Collected").length,
+      processing: labOrders.filter((o) => o.status === "Processing").length,
+      critical: 3,
+    };
+  }, [labOrders]);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
+    <div className="flex-1 overflow-y-auto bg-[#F0F2F5] text-slate-900">
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-xs font-bold border animate-in slide-in-from-bottom-5 duration-200 ${
+            toast.type === "success"
+              ? "bg-emerald-900 text-emerald-100 border-emerald-700"
+              : toast.type === "error"
+              ? "bg-rose-900 text-rose-100 border-rose-700"
+              : "bg-blue-900 text-blue-100 border-blue-700"
+          }`}
+        >
+          <span>{toast.type === "success" ? "✓" : toast.type === "error" ? "⚠" : "ℹ"}</span>
+          <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
         <div>
-          <h1 className="text-base font-semibold text-gray-900">Laboratory</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-base font-bold text-gray-900">Laboratory &amp; Pathology</h1>
+            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10.5px] font-bold">
+              ● Pre-Paid Clearance Active
+            </span>
+          </div>
           <p className="text-[11.5px] text-[#64748B]">
-            Clinical Laboratory · {worklist.length} billed order(s) from the doctor portal
-            {statCount > 0 ? ` · ${statCount} STAT` : ""}
+            Clinical Laboratory · Requires Central Billing Pre-Payment before sample collection · Operator: {technician}
           </p>
         </div>
         <div className="flex gap-2">
@@ -127,286 +141,292 @@ export default function Laboratory({ technician = "Laboratory" }: { technician?:
         </div>
       </div>
 
-      {(criticalCount > 0 || worklist.length === 0) && (
-        <div className="bg-[#FEF2F2] border-b border-[#FECACA] px-6 py-2.5 flex items-center gap-3">
-          <span className="text-[#B91C1C] font-bold text-sm">⚠</span>
-          <span className="text-[12.5px] font-semibold text-[#B91C1C]">
-            {criticalCount > 0
-              ? `${criticalCount} order(s) with critical values require provider notification`
-              : "3 Critical Results Require Provider Notification"}
+      {/* Pre-Payment Financial Policy Notice */}
+      <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between text-xs text-amber-900">
+        <div className="flex items-center gap-2">
+          <span className="font-bold">🛡️ Financial Clearance Gate:</span>
+          <span>
+            Patients advised for blood/pathology tests must settle fees at the <strong>Central Billing Counter</strong> first. Unpaid orders remain locked.
           </span>
-          <Btn variant="danger" size="xs">Review Critical Values</Btn>
         </div>
-      )}
+        <div className="flex items-center gap-3 font-mono font-bold text-[11px]">
+          <span className="text-emerald-700">✓ {counts.paid} Cleared</span>
+          <span className="text-amber-800">⏳ {counts.unpaid} Payment Pending</span>
+        </div>
+      </div>
 
-      {/* ── Live worklist from the doctor portal ─────────────────────────── */}
+      {/* Critical Results Banner */}
+      <div className="bg-[#FEF2F2] border-b border-[#FECACA] px-6 py-2.5 flex items-center gap-3">
+        <span className="text-[#B91C1C] font-bold text-sm">⚠</span>
+        <span className="text-[12.5px] font-semibold text-[#B91C1C]">3 Critical Results Require Provider Notification</span>
+        <Btn variant="danger" size="xs">Review Critical Values</Btn>
+      </div>
+
+      {/* Queue Tabs */}
       <div className="bg-white border-b border-[#DDE2EC] flex overflow-x-auto">
-        {QUEUE_ORDER.map(queue => (
-          <QueueTab
-            key={queue}
-            label={QUEUE_LABELS[queue]}
-            count={worklist.filter(order => order.status === queue).length}
-            active={activeQueue === queue}
-            onClick={() => {
-              setActiveQueue(queue);
-              setSelectedOrderId(null);
-            }}
-          />
-        ))}
+        {QUEUES.map((q, i) => {
+          const count =
+            q.key === "all"
+              ? counts.all
+              : q.key === "paid"
+              ? counts.paid
+              : q.key === "unpaid"
+              ? counts.unpaid
+              : q.key === "collected"
+              ? counts.collected
+              : q.key === "processing"
+              ? counts.processing
+              : counts.critical;
+
+          return (
+            <QueueTab
+              key={i}
+              label={q.label}
+              count={count}
+              active={activeQueue === i}
+              onClick={() => {
+                setActiveQueue(i);
+                setSelectedIdx(0);
+              }}
+            />
+          );
+        })}
       </div>
 
       <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
-          <Card title={`Orders — ${QUEUE_LABELS[activeQueue]}`}>
-            {queued.length === 0 ? (
-              <div className="py-8 text-center">
-                <div className="text-2xl mb-2">🧪</div>
-                <p className="text-[12.5px] font-semibold text-[#334155]">Nothing in this queue</p>
-                <p className="text-[11.5px] text-[#94A3B8] mt-1">
-                  Doctor-ordered investigations arrive here once reception has collected payment for them.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-[#F1F5F9]">
-                {queued.map(order => (
-                  <button
-                    key={order.id}
-                    type="button"
-                    onClick={() => setSelectedOrderId(order.id)}
-                    className={`w-full text-left px-1 py-3 transition-colors ${
-                      selected?.id === order.id ? "bg-[#EFF6FF]" : "hover:bg-[#F8FAFC]"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3 flex-wrap px-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-[13px] text-gray-900">{order.patientName}</span>
-                          <span className="text-[11px] font-mono text-[#64748B]">
-                            {order.umr} · {order.opNumber} · {order.age}
-                            {order.sex?.[0]}
+          {activeQueue === 5 ? (
+            <Card title="Critical Values — Requires Immediate Action">
+              <div className="space-y-3">
+                {CRITICAL_RESULTS.map((c, i) => (
+                  <div key={i} className={`border rounded p-3 ${c.notified === "Pending" ? "border-[#FECACA] bg-[#FEF2F2] critical-pulse" : "border-[#DDE2EC]"}`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-[13px] text-gray-900">{c.patient}</span>
+                          <span className="font-mono text-[11.5px] text-[#64748B]">MRN: {c.mrn}</span>
+                          <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                            ✓ Paid
                           </span>
-                          {order.tests.some(test => test.urgency === "STAT") && (
-                            <span className="text-[10px] font-bold bg-[#FEE2E2] text-[#B91C1C] px-1.5 py-0.5 rounded border border-[#FECACA]">
-                              STAT
-                            </span>
-                          )}
+                        </div>
+                        <div className="text-[12px] font-semibold text-[#B91C1C] mt-1">
+                          {c.test}: <span className="font-mono">{c.value}</span> (Threshold: {c.threshold})
                         </div>
                         <div className="text-[11.5px] text-[#64748B] mt-0.5">
-                          {order.doctorName} · {order.department}
-                          {order.diagnosis ? ` · ${order.diagnosis}` : ""}
-                        </div>
-                        <div className="text-[11.5px] text-[#475569] mt-1">
-                          {order.tests.map(test => test.name).join(" · ")}
+                          Ordered by: {c.provider}
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className="text-[10.5px] font-mono text-[#94A3B8]">{order.id}</div>
-                        <div className="mt-1"><StatusBadge status={order.status} /></div>
-                        <div className="text-[10.5px] text-[#15803D] mt-1">
-                          Paid ₹{order.billing.total.toLocaleString("en-IN")}
-                        </div>
+                      <div className="flex gap-2">
+                        {c.notified === "Pending" ? (
+                          <Btn variant="danger" size="xs">Notify Provider</Btn>
+                        ) : (
+                          <span className="text-[11px] text-emerald-700 font-semibold">Notified {c.notified}</span>
+                        )}
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
-            )}
-          </Card>
-
-          {worklist.length === 0 && (
+            </Card>
+          ) : (
             <Card
-              title="Sample worklist"
-              actions={<span className="text-[10.5px] text-[#94A3B8]">Demo data — replaced by real orders</span>}
+              title="Lab Orders (Pre-Paid Financial Clearance Ledger)"
+              actions={
+                <div className="flex gap-1.5">
+                  <Btn variant="ghost" size="xs">Filter</Btn>
+                  <Btn variant="ghost" size="xs">Export</Btn>
+                </div>
+              }
             >
-              <Table headers={["Patient", "MRN", "Test", "Priority", "Collected", "Status", "Provider", ""]}>
-                {SAMPLE_ORDERS.map((order, index) => (
-                  <TR key={index} onClick={() => setSampleSelected(index)}>
-                    <TD><span className="font-semibold text-gray-800">{order.patient}</span></TD>
-                    <TD><span className="font-mono text-[11.5px] text-[#64748B]">{order.mrn}</span></TD>
-                    <TD><span className="font-medium">{order.test}</span></TD>
-                    <TD>
-                      <span className={`text-[11.5px] font-semibold ${order.priority === "STAT" ? "text-[#DC2626]" : "text-[#64748B]"}`}>
-                        {order.priority}
-                      </span>
-                    </TD>
-                    <TD><span className="font-mono text-[11.5px]">{order.collected}</span></TD>
-                    <TD><StatusBadge status={order.status} /></TD>
-                    <TD><span className="text-[#64748B] text-[11.5px]">{order.provider}</span></TD>
-                    <TD>
-                      <div className="flex gap-1">
-                        <Btn variant="ghost" size="xs">Result</Btn>
-                        <Btn variant="ghost" size="xs">Flag</Btn>
+              <Table headers={["Patient", "MRN", "Test Ordered", "Payment Status", "Sample", "Lab Status", "Provider", "Action"]}>
+                {filteredOrders.length === 0 ? (
+                  <TR>
+                    <TD colSpan={8}>
+                      <div className="p-6 text-center text-slate-400 text-xs font-semibold">
+                        No lab orders match this queue.
                       </div>
                     </TD>
                   </TR>
-                ))}
+                ) : (
+                  filteredOrders.map((o, i) => {
+                    const isPaid = o.paymentStatus === "Paid";
+
+                    return (
+                      <TR
+                        key={o.id || i}
+                        onClick={() => setSelectedIdx(i)}
+                        className={selectedIdx === i ? "bg-blue-50/60" : ""}
+                      >
+                        <TD>
+                          <span className="font-bold text-gray-900">{o.patient}</span>
+                        </TD>
+                        <TD>
+                          <span className="font-mono text-[11.5px] text-[#64748B]">{o.mrn}</span>
+                        </TD>
+                        <TD>
+                          <div className="font-semibold text-slate-800">{o.test}</div>
+                          <span className={`text-[10px] font-bold ${o.priority === "STAT" ? "text-rose-600" : "text-slate-400"}`}>
+                            {o.priority} Priority · ₹{o.price}
+                          </span>
+                        </TD>
+                        <TD>
+                          {isPaid ? (
+                            <div>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] flex items-center gap-1 w-fit">
+                                <span>✓</span> Paid &amp; Cleared
+                              </span>
+                              <div className="text-[9.5px] font-mono text-emerald-700 mt-0.5">
+                                {o.paidReceiptNo || "RCPT-2026-5501"}
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-1 w-fit">
+                                <span>🔒</span> Pay at Billing
+                              </span>
+                              <div className="text-[9.5px] text-amber-700 mt-0.5">
+                                ₹{o.price} Due
+                              </div>
+                            </div>
+                          )}
+                        </TD>
+                        <TD>
+                          <span className="font-mono text-[11.5px]">{o.collected || "—"}</span>
+                        </TD>
+                        <TD>
+                          <StatusBadge status={o.status} />
+                        </TD>
+                        <TD>
+                          <span className="text-[#64748B] text-[11.5px]">{o.provider}</span>
+                        </TD>
+                        <TD>
+                          <div className="flex items-center gap-1">
+                            {isPaid ? (
+                              o.status === "Pending" ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCollectSample(o);
+                                  }}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[10.5px] cursor-pointer shadow-2xs"
+                                >
+                                  💉 Collect Sample
+                                </button>
+                              ) : o.status === "Collected" ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStartProcessing(o);
+                                  }}
+                                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[10.5px] cursor-pointer shadow-2xs"
+                                >
+                                  ⚙ Process
+                                </button>
+                              ) : (
+                                <span className="text-[11px] font-bold text-emerald-700">✓ In Flow</span>
+                              )
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  showToast(`🔒 Cannot collect sample: ${o.patient} must pay ₹${o.price} at Central Billing first!`, "error");
+                                }}
+                                className="px-2 py-1 bg-slate-100 text-slate-400 hover:bg-amber-100 hover:text-amber-800 font-bold rounded text-[10px] cursor-not-allowed border border-dashed border-slate-300"
+                              >
+                                🔒 Locked (Unpaid)
+                              </button>
+                            )}
+                          </div>
+                        </TD>
+                      </TR>
+                    );
+                  })
+                )}
               </Table>
             </Card>
           )}
         </div>
 
+        {/* Right: Selected Test Detail & Payment Clearance Dossier */}
         <div className="space-y-4">
-          {selected ? (
-            <Card
-              title={selected.patientName}
-              actions={<span className="text-[10.5px] font-mono text-[#94A3B8]">{selected.id}</span>}
-            >
-              <div className="text-[11.5px] text-[#64748B] mb-3">
-                {selected.umr} · {selected.opNumber} · ordered by {selected.doctorName} on{" "}
-                {new Date(selected.createdAt).toLocaleDateString()}
-              </div>
-
-              <div className="space-y-3">
-                {selected.tests.map(test => (
-                  <div key={test.id} className="border border-[#E2E8F0] rounded p-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[12px] font-semibold text-gray-900">{test.name}</span>
-                      <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded ${
-                        test.status === "Completed" ? "bg-[#DCFCE7] text-[#15803D]" : "bg-[#F1F5F9] text-[#475569]"
-                      }`}>
-                        {test.status}
-                      </span>
-                    </div>
-                    <div className="text-[10.5px] text-[#94A3B8] mt-0.5">
-                      {test.category} · {test.urgency}
-                    </div>
-
-                    {test.status === "Completed" ? (
-                      <div className="mt-2 flex items-center justify-between text-[12px]">
-                        <span className={`font-mono font-semibold ${
-                          test.flag === "Critical" ? "text-[#B91C1C]" : test.flag === "H" ? "text-[#D97706]" : test.flag === "L" ? "text-[#0284C7]" : "text-gray-900"
-                        }`}>
-                          {test.result} {test.resultUnit}
-                        </span>
-                        <span className="text-[10.5px] text-[#94A3B8]">{test.referenceRange || "no range"}</span>
-                      </div>
-                    ) : (
-                      <div className="mt-2 space-y-1.5">
-                        <div className="grid grid-cols-3 gap-1.5">
-                          <input
-                            value={draftFor(selected, test).value}
-                            onChange={event => setDraft(selected, test, { value: event.target.value })}
-                            placeholder="Result"
-                            className="border border-[#DDE2EC] rounded px-2 py-1 text-[11.5px] font-mono focus:outline-none focus:border-[#1B4FD8]"
-                          />
-                          <input
-                            value={draftFor(selected, test).unit}
-                            onChange={event => setDraft(selected, test, { unit: event.target.value })}
-                            placeholder="Unit"
-                            className="border border-[#DDE2EC] rounded px-2 py-1 text-[11.5px] focus:outline-none focus:border-[#1B4FD8]"
-                          />
-                          <select
-                            value={draftFor(selected, test).flag || ""}
-                            onChange={event => setDraft(selected, test, { flag: event.target.value as LabOrderTest["flag"] })}
-                            className="border border-[#DDE2EC] rounded px-2 py-1 text-[11.5px] focus:outline-none focus:border-[#1B4FD8]"
-                          >
-                            <option value="">Normal</option>
-                            <option value="H">High</option>
-                            <option value="L">Low</option>
-                            <option value="Critical">Critical</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-1.5">
-                          <input
-                            value={draftFor(selected, test).ref}
-                            onChange={event => setDraft(selected, test, { ref: event.target.value })}
-                            placeholder="Reference range"
-                            className="flex-1 border border-[#DDE2EC] rounded px-2 py-1 text-[11.5px] focus:outline-none focus:border-[#1B4FD8]"
-                          />
-                          <Btn variant="primary" size="xs" onClick={() => saveResult(selected, test)}>
-                            Save
-                          </Btn>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                {selected.status === "Billed" && (
-                  <Btn variant="primary" size="xs" onClick={() => advance(selected, "Sample Collected")}>
-                    Mark sample collected
-                  </Btn>
-                )}
-                {selected.status === "Sample Collected" && (
-                  <Btn variant="primary" size="xs" onClick={() => advance(selected, "In Progress")}>
-                    Start processing
-                  </Btn>
-                )}
-                {selected.status === "Completed" && (
-                  <span className="text-[11.5px] font-semibold text-[#15803D]">✓ All results verified</span>
-                )}
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-[#F1F5F9]">
-                <div className="text-[10.5px] uppercase tracking-wide text-[#94A3B8] font-bold mb-1.5">Order trail</div>
-                <div className="space-y-1">
-                  {selected.history.map((event, index) => (
-                    <div key={index} className="text-[11px] text-[#64748B]">
-                      <span className="font-mono text-[#94A3B8]">{new Date(event.at).toLocaleString()}</span> ·{" "}
-                      <span className="font-semibold text-[#475569]">{event.action}</span>
-                      {event.detail ? ` — ${event.detail}` : ""}
-                      <span className="text-[#94A3B8]"> ({event.actor})</span>
-                    </div>
-                  ))}
+          {selectedOrder && (
+            <Card title="Diagnostic Clearance & Patient Dossier">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-sm text-slate-900">{selectedOrder.patient}</span>
+                  <span className="font-mono text-slate-500">MRN: {selectedOrder.mrn}</span>
                 </div>
-              </div>
-            </Card>
-          ) : (
-            <Card title="CBC w/ Differential" actions={<Btn variant="ghost" size="xs">Trend</Btn>}>
-              <div className="text-[11.5px] text-[#64748B] mb-3">
-                <span className="font-medium text-gray-700">{SAMPLE_ORDERS[sampleSelected]?.patient || "John Smith"}</span> ·
-                MRN {SAMPLE_ORDERS[sampleSelected]?.mrn || "100245"} · Collected 09:10 AM
-              </div>
-              <div className="space-y-0.5">
-                {RESULTS_DETAIL.map((row, index) => (
-                  <div
-                    key={index}
-                    className={`flex items-center justify-between py-1.5 border-b border-[#F8FAFC] last:border-0 rounded px-1
-                      ${row.flag === "H" ? "bg-[#FFFBEB]" : row.flag === "L" ? "bg-[#EFF6FF]" : ""}`}
-                  >
-                    <span className="text-[12px] text-gray-700 w-28">{row.component}</span>
-                    <span className={`font-mono font-semibold text-[12px] ${row.flag === "H" ? "text-[#D97706]" : row.flag === "L" ? "text-[#0284C7]" : "text-gray-800"}`}>
-                      {row.value}
+                <div className="text-slate-600">
+                  Advised Test: <strong>{selectedOrder.test}</strong>
+                </div>
+                <div className="text-slate-500">
+                  Prescribing Physician: <strong>{selectedOrder.provider}</strong>
+                </div>
+
+                {/* Financial Clearance Status Card */}
+                <div
+                  className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                    selectedOrder.paymentStatus === "Paid"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                      : "bg-amber-50 border-amber-200 text-amber-900"
+                  }`}
+                >
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-wider">
+                      Financial Clearance Status
                     </span>
-                    <span className="text-[11px] text-[#94A3B8] font-mono w-12 text-right">{row.unit}</span>
-                    <span className="text-[10.5px] text-[#94A3B8] w-16 text-right hidden md:block">{row.ref}</span>
-                    <span className={`w-5 text-right font-mono font-bold text-[11.5px] ${row.flag === "H" ? "text-[#D97706]" : row.flag === "L" ? "text-[#0284C7]" : ""}`}>
-                      {row.flag}
-                    </span>
+                    <div className="font-extrabold text-xs">
+                      {selectedOrder.paymentStatus === "Paid"
+                        ? "✓ Verified Paid at Billing Desk"
+                        : "🔒 Payment Pending at Billing"}
+                    </div>
                   </div>
-                ))}
-              </div>
-              <div className="mt-3 flex gap-2">
-                <Btn variant="primary" size="xs">Verify Result</Btn>
-                <Btn variant="outline" size="xs">Add Comment</Btn>
-                <Btn variant="outline" size="xs">Notify</Btn>
+                  <div className="text-right font-mono">
+                    <div className="font-extrabold">₹{selectedOrder.price}</div>
+                    <div className="text-[10px]">
+                      {selectedOrder.paymentStatus === "Paid"
+                        ? (selectedOrder.paidReceiptNo || "RCPT-2026-5501")
+                        : "UNSETTLED"}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedOrder.paymentStatus !== "Paid" && (
+                  <div className="p-2 rounded bg-rose-50 border border-rose-200 text-[11px] text-rose-800">
+                    ⚠ <strong>Action Blocked:</strong> Direct the patient to the Central Billing Counter on the Ground Floor to complete payment before sample collection.
+                  </div>
+                )}
               </div>
             </Card>
           )}
 
-          {worklist.length === 0 && (
-            <Card title="Critical Values — Requires Immediate Action">
-              <div className="space-y-3">
-                {CRITICAL_RESULTS.map((critical, index) => (
-                  <div key={index} className={`border rounded p-3 ${critical.notified === "Pending" ? "border-[#FECACA] bg-[#FEF2F2]" : "border-[#DDE2EC]"}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-[13px] text-gray-900">{critical.patient}</span>
-                      <span className="font-mono text-[11.5px] text-[#64748B]">MRN: {critical.mrn}</span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-[12px] flex-wrap">
-                      <span className="font-medium text-[#B91C1C]">
-                        {critical.test}: <span className="font-mono">{critical.value}</span>
-                      </span>
-                      <span className="text-[#64748B]">Threshold: {critical.threshold}</span>
-                      <span className="text-[#64748B]">Provider: {critical.provider}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
+          <Card title="CBC w/ Differential" actions={<Btn variant="ghost" size="xs">Trend</Btn>}>
+            <div className="text-[11.5px] text-[#64748B] mb-3">
+              <span className="font-medium text-gray-700">John Smith</span> · MRN 100245 · Verified Paid
+            </div>
+            <div className="space-y-0.5">
+              {RESULTS_DETAIL.map((r, i) => (
+                <div key={i} className={`flex items-center justify-between py-1.5 border-b border-[#F8FAFC] last:border-0 rounded px-1
+                  ${r.flag === "H" || r.flag === "HH" ? "bg-[#FFFBEB]" : r.flag === "L" ? "bg-[#EFF6FF]" : ""}`}>
+                  <span className="text-[12px] text-gray-700 w-28">{r.component}</span>
+                  <span className={`font-mono font-semibold text-[12px] ${r.flag === "H" || r.flag === "HH" ? "text-[#D97706]" : r.flag === "L" ? "text-[#0284C7]" : "text-gray-800"}`}>
+                    {r.value}
+                  </span>
+                  <span className="text-[11px] text-[#94A3B8] font-mono w-12 text-right">{r.unit}</span>
+                  <span className="text-[10.5px] text-[#94A3B8] w-16 text-right hidden md:block">{r.ref}</span>
+                  <span className={`w-5 text-right font-mono font-bold text-[11.5px] ${r.flag === "H" ? "text-[#D97706]" : r.flag === "L" ? "text-[#0284C7]" : ""}`}>{r.flag}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Btn variant="primary" size="xs">Verify Result</Btn>
+              <Btn variant="outline" size="xs">Add Comment</Btn>
+              <Btn variant="outline" size="xs">Notify</Btn>
+            </div>
+          </Card>
 
           <Card title="Turnaround Time">
             <div className="space-y-2 text-[12px]">

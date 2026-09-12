@@ -48,6 +48,7 @@ export interface DBOPEncounter {
   icd10: string;
   prescription: { medicine: string; dosage: string; frequency: string; duration: string; instructions?: string }[];
   investigations: string[];
+  services?: { id?: string; name: string; category?: string; cptCode?: string; price: number; quantity?: number }[];
   advice: string;
   vitals: { bp: string; pulse: string; temp: string; spo2: string; weight: string; notes: string };
   billing: { consultationFee: number; labFee: number; total: number; status: "Paid" | "Pending"; mode: string };

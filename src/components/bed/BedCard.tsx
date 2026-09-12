@@ -1,6 +1,7 @@
 import { FaBed } from "react-icons/fa";
 import { FiTool } from "react-icons/fi";
 import { formatDateTimeIST } from "../../lib/format";
+import { BillingDatabase } from "../../services/billingDb";
 
 export type BedCardData = {
   id: number | string;
@@ -15,6 +16,7 @@ export type BedCardData = {
   patient_phone?: string | null;
   patient_age?: number | null;
   patient_gender?: string | null;
+  admission_notes?: string | null;
 };
 
 export function bedOccupantName(bed: BedCardData): string {
@@ -121,6 +123,33 @@ export function BedCard<T extends BedCardData>({
             {bed.admission_date && (
               <span className="bed-info-card-meta">Day {daysSinceAdmission(bed.admission_date)}</span>
             )}
+            {(() => {
+              if (bed.status !== "Occupied" || !bed.patient_id) return null;
+              const clr = BillingDatabase.getInpatientFinancialClearance(bed.patient_id, bedOccupantName(bed));
+              if (clr.totalAmount === 0 && clr.balanceDue === 0) return null;
+              if (!clr.isCleared && clr.balanceDue > 0) {
+                return (
+                  <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-900 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded mt-0.5 w-fit">
+                    🔒 Due: ₹{clr.balanceDue.toLocaleString("en-IN")}
+                  </span>
+                );
+              }
+              if (clr.isCleared) {
+                return (
+                  <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded mt-0.5 w-fit">
+                    ✅ Bill Cleared
+                  </span>
+                );
+              }
+              return null;
+            })()}
+            {bed.admission_notes &&
+              (bed.admission_notes.toLowerCase().includes("er") ||
+                bed.admission_notes.toLowerCase().includes("transfer")) && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded mt-0.5 w-fit">
+                  🚑 Transferred
+                </span>
+              )}
           </div>
         ) : bed.status === "Maintenance" ? (
           <div className="bed-info-card-status">

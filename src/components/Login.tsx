@@ -77,6 +77,7 @@ export default function Login({ onLogin }: LoginProps) {
       );
       setError(err instanceof Error ? err.message : "Unable to sign in. Please check your credentials.");
     } finally {
+      
       setLoading(false);
     }
   };
