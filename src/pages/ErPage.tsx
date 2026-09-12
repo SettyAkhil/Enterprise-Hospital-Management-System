@@ -6603,7 +6603,7 @@ export function VisitDetailPanel({
           {(detail.investigations && detail.investigations.length > 0) ? (
             <div className="space-y-3">
               {detail.investigations.map((inv) => (
-                <div key={inv.id} className="p-4 bg-slate-50/80 border border-slate-200 rounded-lg hover:border-[#1B4FD8] transition-all">
+                <div key={inv.id} className="p-4 bg-slate-50/80 border border-slate-200 rounded-none hover:border-[#1B4FD8] transition-all">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2.5">
                       <span className="font-bold text-gray-900 text-[13.5px]">{inv.test_name}</span>
@@ -6739,7 +6739,7 @@ export function VisitDetailPanel({
             <div className="space-y-3 pt-2">
               <h4 className="font-bold text-gray-900 text-sm">Bed Requests & Transfer Track</h4>
               {detail.bed_requests.map((b) => (
-                <div key={b.id} className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+                <div key={b.id} className="p-4 bg-slate-50 border border-slate-200 rounded-none flex items-center justify-between">
                   <div>
                     <strong className="text-gray-900 block text-[13px]">{b.requested_level_of_care}</strong>
                     <span className="text-xs text-[#64748B]">Specialty: {b.requested_specialty} • Requested at {formatDateTimeIST(b.requested_at)}</span>
@@ -6777,7 +6777,7 @@ export function VisitDetailPanel({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 border border-slate-200 rounded-lg hover:border-[#1B4FD8] transition-all bg-white">
+            <div className="p-4 border border-slate-200 rounded-none hover:border-[#1B4FD8] transition-all bg-white">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h4 className="font-bold text-gray-900 text-[13px]">General Emergency Admission Consent</h4>
@@ -6795,7 +6795,7 @@ export function VisitDetailPanel({
               </div>
             </div>
 
-            <div className="p-4 border border-slate-200 rounded-lg hover:border-[#1B4FD8] transition-all bg-white">
+            <div className="p-4 border border-slate-200 rounded-none hover:border-[#1B4FD8] transition-all bg-white">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h4 className="font-bold text-gray-900 text-[13px]">Specialist Intervention & Procedure Consent</h4>

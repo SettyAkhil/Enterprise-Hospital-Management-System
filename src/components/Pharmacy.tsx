@@ -16,9 +16,62 @@ const Icons = {
   Search: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
 };
 
-export default function Pharmacy() {
-  const [activeMenu, setActiveMenu] = useState("Dashboard");
-  const [activeSubMenu, setActiveSubMenu] = useState("KPIs");
+interface PharmacyProps {
+  activeModule?: string;
+  onNavigate?: (module: string) => void;
+}
+
+// Sections are matched by key, never by label text -- substring matching on labels
+// silently routed two different pages to the same panel.
+type Section =
+  | "dashboard" | "dispensing" | "rx" | "ocr" | "returns"
+  | "medicine" | "category"
+  | "suppliers" | "po" | "grn"
+  | "ledger" | "transfers" | "expiry"
+  | "analytics";
+
+const MODULE_TO_SECTION: Record<string, Section> = {
+  pharmacy: "dashboard",
+  pharmacy_dispensing: "dispensing",
+  pharmacy_rx: "rx",
+  pharmacy_ocr: "ocr",
+  pharmacy_returns: "returns",
+  pharmacy_medicine: "medicine",
+  pharmacy_category: "category",
+  pharmacy_suppliers: "suppliers",
+  pharmacy_po: "po",
+  pharmacy_grn: "grn",
+  pharmacy_ledger: "ledger",
+  pharmacy_transfers: "transfers",
+  pharmacy_expiry: "expiry",
+  pharmacy_analytics: "analytics",
+};
+
+const SECTION_META: Record<Section, { title: string; subtitle: string }> = {
+  dashboard: { title: "Pharmacy Dashboard", subtitle: "Stock position, queue load and today's revenue at a glance." },
+  dispensing: { title: "Dispensing & Billing", subtitle: "FEFO point of sale -- batch splits and billing in one pass." },
+  rx: { title: "Prescription Queue", subtitle: "Incoming prescriptions waiting on a pharmacist." },
+  ocr: { title: "OCR Verification", subtitle: "Map scanned prescription text onto the drug master." },
+  returns: { title: "Returns", subtitle: "Take unused medicine back from wards and outpatients." },
+  medicine: { title: "Medicine Master", subtitle: "The drug catalogue every other pharmacy screen reads from." },
+  category: { title: "Category Master", subtitle: "Therapeutic groupings used for reporting and stock value." },
+  suppliers: { title: "Suppliers", subtitle: "Vendors you raise purchase orders against." },
+  po: { title: "Purchase Orders", subtitle: "Stock requested from suppliers, awaiting receipt." },
+  grn: { title: "GRN Receiving", subtitle: "Book delivered stock into batches against a purchase order." },
+  ledger: { title: "Inventory Ledger", subtitle: "Every movement in and out of pharmacy stock." },
+  transfers: { title: "Stock Transfers", subtitle: "Move stock from the main pharmacy to ward and ICU stores." },
+  expiry: { title: "Expiry Management", subtitle: "Shelf life by batch, and write-offs for expired stock." },
+  analytics: { title: "Analytics & Reports", subtitle: "Consumption, movement and revenue across the pharmacy." },
+};
+
+export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps = {}) {
+  const [section, setSection] = useState<Section>("dashboard");
+
+  useEffect(() => {
+    if (activeModule && MODULE_TO_SECTION[activeModule]) {
+      setSection(MODULE_TO_SECTION[activeModule]);
+    }
+  }, [activeModule]);
   
   // Data State
   const [categories, setCategories] = useState<AppCategory[]>([]);
@@ -47,6 +100,8 @@ export default function Pharmacy() {
   const [showMedicineModal, setShowMedicineModal] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<AppMedicine | null>(null);
   const [medicineSearch, setMedicineSearch] = useState("");
+  const [medicineCategoryFilter, setMedicineCategoryFilter] = useState("all");
+  const [medicineStockFilter, setMedicineStockFilter] = useState<"all" | "low" | "out">("all");
 
   // PO Modal State
   const [showPOModal, setShowPOModal] = useState(false);
@@ -72,6 +127,13 @@ export default function Pharmacy() {
   const [returnBillId, setReturnBillId] = useState("");
   const [returnItems, setReturnItems] = useState<{medId: string, batchNo: string, qty: number, reason: string}[]>([]);
 
+  // Expiry Management State
+  const [expiryFilter, setExpiryFilter] = useState<"all" | "expired" | "30" | "90">("all");
+  const [expirySearch, setExpirySearch] = useState("");
+
+  // OCR Verification State
+  const [ocrSearch, setOcrSearch] = useState("");
+
   // Transfers State
   const [transferDest, setTransferDest] = useState("ICU Store");
   const [transferMed, setTransferMed] = useState("");
@@ -91,9 +153,10 @@ export default function Pharmacy() {
     setTransfers(PharmacyDatabase.getTransfers());
   }, []);
 
-  const handleTabChange = (menu: string, submenu: string) => {
-    setActiveMenu(menu);
-    setActiveSubMenu(submenu);
+  // Shortcut buttons move the sidebar too, so its highlight keeps matching the panel on screen.
+  const goToModule = (module: string) => {
+    setSection(MODULE_TO_SECTION[module] || section);
+    onNavigate?.(module);
   };
 
   const handleSaveCategory = (e: React.FormEvent) => {
@@ -679,7 +742,39 @@ export default function Pharmacy() {
 
   const filteredCategories = categories.filter(c => c.categoryName.toLowerCase().includes(categorySearch.toLowerCase()));
   const filteredSuppliers = suppliers.filter(s => s.supplierName.toLowerCase().includes(supplierSearch.toLowerCase()));
-  const filteredMedicines = medicines.filter(m => m.brandName.toLowerCase().includes(medicineSearch.toLowerCase()) || m.genericName.toLowerCase().includes(medicineSearch.toLowerCase()));
+  const filteredMedicines = medicines
+    .filter(m =>
+      m.brandName.toLowerCase().includes(medicineSearch.toLowerCase()) ||
+      m.genericName.toLowerCase().includes(medicineSearch.toLowerCase()) ||
+      m.barcode.toLowerCase().includes(medicineSearch.toLowerCase())
+    )
+    .filter(m => medicineCategoryFilter === "all" || m.categoryId === medicineCategoryFilter)
+    .filter(m => {
+      if (medicineStockFilter === "all") return true;
+      const onHand = batches.filter(b => b.medicineId === m.id).reduce((a, b) => a + b.availableQuantity, 0);
+      return medicineStockFilter === "out" ? onHand === 0 : onHand <= m.reorderLevel;
+    });
+
+  const stockOnHand = (medicineId: string) =>
+    batches.filter(b => b.medicineId === medicineId).reduce((a, b) => a + b.availableQuantity, 0);
+
+  const stockValue = (medicineId: string) =>
+    batches.filter(b => b.medicineId === medicineId).reduce((a, b) => a + b.availableQuantity * b.purchasePrice, 0);
+
+  const lowStockMedicines = medicines.filter(m => {
+    const onHand = stockOnHand(m.id);
+    return onHand <= m.reorderLevel;
+  });
+
+  const daysToExpiry = (expiryDate: string) =>
+    Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86400000);
+
+  const activeBatches = batches.filter(b => b.availableQuantity > 0);
+  const nearExpiryCount = activeBatches.filter(b => {
+    const d = daysToExpiry(b.expiryDate);
+    return d >= 0 && d <= 90;
+  }).length;
+  const expiredCount = activeBatches.filter(b => daysToExpiry(b.expiryDate) < 0).length;
 
   const EmptyState = ({ title, message }: { title: string, message: string }) => (
     <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -690,71 +785,87 @@ export default function Pharmacy() {
   );
 
   return (
-    <div className="flex-1 bg-[#F0F2F5] flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <div className="bg-[#0C1524] border-b border-[#1E2D42] px-6 py-3 flex items-center justify-between sticky top-0 z-10 flex-shrink-0">
+    <div className="flex-1 bg-[#F4F7FB] flex flex-col h-full overflow-hidden text-gray-900 font-sans select-none">
+      {/* Sleek Minimalist Light Header */}
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between sticky top-0 z-10 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white rounded-lg shadow-sm">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <div className="w-9 h-9 bg-blue-50 border border-blue-200 text-[#1B4FD8] flex items-center justify-center font-bold text-lg rounded-none">
+            💊
           </div>
           <div>
-            <h1 className="text-[16px] font-bold text-white leading-tight">Enterprise Pharmacy</h1>
-            <p className="text-[11.5px] text-[#94A3B8] font-medium">Centralized Drug Inventory & Dispensing Hub</p>
+            <div className="flex items-center gap-2">
+              <span className="text-[11.5px] text-[#94A3B8] font-semibold">Pharmacy</span>
+              <span className="text-[#CBD5E1]">/</span>
+              <h1 className="text-[15px] font-bold text-[#0F172A] leading-tight">{SECTION_META[section].title}</h1>
+              {section === "dispensing" && (
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 border border-emerald-200 font-bold uppercase tracking-wide">
+                  FEFO Active
+                </span>
+              )}
+            </div>
+            <p className="text-[11.5px] text-[#64748B] font-medium">{SECTION_META[section].subtitle}</p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => goToModule("pharmacy_dispensing")}
+            className="bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-semibold px-3 py-1.5 rounded-none border border-blue-600 shadow-2xs transition-colors cursor-pointer"
+          >
+            ⚡ Quick Dispense
+          </button>
+          <button
+            onClick={() => {
+              setEditingPO({
+                id: "PO_" + Date.now(),
+                supplierId: suppliers[0]?.id || "",
+                poDate: new Date().toISOString().split("T")[0],
+                expectedDeliveryDate: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
+                status: "Draft",
+                items: [],
+                totalOrderValue: 0,
+                createdAt: new Date().toISOString(),
+                createdBy: "U_ADMIN"
+              });
+              setShowPOModal(true);
+            }}
+            className="bg-white hover:bg-gray-50 text-[#0F172A] text-[12px] font-semibold px-3 py-1.5 rounded-none border border-[#CBD5E1] shadow-2xs transition-colors cursor-pointer"
+          >
+            + New PO
+          </button>
+          <button
+            onClick={() => {
+              setEditingMedicine({
+                id: "MED_" + Date.now(),
+                medicineName: "",
+                genericName: "",
+                brandName: "",
+                categoryId: categories[0]?.id || "",
+                manufacturer: "",
+                dosageForm: "Tablet",
+                strength: "",
+                unit: "Strip",
+                barcode: "",
+                taxPercentage: 0,
+                reorderLevel: 50,
+                storageCondition: "Room Temperature",
+                scheduleType: "Schedule H",
+                controlledSubstanceFlag: false,
+                activeStatus: "Active",
+                createdAt: new Date().toISOString()
+              });
+              setShowMedicineModal(true);
+            }}
+            className="bg-white hover:bg-gray-50 text-[#0F172A] text-[12px] font-semibold px-3 py-1.5 rounded-none border border-[#CBD5E1] shadow-2xs transition-colors cursor-pointer"
+          >
+            + Drug Master
+          </button>
         </div>
       </div>
 
-      {/* Main Content Layout with Sidebar */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Pharmacy Nested Sidebar */}
-        <div className="w-56 bg-white border-r border-[#DDE2EC] flex flex-col flex-shrink-0 overflow-y-auto">
-           {[
-             {
-               menu: "PHARMACY",
-               items: ["Dashboard"]
-             },
-             {
-               menu: "INVENTORY",
-               items: [
-                 "Category Master", "Medicine Master", "Suppliers", 
-                 "Purchase Orders", "GRN Receiving", "Inventory Ledger", 
-                 "Transfers", "Returns", "Supplier Returns", 
-                 "Expiry Management", "Stock Adjustments"
-               ]
-             },
-             {
-               menu: "OPERATIONS",
-               items: ["Prescription Queue", "OCR Verification", "Dispensing & Billing", "Medication History"]
-             },
-             {
-               menu: "REPORTS",
-               items: ["Analytics Dashboard", "Advanced Reports", "Audit Logs"]
-             }
-           ].map((section, idx) => (
-             <div key={idx} className="py-3">
-               <div className="px-4 text-[10.5px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1.5">{section.menu}</div>
-               <div className="space-y-0.5">
-                 {section.items.map(item => (
-                   <button
-                     key={item}
-                     onClick={() => handleTabChange(section.menu, item)}
-                     className={`w-full text-left px-4 py-1.5 text-[12.5px] font-semibold transition-colors ${
-                       activeSubMenu === item
-                         ? "bg-[#EFF6FF] text-[#1B4FD8] border-r-2 border-[#1B4FD8]"
-                         : "text-gray-600 hover:bg-[#F8FAFC] hover:text-gray-900 border-r-2 border-transparent"
-                     }`}
-                   >
-                     {item}
-                   </button>
-                 ))}
-               </div>
-             </div>
-           ))}
-        </div>
-
-        {/* Dynamic Content Area */}
-        <div className="flex-1 p-5 overflow-y-auto w-full">
-        {activeSubMenu === "Dashboard" && (
+      {/* Main Full-Width Content Area */}
+      <div className="flex-1 p-6 overflow-y-auto w-full">
+        {section === "dashboard" && (
           <div className="flex flex-col gap-5 flex-1 max-w-6xl mx-auto">
             {/* Extended KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -764,43 +875,166 @@ export default function Pharmacy() {
                 { label: "Pending Verification", value: prescriptions.filter(p => p.status === "Verification Pending" || p.status === "OCR Processing").length, color: "text-amber-600" },
                 { label: "Ready For Dispensing", value: prescriptions.filter(p => p.dispensingStatus === "Ready" || p.status === "Ready For Dispensing").length, color: "text-green-600" },
                 { label: "Today's Dispensed Items", value: stockTxs.filter(tx => tx.transactionType === "DISPENSED" && tx.date.startsWith(new Date().toISOString().split("T")[0])).length, color: "text-emerald-700" },
-                { label: "Low Stock Alerts", value: medicines.filter(m => { const b = batches.filter(x=>x.medicineId===m.id).reduce((a,x)=>a+x.availableQuantity,0); return b > 0 && b <= m.reorderLevel; }).length, color: "text-red-600" },
-                { label: "Near Expiry (90 Days)", value: "0", color: "text-orange-600" }, // Mocked for now
+                { label: "Low Stock Alerts", value: lowStockMedicines.length, color: "text-red-600" },
+                { label: "Near Expiry (90 Days)", value: nearExpiryCount, color: "text-orange-600" },
                 { label: "IP/OP Revenue (Today)", value: `$${bills.filter(b => b.createdAt.startsWith(new Date().toISOString().split("T")[0])).reduce((a,b)=>a+b.totalAmount,0).toFixed(2)}`, color: "text-gray-900" }
               ].map((stat, i) => (
-                <div key={i} className="bg-white p-4 border border-[#CBD5E1] rounded shadow-xs">
+                <div key={i} className="bg-white p-4 border border-[#CBD5E1] rounded-none shadow-xs">
                   <div className="text-[11px] font-bold text-[#64748B] mb-1 uppercase tracking-wider">{stat.label}</div>
                   <div className={`text-[22px] font-black ${stat.color}`}>{stat.value}</div>
                 </div>
               ))}
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 flex-1">
-               <div className="bg-white border border-[#CBD5E1] rounded shadow-xs p-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+               <div className="bg-white border border-[#CBD5E1] rounded-none shadow-xs p-5">
                   <h3 className="text-[13px] font-bold text-gray-900 mb-4">Stock Value by Category</h3>
-                  <EmptyState title="No Data" message="Add GRNs and stock to generate charts." />
+                  {(() => {
+                    const rows = categories
+                      .map(c => ({
+                        name: c.categoryName,
+                        value: medicines.filter(m => m.categoryId === c.id).reduce((a, m) => a + stockValue(m.id), 0)
+                      }))
+                      .filter(r => r.value > 0)
+                      .sort((a, b) => b.value - a.value);
+                    const total = rows.reduce((a, r) => a + r.value, 0);
+
+                    if (rows.length === 0) {
+                      return <EmptyState title="No Data" message="Receive stock through a GRN to value the shelves by category." />;
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        {rows.slice(0, 6).map(r => (
+                          <div key={r.name}>
+                            <div className="flex justify-between items-baseline mb-1">
+                              <span className="text-[12px] font-semibold text-gray-700">{r.name}</span>
+                              <span className="text-[12px] font-bold text-gray-900">${r.value.toFixed(2)}</span>
+                            </div>
+                            <div className="h-2 bg-[#F1F5F9] rounded-none overflow-hidden">
+                              <div className="h-full bg-[#1B4FD8]" style={{ width: `${Math.max(2, (r.value / rows[0].value) * 100)}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-baseline pt-2 border-t border-[#E2E8F0]">
+                          <span className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">Total Stock Value</span>
+                          <span className="text-[14px] font-black text-gray-900">${total.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                </div>
-               <div className="bg-white border border-[#CBD5E1] rounded shadow-xs p-5">
+
+               <div className="bg-white border border-[#CBD5E1] rounded-none shadow-xs p-5">
                   <h3 className="text-[13px] font-bold text-gray-900 mb-4">Prescription Queue Status</h3>
-                  <EmptyState title="Queue Empty" message="No active prescriptions today." />
+                  {prescriptions.length === 0 ? (
+                    <EmptyState title="Queue Empty" message="No active prescriptions today." />
+                  ) : (
+                    <div className="space-y-3">
+                      {[
+                        { label: "Awaiting verification", tone: "bg-amber-500", count: prescriptions.filter(p => p.status === "Verification Pending" || p.status === "OCR Processing").length },
+                        { label: "Verified, ready to dispense", tone: "bg-blue-600", count: prescriptions.filter(p => p.status === "Verified" || p.status === "Approved").length },
+                        { label: "Dispensed", tone: "bg-emerald-600", count: prescriptions.filter(p => p.status === "Dispensed").length },
+                        { label: "Rejected / cancelled", tone: "bg-gray-400", count: prescriptions.filter(p => p.status === "Rejected" || p.status === "Cancelled").length }
+                      ].map(row => (
+                        <div key={row.label}>
+                          <div className="flex justify-between items-baseline mb-1">
+                            <span className="text-[12px] font-semibold text-gray-700">{row.label}</span>
+                            <span className="text-[12px] font-bold text-gray-900">{row.count}</span>
+                          </div>
+                          <div className="h-2 bg-[#F1F5F9] rounded-none overflow-hidden">
+                            <div className={`h-full ${row.tone}`} style={{ width: `${prescriptions.length ? (row.count / prescriptions.length) * 100 : 0}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-baseline pt-2 border-t border-[#E2E8F0]">
+                        <span className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">Emergency priority</span>
+                        <span className="text-[14px] font-black text-red-600">{prescriptions.filter(p => p.priority === "Emergency" && p.status !== "Dispensed").length}</span>
+                      </div>
+                    </div>
+                  )}
+               </div>
+            </div>
+
+            {/* Action lists -- each row is a jump into the section that resolves it */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+               <div className="bg-white border border-[#CBD5E1] rounded-none shadow-xs flex flex-col">
+                  <div className="px-5 py-3 border-b border-[#E2E8F0] flex items-center justify-between">
+                    <h3 className="text-[13px] font-bold text-gray-900">Reorder Now</h3>
+                    <button onClick={() => goToModule("pharmacy_po")} className="text-[11px] font-bold text-[#1B4FD8] hover:underline">Raise PO</button>
+                  </div>
+                  {lowStockMedicines.length === 0 ? (
+                    <div className="px-5 py-8 text-center text-[12px] text-[#64748B] font-medium">Every medicine is above its reorder level.</div>
+                  ) : (
+                    <div className="divide-y divide-[#F1F5F9]">
+                      {lowStockMedicines.slice(0, 6).map(m => {
+                        const onHand = stockOnHand(m.id);
+                        return (
+                          <div key={m.id} className="px-5 py-2.5 flex items-center justify-between">
+                            <div className="min-w-0">
+                              <div className="text-[12.5px] font-bold text-gray-900 truncate">{m.brandName}</div>
+                              <div className="text-[11px] text-[#64748B] font-medium">Reorder level {m.reorderLevel}</div>
+                            </div>
+                            <span className={`text-[12px] font-black ${onHand === 0 ? "text-red-600" : "text-orange-500"}`}>
+                              {onHand === 0 ? "Out of stock" : `${onHand} left`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+               </div>
+
+               <div className="bg-white border border-[#CBD5E1] rounded-none shadow-xs flex flex-col">
+                  <div className="px-5 py-3 border-b border-[#E2E8F0] flex items-center justify-between">
+                    <h3 className="text-[13px] font-bold text-gray-900">Expiring Soon</h3>
+                    <button onClick={() => goToModule("pharmacy_expiry")} className="text-[11px] font-bold text-[#1B4FD8] hover:underline">Review batches</button>
+                  </div>
+                  {(() => {
+                    const soon = activeBatches
+                      .filter(b => daysToExpiry(b.expiryDate) <= 90)
+                      .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+                    if (soon.length === 0) {
+                      return <div className="px-5 py-8 text-center text-[12px] text-[#64748B] font-medium">Nothing expires inside 90 days.</div>;
+                    }
+                    return (
+                      <div className="divide-y divide-[#F1F5F9]">
+                        {soon.slice(0, 6).map(b => {
+                          const days = daysToExpiry(b.expiryDate);
+                          const med = medicines.find(m => m.id === b.medicineId);
+                          return (
+                            <div key={b.id} className="px-5 py-2.5 flex items-center justify-between">
+                              <div className="min-w-0">
+                                <div className="text-[12.5px] font-bold text-gray-900 truncate">{med?.brandName || "Unknown"}</div>
+                                <div className="text-[11px] text-[#64748B] font-mono">{b.batchNumber} &middot; {b.availableQuantity} units</div>
+                              </div>
+                              <span className={`text-[12px] font-black ${days < 0 ? "text-red-600" : days <= 30 ? "text-orange-500" : "text-amber-600"}`}>
+                                {days < 0 ? "Expired" : `${days}d`}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                </div>
             </div>
           </div>
         )}
 
-        {activeSubMenu === "Category Master" && (
-          <div className="bg-white shadow-xs border border-[#CBD5E1] rounded flex flex-col flex-1 max-w-5xl mx-auto">
+        {section === "category" && (
+          <div className="bg-white shadow-xs border border-[#CBD5E1] rounded-none flex flex-col flex-1 max-w-5xl mx-auto">
              <div className="p-4 border-b border-[#E2E8F0] flex justify-between items-center bg-[#F8FAFC] rounded-t">
                <div className="relative w-72">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]"><Icons.Search /></div>
-                  <input value={categorySearch} onChange={e => setCategorySearch(e.target.value)} placeholder="Search categories..." className="w-full bg-white border border-[#CBD5E1] rounded pl-9 pr-4 py-1.5 text-[12px] focus:outline-none focus:border-[#1B4FD8] font-medium text-gray-900 shadow-sm" />
+                  <input value={categorySearch} onChange={e => setCategorySearch(e.target.value)} placeholder="Search categories..." className="w-full bg-white border border-[#CBD5E1] rounded-none pl-9 pr-4 py-1.5 text-[12px] focus:outline-none focus:border-[#1B4FD8] font-medium text-gray-900 shadow-sm" />
                </div>
                <button 
                   onClick={() => {
                     setEditingCategory({ id: "CAT_" + Date.now(), categoryName: "", description: "", status: "Active", createdAt: new Date().toISOString() });
                     setShowCategoryModal(true);
                   }}
-                  className="bg-[#1B4FD8] hover:bg-[#1E3A8A] text-white px-4 py-1.5 text-[12px] font-bold rounded shadow-sm transition-colors flex items-center gap-2"
+                  className="bg-[#1B4FD8] hover:bg-[#1E3A8A] text-white px-4 py-1.5 text-[12px] font-bold rounded-none shadow-sm transition-colors flex items-center gap-2"
                >
                  <Icons.Plus /> Add Category
                </button>
@@ -824,7 +1058,7 @@ export default function Pharmacy() {
                          <td className="px-4 py-3 font-bold text-gray-900">{c.categoryName}</td>
                          <td className="px-4 py-3 text-[#64748B]">{c.description}</td>
                          <td className="px-4 py-3">
-                           <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${c.status === "Active" ? "bg-green-100 text-[#166534] border border-green-200" : "bg-gray-100 text-[#475569] border border-gray-200"}`}>
+                           <span className={`px-2 py-0.5 text-[10px] font-bold rounded-none ${c.status === "Active" ? "bg-green-100 text-[#166534] border border-green-200" : "bg-gray-100 text-[#475569] border border-gray-200"}`}>
                              {c.status}
                            </span>
                          </td>
@@ -840,12 +1074,31 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Medicine Master" && (
+        {section === "medicine" && (
           <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1">
              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                <div className="relative w-72">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Icons.Search /></div>
-                  <input value={medicineSearch} onChange={e => setMedicineSearch(e.target.value)} placeholder="Search medicines..." className="w-full bg-white border border-gray-200 pl-9 pr-4 py-2 text-[13px] focus:outline-none focus:border-indigo-500 font-medium text-gray-700 shadow-sm" />
+                  <input value={medicineSearch} onChange={e => setMedicineSearch(e.target.value)} placeholder="Search brand, generic or barcode..." className="w-full bg-white border border-gray-200 pl-9 pr-4 py-2 text-[13px] focus:outline-none focus:border-indigo-500 font-medium text-gray-700 shadow-sm" />
+               </div>
+               <div className="flex items-center gap-2 ml-3">
+                 <select
+                   value={medicineCategoryFilter}
+                   onChange={e => setMedicineCategoryFilter(e.target.value)}
+                   className="bg-white border border-gray-200 px-3 py-2 text-[12.5px] font-semibold text-gray-700 focus:outline-none focus:border-indigo-500 shadow-sm cursor-pointer"
+                 >
+                   <option value="all">All categories</option>
+                   {categories.map(c => <option key={c.id} value={c.id}>{c.categoryName}</option>)}
+                 </select>
+                 <select
+                   value={medicineStockFilter}
+                   onChange={e => setMedicineStockFilter(e.target.value as "all" | "low" | "out")}
+                   className="bg-white border border-gray-200 px-3 py-2 text-[12.5px] font-semibold text-gray-700 focus:outline-none focus:border-indigo-500 shadow-sm cursor-pointer"
+                 >
+                   <option value="all">Any stock level</option>
+                   <option value="low">At or below reorder level</option>
+                   <option value="out">Out of stock</option>
+                 </select>
                </div>
                <button 
                  onClick={() => {
@@ -865,16 +1118,18 @@ export default function Pharmacy() {
                      <th className="px-6 py-4">Generic Name</th>
                      <th className="px-6 py-4">Category</th>
                      <th className="px-6 py-4">Form & Strength</th>
+                     <th className="px-6 py-4">Stock On Hand</th>
                      <th className="px-6 py-4">Status</th>
                      <th className="px-6 py-4 text-right">Actions</th>
                    </tr>
                  </thead>
                  <tbody className="text-[13px] text-gray-800 divide-y divide-gray-100">
                    {filteredMedicines.length === 0 ? (
-                     <tr><td colSpan={6}><EmptyState title="No Medicines Found" message="The medicine master database is currently empty. Add medicines to begin." /></td></tr>
+                     <tr><td colSpan={7}><EmptyState title="No Medicines Found" message="Nothing matches the current search and filters." /></td></tr>
                    ) : (
                      filteredMedicines.map(m => {
                        const cat = categories.find(c => c.id === m.categoryId);
+                       const onHand = stockOnHand(m.id);
                        return (
                          <tr key={m.id} className="hover:bg-gray-50 transition-colors">
                            <td className="px-6 py-4">
@@ -885,7 +1140,13 @@ export default function Pharmacy() {
                            <td className="px-6 py-4 text-gray-500">{cat ? cat.categoryName : "—"}</td>
                            <td className="px-6 py-4 text-gray-500 font-mono text-[11.5px]">{m.dosageForm} · {m.strength}</td>
                            <td className="px-6 py-4">
-                             <span className={`px-2.5 py-1 text-[11px] font-bold rounded-sm ${m.activeStatus === "Active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}`}>
+                             <span className={`font-black ${onHand === 0 ? "text-red-600" : onHand <= m.reorderLevel ? "text-orange-500" : "text-gray-900"}`}>{onHand}</span>
+                             <span className="text-[11px] text-gray-400 font-medium"> / {m.reorderLevel}</span>
+                             {onHand === 0 && <div className="text-[10px] font-bold text-red-600 uppercase tracking-wide">Out of stock</div>}
+                             {onHand > 0 && onHand <= m.reorderLevel && <div className="text-[10px] font-bold text-orange-500 uppercase tracking-wide">Reorder</div>}
+                           </td>
+                           <td className="px-6 py-4">
+                             <span className={`px-2.5 py-1 text-[11px] font-bold rounded-none ${m.activeStatus === "Active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}`}>
                                {m.activeStatus}
                              </span>
                            </td>
@@ -902,7 +1163,7 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Suppliers" && (
+        {section === "suppliers" && (
           <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1">
              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                <div className="relative w-72">
@@ -940,7 +1201,7 @@ export default function Pharmacy() {
                          <td className="px-6 py-4 text-gray-500">{s.contactInformation}</td>
                          <td className="px-6 py-4 text-gray-500 text-[11.5px] font-mono">{s.gstInformation}<br/>{s.licenseDetails}</td>
                          <td className="px-6 py-4">
-                           <span className={`px-2.5 py-1 text-[11px] font-bold rounded-sm ${s.status === "Active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}`}>
+                           <span className={`px-2.5 py-1 text-[11px] font-bold rounded-none ${s.status === "Active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}`}>
                              {s.status}
                            </span>
                          </td>
@@ -956,7 +1217,7 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Purchase Orders" && (
+        {section === "po" && (
           <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1">
              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                <div className="relative w-72">
@@ -998,7 +1259,7 @@ export default function Pharmacy() {
                            <td className="px-6 py-4 text-gray-500">{new Date(p.poDate).toLocaleDateString()}</td>
                            <td className="px-6 py-4 font-bold text-gray-900">${p.totalOrderValue.toFixed(2)}</td>
                            <td className="px-6 py-4">
-                             <span className={`px-2.5 py-1 text-[11px] font-bold rounded-sm ${p.status === "Received" ? "bg-green-100 text-green-700" : p.status === "Cancelled" ? "bg-red-100 text-red-700" : p.status === "Ordered" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
+                             <span className={`px-2.5 py-1 text-[11px] font-bold rounded-none ${p.status === "Received" ? "bg-green-100 text-green-700" : p.status === "Cancelled" ? "bg-red-100 text-red-700" : p.status === "Ordered" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
                                {p.status}
                              </span>
                            </td>
@@ -1015,10 +1276,10 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "GRN Receiving" && (
+        {section === "grn" && (
           <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1 p-6">
              <div className="max-w-xl mx-auto w-full text-center py-10">
-               <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center text-indigo-600 mx-auto mb-6">
+               <div className="bg-indigo-50 w-20 h-20 rounded-none flex items-center justify-center text-indigo-600 mx-auto mb-6">
                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                </div>
                <h2 className="text-[20px] font-black text-gray-900 mb-2">Goods Receipt Note (GRN)</h2>
@@ -1070,11 +1331,8 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Inventory Ledger" && (
+        {section === "ledger" && (
           <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1">
-             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-               <h2 className="text-[16px] font-extrabold text-gray-900">Live Inventory Ledger</h2>
-             </div>
              <div className="flex-1 overflow-x-auto">
                <table className="w-full text-left border-collapse">
                  <thead>
@@ -1098,7 +1356,7 @@ export default function Pharmacy() {
                          <tr key={tx.id} className="hover:bg-gray-50">
                            <td className="px-6 py-4 text-gray-500">{new Date(tx.date).toLocaleString()}</td>
                            <td className="px-6 py-4">
-                             <span className={`px-2.5 py-1 text-[11px] font-bold rounded-sm ${tx.transactionType.includes("RECEIVED") ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                             <span className={`px-2.5 py-1 text-[11px] font-bold rounded-none ${tx.transactionType.includes("RECEIVED") ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
                                {tx.transactionType}
                              </span>
                            </td>
@@ -1118,13 +1376,10 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Prescription Queue" && (
+        {section === "rx" && (
           <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1">
              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-               <div>
-                 <h2 className="text-[16px] font-extrabold text-gray-900">Prescription Verification Queue</h2>
-                 <p className="text-[12px] text-gray-500 font-medium">Verify OCR prescriptions before sending them to the Dispensing Queue.</p>
-               </div>
+               <span className="text-[12px] text-gray-500 font-medium">Emergency first, then urgent, then by arrival time.</span>
                <button onClick={simulateIncomingPrescription} className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 text-[13px] font-bold shadow-sm transition-colors">
                  + Simulate Incoming Rx
                </button>
@@ -1153,8 +1408,8 @@ export default function Pharmacy() {
                      }).map(rx => (
                        <tr key={rx.id} className="hover:bg-gray-50">
                          <td className="px-6 py-4">
-                           {rx.priority === "Emergency" && <span className="bg-red-100 text-red-700 font-bold px-2 py-1 text-[11px] rounded-sm uppercase tracking-wide flex items-center gap-1 w-max"><div className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></div>Emergency</span>}
-                           {rx.priority === "Urgent" && <span className="bg-orange-100 text-orange-700 font-bold px-2 py-1 text-[11px] rounded-sm uppercase tracking-wide w-max block">Urgent</span>}
+                           {rx.priority === "Emergency" && <span className="bg-red-100 text-red-700 font-bold px-2 py-1 text-[11px] rounded-none uppercase tracking-wide flex items-center gap-1 w-max"><div className="w-1.5 h-1.5 rounded-none bg-red-600 animate-pulse"></div>Emergency</span>}
+                           {rx.priority === "Urgent" && <span className="bg-orange-100 text-orange-700 font-bold px-2 py-1 text-[11px] rounded-none uppercase tracking-wide w-max block">Urgent</span>}
                            {rx.priority === "Normal" && <span className="text-gray-500 font-bold px-2 py-1 text-[11px] uppercase tracking-wide">Normal</span>}
                          </td>
                          <td className="px-6 py-4 font-mono font-bold text-indigo-700">{rx.id}</td>
@@ -1164,7 +1419,7 @@ export default function Pharmacy() {
                          </td>
                          <td className="px-6 py-4 text-gray-500">{rx.doctorName} ({rx.department})</td>
                          <td className="px-6 py-4">
-                            <span className={`px-2 py-1 text-[11px] font-bold rounded-sm ${rx.status === 'Verification Pending' ? 'bg-yellow-100 text-yellow-700' : rx.status === 'Verified' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{rx.status}</span>
+                            <span className={`px-2 py-1 text-[11px] font-bold rounded-none ${rx.status === 'Verification Pending' ? 'bg-yellow-100 text-yellow-700' : rx.status === 'Verified' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{rx.status}</span>
                          </td>
                          <td className="px-6 py-4 text-right">
                            {rx.status === "Verification Pending" || rx.status === "OCR Processing" || rx.status === "Sent To Pharmacy" ? (
@@ -1182,23 +1437,23 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Dispensing & Billing" && (
+        {section === "dispensing" && (
           <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1 p-6">
              <div className="max-w-2xl mx-auto w-full py-10">
                <div className="text-center mb-8">
-                 <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center text-indigo-600 mx-auto mb-6">
+                 <div className="bg-indigo-50 w-20 h-20 rounded-none flex items-center justify-center text-indigo-600 mx-auto mb-6">
                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
                  </div>
                  <h2 className="text-[20px] font-black text-gray-900 mb-2">FEFO Dispensing & Billing POS</h2>
                  <p className="text-[14px] text-gray-500 font-medium">Select an approved prescription. The FEFO engine will automatically calculate stock availability and batch splits.</p>
                </div>
                
-               <div className="bg-gray-50 border border-gray-200 p-6 rounded-sm shadow-sm space-y-6">
+               <div className="bg-gray-50 border border-gray-200 p-6 rounded-none shadow-sm space-y-6">
                  <div>
                    <label className="block text-[12px] font-bold text-gray-700 mb-2 uppercase tracking-wider">Select Approved Prescription</label>
                    <select value={selectedRxForDispense} onChange={e => setSelectedRxForDispense(e.target.value)} className="w-full border-2 border-gray-300 px-4 py-3 text-[14px] font-bold text-gray-900 focus:outline-none focus:border-indigo-500 bg-white cursor-pointer shadow-sm">
                      <option value="">-- Waiting for Selection --</option>
-                     {prescriptions.filter(p => p.status === "Approved").map(p => (
+                     {prescriptions.filter(p => p.status === "Approved" || p.status === "Verified").map(p => (
                        <option key={p.id} value={p.id}>{p.id} — {p.patientName} (Dr. {p.doctorName})</option>
                      ))}
                    </select>
@@ -1251,7 +1506,7 @@ export default function Pharmacy() {
                            <td className="px-6 py-4 font-bold">{b.patientName}</td>
                            <td className="px-6 py-4 text-gray-500">{b.billType}</td>
                            <td className="px-6 py-4">
-                             <span className={`px-2 py-1 text-[11px] font-bold rounded-sm ${b.paymentStatus === 'Paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{b.paymentStatus}</span>
+                             <span className={`px-2 py-1 text-[11px] font-bold rounded-none ${b.paymentStatus === 'Paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{b.paymentStatus}</span>
                            </td>
                            <td className="px-6 py-4 text-right font-black text-[14px] text-gray-900">${b.totalAmount.toFixed(2)}</td>
                          </tr>
@@ -1264,11 +1519,10 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Returns" && (
+        {section === "returns" && (
           <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1 p-6">
              <div className="max-w-xl mx-auto w-full py-10">
-               <h2 className="text-[20px] font-black text-gray-900 mb-2">Process Returns</h2>
-               <p className="text-[14px] text-gray-500 font-medium mb-8">Process unused medicines returned from Wards or Outpatients to add stock back to the ledger.</p>
+               <p className="text-[14px] text-gray-500 font-medium mb-8">Returned stock goes back onto the shelf against its original batch.</p>
                
                <div className="flex gap-2">
                  <input type="text" value={returnBillId} onChange={e => setReturnBillId(e.target.value)} placeholder="Enter Original Rx ID or Bill ID" className="flex-1 border-2 border-gray-200 px-4 py-3 text-[14px] font-bold focus:outline-none focus:border-indigo-500" />
@@ -1302,7 +1556,7 @@ export default function Pharmacy() {
                            <td className="px-6 py-4 text-gray-500 font-mono">{r.originalBillId}</td>
                            <td className="px-6 py-4 font-bold">{med?.brandName}</td>
                            <td className="px-6 py-4 text-green-600 font-black">+{r.returnQuantity}</td>
-                           <td className="px-6 py-4"><span className="bg-green-100 text-green-700 font-bold px-2 py-1 text-[11px] rounded-sm uppercase tracking-wide">{r.status}</span></td>
+                           <td className="px-6 py-4"><span className="bg-green-100 text-green-700 font-bold px-2 py-1 text-[11px] rounded-none uppercase tracking-wide">{r.status}</span></td>
                          </tr>
                        )
                      })
@@ -1313,11 +1567,10 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Transfers" && (
+        {section === "transfers" && (
           <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1 p-6">
              <div className="max-w-3xl mx-auto w-full py-10">
-               <h2 className="text-[20px] font-black text-gray-900 mb-2">Internal Stock Transfers</h2>
-               <p className="text-[14px] text-gray-500 font-medium mb-8">Move stock from the Main Pharmacy to ICU, Wards, or Emergency Stores.</p>
+               <p className="text-[14px] text-gray-500 font-medium mb-8">Stock leaves the main pharmacy ledger and lands in the destination store.</p>
                
                <div className="bg-gray-50 p-6 border border-gray-200 grid grid-cols-4 gap-4 items-end">
                   <div className="col-span-2">
@@ -1365,7 +1618,7 @@ export default function Pharmacy() {
                            <td className="px-6 py-4 font-bold">{med?.brandName}</td>
                            <td className="px-6 py-4 text-gray-500 font-mono text-[11px]">{t.fromLocation} → {t.toLocation}</td>
                            <td className="px-6 py-4 font-black">{t.quantity}</td>
-                           <td className="px-6 py-4"><span className="bg-blue-100 text-blue-700 font-bold px-2 py-1 text-[11px] rounded-sm uppercase tracking-wide">{t.status}</span></td>
+                           <td className="px-6 py-4"><span className="bg-blue-100 text-blue-700 font-bold px-2 py-1 text-[11px] rounded-none uppercase tracking-wide">{t.status}</span></td>
                          </tr>
                        )
                      })
@@ -1376,58 +1629,11 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Analytics Dashboard" && (
+        {section === "analytics" && (
           <div className="bg-gray-50 flex flex-col flex-1 p-6 overflow-y-auto">
-             <div className="flex justify-between items-center mb-6">
-                <div>
-                   <h2 className="text-[20px] font-black text-gray-900">Analytics & Expiry Management</h2>
-                   <p className="text-[13px] text-gray-500 font-medium">Monitor expiring stock, view consumption trends, and track revenue.</p>
-                </div>
-             </div>
-
-             {/* Expiry Dashboard */}
-             <div className="mb-8">
-               <h3 className="text-[14px] font-extrabold text-gray-900 mb-4 uppercase tracking-wider text-red-600 flex items-center gap-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> Action Required: Expiry Watch</h3>
-               <div className="bg-white border border-gray-200 shadow-sm rounded-sm">
-                 <table className="w-full text-left border-collapse">
-                   <thead>
-                     <tr className="border-b border-gray-100 text-[11px] text-gray-500 font-bold bg-gray-50 uppercase tracking-wider">
-                       <th className="px-6 py-3">Batch No</th>
-                       <th className="px-6 py-3">Medicine</th>
-                       <th className="px-6 py-3">Location</th>
-                       <th className="px-6 py-3">Expiry Date</th>
-                       <th className="px-6 py-3">Stock Left</th>
-                       <th className="px-6 py-3 text-right">Action</th>
-                     </tr>
-                   </thead>
-                   <tbody className="text-[13px] text-gray-800 divide-y divide-gray-100">
-                     {batches.filter(b => b.availableQuantity > 0).sort((a,b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()).slice(0, 5).map(b => {
-                        const isExpired = new Date(b.expiryDate) < new Date();
-                        const med = medicines.find(m => m.id === b.medicineId);
-                        return (
-                          <tr key={b.id} className={isExpired ? "bg-red-50" : "hover:bg-gray-50"}>
-                            <td className="px-6 py-4 font-mono font-bold text-[12px]">{b.batchNumber}</td>
-                            <td className="px-6 py-4 font-bold">{med?.brandName}</td>
-                            <td className="px-6 py-4 text-gray-500">{b.location || "Main Pharmacy"}</td>
-                            <td className={`px-6 py-4 font-black ${isExpired ? "text-red-600" : "text-orange-500"}`}>{new Date(b.expiryDate).toLocaleDateString()}</td>
-                            <td className="px-6 py-4 font-black">{b.availableQuantity}</td>
-                            <td className="px-6 py-4 text-right">
-                               <button onClick={() => handleMarkExpired(b.id)} className="border border-red-200 bg-white text-red-600 hover:bg-red-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide transition-colors">Mark Expired</button>
-                            </td>
-                          </tr>
-                        );
-                     })}
-                     {batches.filter(b => b.availableQuantity > 0).length === 0 && (
-                        <tr><td colSpan={6} className="px-6 py-6 text-center text-gray-500 text-[12px] font-bold uppercase tracking-wider">No active batches in inventory.</td></tr>
-                     )}
-                   </tbody>
-                 </table>
-               </div>
-             </div>
-
              {/* Reports Area */}
              <div className="grid grid-cols-2 gap-6">
-                <div className="bg-white border border-gray-200 shadow-sm p-5 rounded-sm">
+                <div className="bg-white border border-gray-200 shadow-sm p-5 rounded-none">
                    <h3 className="text-[13px] font-extrabold text-gray-900 mb-4 uppercase tracking-wider">Sales Revenue Summary</h3>
                    <div className="space-y-4">
                       <div className="flex justify-between items-center border-b border-gray-100 pb-2">
@@ -1449,7 +1655,7 @@ export default function Pharmacy() {
                    </div>
                 </div>
 
-                <div className="bg-white border border-gray-200 shadow-sm p-5 rounded-sm">
+                <div className="bg-white border border-gray-200 shadow-sm p-5 rounded-none">
                    <h3 className="text-[13px] font-extrabold text-gray-900 mb-4 uppercase tracking-wider">Inventory Health</h3>
                    <div className="space-y-4">
                       <div className="flex justify-between items-center border-b border-gray-100 pb-2">
@@ -1474,57 +1680,203 @@ export default function Pharmacy() {
           </div>
         )}
 
-        {activeSubMenu === "Supplier Returns" && (
-          <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1 p-6">
-             <div className="max-w-xl mx-auto w-full py-10">
-               <h2 className="text-[20px] font-black text-gray-900 mb-2">Supplier Returns</h2>
-               <p className="text-[13px] text-gray-500 mb-6">Return expired or damaged stock back to the supplier.</p>
-               <EmptyState title="Under Construction" message="This module will handle RTV (Return to Vendor) processes." />
+        {section === "ocr" && (
+          <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1">
+             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+               <span className="text-[12px] text-gray-500 font-medium">Unmapped lines block dispensing.</span>
+               <div className="flex items-center gap-2">
+                 <div className="relative flex items-center">
+                   <span className="absolute left-3 text-gray-400"><Icons.Search /></span>
+                   <input
+                     value={ocrSearch}
+                     onChange={e => setOcrSearch(e.target.value)}
+                     placeholder="Search Rx ID, patient or UHID"
+                     className="w-[260px] border border-gray-300 pl-10 pr-3 py-2 text-[13px] font-medium focus:outline-none focus:border-indigo-500"
+                   />
+                 </div>
+                 <button onClick={simulateIncomingPrescription} className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 text-[13px] font-bold shadow-sm transition-colors">
+                   + Simulate Scan
+                 </button>
+               </div>
+             </div>
+
+             <div className="flex-1 overflow-y-auto p-6">
+               {(() => {
+                 const q = ocrSearch.trim().toLowerCase();
+                 const scans = prescriptions
+                   .filter(rx => rx.sourceType === "OCR" || rx.sourceType === "UPLOADED_IMAGE")
+                   .filter(rx => rx.status === "OCR Processing" || rx.status === "Verification Pending" || rx.status === "Sent To Pharmacy" || rx.status === "Received")
+                   .filter(rx => !q || rx.id.toLowerCase().includes(q) || rx.patientName.toLowerCase().includes(q) || rx.uhid.toLowerCase().includes(q))
+                   .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+                 if (scans.length === 0) {
+                   return <EmptyState title="Nothing To Verify" message="Every scanned prescription has been mapped to the drug master. New scans land here automatically." />;
+                 }
+
+                 return (
+                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                     {scans.map(rx => {
+                       const unresolved = rx.items.filter(it => !it.medicineId).length;
+                       return (
+                         <div key={rx.id} className="border border-gray-200 bg-white shadow-sm flex flex-col">
+                           <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex items-start justify-between gap-3">
+                             <div>
+                               <div className="font-mono font-bold text-indigo-700 text-[13px]">{rx.id}</div>
+                               <div className="text-[13px] font-bold text-gray-900">{rx.patientName} <span className="text-gray-400 font-mono text-[11px]">{rx.uhid}</span></div>
+                               <div className="text-[11px] text-gray-500 font-medium">{rx.doctorName} &middot; {rx.department} &middot; {new Date(rx.createdAt).toLocaleString()}</div>
+                             </div>
+                             <div className="flex flex-col items-end gap-1">
+                               <span className="bg-gray-900 text-white font-bold px-2 py-1 text-[10px] uppercase tracking-wide">{rx.sourceType === "OCR" ? "Scanned" : "Uploaded"}</span>
+                               {rx.priority !== "Normal" && (
+                                 <span className={`font-bold px-2 py-1 text-[10px] uppercase tracking-wide ${rx.priority === "Emergency" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>{rx.priority}</span>
+                               )}
+                             </div>
+                           </div>
+
+                           <div className="p-5 flex-1">
+                             <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">OCR Text &rarr; Drug Master</div>
+                             <div className="divide-y divide-gray-100 border border-gray-100">
+                               {rx.items.map(it => {
+                                 const med = it.medicineId ? medicines.find(m => m.id === it.medicineId) : undefined;
+                                 return (
+                                   <div key={it.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                                     <div className="min-w-0">
+                                       <div className="font-mono text-[12px] text-gray-900 truncate">{it.medicineName}</div>
+                                       <div className="text-[11px] text-gray-500 font-medium">{it.dosage} &middot; {it.duration} &middot; Qty {it.quantity}</div>
+                                     </div>
+                                     {med ? (
+                                       <span className="bg-green-100 text-green-700 font-bold px-2 py-1 text-[11px] whitespace-nowrap">{med.brandName}</span>
+                                     ) : (
+                                       <span className="bg-amber-100 text-amber-700 font-bold px-2 py-1 text-[11px] uppercase tracking-wide whitespace-nowrap">Unmapped</span>
+                                     )}
+                                   </div>
+                                 );
+                               })}
+                             </div>
+                           </div>
+
+                           <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center justify-between">
+                             <span className={`text-[12px] font-bold ${unresolved > 0 ? "text-amber-600" : "text-green-600"}`}>
+                               {unresolved > 0 ? `${unresolved} line(s) need mapping` : "All lines mapped"}
+                             </span>
+                             <button
+                               onClick={() => { setVerifyingRx({ ...rx }); setShowRxVerificationModal(true); }}
+                               className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-[12px] font-bold shadow-sm transition-colors"
+                             >
+                               Open Verification
+                             </button>
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 );
+               })()}
              </div>
           </div>
         )}
 
-        {activeSubMenu === "Stock Adjustments" && (
-          <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1 p-6">
-             <div className="max-w-xl mx-auto w-full py-10">
-               <h2 className="text-[20px] font-black text-gray-900 mb-2">Stock Adjustments</h2>
-               <p className="text-[13px] text-gray-500 mb-6">Manually adjust inventory for breakages or physical audit corrections.</p>
-               <EmptyState title="Under Construction" message="This module will handle reconciliation and write-offs." />
+        {section === "expiry" && (
+          <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1">
+             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 gap-4 flex-wrap">
+               <span className="text-[12px] text-gray-500 font-medium">Marking a batch expired writes it off against the ledger.</span>
+               <div className="relative flex items-center">
+                 <span className="absolute left-3 text-gray-400"><Icons.Search /></span>
+                 <input
+                   value={expirySearch}
+                   onChange={e => setExpirySearch(e.target.value)}
+                   placeholder="Search batch or medicine"
+                   className="w-[260px] border border-gray-300 pl-10 pr-3 py-2 text-[13px] font-medium focus:outline-none focus:border-indigo-500"
+                 />
+               </div>
+             </div>
+
+             <div className="px-6 pt-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+               {[
+                 { key: "expired" as const, label: "Already Expired", value: expiredCount, color: "text-red-600" },
+                 { key: "30" as const, label: "Expiring in 30 Days", value: activeBatches.filter(b => { const d = daysToExpiry(b.expiryDate); return d >= 0 && d <= 30; }).length, color: "text-orange-600" },
+                 { key: "90" as const, label: "Expiring in 90 Days", value: nearExpiryCount, color: "text-amber-600" },
+                 { key: "all" as const, label: "Active Batches", value: activeBatches.length, color: "text-gray-900" }
+               ].map(card => (
+                 <button
+                   key={card.key}
+                   type="button"
+                   onClick={() => setExpiryFilter(card.key)}
+                   className={`text-left p-4 border rounded-none shadow-xs transition-colors cursor-pointer ${expiryFilter === card.key ? "border-[#1B4FD8] bg-indigo-50/50" : "border-[#CBD5E1] bg-white hover:bg-gray-50"}`}
+                 >
+                   <div className="text-[11px] font-bold text-[#64748B] mb-1 uppercase tracking-wider">{card.label}</div>
+                   <div className={`text-[22px] font-black ${card.color}`}>{card.value}</div>
+                 </button>
+               ))}
+             </div>
+
+             <div className="flex-1 overflow-x-auto p-6">
+               <div className="border border-gray-200 shadow-sm">
+                 <table className="w-full text-left border-collapse">
+                   <thead>
+                     <tr className="border-b border-gray-100 text-[11px] text-gray-500 font-bold bg-gray-50 uppercase tracking-wider">
+                       <th className="px-6 py-3">Batch No</th>
+                       <th className="px-6 py-3">Medicine</th>
+                       <th className="px-6 py-3">Location</th>
+                       <th className="px-6 py-3">Expiry Date</th>
+                       <th className="px-6 py-3">Shelf Life</th>
+                       <th className="px-6 py-3">Stock Left</th>
+                       <th className="px-6 py-3">Value At Risk</th>
+                       <th className="px-6 py-3 text-right">Action</th>
+                     </tr>
+                   </thead>
+                   <tbody className="text-[13px] text-gray-800 divide-y divide-gray-100">
+                     {(() => {
+                       const q = expirySearch.trim().toLowerCase();
+                       const rows = activeBatches
+                         .filter(b => {
+                           const d = daysToExpiry(b.expiryDate);
+                           if (expiryFilter === "expired") return d < 0;
+                           if (expiryFilter === "30") return d >= 0 && d <= 30;
+                           if (expiryFilter === "90") return d >= 0 && d <= 90;
+                           return true;
+                         })
+                         .filter(b => {
+                           if (!q) return true;
+                           const med = medicines.find(m => m.id === b.medicineId);
+                           return b.batchNumber.toLowerCase().includes(q) || (med?.brandName || "").toLowerCase().includes(q) || (med?.genericName || "").toLowerCase().includes(q);
+                         })
+                         .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+                       if (rows.length === 0) {
+                         return <tr><td colSpan={8}><EmptyState title="Nothing In This Bucket" message="No batches match the selected expiry window." /></td></tr>;
+                       }
+
+                       return rows.map(b => {
+                         const days = daysToExpiry(b.expiryDate);
+                         const med = medicines.find(m => m.id === b.medicineId);
+                         const tone = days < 0 ? "text-red-600" : days <= 30 ? "text-orange-500" : days <= 90 ? "text-amber-600" : "text-gray-600";
+                         return (
+                           <tr key={b.id} className={days < 0 ? "bg-red-50" : "hover:bg-gray-50"}>
+                             <td className="px-6 py-4 font-mono font-bold text-[12px]">{b.batchNumber}</td>
+                             <td className="px-6 py-4">
+                               <div className="font-bold">{med?.brandName || "Unknown"}</div>
+                               <div className="text-[11px] text-gray-500 font-medium">{med?.genericName}</div>
+                             </td>
+                             <td className="px-6 py-4 text-gray-500">{b.location || "Main Pharmacy"}</td>
+                             <td className={`px-6 py-4 font-black ${tone}`}>{new Date(b.expiryDate).toLocaleDateString()}</td>
+                             <td className={`px-6 py-4 font-bold ${tone}`}>{days < 0 ? `Expired ${Math.abs(days)}d ago` : `${days}d left`}</td>
+                             <td className="px-6 py-4 font-black">{b.availableQuantity}</td>
+                             <td className="px-6 py-4 font-bold text-gray-700">${(b.availableQuantity * b.purchasePrice).toFixed(2)}</td>
+                             <td className="px-6 py-4 text-right">
+                               <button onClick={() => handleMarkExpired(b.id)} className="border border-red-200 bg-white text-red-600 hover:bg-red-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide transition-colors">Mark Expired</button>
+                             </td>
+                           </tr>
+                         );
+                       });
+                     })()}
+                   </tbody>
+                 </table>
+               </div>
              </div>
           </div>
         )}
 
-        {activeSubMenu === "Medication History" && (
-          <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1 p-6">
-             <div className="max-w-xl mx-auto w-full py-10">
-               <h2 className="text-[20px] font-black text-gray-900 mb-2">Medication History</h2>
-               <p className="text-[13px] text-gray-500 mb-6">View past dispensed medications by patient UHID.</p>
-               <EmptyState title="Feature Active in Doctor EMR" message="The comprehensive medication history is currently visible in the Clinical Consultation portal." />
-             </div>
-          </div>
-        )}
-
-        {activeSubMenu === "Advanced Reports" && (
-          <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1 p-6">
-             <div className="max-w-xl mx-auto w-full py-10">
-               <h2 className="text-[20px] font-black text-gray-900 mb-2">Advanced Reports</h2>
-               <p className="text-[13px] text-gray-500 mb-6">Generate regulatory and compliance reports.</p>
-               <EmptyState title="Under Construction" message="GST reports, narcotic consumption, and ABC/VED analysis coming soon." />
-             </div>
-          </div>
-        )}
-
-        {activeSubMenu === "Audit Logs" && (
-          <div className="bg-white shadow-sm border border-gray-100 flex flex-col flex-1 p-6">
-             <div className="max-w-xl mx-auto w-full py-10">
-               <h2 className="text-[20px] font-black text-gray-900 mb-2">Audit Logs</h2>
-               <p className="text-[13px] text-gray-500 mb-6">View system audit trails for Pharmacy actions.</p>
-               <EmptyState title="Under Construction" message="The audit log viewer is available in the System Admin module." />
-             </div>
-          </div>
-        )}
-
-      </div>
       </div>
 
       {/* --- MODALS --- */}
@@ -1709,7 +2061,7 @@ export default function Pharmacy() {
 
               <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={editingMedicine.controlledSubstanceFlag} onChange={e => setEditingMedicine({...editingMedicine, controlledSubstanceFlag: e.target.checked})} className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm" />
+                  <input type="checkbox" checked={editingMedicine.controlledSubstanceFlag} onChange={e => setEditingMedicine({...editingMedicine, controlledSubstanceFlag: e.target.checked})} className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-none" />
                   <div>
                     <span className="block text-[13px] font-bold text-red-600">Controlled Substance</span>
                     <span className="block text-[11px] text-gray-500 font-medium">Requires dual authentication for dispensing</span>
@@ -1749,7 +2101,7 @@ export default function Pharmacy() {
             
             <form id="poForm" onSubmit={handleSavePO} className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
               {/* Header Info */}
-              <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50/50 border border-gray-100 rounded-sm">
+              <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50/50 border border-gray-100 rounded-none">
                  <div className="col-span-2">
                    <label className="block text-[12px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Supplier</label>
                    <select required disabled={editingPO.status === "Received" || editingPO.status === "Ordered"} value={editingPO.supplierId} onChange={e => setEditingPO({...editingPO, supplierId: e.target.value})} className="w-full border-2 border-gray-200 px-3 py-2 text-[13px] font-bold text-gray-900 focus:outline-none focus:border-indigo-500 bg-white cursor-pointer">
@@ -1875,7 +2227,7 @@ export default function Pharmacy() {
             
             <form id="grnForm" onSubmit={verifyAndReceiveGRN} className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
               {/* Header Info */}
-              <div className="grid grid-cols-3 gap-4 p-4 bg-yellow-50 border border-yellow-200 rounded-sm">
+              <div className="grid grid-cols-3 gap-4 p-4 bg-yellow-50 border border-yellow-200 rounded-none">
                  <div>
                    <label className="block text-[12px] font-bold text-gray-700 mb-1.5 uppercase tracking-wider">Purchase Order Ref</label>
                    <input disabled value={editingGRN.purchaseOrderId} className="w-full border-2 border-gray-200 px-3 py-2 text-[13px] font-bold text-gray-500 focus:outline-none bg-gray-100" />
@@ -1964,7 +2316,7 @@ export default function Pharmacy() {
             </div>
             
             <form id="rxVerifyForm" onSubmit={handleVerifyPrescription} className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
-               <div className="bg-gray-50 border border-gray-200 p-4 rounded-sm flex gap-6">
+               <div className="bg-gray-50 border border-gray-200 p-4 rounded-none flex gap-6">
                  <div className="w-1/3 border-r border-gray-200 pr-4">
                     <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Patient Details</div>
                     <div className="font-bold text-gray-900 text-[14px]">{verifyingRx.patientName}</div>
@@ -1983,7 +2335,7 @@ export default function Pharmacy() {
                </div>
 
                {/* Patient Safety Panel (Allergies) */}
-               <div className="bg-[#FFF1F2] border border-[#FECDD3] p-4 rounded-sm">
+               <div className="bg-[#FFF1F2] border border-[#FECDD3] p-4 rounded-none">
                  <div className="flex items-center gap-2 mb-2">
                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-[#E11D48]"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                    <span className="text-[12px] font-extrabold text-[#9F1239] uppercase tracking-wider">Patient Safety &amp; Allergy Alerts</span>
@@ -2001,10 +2353,10 @@ export default function Pharmacy() {
                        const isMatched = !!item.medicineId;
                        
                        return (
-                         <div key={item.id} className="border border-gray-200 rounded-sm bg-white p-4">
+                         <div key={item.id} className="border border-gray-200 rounded-none bg-white p-4">
                             <div className="flex items-center justify-between mb-3">
                                <div>
-                                 <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider mr-2">OCR Text</span>
+                                 <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider mr-2">OCR Text</span>
                                  <span className="font-mono font-bold text-[14px] text-gray-900">{item.medicineName}</span>
                                </div>
                                <div className="text-[12px] text-gray-500 font-bold">Qty: {item.quantity} ({item.dosage})</div>

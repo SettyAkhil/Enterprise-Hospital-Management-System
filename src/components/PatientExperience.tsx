@@ -53,7 +53,7 @@ export default function PatientExperience() {
                 { rating: 5, dept: "Orthopedics", comment: "Surgery went perfectly, nursing staff in 3N was so attentive and kind.", patient: "E.W.", date: "Aug 22" },
                 { rating: 4, dept: "Pharmacy", comment: "Fast service but the waiting area was a bit crowded.", patient: "R.L.", date: "Aug 21" },
               ].map((fb, i) => (
-                <div key={i} className="border border-[#DDE2EC] rounded-lg p-4 hover:bg-[#F8FAFC] transition-colors">
+                <div key={i} className="border border-[#DDE2EC] rounded-none p-4 hover:bg-[#F8FAFC] transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">
                       <div className="flex text-yellow-400 text-[14px]">

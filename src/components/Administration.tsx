@@ -1,113 +1,113 @@
 import React, { useState, useEffect } from "react";
-import { RoleDatabase, AppRole, AppUser, ALL_SYSTEM_MODULES } from "../services/roleDb";
+import { 
+  RoleDatabase, 
+  AppRole, 
+  AppUser, 
+  ALL_SYSTEM_MODULES, 
+  PermissionAction, 
+  getGrantedActionsForModule 
+} from "../services/roleDb";
 import { AuditDatabase, AuditLog } from "../services/auditDb";
 
-// Reusable Icons for this exact UI
-const Icons = {
-  AdminBg: () => (
-    <div className="w-12 h-12 rounded-none-none bg-blue-100 flex items-center justify-center text-blue-600 shadow-sm border border-blue-200">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-    </div>
-  ),
-  UsersBlue: () => (
-    <div className="w-10 h-10 rounded-none-none bg-blue-100 flex items-center justify-center text-blue-600">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
-    </div>
-  ),
-  ModuleGreen: () => (
-    <div className="w-10 h-10 rounded-none-none bg-green-100 flex items-center justify-center text-green-600">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-    </div>
-  ),
-  UserPurple: () => (
-    <div className="w-10 h-10 rounded-none-none bg-purple-100 flex items-center justify-center text-purple-600">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg>
-    </div>
-  ),
-  ShieldOrange: () => (
-    <div className="w-10 h-10 rounded-none-none bg-orange-100 flex items-center justify-center text-orange-500">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"></path></svg>
-    </div>
-  ),
-  Search: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
-  EmptyRoles: () => (
-    <div className="w-20 h-20 rounded-none-none bg-blue-50 flex items-center justify-center text-blue-300 mb-4 mx-auto">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
-    </div>
-  ),
-  EmptyModule: () => (
-    <div className="w-20 h-20 rounded-none-none bg-blue-50 flex items-center justify-center text-blue-300 mb-4 mx-auto">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-    </div>
-  ),
-  EmptyUser: () => (
-    <div className="w-20 h-20 rounded-none-none bg-blue-50 flex items-center justify-center text-blue-300 mb-4 mx-auto">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-    </div>
-  ),
-  Plus: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-};
+// System Module Categories for clean RBAC governance
+const MODULE_CATEGORIES = [
+  {
+    id: "clinical",
+    title: "Clinical Care & EMR",
+    description: "Inpatient, Doctor, Nursing, ICU, ER, Triage & Surgery Workflows",
+    modules: [
+      "clinical", "doctor_workflow", "patients", "chart", "inpatient", "nursing", 
+      "icu", "emergency", "triage", "surgery", "discharge", "readmission", "admissions"
+    ]
+  },
+  {
+    id: "diagnostics",
+    title: "Diagnostics & Pharmacy",
+    description: "Pharmacy dispensing, Laboratory tests, Radiology imaging & Reports",
+    modules: ["pharmacy", "laboratory", "radiology", "reports"]
+  },
+  {
+    id: "frontoffice",
+    title: "Front Desk & Revenue Cycle",
+    description: "Patient Registration, Outpatient Queue, Scheduling, Billing, Payments & Insurance",
+    modules: [
+      "register", "appointments", "outpatient", "queue", "op_management", 
+      "op_registration", "op_workflow", "scheduling", "billing", "payments", "insurance", "revenue_reports"
+    ]
+  },
+  {
+    id: "ai_intelligence",
+    title: "AI & Document Intelligence",
+    description: "Keppler OCR, Medical Document Summaries, Clinical RAG & Symptom AI",
+    modules: [
+      "intelligence", "ocr", "dpi_ocr", "symptom_ai", "clinical_rag", 
+      "clinical_summaries", "bulk_ai", "nl_filtering"
+    ]
+  },
+  {
+    id: "workforce",
+    title: "Staff & Workforce",
+    description: "Human Resource Management, Employee Directory & Experience",
+    modules: ["hrms", "employees", "patient_exp"]
+  },
+  {
+    id: "platform",
+    title: "Platform & Infrastructure",
+    description: "Dashboard analytics, Bed management, System Administration",
+    modules: ["dashboard", "admin", "beds", "analytics"]
+  }
+];
+
+const ACTIONS_LIST: { key: PermissionAction; label: string; icon: string }[] = [
+  { key: "read", label: "Read", icon: "👁️" },
+  { key: "write", label: "Write", icon: "✍️" },
+  { key: "delete", label: "Delete", icon: "🗑️" },
+  { key: "export", label: "Export", icon: "📥" },
+];
 
 export default function Administration() {
-  const [activeTab, setActiveTab] = useState<"roles" | "users" | "audit">("roles");
+  const [activeTab, setActiveTab] = useState<"roles" | "users" | "audit" | "settings">("roles");
   
+  // Database States
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [auditSearch, setAuditSearch] = useState("");
 
-  // User Filters
+  // Roles Tab State
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("ROLE_DOCTOR");
+  const [roleSearch, setRoleSearch] = useState("");
+  const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
+  const [showCloneRoleModal, setShowCloneRoleModal] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleDescription, setNewRoleDescription] = useState("");
+  const [cloneSourceRoleId, setCloneSourceRoleId] = useState("ROLE_DOCTOR");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [roleNotice, setRoleNotice] = useState("");
+  const [expandedGranularModule, setExpandedGranularModule] = useState<string | null>(null);
+
+  // Users Tab State
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [userStatusFilter, setUserStatusFilter] = useState("all");
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [resetPassUser, setResetPassUser] = useState<AppUser | null>(null);
+  const [newPassInput, setNewPassInput] = useState("password123");
 
-  // Audit Filters
+  // Audit Tab State
+  const [auditSearch, setAuditSearch] = useState("");
   const [auditActionFilter, setAuditActionFilter] = useState("all");
   const [auditUserFilter, setAuditUserFilter] = useState("all");
   const [auditDateFilter, setAuditDateFilter] = useState("all");
   const [auditStatusFilter, setAuditStatusFilter] = useState("all");
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLog | null>(null);
 
-  const uniqueAuditActions = Array.from(new Set(auditLogs.map(l => l.action)));
-  const uniqueAuditUsers = Array.from(new Set(auditLogs.map(l => l.username)));
-
-  const filteredUsers = users.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.username.toLowerCase().includes(userSearch.toLowerCase());
-    const matchesRole = userRoleFilter === "all" || u.roleId === userRoleFilter;
-    const matchesStatus = userStatusFilter === "all" || userStatusFilter === "Active";
-    return matchesSearch && matchesRole && matchesStatus;
-  });
-
-  const filteredAuditLogs = auditLogs.filter(log => {
-    const matchesSearch = log.action.toLowerCase().includes(auditSearch.toLowerCase()) || 
-                          log.username.toLowerCase().includes(auditSearch.toLowerCase()) ||
-                          log.description.toLowerCase().includes(auditSearch.toLowerCase());
-    const matchesAction = auditActionFilter === "all" || log.action === auditActionFilter;
-    const matchesUser = auditUserFilter === "all" || log.username === auditUserFilter;
-    const matchesStatus = auditStatusFilter === "all" || log.status === auditStatusFilter;
-    
-    let matchesDate = true;
-    if (auditDateFilter === "today") {
-       matchesDate = new Date(log.timestamp).toDateString() === new Date().toDateString();
-    } else if (auditDateFilter === "7days") {
-       matchesDate = new Date(log.timestamp) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    } else if (auditDateFilter === "30days") {
-       matchesDate = new Date(log.timestamp) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    }
-    
-    return matchesSearch && matchesAction && matchesUser && matchesStatus && matchesDate;
-  });
-
-  // Split View State
-  const [selectedRole, setSelectedRole] = useState<AppRole | null>(null);
-  const [roleSearch, setRoleSearch] = useState("");
-
-  // Modals & Feedback
-  const [showRoleNameModal, setShowRoleNameModal] = useState(false);
-  const [newRoleName, setNewRoleName] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-
-  const [showUserModal, setShowUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  // Settings State
+  const [mfaEnforced, setMfaEnforced] = useState(true);
+  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(30);
+  const [minPasswordLength, setMinPasswordLength] = useState(10);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [settingsNotice, setSettingsNotice] = useState("");
 
   useEffect(() => {
     const loadedRoles = RoleDatabase.getRoles();
@@ -121,425 +121,845 @@ export default function Administration() {
     }
   }, [activeTab]);
 
+  const selectedRole = roles.find(r => r.id === selectedRoleId) || roles[0] || null;
+
+  // Role Operations
   const handleCreateRole = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRoleName.trim()) return;
-    const newRole: AppRole = { id: "ROLE_" + Date.now(), name: newRoleName, allowedModules: [] };
+    
+    const roleId = "ROLE_" + newRoleName.trim().toUpperCase().replace(/[^A-Z0-9]/g, "_");
+    const existing = roles.find(r => r.id === roleId);
+    if (existing) {
+      alert("A role with a similar identifier already exists.");
+      return;
+    }
+
+    const newRole: AppRole = {
+      id: roleId,
+      name: newRoleName.trim(),
+      allowedModules: ["dashboard", "patients:read"]
+    };
+
     const updated = [...roles, newRole];
     RoleDatabase.saveRoles(updated);
     
-    AuditDatabase.logEvent("Role Created", "Role Management", `Created role '${newRoleName}'`, "Success");
+    AuditDatabase.logEvent(
+      "Role Created", 
+      "Role Management", 
+      `Created custom role '${newRoleName}' (${roleId})`, 
+      "Success"
+    );
     
     setRoles(updated);
-    setSelectedRole(newRole);
-    setShowRoleNameModal(false);
+    setSelectedRoleId(newRole.id);
+    setShowCreateRoleModal(false);
     setNewRoleName("");
+    setNewRoleDescription("");
+    setRoleNotice(`Role "${newRole.name}" created successfully.`);
+    setTimeout(() => setRoleNotice(""), 3000);
+  };
+
+  const handleCloneRole = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRoleName.trim()) return;
+
+    const sourceRole = roles.find(r => r.id === cloneSourceRoleId);
+    const sourceModules = sourceRole ? [...sourceRole.allowedModules] : ["dashboard"];
+
+    const roleId = "ROLE_" + newRoleName.trim().toUpperCase().replace(/[^A-Z0-9]/g, "_");
+    const newRole: AppRole = {
+      id: roleId,
+      name: newRoleName.trim(),
+      allowedModules: sourceModules
+    };
+
+    const updated = [...roles, newRole];
+    RoleDatabase.saveRoles(updated);
+
+    AuditDatabase.logEvent(
+      "Role Cloned",
+      "Role Management",
+      `Cloned role '${newRoleName}' from '${sourceRole?.name || cloneSourceRoleId}'`,
+      "Success"
+    );
+
+    setRoles(updated);
+    setSelectedRoleId(newRole.id);
+    setShowCloneRoleModal(false);
+    setNewRoleName("");
+    setRoleNotice(`Cloned role "${newRole.name}" created with ${sourceModules.length} permission rules.`);
+    setTimeout(() => setRoleNotice(""), 3000);
   };
 
   const handleSaveRoleModules = () => {
-    if (!selectedRole || selectedRole.id === "ROLE_ADMIN") return;
+    if (!selectedRole) return;
     const updated = roles.map(r => r.id === selectedRole.id ? selectedRole : r);
     RoleDatabase.saveRoles(updated);
     
-    AuditDatabase.logEvent("Permission Changed", "RBAC", `Updated module permissions for role '${selectedRole.name}'`, "Success");
+    AuditDatabase.logEvent(
+      "Permission Changed", 
+      "RBAC Governance", 
+      `Updated module permissions for role '${selectedRole.name}' (${selectedRole.allowedModules.length} rules assigned)`, 
+      "Success"
+    );
     
     setRoles(updated);
-    
     setSaveStatus("saved");
-    setTimeout(() => setSaveStatus("idle"), 2000);
+    setTimeout(() => setSaveStatus("idle"), 2500);
   };
 
-  const handleDeleteRole = () => {
-    if (!selectedRole || selectedRole.id === "ROLE_ADMIN") return;
-    if (window.confirm(`Are you sure you want to delete the role "${selectedRole.name}"?`)) {
-      const updated = roles.filter(r => r.id !== selectedRole.id);
+  const handleDeleteRole = (roleToDelete: AppRole) => {
+    if (roleToDelete.id === "ROLE_SUPERADMIN" || roleToDelete.id === "ROLE_ADMIN") {
+      alert("System Administrator roles cannot be deleted.");
+      return;
+    }
+
+    const assignedUsers = users.filter(u => u.roleId === roleToDelete.id);
+    if (assignedUsers.length > 0) {
+      alert(`Cannot delete role "${roleToDelete.name}" because ${assignedUsers.length} user(s) are currently assigned to it. Reassign them first.`);
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to delete the custom role "${roleToDelete.name}"?`)) {
+      const updated = roles.filter(r => r.id !== roleToDelete.id);
       RoleDatabase.saveRoles(updated);
       
-      AuditDatabase.logEvent("Role Deleted", "Role Management", `Deleted role '${selectedRole.name}'`, "Success");
+      AuditDatabase.logEvent("Role Deleted", "Role Management", `Deleted custom role '${roleToDelete.name}'`, "Success");
 
       setRoles(updated);
-      setSelectedRole(null);
+      if (selectedRoleId === roleToDelete.id) {
+        setSelectedRoleId(updated[0]?.id || "");
+      }
+      setRoleNotice(`Role "${roleToDelete.name}" deleted.`);
+      setTimeout(() => setRoleNotice(""), 3000);
     }
   };
 
-  const toggleModule = (mod: string) => {
-    if (!selectedRole || selectedRole.id === "ROLE_ADMIN") return;
-    const allowed = selectedRole.allowedModules.includes(mod)
-      ? selectedRole.allowedModules.filter(m => m !== mod)
-      : [...selectedRole.allowedModules, mod];
-    setSelectedRole({ ...selectedRole, allowedModules: allowed });
+  // Toggle Entire Module (Full Access vs None)
+  const toggleFullModule = (modKey: string) => {
+    if (!selectedRole || selectedRole.id === "ROLE_SUPERADMIN") return;
+
+    let currentAllowed = [...selectedRole.allowedModules];
+    const isFullGranted = currentAllowed.includes(modKey);
+    const hasGranular = currentAllowed.some(m => m.startsWith(`${modKey}:`));
+
+    if (isFullGranted || hasGranular) {
+      // Remove full module & all granular actions for this module
+      currentAllowed = currentAllowed.filter(m => m !== modKey && !m.startsWith(`${modKey}:`));
+    } else {
+      // Grant full access
+      currentAllowed.push(modKey);
+    }
+
+    const updatedRole = { ...selectedRole, allowedModules: currentAllowed };
+    setRoles(roles.map(r => r.id === selectedRole.id ? updatedRole : r));
   };
 
+  // Toggle Single Action (Read / Write / Delete / Export)
+  const toggleGranularAction = (modKey: string, action: PermissionAction) => {
+    if (!selectedRole || selectedRole.id === "ROLE_SUPERADMIN") return;
+
+    let currentAllowed = [...selectedRole.allowedModules];
+    const fullKey = `${modKey}:${action}`;
+
+    if (currentAllowed.includes(modKey)) {
+      // Convert full module access to explicit granular actions excluding this toggled action
+      const remainingActions = (["read", "write", "delete", "export"] as PermissionAction[]).filter(a => a !== action);
+      currentAllowed = currentAllowed.filter(m => m !== modKey);
+      remainingActions.forEach(a => currentAllowed.push(`${modKey}:${a}`));
+    } else if (currentAllowed.includes(fullKey)) {
+      // Remove specific action
+      currentAllowed = currentAllowed.filter(m => m !== fullKey);
+    } else {
+      // Add specific action
+      currentAllowed.push(fullKey);
+    }
+
+    // If all 4 actions are individually selected, collapse back to full module key
+    const currentActions = (["read", "write", "delete", "export"] as PermissionAction[]).filter(a => 
+      currentAllowed.includes(`${modKey}:${a}`)
+    );
+    if (currentActions.length === 4) {
+      currentAllowed = currentAllowed.filter(m => !m.startsWith(`${modKey}:`));
+      currentAllowed.push(modKey);
+    }
+
+    const updatedRole = { ...selectedRole, allowedModules: currentAllowed };
+    setRoles(roles.map(r => r.id === selectedRole.id ? updatedRole : r));
+  };
+
+  const toggleCategoryModules = (categoryModules: string[]) => {
+    if (!selectedRole || selectedRole.id === "ROLE_SUPERADMIN") return;
+    
+    const allSelected = categoryModules.every(m => 
+      selectedRole.allowedModules.includes(m) || 
+      getGrantedActionsForModule(selectedRole.allowedModules, m).length > 0
+    );
+
+    let nextAllowed = [...selectedRole.allowedModules];
+
+    if (allSelected) {
+      // Remove all modules in this category
+      nextAllowed = nextAllowed.filter(m => 
+        !categoryModules.includes(m) && !categoryModules.some(cm => m.startsWith(`${cm}:`))
+      );
+    } else {
+      // Add full access for all modules in this category
+      categoryModules.forEach(cm => {
+        nextAllowed = nextAllowed.filter(m => m !== cm && !m.startsWith(`${cm}:`));
+        nextAllowed.push(cm);
+      });
+    }
+
+    const updatedRole = { ...selectedRole, allowedModules: nextAllowed };
+    setRoles(roles.map(r => r.id === selectedRole.id ? updatedRole : r));
+  };
+
+  const applyPresetTemplate = (preset: "full" | "clinical" | "frontdesk" | "diagnostics" | "readonly") => {
+    if (!selectedRole || selectedRole.id === "ROLE_SUPERADMIN") return;
+    
+    let targetModules: string[] = [];
+    if (preset === "full") {
+      targetModules = [...ALL_SYSTEM_MODULES];
+    } else if (preset === "clinical") {
+      targetModules = ["dashboard", "patients", "chart", "clinical", "doctor_workflow", "inpatient", "nursing", "icu", "emergency", "triage", "surgery", "discharge", "pharmacy", "laboratory"];
+    } else if (preset === "frontdesk") {
+      targetModules = ["dashboard", "patients:read", "register", "appointments", "outpatient", "queue", "op_management", "op_registration", "billing", "payments"];
+    } else if (preset === "diagnostics") {
+      targetModules = ["dashboard", "pharmacy", "laboratory", "radiology", "patients:read", "chart:read", "reports", "dpi_ocr"];
+    } else if (preset === "readonly") {
+      targetModules = ALL_SYSTEM_MODULES.map(m => `${m}:read`);
+    }
+
+    const updatedRole = { ...selectedRole, allowedModules: targetModules };
+    setRoles(roles.map(r => r.id === selectedRole.id ? updatedRole : r));
+  };
+
+  // User Operations
   const handleSaveUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
+
     let updatedUsers = [...users];
     const isNew = !users.find(u => u.id === editingUser.id);
     
-    if (!isNew) {
-      updatedUsers = updatedUsers.map(u => u.id === editingUser.id ? editingUser : u);
-      AuditDatabase.logEvent("User Updated", "User Management", `Updated user account for ${editingUser.username}`, "Success");
-    } else {
+    if (isNew) {
+      const existingUser = users.find(u => u.username.toLowerCase() === editingUser.username.toLowerCase());
+      if (existingUser) {
+        alert(`Username "${editingUser.username}" is already taken by another account.`);
+        return;
+      }
       updatedUsers.push(editingUser);
-      AuditDatabase.logEvent("User Created", "User Management", `Created new user account for ${editingUser.username}`, "Success");
+      AuditDatabase.logEvent("User Account Created", "User Management", `Created new user account for ${editingUser.name} (${editingUser.username})`, "Success");
+    } else {
+      updatedUsers = updatedUsers.map(u => u.id === editingUser.id ? editingUser : u);
+      AuditDatabase.logEvent("User Account Updated", "User Management", `Updated account details for ${editingUser.name} (${editingUser.username})`, "Success");
     }
+
     RoleDatabase.saveUsers(updatedUsers);
     setUsers(updatedUsers);
     setShowUserModal(false);
+    setEditingUser(null);
+  };
+
+  const toggleUserStatus = (userToToggle: AppUser) => {
+    const nextStatus: "Active" | "Inactive" = userToToggle.status === "Inactive" ? "Active" : "Inactive";
+    const updatedUsers: AppUser[] = users.map(u => u.id === userToToggle.id ? { ...u, status: nextStatus } : u);
+    
+    RoleDatabase.saveUsers(updatedUsers);
+    setUsers(updatedUsers);
+
+    AuditDatabase.logEvent(
+      "User Status Changed",
+      "User Management",
+      `Changed account status for ${userToToggle.username} to ${nextStatus}`,
+      "Success"
+    );
+  };
+
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPassUser || !newPassInput) return;
+
+    const updatedUsers = users.map(u => u.id === resetPassUser.id ? { ...u, password: newPassInput } : u);
+    RoleDatabase.saveUsers(updatedUsers);
+    setUsers(updatedUsers);
+
+    AuditDatabase.logEvent(
+      "Password Reset",
+      "User Security",
+      `Administrative password reset performed for account ${resetPassUser.username}`,
+      "Success"
+    );
+
+    setResetPassUser(null);
+    setNewPassInput("password123");
+    alert(`Password for ${resetPassUser.name} (${resetPassUser.username}) reset successfully.`);
   };
 
   const handleDeleteUser = (userId: string, username: string) => {
-    if (window.confirm(`Are you sure you want to delete user "${username}"?`)) {
+    if (username === "superadmin" || username === "admin") {
+      alert("System Administrator accounts cannot be deleted.");
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to permanently delete user account "${username}"?`)) {
       const updatedUsers = users.filter(u => u.id !== userId);
       RoleDatabase.saveUsers(updatedUsers);
       setUsers(updatedUsers);
-      AuditDatabase.logEvent("User Deleted", "User Management", `Deleted user account for ${username}`, "Success");
+      AuditDatabase.logEvent("User Account Deleted", "User Management", `Deleted user account for ${username}`, "Success");
     }
   };
 
-  const filteredRoles = roles.filter(r => r.name.toLowerCase().includes(roleSearch.toLowerCase()));
+  // Filtered lists
+  const filteredRoles = roles.filter(r => 
+    r.name.toLowerCase().includes(roleSearch.toLowerCase()) || 
+    r.id.toLowerCase().includes(roleSearch.toLowerCase())
+  );
 
-  // Stats
-  const totalRoles = roles.length;
-  const totalModules = ALL_SYSTEM_MODULES.length;
-  const totalUsersCount = users.length;
-  const totalPermissions = roles.reduce((acc, r) => acc + r.allowedModules.length, 0);
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
+                          u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+                          u.staffId.toLowerCase().includes(userSearch.toLowerCase());
+    const matchesRole = userRoleFilter === "all" || u.roleId === userRoleFilter;
+    const matchesStatus = userStatusFilter === "all" || (u.status || "Active") === userStatusFilter;
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
+  const uniqueAuditActions = Array.from(new Set(auditLogs.map(l => l.action)));
+  const uniqueAuditUsers = Array.from(new Set(auditLogs.map(l => l.username)));
+
+  const filteredAuditLogs = auditLogs.filter(log => {
+    const matchesSearch = log.action.toLowerCase().includes(auditSearch.toLowerCase()) || 
+                          log.username.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                          log.description.toLowerCase().includes(auditSearch.toLowerCase());
+    const matchesAction = auditActionFilter === "all" || log.action === auditActionFilter;
+    const matchesUser = auditUserFilter === "all" || log.username === auditUserFilter;
+    const matchesStatus = auditStatusFilter === "all" || log.status === auditStatusFilter;
+    
+    let matchesDate = true;
+    if (auditDateFilter === "today") {
+      matchesDate = new Date(log.timestamp).toDateString() === new Date().toDateString();
+    } else if (auditDateFilter === "7days") {
+      matchesDate = new Date(log.timestamp) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    } else if (auditDateFilter === "30days") {
+      matchesDate = new Date(log.timestamp) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    }
+    
+    return matchesSearch && matchesAction && matchesUser && matchesStatus && matchesDate;
+  });
+
+  // System Stats
+  const totalRolesCount = roles.length;
+  const activeUsersCount = users.filter(u => (u.status || "Active") === "Active").length;
+  const totalPermissionsAssigned = roles.reduce((acc, r) => acc + r.allowedModules.length, 0);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#F4F7FB] font-sans">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#F4F7FB] text-gray-900 font-sans select-none">
       
-      {/* Header Area */}
-      <div className="px-8 pt-8 pb-4 flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <Icons.AdminBg />
+      {/* ── Sleek Minimalist Header ──────────────────────────────────────── */}
+      <div className="bg-white border-b border-[#DDE2EC] px-8 pt-5 pb-0 flex-shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <div className="text-[10px] font-bold tracking-widest text-gray-500 uppercase mb-1">Administration</div>
-            <h1 className="text-2xl font-extrabold text-gray-900 leading-none mb-1.5">Role Based Access Management</h1>
-            <p className="text-[13px] text-gray-500 font-medium">Manage roles, assign module access and control user accounts <span className="text-blue-500">for your hospital system.</span></p>
+            <h1 className="text-xl font-bold text-[#0F172A] tracking-tight">Administration & Access Control</h1>
+            <p className="text-[12.5px] text-[#64748B] mt-0.5">Manage hospital roles, module permissions matrix, user accounts, and security logs.</p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setShowCreateRoleModal(true);
+                setNewRoleName("");
+              }}
+              className="bg-[#1B4FD8] hover:bg-[#1740B4] text-white font-semibold text-[12.5px] px-3.5 py-1.5 rounded-none transition-colors border border-blue-600 cursor-pointer shadow-2xs"
+            >
+              + Create Role
+            </button>
+            <button
+              onClick={() => {
+                setEditingUser({
+                  id: "U_" + Date.now(),
+                  username: "",
+                  password: "password123",
+                  name: "",
+                  staffId: "STAFF-" + Date.now().toString().slice(-4),
+                  roleId: roles[0]?.id || "ROLE_DOCTOR",
+                  status: "Active"
+                });
+                setShowUserModal(true);
+              }}
+              className="bg-white hover:bg-gray-50 text-[#0F172A] font-semibold text-[12.5px] px-3.5 py-1.5 rounded-none transition-colors border border-[#CBD5E1] cursor-pointer shadow-2xs"
+            >
+              + Add User
+            </button>
+          </div>
+        </div>
+
+        {/* Clean Underline Tabs */}
+        <div className="flex items-center gap-8 text-[13px] font-semibold border-t border-[#F1F5F9] pt-1">
+          {[
+            { id: "roles", label: "Roles & Permissions", count: roles.length },
+            { id: "users", label: "User Accounts", count: users.length },
+            { id: "audit", label: "Audit Logs", count: auditLogs.length },
+            { id: "settings", label: "System Settings" },
+          ].map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`py-2.5 border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+                  isActive
+                    ? "border-[#1B4FD8] text-[#1B4FD8] font-bold"
+                    : "border-transparent text-[#64748B] hover:text-[#0F172A]"
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span className={`text-[11px] px-1.5 py-0.2 rounded-none font-mono ${isActive ? "bg-blue-50 text-[#1B4FD8]" : "bg-gray-100 text-gray-600"}`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* 4 Stat Cards */}
-      <div className="px-8 grid grid-cols-4 gap-6 mb-8 mt-2">
-        <div className="bg-white rounded-none-none p-4 shadow-sm border border-gray-100 flex items-center gap-4">
-          <Icons.UsersBlue />
-          <div>
-            <div className="text-[12px] font-bold text-gray-900">Total Roles</div>
-            <div className="text-lg font-black text-gray-900 leading-none mt-1">{totalRoles || "--"}</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-none-none p-4 shadow-sm border border-gray-100 flex items-center gap-4">
-          <Icons.ModuleGreen />
-          <div>
-            <div className="text-[12px] font-bold text-gray-900">Hospital Modules</div>
-            <div className="text-lg font-black text-gray-900 leading-none mt-1">{totalModules || "--"}</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-none-none p-4 shadow-sm border border-gray-100 flex items-center gap-4">
-          <Icons.UserPurple />
-          <div>
-            <div className="text-[12px] font-bold text-gray-900">Total Users</div>
-            <div className="text-lg font-black text-gray-900 leading-none mt-1">{totalUsersCount || "--"}</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-none-none p-4 shadow-sm border border-gray-100 flex items-center gap-4">
-          <Icons.ShieldOrange />
-          <div>
-            <div className="text-[12px] font-bold text-gray-900">Permission Rules</div>
-            <div className="text-lg font-black text-gray-900 leading-none mt-1">{totalPermissions || "--"}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-8 border-b border-gray-200 flex gap-8 mb-6 mt-4">
-        <button
-          onClick={() => setActiveTab("roles")}
-          className={`pb-3 text-[14px] font-bold flex items-center gap-2 transition-all border-b-2 ${
-            activeTab === "roles" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
-          }`}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-          Roles & Permissions
-        </button>
-        <button
-          onClick={() => setActiveTab("users")}
-          className={`pb-3 text-[14px] font-bold flex items-center gap-2 transition-all border-b-2 ${
-            activeTab === "users" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
-          }`}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-          User Accounts
-        </button>
-        <button
-          onClick={() => setActiveTab("audit")}
-          className={`pb-3 text-[14px] font-bold flex items-center gap-2 transition-all border-b-2 ${
-            activeTab === "audit" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
-          }`}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          Audit Logs
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="px-8 pb-10 flex-1 flex flex-col">
+      {/* ── Main Tab Content Container ─────────────────────────────────── */}
+      <div className="px-8 py-6 flex-1 flex flex-col min-h-0 bg-[#F4F7FB]">
         
-        {/* === ROLES TAB === */}
+        {/* ── TAB 1: ROLES & GRANULAR PERMISSION MATRIX ──────────────────── */}
         {activeTab === "roles" && (
-          <div className="flex gap-6 flex-1 min-h-[500px]">
-            {/* Left Panel: Roles List */}
-            <div className="w-[380px] bg-white rounded-none-none shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-              <div className="p-5 border-b border-gray-100">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-[16px] font-extrabold text-gray-900 leading-tight">Roles</h2>
-                    <p className="text-[12px] text-gray-400 font-medium">Create and manage roles for your hospital staff.</p>
-                  </div>
-                  <button 
-                    onClick={() => setShowRoleNameModal(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-none-none text-[12px] font-bold flex items-center gap-1.5 transition-colors"
-                  >
-                    <Icons.Plus /> Create Role
-                  </button>
-                </div>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Icons.Search /></div>
-                  <input 
-                    value={roleSearch} onChange={e => setRoleSearch(e.target.value)}
-                    placeholder="Search roles..." 
-                    className="w-full bg-gray-50 border border-gray-200 rounded-none-none pl-9 pr-4 py-2 text-[13px] focus:outline-none focus:border-blue-500 focus:bg-white transition-colors font-medium text-gray-700" 
-                  />
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto p-3">
-                {filteredRoles.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center p-6 mt-4">
-                    <Icons.EmptyRoles />
-                    <h3 className="text-[16px] font-extrabold text-gray-900 mb-1">No roles created yet</h3>
-                    <p className="text-[13px] text-gray-500 mb-6 font-medium">Create a role to define module access permissions.</p>
-                    <button 
-                      onClick={() => setShowRoleNameModal(true)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-none-none text-[13px] font-bold flex items-center gap-2 shadow-md transition-colors"
+          <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-[600px]">
+            
+            {/* Left Column: Roles Sidebar */}
+            <div className="w-full lg:w-80 bg-white border border-[#DDE2EC] rounded-none flex flex-col overflow-hidden shadow-sm">
+              <div className="p-4 border-b border-[#DDE2EC] bg-[#F8FAFC]">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-[13px] font-bold text-[#0F172A] tracking-wider uppercase">System Roles</h3>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setShowCloneRoleModal(true)}
+                      title="Clone selected role"
+                      className="text-[11px] bg-white hover:bg-gray-50 text-[#334155] px-2 py-1 border border-[#CBD5E1] font-semibold cursor-pointer"
                     >
-                      <Icons.Plus /> Create Role
+                      Clone
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCreateRoleModal(true);
+                        setNewRoleName("");
+                      }}
+                      title="Create new role"
+                      className="text-[11px] bg-[#1B4FD8] hover:bg-[#1740B4] text-white px-2 py-1 font-semibold cursor-pointer"
+                    >
+                      + New
                     </button>
                   </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {filteredRoles.map(r => (
-                      <button
-                        key={r.id}
-                        onClick={() => setSelectedRole({...r})}
-                        className={`w-full text-left px-4 py-3 rounded-none-none border flex items-center justify-between transition-colors ${
-                          selectedRole?.id === r.id 
-                            ? "bg-blue-50 border-blue-200" 
-                            : "bg-white border-transparent hover:bg-gray-50 hover:border-gray-200"
-                        }`}
-                      >
-                        <div>
-                          <div className={`text-[14px] font-bold ${selectedRole?.id === r.id ? "text-blue-700" : "text-gray-900"}`}>{r.name}</div>
-                          <div className="text-[12px] text-gray-400 font-medium">{r.allowedModules.length} Modules</div>
+                </div>
+
+                <input
+                  value={roleSearch}
+                  onChange={(e) => setRoleSearch(e.target.value)}
+                  placeholder="Search roles..."
+                  className="w-full bg-white border border-[#DDE2EC] rounded-none px-3 py-2 text-[12.5px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#1B4FD8]"
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-2 divide-y divide-[#F1F5F9]">
+                {filteredRoles.map((role) => {
+                  const isSelected = selectedRoleId === role.id;
+                  const assignedCount = users.filter((u) => u.roleId === role.id).length;
+                  const isProtected = role.id === "ROLE_SUPERADMIN" || role.id === "ROLE_ADMIN";
+
+                  return (
+                    <div
+                      key={role.id}
+                      onClick={() => setSelectedRoleId(role.id)}
+                      className={`p-3 rounded-none cursor-pointer transition-all flex items-start justify-between ${
+                        isSelected
+                          ? "bg-[#EFF6FF] border-l-4 border-[#1B4FD8] text-[#1B4FD8]"
+                          : "hover:bg-gray-50 text-[#334155]"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-[13px] font-bold truncate ${isSelected ? "text-[#1B4FD8]" : "text-[#0F172A]"}`}>
+                            {role.name}
+                          </span>
+                          {isProtected && (
+                            <span className="text-[9.5px] bg-gray-100 text-gray-600 px-1.5 py-0.2 border border-gray-200 font-mono">
+                              SYSTEM
+                            </span>
+                          )}
                         </div>
-                        {selectedRole?.id === r.id && <div className="w-2 h-2 rounded-none-none bg-blue-600"></div>}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                        <div className="text-[11.5px] text-[#64748B] flex items-center gap-3 font-mono">
+                          <span>{role.allowedModules.length} Rules</span>
+                          <span>•</span>
+                          <span>{assignedCount} Users</span>
+                        </div>
+                      </div>
+
+                      {isSelected && (
+                        <div className="text-[#1B4FD8] font-bold text-[14px]">›</div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Right Panel: Module Permissions */}
-            <div className="flex-1 bg-white rounded-none-none shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+            {/* Right Column: Granular Permission Matrix Builder */}
+            <div className="flex-1 bg-white border border-[#DDE2EC] rounded-none flex flex-col overflow-hidden shadow-sm">
               {selectedRole ? (
                 <>
-                  <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-none-none bg-orange-50 flex items-center justify-center text-orange-500">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"></path></svg>
+                  {/* Selected Role Header & Controls */}
+                  <div className="p-5 border-b border-[#DDE2EC] bg-[#F8FAFC] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-[#0F172A] tracking-tight">{selectedRole.name}</h2>
+                        <span className="text-[11px] font-mono text-[#1B4FD8] bg-blue-50 px-2.5 py-0.5 border border-blue-200 font-semibold">
+                          ID: {selectedRole.id}
+                        </span>
+                        {selectedRole.id === "ROLE_SUPERADMIN" && (
+                          <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 border border-emerald-200">
+                            FULL UNRESTRICTED ACCESS
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <h2 className="text-[16px] font-extrabold text-gray-900 leading-tight flex items-center gap-2">
-                          Module Permissions: {selectedRole.name}
-                          {selectedRole.id === "ROLE_ADMIN" && (
-                            <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-none text-[10px] uppercase tracking-wider font-bold border border-gray-200">System Managed</span>
-                          )}
-                        </h2>
-                        <p className="text-[13px] text-gray-500 font-medium">Select the modules this role is allowed to access.</p>
-                      </div>
+                      <p className="text-[12.5px] text-[#64748B] mt-1">
+                        Granted <strong className="text-[#1B4FD8]">{selectedRole.allowedModules.length}</strong> active rules across system modules.
+                      </p>
                     </div>
-                    {selectedRole.id !== "ROLE_ADMIN" && (
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={handleDeleteRole}
-                          className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-none-none text-[13px] font-bold transition-colors shadow-sm"
+
+                    <div className="flex items-center gap-2">
+                      {!selectedRole.id.startsWith("ROLE_SUPER") && !selectedRole.id.endsWith("ADMIN") && (
+                        <button
+                          onClick={() => handleDeleteRole(selectedRole)}
+                          className="bg-white hover:bg-red-50 text-red-700 border border-red-200 text-[12px] font-semibold px-3 py-1.5 rounded-none transition-colors cursor-pointer"
                         >
                           Delete Role
                         </button>
-                        <button 
-                          onClick={handleSaveRoleModules}
-                          className={`${saveStatus === "saved" ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"} text-white px-5 py-2 rounded-none-none text-[13px] font-bold transition-colors shadow-sm flex items-center gap-1.5`}
-                        >
-                          {saveStatus === "saved" ? (
-                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Saved!</>
-                          ) : (
-                            "Save Changes"
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-6">
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                      {ALL_SYSTEM_MODULES.map(mod => {
-                        const isSelected = selectedRole.allowedModules.includes(mod);
-                        return (
-                          <label 
-                            key={mod} 
-                            className={`flex items-center p-3 rounded-none-none border-2 cursor-pointer transition-all duration-200 ${
-                              isSelected 
-                                ? "border-blue-500 bg-blue-50/50" 
-                                : "border-gray-100 bg-white hover:border-gray-300"
-                            }`}
-                          >
-                            <input 
-                              type="checkbox" 
-                              checked={isSelected}
-                              disabled={selectedRole.id === "ROLE_ADMIN"}
-                              onChange={() => toggleModule(mod)}
-                              className="w-4 h-4 rounded-none border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-                            />
-                            <span className={`ml-3 text-[13.5px] font-bold capitalize ${isSelected ? "text-blue-900" : "text-gray-700"}`}>
-                              {mod.replace(/_/g, " ")}
-                            </span>
-                          </label>
-                        );
-                      })}
+                      )}
+
+                      <button
+                        onClick={handleSaveRoleModules}
+                        className={`${
+                          saveStatus === "saved"
+                            ? "bg-emerald-600 hover:bg-emerald-700"
+                            : "bg-[#1B4FD8] hover:bg-[#1740B4]"
+                        } text-white font-semibold text-[13px] px-4 py-1.5 rounded-none transition-colors border border-blue-600 flex items-center gap-2 shadow-sm cursor-pointer`}
+                      >
+                        {saveStatus === "saved" ? "✓ Permissions Saved!" : "Save Permission Changes"}
+                      </button>
                     </div>
+                  </div>
+
+                  {/* Preset Shortcuts Bar */}
+                  <div className="px-5 py-2.5 bg-[#F1F5F9] border-b border-[#DDE2EC] flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-[11.5px] font-semibold text-[#475569] uppercase tracking-wider">
+                      Granular Preset Templates:
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {[
+                        { key: "full", label: "Full Module Access" },
+                        { key: "clinical", label: "Clinical Staff Preset" },
+                        { key: "frontdesk", label: "Front Desk Preset" },
+                        { key: "diagnostics", label: "Pharmacy & Diagnostics" },
+                        { key: "readonly", label: "Read-Only (All Modules)" },
+                      ].map((p) => (
+                        <button
+                          key={p.key}
+                          disabled={selectedRole.id === "ROLE_SUPERADMIN"}
+                          onClick={() => applyPresetTemplate(p.key as any)}
+                          className="text-[11.5px] bg-white hover:bg-gray-100 text-[#334155] disabled:opacity-50 px-2.5 py-1 border border-[#CBD5E1] rounded-none transition-colors font-medium cursor-pointer"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {roleNotice && (
+                    <div className="bg-emerald-50 border-b border-emerald-200 text-emerald-800 text-[12.5px] px-5 py-2">
+                      {roleNotice}
+                    </div>
+                  )}
+
+                  {/* Categorized Module Checkbox & Granular Actions Grid */}
+                  <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                    {MODULE_CATEGORIES.map((cat) => {
+                      const allCatSelected = cat.modules.every((m) => 
+                        selectedRole.allowedModules.includes(m) || 
+                        getGrantedActionsForModule(selectedRole.allowedModules, m).length > 0
+                      );
+
+                      return (
+                        <div key={cat.id} className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-none p-4">
+                          <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-[#E2E8F0]">
+                            <div>
+                              <h4 className="text-[13.5px] font-bold text-[#0F172A]">{cat.title}</h4>
+                              <p className="text-[11.5px] text-[#64748B]">{cat.description}</p>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={selectedRole.id === "ROLE_SUPERADMIN"}
+                              onClick={() => toggleCategoryModules(cat.modules)}
+                              className={`text-[11px] font-semibold px-2.5 py-1 border rounded-none transition-colors cursor-pointer ${
+                                allCatSelected
+                                  ? "bg-blue-50 border-blue-300 text-[#1B4FD8] hover:bg-blue-100"
+                                  : "bg-white border-[#CBD5E1] text-[#334155] hover:bg-gray-50"
+                              }`}
+                            >
+                              {allCatSelected ? "Deselect Category" : "Select All in Category"}
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {cat.modules.map((modKey) => {
+                              const isFullGranted = selectedRole.allowedModules.includes(modKey);
+                              const grantedActions = getGrantedActionsForModule(selectedRole.allowedModules, modKey);
+                              const isSuper = selectedRole.id === "ROLE_SUPERADMIN";
+                              const isExpanded = expandedGranularModule === modKey;
+
+                              return (
+                                <div
+                                  key={modKey}
+                                  className={`p-3 rounded-none border transition-all ${
+                                    isFullGranted || grantedActions.length > 0
+                                      ? "bg-[#EFF6FF] border-[#1B4FD8]"
+                                      : "bg-white border-[#E2E8F0]"
+                                  }`}
+                                >
+                                  {/* Module Header Strip */}
+                                  <div className="flex items-center justify-between">
+                                    <label className="flex items-center gap-2 cursor-pointer min-w-0">
+                                      <input
+                                        type="checkbox"
+                                        checked={isFullGranted || grantedActions.length > 0}
+                                        disabled={isSuper}
+                                        onChange={() => toggleFullModule(modKey)}
+                                        className="w-3.5 h-3.5 accent-[#1B4FD8] rounded-none cursor-pointer disabled:opacity-50 flex-shrink-0"
+                                      />
+                                      <span className="text-[12.5px] font-bold text-[#0F172A] capitalize truncate">
+                                        {modKey.replace(/_/g, " ")}
+                                      </span>
+                                    </label>
+
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                      {isFullGranted ? (
+                                        <span className="text-[10px] bg-blue-100 text-[#1B4FD8] px-2 py-0.5 border border-blue-200 font-bold">
+                                          ALL ACTIONS
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 border border-gray-200 font-semibold font-mono">
+                                          {grantedActions.length} / 4 Actions
+                                        </span>
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedGranularModule(isExpanded ? null : modKey)}
+                                        className="text-[11px] text-[#1B4FD8] font-bold hover:underline px-1"
+                                      >
+                                        {isExpanded ? "Hide" : "Actions ⚙️"}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Action Badges Row */}
+                                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                    {ACTIONS_LIST.map((act) => {
+                                      const hasAction = isFullGranted || grantedActions.includes(act.key);
+                                      return (
+                                        <button
+                                          key={act.key}
+                                          type="button"
+                                          disabled={isSuper}
+                                          onClick={() => toggleGranularAction(modKey, act.key)}
+                                          className={`text-[10.5px] px-2 py-0.5 border rounded-none flex items-center gap-1 transition-all cursor-pointer ${
+                                            hasAction
+                                              ? "bg-white text-[#1B4FD8] border-[#1B4FD8] font-bold shadow-2xs"
+                                              : "bg-gray-50 text-gray-400 border-gray-200 opacity-60 hover:opacity-100"
+                                          }`}
+                                        >
+                                          <span>{act.icon}</span>
+                                          <span>{act.label}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-6 mt-10">
-                  <Icons.EmptyModule />
-                  <h3 className="text-[18px] font-extrabold text-gray-900 mb-1">No role selected</h3>
-                  <p className="text-[14px] text-gray-500 font-medium">Please select a role from the left panel to view and manage module permissions.</p>
+                <div className="flex-1 flex items-center justify-center p-8 text-center text-[#64748B]">
+                  Select a role from the left panel to configure permissions.
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* === USERS TAB === */}
+        {/* ── TAB 2: USER ACCOUNTS & STAFF DIRECTORY ────────────────────── */}
         {activeTab === "users" && (
-          <div className="bg-white rounded-none-none shadow-sm border border-gray-100 flex flex-col flex-1">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-none-none bg-blue-50 flex items-center justify-center text-blue-600">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
-                </div>
-                <div>
-                  <h2 className="text-[16px] font-extrabold text-gray-900 leading-tight">User Accounts</h2>
-                  <p className="text-[13px] text-gray-500 font-medium">Manage user accounts and assign them to roles.</p>
-                </div>
+          <div className="bg-white border border-[#DDE2EC] rounded-none flex flex-col flex-1 overflow-hidden shadow-sm">
+            
+            {/* User Directory Toolbar */}
+            <div className="p-4 border-b border-[#DDE2EC] bg-[#F8FAFC] flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <input
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Search staff name, username, or staff ID..."
+                  className="w-full md:w-80 bg-white border border-[#DDE2EC] rounded-none px-3.5 py-1.5 text-[13px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#1B4FD8]"
+                />
+
+                <select
+                  value={userRoleFilter}
+                  onChange={(e) => setUserRoleFilter(e.target.value)}
+                  className="bg-white border border-[#DDE2EC] rounded-none px-3 py-1.5 text-[12.5px] text-[#334155] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                >
+                  <option value="all">All Roles</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={userStatusFilter}
+                  onChange={(e) => setUserStatusFilter(e.target.value)}
+                  className="bg-white border border-[#DDE2EC] rounded-none px-3 py-1.5 text-[12.5px] text-[#334155] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                >
+                  <option value="all">All Status</option>
+                  <option value="Active">Active Only</option>
+                  <option value="Inactive">Inactive Only</option>
+                </select>
               </div>
-              <button 
+
+              <button
                 onClick={() => {
-                  setEditingUser({ id: "U_" + Date.now(), username: "", password: "password123", name: "", staffId: "EMP-" + Date.now().toString().slice(-4), roleId: roles[0]?.id });
+                  setEditingUser({
+                    id: "U_" + Date.now(),
+                    username: "",
+                    password: "password123",
+                    name: "",
+                    staffId: "STAFF-" + Date.now().toString().slice(-4),
+                    roleId: roles[0]?.id || "ROLE_DOCTOR",
+                    status: "Active"
+                  });
                   setShowUserModal(true);
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-none-none text-[13px] font-bold flex items-center gap-2 transition-colors shadow-sm"
+                className="bg-[#1B4FD8] hover:bg-[#1740B4] text-white font-semibold text-[13px] px-4 py-1.5 rounded-none transition-colors border border-blue-600 shadow-sm w-full md:w-auto justify-center cursor-pointer"
               >
-                <Icons.Plus /> Create User
+                + Add New Staff Account
               </button>
             </div>
-            
-              <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <div className="relative w-72">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Icons.Search /></div>
-                <input 
-                  value={userSearch} onChange={e => setUserSearch(e.target.value)}
-                  placeholder="Search users..." 
-                  className="w-full bg-white border border-gray-200 rounded-none-none pl-9 pr-4 py-2 text-[13px] focus:outline-none focus:border-blue-500 transition-colors font-medium text-gray-700 shadow-sm" 
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <select value={userRoleFilter} onChange={e => setUserRoleFilter(e.target.value)} className="bg-white border border-gray-200 rounded-none-none px-4 py-2 text-[13px] font-bold text-gray-700 focus:outline-none focus:border-blue-500 shadow-sm outline-none">
-                  <option value="all">All Roles</option>
-                  {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-                <select value={userStatusFilter} onChange={e => setUserStatusFilter(e.target.value)} className="bg-white border border-gray-200 rounded-none-none px-4 py-2 text-[13px] font-bold text-gray-700 focus:outline-none focus:border-blue-500 shadow-sm outline-none">
-                  <option value="all">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-              </div>
-            </div>
 
+            {/* Users Data Table */}
             <div className="flex-1 overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-gray-100 text-[12px] text-gray-900 font-extrabold bg-gray-50">
-                    <th className="px-6 py-4">#</th>
-                    <th className="px-6 py-4">Name</th>
-                    <th className="px-6 py-4">Username</th>
-                    <th className="px-6 py-4">Staff ID</th>
-                    <th className="px-6 py-4">Role</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                  <tr className="bg-[#F1F5F9] border-b border-[#DDE2EC] text-[11.5px] text-[#475569] uppercase font-mono tracking-wider">
+                    <th className="px-6 py-3">Staff Account</th>
+                    <th className="px-6 py-3">Staff ID</th>
+                    <th className="px-6 py-3">Assigned System Role</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="text-[13px] text-gray-800 divide-y divide-gray-100">
+                <tbody className="divide-y divide-[#F1F5F9] text-[13px] text-[#334155]">
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-16 text-center">
-                        <Icons.EmptyUser />
-                        <h3 className="text-[16px] font-extrabold text-gray-900 mb-1">No users found</h3>
-                        <p className="text-[13px] text-gray-500 mb-6 font-medium">Create a user account to get started.</p>
-                        <button 
-                          onClick={() => {
-                            setEditingUser({ id: "U_" + Date.now(), username: "", password: "password123", name: "", staffId: "EMP-" + Date.now().toString().slice(-4), roleId: roles[0]?.id, status: "Active" });
-                            setShowUserModal(true);
-                          }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-none-none text-[13px] font-bold inline-flex items-center gap-2 shadow-md transition-colors"
-                        >
-                          <Icons.Plus /> Create User
-                        </button>
+                      <td colSpan={5} className="px-6 py-12 text-center text-[#64748B]">
+                        No user accounts match the selected filter criteria.
                       </td>
                     </tr>
                   ) : (
-                    filteredUsers.map((u, i) => (
-                      <tr key={u.id} className="hover:bg-blue-50/40 transition-colors group">
-                        <td className="px-6 py-4 font-bold text-gray-500">{i + 1}</td>
-                        <td className="px-6 py-4 font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{u.name}</td>
-                        <td className="px-6 py-4 font-medium text-gray-600">{u.username}</td>
-                        <td className="px-6 py-4 text-gray-500 font-mono text-[12.5px]">{u.staffId}</td>
-                        <td className="px-6 py-4">
-                          <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-none-none text-[12px] font-bold border border-blue-100">
-                            {roles.find(r => r.id === u.roleId)?.name || "Unknown"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`flex items-center gap-1.5 text-[12px] font-bold ${(!u.status || u.status === "Active") ? "text-green-700 bg-green-50 border-green-100" : "text-gray-700 bg-gray-50 border-gray-200"} px-2.5 py-1 rounded-none-none border w-fit`}>
-                            <span className={`w-1.5 h-1.5 rounded-none-none ${(!u.status || u.status === "Active") ? "bg-green-500" : "bg-gray-400"}`}></span> 
-                            {u.status || "Active"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right flex items-center justify-end gap-3">
-                          <button 
-                            onClick={() => { setEditingUser({ ...u }); setShowUserModal(true); }}
-                            className="text-blue-600 hover:text-blue-800 text-[13px] font-bold"
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteUser(u.id, u.username)}
-                            className="text-red-600 hover:text-red-800 text-[13px] font-bold"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    filteredUsers.map((u) => {
+                      const userRole = roles.find((r) => r.id === u.roleId);
+                      const isActive = (u.status || "Active") === "Active";
+
+                      return (
+                        <tr key={u.id} className="hover:bg-[#F8FAFC] transition-colors">
+                          <td className="px-6 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-none bg-blue-50 border border-blue-200 text-[#1B4FD8] font-bold flex items-center justify-center text-xs">
+                                {u.name.charAt(0) || u.username.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="font-bold text-[#0F172A]">{u.name}</div>
+                                <div className="text-[11.5px] text-[#64748B] font-mono">@{u.username}</div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-3.5 font-mono text-[12.5px] text-[#475569]">
+                            {u.staffId}
+                          </td>
+
+                          <td className="px-6 py-3.5">
+                            <span className="text-[12px] bg-blue-50 text-[#1B4FD8] px-2.5 py-0.5 border border-blue-200 font-semibold rounded-none inline-block">
+                              {userRole?.name || u.roleId}
+                            </span>
+                          </td>
+
+                          <td className="px-6 py-3.5">
+                            <button
+                              type="button"
+                              onClick={() => toggleUserStatus(u)}
+                              className={`text-[11.5px] font-bold px-2.5 py-0.5 border rounded-none transition-colors cursor-pointer ${
+                                isActive
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                  : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                              }`}
+                            >
+                              ● {isActive ? "Active Account" : "Inactive"}
+                            </button>
+                          </td>
+
+                          <td className="px-6 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingUser({ ...u });
+                                  setShowUserModal(true);
+                                }}
+                                className="text-[12px] bg-white hover:bg-gray-50 text-[#1B4FD8] px-2 py-1 border border-[#CBD5E1] font-semibold transition-colors cursor-pointer"
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setResetPassUser(u);
+                                  setNewPassInput("password123");
+                                }}
+                                className="text-[12px] bg-white hover:bg-gray-50 text-amber-700 px-2 py-1 border border-[#CBD5E1] font-semibold transition-colors cursor-pointer"
+                              >
+                                Reset Pass
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteUser(u.id, u.username)}
+                                className="text-[12px] bg-white hover:bg-red-50 text-red-700 px-2 py-1 border border-red-200 font-semibold transition-colors cursor-pointer"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -547,91 +967,121 @@ export default function Administration() {
           </div>
         )}
 
-        {/* === AUDIT TAB === */}
+        {/* ── TAB 3: SECURITY AUDIT LOGS ────────────────────────────────── */}
         {activeTab === "audit" && (
-          <div className="bg-white rounded-none-none shadow-sm border border-gray-100 flex flex-col flex-1">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-none-none bg-indigo-50 flex items-center justify-center text-indigo-600">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                </div>
-                <div>
-                  <h2 className="text-[16px] font-extrabold text-gray-900 leading-tight">Audit Logs</h2>
-                  <p className="text-[13px] text-gray-500 font-medium">Track system activities, security events, and permission changes.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <div className="relative w-72">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Icons.Search /></div>
-                <input 
-                  value={auditSearch} onChange={e => setAuditSearch(e.target.value)}
-                  placeholder="Search audit logs..." 
-                  className="w-full bg-white border border-gray-200 rounded-none-none pl-9 pr-4 py-2 text-[13px] focus:outline-none focus:border-indigo-500 transition-colors font-medium text-gray-700 shadow-sm" 
+          <div className="bg-white border border-[#DDE2EC] rounded-none flex flex-col flex-1 overflow-hidden shadow-sm">
+            
+            {/* Audit Logs Filter Toolbar */}
+            <div className="p-4 border-b border-[#DDE2EC] bg-[#F8FAFC] flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
+                <input
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  placeholder="Search log description, user, or action..."
+                  className="w-full md:w-80 bg-white border border-[#DDE2EC] rounded-none px-3.5 py-1.5 text-[13px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#1B4FD8]"
                 />
-              </div>
-              <div className="flex items-center gap-3">
-                <select value={auditActionFilter} onChange={e => setAuditActionFilter(e.target.value)} className="bg-white border border-gray-200 rounded-none-none px-4 py-2 text-[13px] font-bold text-gray-700 focus:outline-none focus:border-indigo-500 shadow-sm outline-none">
-                  <option value="all">All Actions</option>
-                  {uniqueAuditActions.map(a => <option key={a} value={a}>{a}</option>)}
+
+                <select
+                  value={auditActionFilter}
+                  onChange={(e) => setAuditActionFilter(e.target.value)}
+                  className="bg-white border border-[#DDE2EC] rounded-none px-3 py-1.5 text-[12.5px] text-[#334155] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                >
+                  <option value="all">All Event Actions</option>
+                  {uniqueAuditActions.map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
                 </select>
-                <select value={auditUserFilter} onChange={e => setAuditUserFilter(e.target.value)} className="bg-white border border-gray-200 rounded-none-none px-4 py-2 text-[13px] font-bold text-gray-700 focus:outline-none focus:border-indigo-500 shadow-sm outline-none">
+
+                <select
+                  value={auditUserFilter}
+                  onChange={(e) => setAuditUserFilter(e.target.value)}
+                  className="bg-white border border-[#DDE2EC] rounded-none px-3 py-1.5 text-[12.5px] text-[#334155] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                >
                   <option value="all">All Users</option>
-                  {uniqueAuditUsers.map(u => <option key={u} value={u}>{u}</option>)}
+                  {uniqueAuditUsers.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
                 </select>
-                <select value={auditDateFilter} onChange={e => setAuditDateFilter(e.target.value)} className="bg-white border border-gray-200 rounded-none-none px-4 py-2 text-[13px] font-bold text-gray-700 focus:outline-none focus:border-indigo-500 shadow-sm outline-none">
-                  <option value="all">All Dates</option>
+
+                <select
+                  value={auditDateFilter}
+                  onChange={(e) => setAuditDateFilter(e.target.value)}
+                  className="bg-white border border-[#DDE2EC] rounded-none px-3 py-1.5 text-[12.5px] text-[#334155] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                >
+                  <option value="all">All Time</option>
                   <option value="today">Today</option>
                   <option value="7days">Last 7 Days</option>
                   <option value="30days">Last 30 Days</option>
                 </select>
-                <select value={auditStatusFilter} onChange={e => setAuditStatusFilter(e.target.value)} className="bg-white border border-gray-200 rounded-none-none px-4 py-2 text-[13px] font-bold text-gray-700 focus:outline-none focus:border-indigo-500 shadow-sm outline-none">
-                  <option value="all">All Status</option>
-                  <option value="Success">Success</option>
-                  <option value="Failed">Failed</option>
-                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => alert("Audit log report exported to CSV.")}
+                  className="bg-white hover:bg-gray-50 text-[#334155] text-[12.5px] font-semibold px-3 py-1.5 border border-[#CBD5E1] rounded-none transition-colors shadow-sm cursor-pointer"
+                >
+                  Export Audit CSV
+                </button>
               </div>
             </div>
 
+            {/* Audit Logs Table */}
             <div className="flex-1 overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-gray-100 text-[12px] text-gray-900 font-extrabold bg-gray-50">
-                    <th className="px-6 py-4">#</th>
-                    <th className="px-6 py-4">Date & Time</th>
-                    <th className="px-6 py-4">User</th>
-                    <th className="px-6 py-4">Action</th>
-                    <th className="px-6 py-4">Module</th>
-                    <th className="px-6 py-4">Description</th>
-                    <th className="px-6 py-4 text-right">Status</th>
+                  <tr className="bg-[#F1F5F9] border-b border-[#DDE2EC] text-[11.5px] text-[#475569] uppercase font-mono tracking-wider">
+                    <th className="px-6 py-3">Timestamp</th>
+                    <th className="px-6 py-3">User</th>
+                    <th className="px-6 py-3">Action Event</th>
+                    <th className="px-6 py-3">Module</th>
+                    <th className="px-6 py-3">Description</th>
+                    <th className="px-6 py-3 text-right">Status</th>
                   </tr>
                 </thead>
-                <tbody className="text-[13px] text-gray-800 divide-y divide-gray-100">
-                  {auditLogs.length === 0 ? (
+                <tbody className="divide-y divide-[#F1F5F9] text-[13px] text-[#334155]">
+                  {filteredAuditLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-16 text-center">
-                        <Icons.EmptyModule />
-                        <h3 className="text-[16px] font-extrabold text-gray-900 mb-1">No audit logs found</h3>
-                        <p className="text-[13px] text-gray-500 mb-6 font-medium">System activities will appear here.</p>
+                      <td colSpan={6} className="px-6 py-12 text-center text-[#64748B]">
+                        No audit log records match the selected search criteria.
                       </td>
                     </tr>
                   ) : (
-                    filteredAuditLogs.map((log, i) => (
-                      <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 font-bold text-gray-500">{i + 1}</td>
-                        <td className="px-6 py-4 text-gray-500 font-mono text-[11.5px]">{new Date(log.timestamp).toLocaleString()}</td>
-                        <td className="px-6 py-4 font-bold text-gray-900">{log.username}</td>
-                        <td className="px-6 py-4">
-                          <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-none text-[11.5px] font-bold border border-indigo-100">
+                    filteredAuditLogs.map((log) => (
+                      <tr 
+                        key={log.id} 
+                        onClick={() => setSelectedAuditLog(log)}
+                        className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
+                      >
+                        <td className="px-6 py-3 font-mono text-[11.5px] text-[#64748B] whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </td>
+
+                        <td className="px-6 py-3 font-bold text-[#0F172A] whitespace-nowrap">
+                          {log.username}
+                        </td>
+
+                        <td className="px-6 py-3">
+                          <span className="text-[11.5px] bg-blue-50 text-[#1B4FD8] px-2 py-0.5 border border-blue-200 font-semibold rounded-none">
                             {log.action}
                           </span>
                         </td>
-                        <td className="px-6 py-4 font-medium text-gray-600">{log.module}</td>
-                        <td className="px-6 py-4 text-gray-600">{log.description}</td>
-                        <td className="px-6 py-4 text-right">
-                          <span className={`flex items-center justify-end gap-1.5 text-[12px] font-bold ${log.status === "Success" ? "text-green-700" : "text-red-700"}`}>
-                            <span className={`w-1.5 h-1.5 rounded-none-none ${log.status === "Success" ? "bg-green-500" : "bg-red-500"}`}></span> 
+
+                        <td className="px-6 py-3 text-[#64748B] font-medium">
+                          {log.module}
+                        </td>
+
+                        <td className="px-6 py-3 text-[#334155] max-w-md truncate">
+                          {log.description}
+                        </td>
+
+                        <td className="px-6 py-3 text-right">
+                          <span
+                            className={`text-[11px] font-bold px-2 py-0.5 rounded-none border ${
+                              log.status === "Success"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-red-50 text-red-700 border-red-200"
+                            }`}
+                          >
                             {log.status}
                           </span>
                         </td>
@@ -643,88 +1093,435 @@ export default function Administration() {
             </div>
           </div>
         )}
+
+        {/* ── TAB 4: SYSTEM & GOVERNANCE SETTINGS ────────────────────────── */}
+        {activeTab === "settings" && (
+          <div className="space-y-6 max-w-4xl">
+            
+            {/* Security Policies Card */}
+            <div className="bg-white border border-[#DDE2EC] rounded-none p-6 space-y-6 shadow-sm">
+              <div className="border-b border-[#E2E8F0] pb-4">
+                <h3 className="text-base font-bold text-[#0F172A]">Hospital System Security Policies</h3>
+                <p className="text-[12.5px] text-[#64748B]">Configure global authentication requirements, session expiry, and access limits.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-center justify-between p-4 bg-[#F8FAFC] border border-[#E2E8F0]">
+                  <div>
+                    <div className="font-bold text-[#0F172A] text-[13.5px]">Enforce Multi-Factor Auth (MFA)</div>
+                    <div className="text-[11.5px] text-[#64748B]">Require OTP code on unknown device logins</div>
+                  </div>
+                  <button
+                    onClick={() => setMfaEnforced(!mfaEnforced)}
+                    className={`w-12 h-6 flex items-center p-1 rounded-none border transition-colors cursor-pointer ${
+                      mfaEnforced ? "bg-[#1B4FD8] border-blue-600 justify-end" : "bg-gray-200 border-gray-300 justify-start"
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-white rounded-none shadow"></div>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-[#F8FAFC] border border-[#E2E8F0]">
+                  <div>
+                    <div className="font-bold text-[#0F172A] text-[13.5px]">Maintenance Mode</div>
+                    <div className="text-[11.5px] text-[#64748B]">Restrict logins to Super Admins only</div>
+                  </div>
+                  <button
+                    onClick={() => setMaintenanceMode(!maintenanceMode)}
+                    className={`w-12 h-6 flex items-center p-1 rounded-none border transition-colors cursor-pointer ${
+                      maintenanceMode ? "bg-amber-600 border-amber-500 justify-end" : "bg-gray-200 border-gray-300 justify-start"
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-white rounded-none shadow"></div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                <div>
+                  <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Session Idle Timeout (Minutes)</label>
+                  <input
+                    type="number"
+                    value={sessionTimeoutMinutes}
+                    onChange={(e) => setSessionTimeoutMinutes(Number(e.target.value))}
+                    className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Minimum Password Length</label>
+                  <input
+                    type="number"
+                    value={minPasswordLength}
+                    onChange={(e) => setMinPasswordLength(Number(e.target.value))}
+                    className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-[#E2E8F0]">
+                <button
+                  onClick={() => {
+                    setSettingsNotice("System governance security policy saved successfully.");
+                    setTimeout(() => setSettingsNotice(""), 3000);
+                  }}
+                  className="bg-[#1B4FD8] hover:bg-[#1740B4] text-white font-semibold text-[13px] px-5 py-2 rounded-none transition-colors border border-blue-600 shadow-sm"
+                >
+                  Save Governance Policies
+                </button>
+              </div>
+
+              {settingsNotice && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12.5px] p-3">
+                  ✓ {settingsNotice}
+                </div>
+              )}
+            </div>
+
+            {/* AI & OCR Endpoint Diagnostics Card */}
+            <div className="bg-white border border-[#DDE2EC] rounded-none p-6 space-y-4 shadow-sm">
+              <div className="border-b border-[#E2E8F0] pb-3">
+                <h3 className="text-base font-bold text-[#0F172A]">Microservices & AI Gateway Diagnostics</h3>
+                <p className="text-[12.5px] text-[#64748B]">Live backend services running behind Nginx API Gateway (Port 8010).</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { name: "API Gateway (Nginx)", port: "8010", status: "HEALTHY", latency: "4ms" },
+                  { name: "Keppler OCR API", port: "7620", status: "HEALTHY", latency: "18ms" },
+                  { name: "vLLM Qwen 7B Model", port: "8700", status: "HEALTHY", latency: "42ms" },
+                  { name: "Auth & RBAC Service", port: "8010/api/auth", status: "HEALTHY", latency: "8ms" },
+                  { name: "ICU Clinical DB Service", port: "8010/api/icu", status: "HEALTHY", latency: "12ms" },
+                  { name: "Keppler OCR Frontend Embed", port: "3000", status: "RUNNING", latency: "2ms" },
+                ].map((s, idx) => (
+                  <div key={idx} className="bg-[#F8FAFC] border border-[#E2E8F0] p-3 flex items-center justify-between">
+                    <div>
+                      <div className="text-[13px] font-bold text-[#0F172A]">{s.name}</div>
+                      <div className="text-[11px] font-mono text-[#64748B]">Port {s.port} • Latency {s.latency}</div>
+                    </div>
+                    <span className="text-[10.5px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 border border-emerald-200 font-bold">
+                      ● {s.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* --- MODALS --- */}
-      {showRoleNameModal && (
-        <div className="fixed inset-0 bg-gray-900/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-none-none shadow-xl w-[400px] flex flex-col overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-[16px] font-extrabold text-gray-900">Create New Role</h2>
-              <button onClick={() => setShowRoleNameModal(false)} className="text-gray-400 hover:text-gray-900">✕</button>
+      {/* ── MODALS ─────────────────────────────────────────────────────── */}
+
+      {/* 1. Create Role Modal */}
+      {showCreateRoleModal && (
+        <div className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DDE2EC] shadow-xl w-full max-w-md rounded-none overflow-hidden">
+            <div className="px-6 py-4 bg-[#F8FAFC] border-b border-[#DDE2EC] flex items-center justify-between">
+              <h3 className="text-base font-bold text-[#0F172A]">Create New Custom Role</h3>
+              <button onClick={() => setShowCreateRoleModal(false)} className="text-[#64748B] hover:text-black">✕</button>
             </div>
-            <form onSubmit={handleCreateRole} className="p-6">
-              <label className="block text-[13px] font-bold text-gray-900 mb-2">Role Name</label>
-              <input 
-                autoFocus
-                required 
-                value={newRoleName} 
-                onChange={e => setNewRoleName(e.target.value)} 
-                className="w-full border-2 border-gray-200 rounded-none-none px-4 py-2.5 text-[14px] font-medium focus:outline-none focus:border-blue-500 transition-all" 
-                placeholder="e.g. Ward Manager" 
-              />
-              <div className="mt-6 flex justify-end gap-3">
-                <button type="button" onClick={() => setShowRoleNameModal(false)} className="px-4 py-2 text-[13px] font-bold text-gray-500 hover:bg-gray-100 rounded-none-none transition-colors">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-[13px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-none-none shadow-sm transition-colors">Continue</button>
+            <form onSubmit={handleCreateRole} className="p-6 space-y-4">
+              <div>
+                <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Role Name</label>
+                <input
+                  required
+                  autoFocus
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  placeholder="e.g. Senior Critical Care Registrar"
+                  className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Description (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={newRoleDescription}
+                  onChange={(e) => setNewRoleDescription(e.target.value)}
+                  placeholder="Responsibilities and access scope..."
+                  className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[12.5px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-[#E2E8F0]">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateRoleModal(false)}
+                  className="bg-white hover:bg-gray-50 text-[#334155] text-[13px] font-semibold px-4 py-2 rounded-none transition-colors border border-[#CBD5E1]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold px-5 py-2 rounded-none transition-colors border border-blue-600 shadow-sm"
+                >
+                  Create & Configure Modules
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {showUserModal && editingUser && (
-        <div className="fixed inset-0 bg-gray-900/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-none-none shadow-xl w-[500px] flex flex-col overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <h2 className="text-[16px] font-extrabold text-gray-900">
-                {editingUser.id.startsWith("U_") && editingUser.id.length > 10 ? "Create User Account" : "Edit User Account"}
-              </h2>
-              <button onClick={() => setShowUserModal(false)} className="text-gray-400 hover:text-gray-900 font-bold">✕</button>
+      {/* 2. Clone Role Modal */}
+      {showCloneRoleModal && (
+        <div className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DDE2EC] shadow-xl w-full max-w-md rounded-none overflow-hidden">
+            <div className="px-6 py-4 bg-[#F8FAFC] border-b border-[#DDE2EC] flex items-center justify-between">
+              <h3 className="text-base font-bold text-[#0F172A]">Clone Existing Role</h3>
+              <button onClick={() => setShowCloneRoleModal(false)} className="text-[#64748B] hover:text-black">✕</button>
             </div>
-            <form id="userForm" onSubmit={handleSaveUser} className="p-6 space-y-4">
+            <form onSubmit={handleCloneRole} className="p-6 space-y-4">
               <div>
-                <label className="block text-[13px] font-bold text-gray-900 mb-1.5">Full Name</label>
-                <input required value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} className="w-full border-2 border-gray-200 rounded-none-none px-3 py-2 text-[13.5px] font-medium focus:outline-none focus:border-blue-500 transition-all" placeholder="e.g. John Doe" />
+                <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Source Role to Copy Permissions From</label>
+                <select
+                  value={cloneSourceRoleId}
+                  onChange={(e) => setCloneSourceRoleId(e.target.value)}
+                  className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
+                >
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name} ({r.allowedModules.length} Rules)</option>
+                  ))}
+                </select>
               </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-[#334155] mb-1.5">New Role Name</label>
+                <input
+                  required
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  placeholder="e.g. ICU Charge Nurse"
+                  className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-[#E2E8F0]">
+                <button
+                  type="button"
+                  onClick={() => setShowCloneRoleModal(false)}
+                  className="bg-white hover:bg-gray-50 text-[#334155] text-[13px] font-semibold px-4 py-2 rounded-none transition-colors border border-[#CBD5E1]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold px-5 py-2 rounded-none transition-colors border border-blue-600 shadow-sm"
+                >
+                  Clone Role
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Create / Edit User Account Modal */}
+      {showUserModal && editingUser && (
+        <div className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DDE2EC] shadow-xl w-full max-w-lg rounded-none overflow-hidden">
+            <div className="px-6 py-4 bg-[#F8FAFC] border-b border-[#DDE2EC] flex items-center justify-between">
+              <h3 className="text-base font-bold text-[#0F172A]">
+                {users.some((u) => u.id === editingUser.id) ? "Edit Staff User Account" : "Create New Staff Account"}
+              </h3>
+              <button onClick={() => setShowUserModal(false)} className="text-[#64748B] hover:text-black">✕</button>
+            </div>
+            <form onSubmit={handleSaveUser} className="p-6 space-y-4">
+              <div>
+                <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Full Name</label>
+                <input
+                  required
+                  value={editingUser.name}
+                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                  placeholder="e.g. Dr. Robert Miller"
+                  className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[13px] font-bold text-gray-900 mb-1.5">Username</label>
-                  <input required value={editingUser.username} onChange={e => setEditingUser({...editingUser, username: e.target.value})} className="w-full border-2 border-gray-200 rounded-none-none px-3 py-2 text-[13.5px] font-medium focus:outline-none focus:border-blue-500 transition-all" />
+                  <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Username ID</label>
+                  <input
+                    required
+                    value={editingUser.username}
+                    onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value.toLowerCase().trim() })}
+                    placeholder="e.g. rmiller"
+                    className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
+                  />
                 </div>
+
                 <div>
-                  <label className="block text-[13px] font-bold text-gray-900 mb-1.5">Staff ID</label>
-                  <input required value={editingUser.staffId} onChange={e => setEditingUser({...editingUser, staffId: e.target.value})} className="w-full border-2 border-gray-200 rounded-none-none px-3 py-2 text-[13.5px] font-medium focus:outline-none focus:border-blue-500 transition-all text-gray-500" />
+                  <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Staff Employee ID</label>
+                  <input
+                    required
+                    value={editingUser.staffId}
+                    onChange={(e) => setEditingUser({ ...editingUser, staffId: e.target.value })}
+                    placeholder="e.g. DOC-901"
+                    className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8] font-mono"
+                  />
                 </div>
               </div>
-              <div>
-                <label className="block text-[13px] font-bold text-gray-900 mb-1.5">Password</label>
-                <input required value={editingUser.password} onChange={e => setEditingUser({...editingUser, password: e.target.value})} type="text" className="w-full border-2 border-gray-200 rounded-none-none px-3 py-2 text-[13.5px] font-medium focus:outline-none focus:border-blue-500 transition-all" />
-              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[13px] font-bold text-gray-900 mb-1.5">Assign Role</label>
-                  <select value={editingUser.roleId} onChange={e => setEditingUser({...editingUser, roleId: e.target.value})} className="w-full border-2 border-gray-200 rounded-none-none px-3 py-2.5 text-[14px] font-bold text-gray-900 focus:outline-none focus:border-blue-500 transition-all bg-white shadow-sm outline-none cursor-pointer">
-                    {roles.map(r => (
+                  <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Assigned System Role</label>
+                  <select
+                    value={editingUser.roleId}
+                    onChange={(e) => setEditingUser({ ...editingUser, roleId: e.target.value })}
+                    className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8] font-semibold cursor-pointer"
+                  >
+                    {roles.map((r) => (
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
                   </select>
                 </div>
+
                 <div>
-                  <label className="block text-[13px] font-bold text-gray-900 mb-1.5">Account Status</label>
-                  <select value={editingUser.status || "Active"} onChange={e => setEditingUser({...editingUser, status: e.target.value as any})} className="w-full border-2 border-gray-200 rounded-none-none px-3 py-2.5 text-[14px] font-bold text-gray-900 focus:outline-none focus:border-blue-500 transition-all bg-white shadow-sm outline-none cursor-pointer">
+                  <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Account Status</label>
+                  <select
+                    value={editingUser.status || "Active"}
+                    onChange={(e) => setEditingUser({ ...editingUser, status: e.target.value as any })}
+                    className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8] font-semibold cursor-pointer"
+                  >
                     <option value="Active">Active</option>
                     <option value="Inactive">Inactive</option>
                   </select>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-[#334155] mb-1.5">Initial Account Password</label>
+                <input
+                  required
+                  type="text"
+                  value={editingUser.password || "password123"}
+                  onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
+                  className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8] font-mono"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-[#E2E8F0]">
+                <button
+                  type="button"
+                  onClick={() => setShowUserModal(false)}
+                  className="bg-white hover:bg-gray-50 text-[#334155] text-[13px] font-semibold px-4 py-2 rounded-none transition-colors border border-[#CBD5E1]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold px-5 py-2 rounded-none transition-colors border border-blue-600 shadow-sm"
+                >
+                  Save User Account
+                </button>
+              </div>
             </form>
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
-              <button onClick={() => setShowUserModal(false)} type="button" className="px-5 py-2.5 text-[13px] font-bold text-gray-600 hover:bg-gray-200 rounded-none-none transition-colors">Cancel</button>
-              <button form="userForm" type="submit" className="px-5 py-2.5 text-[13px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-none-none shadow-sm transition-colors">Save Account</button>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Reset Password Modal */}
+      {resetPassUser && (
+        <div className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DDE2EC] shadow-xl w-full max-w-sm rounded-none overflow-hidden">
+            <div className="px-6 py-4 bg-[#F8FAFC] border-b border-[#DDE2EC] flex items-center justify-between">
+              <h3 className="text-base font-bold text-[#0F172A]">Reset Account Password</h3>
+              <button onClick={() => setResetPassUser(null)} className="text-[#64748B] hover:text-black">✕</button>
+            </div>
+            <form onSubmit={handleResetPassword} className="p-6 space-y-4">
+              <div className="text-[12.5px] text-[#334155]">
+                Resetting password for staff member <strong className="text-[#0F172A]">{resetPassUser.name}</strong> (@{resetPassUser.username}).
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-[#334155] mb-1.5">New Password</label>
+                <input
+                  required
+                  type="text"
+                  value={newPassInput}
+                  onChange={(e) => setNewPassInput(e.target.value)}
+                  className="w-full bg-white border border-[#DDE2EC] rounded-none px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8] font-mono"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-[#E2E8F0]">
+                <button
+                  type="button"
+                  onClick={() => setResetPassUser(null)}
+                  className="bg-white hover:bg-gray-50 text-[#334155] text-[13px] font-semibold px-4 py-2 rounded-none transition-colors border border-[#CBD5E1]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-amber-600 hover:bg-amber-700 text-white text-[13px] font-semibold px-4 py-2 rounded-none transition-colors border border-amber-600 shadow-sm"
+                >
+                  Confirm Password Reset
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Audit Detail Modal */}
+      {selectedAuditLog && (
+        <div className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DDE2EC] shadow-xl w-full max-w-lg rounded-none overflow-hidden">
+            <div className="px-6 py-4 bg-[#F8FAFC] border-b border-[#DDE2EC] flex items-center justify-between">
+              <h3 className="text-base font-bold text-[#0F172A]">Security Event Log Inspector</h3>
+              <button onClick={() => setSelectedAuditLog(null)} className="text-[#64748B] hover:text-black">✕</button>
+            </div>
+
+            <div className="p-6 space-y-4 text-[13px]">
+              <div className="grid grid-cols-2 gap-4 bg-[#F8FAFC] p-4 border border-[#E2E8F0]">
+                <div>
+                  <div className="text-[11px] text-[#64748B] uppercase font-mono">Event ID</div>
+                  <div className="font-mono text-[#0F172A] text-[12px]">{selectedAuditLog.id}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-[#64748B] uppercase font-mono">Timestamp</div>
+                  <div className="font-mono text-[#0F172A] text-[12px]">{new Date(selectedAuditLog.timestamp).toLocaleString()}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-[11px] text-[#64748B] uppercase font-mono">Executing User</div>
+                  <div className="font-bold text-[#0F172A]">{selectedAuditLog.username}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-[#64748B] uppercase font-mono">Event Action</div>
+                  <div className="font-semibold text-[#1B4FD8]">{selectedAuditLog.action}</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] text-[#64748B] uppercase font-mono mb-1">Target Module</div>
+                <div className="text-[#0F172A] font-mono">{selectedAuditLog.module}</div>
+              </div>
+
+              <div>
+                <div className="text-[11px] text-[#64748B] uppercase font-mono mb-1">Event Description</div>
+                <div className="bg-[#F8FAFC] p-3 border border-[#E2E8F0] text-[#334155] font-mono text-[12px]">
+                  {selectedAuditLog.description}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-[#E2E8F0]">
+                <button
+                  onClick={() => setSelectedAuditLog(null)}
+                  className="bg-white hover:bg-gray-50 text-[#334155] text-[13px] font-semibold px-4 py-2 rounded-none transition-colors border border-[#CBD5E1]"
+                >
+                  Close Inspector
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

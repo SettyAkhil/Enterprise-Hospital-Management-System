@@ -157,6 +157,36 @@ body {
   color: #93C5FD;
 }
 
+/* Nav icons must never be squeezed by the flex row */
+.nav-item > svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+/* Collapsed rail: icon-only rows, centered and legible */
+.nav-item.collapsed {
+  justify-content: center;
+  padding: 9px 0;
+  gap: 0;
+}
+.nav-item.collapsed > svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Squared cards
+   Cards, panels, dialogs and tiles are square app-wide. Tailwind's card-sized
+   radii are neutralised here instead of being edited out of ~84 class strings,
+   so new cards come out square by default too. These rules are unlayered, so
+   they beat Tailwind's @layer utilities without !important.
+   Small chips keep their radius: rounded / -sm / -md / -lg (icon tiles, badges)
+   and rounded-full (pills, avatars, progress bars, status dots). */
+[class*="rounded-xl"],
+[class*="rounded-2xl"],
+[class*="rounded-3xl"] {
+  border-radius: 0;
+}
+
 /* Badge */
 .badge {
   font-family: var(--font-mono);

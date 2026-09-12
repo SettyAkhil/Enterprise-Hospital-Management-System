@@ -228,7 +228,7 @@ export default function DischargedDirectoryView({
         {/* ── OPERATIONAL SUMMARY KPI CARDS (LARGE FORMAT) ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {/* Card 1 */}
-          <div className="bg-white rounded-lg border border-[#E2E8F0] p-5 shadow-xs flex flex-col justify-between">
+          <div className="bg-white rounded-none border border-[#E2E8F0] p-5 shadow-xs flex flex-col justify-between">
             <div className="text-[11px] font-bold tracking-wider text-[#64748B] uppercase">
               Total Discharged
             </div>
@@ -244,7 +244,7 @@ export default function DischargedDirectoryView({
           </div>
 
           {/* Card 2 */}
-          <div className="bg-white rounded-lg border border-[#E2E8F0] p-5 shadow-xs flex flex-col justify-between">
+          <div className="bg-white rounded-none border border-[#E2E8F0] p-5 shadow-xs flex flex-col justify-between">
             <div className="text-[11px] font-bold tracking-wider text-[#64748B] uppercase">
               Today's Discharges
             </div>
@@ -260,7 +260,7 @@ export default function DischargedDirectoryView({
           </div>
 
           {/* Card 3 */}
-          <div className="bg-white rounded-lg border border-[#E2E8F0] p-5 shadow-xs flex flex-col justify-between">
+          <div className="bg-white rounded-none border border-[#E2E8F0] p-5 shadow-xs flex flex-col justify-between">
             <div className="text-[11px] font-bold tracking-wider text-[#64748B] uppercase">
               Avg. Length of Stay
             </div>
@@ -276,7 +276,7 @@ export default function DischargedDirectoryView({
           </div>
 
           {/* Card 4 */}
-          <div className="bg-white rounded-lg border border-[#E2E8F0] p-5 shadow-xs flex flex-col justify-between">
+          <div className="bg-white rounded-none border border-[#E2E8F0] p-5 shadow-xs flex flex-col justify-between">
             <div className="text-[11px] font-bold tracking-wider text-[#64748B] uppercase">
               Room Charges Settled
             </div>
@@ -575,7 +575,7 @@ export default function DischargedDirectoryView({
             {/* Drawer Body / Clinical Record Content */}
             <div className="p-6 overflow-y-auto flex-1 space-y-6 text-sm text-[#0F172A]">
               {/* 1. Stay Timeline */}
-              <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-4">
+              <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-none p-4">
                 <div className="text-[11px] font-bold tracking-wider text-[#64748B] uppercase mb-3">
                   Admission & Stay Timeline
                 </div>
@@ -639,7 +639,7 @@ export default function DischargedDirectoryView({
                 <div className="text-[11px] font-bold tracking-wider text-[#64748B] uppercase mb-2">
                   Discharge Summary & Clinical Reason
                 </div>
-                <div className="p-4 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg text-xs leading-relaxed text-[#1E293B]">
+                <div className="p-4 bg-[#F8FAFC] border border-[#CBD5E1] rounded-none text-xs leading-relaxed text-[#1E293B]">
                   <p className="font-semibold text-sm text-[#0F172A] mb-1">
                     Physician Discharge Disposition:
                   </p>
@@ -650,7 +650,7 @@ export default function DischargedDirectoryView({
               </div>
 
               {/* 5. Settled Room Charges */}
-              <div className="p-4 bg-[#F0FDF4] border border-[#BBF7D0] rounded-lg flex items-center justify-between">
+              <div className="p-4 bg-[#F0FDF4] border border-[#BBF7D0] rounded-none flex items-center justify-between">
                 <div>
                   <div className="text-[11px] font-bold text-[#166534] uppercase tracking-wider">
                     Total Inpatient Room Charges

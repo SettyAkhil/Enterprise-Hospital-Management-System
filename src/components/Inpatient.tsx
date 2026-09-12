@@ -3,7 +3,7 @@ import { FiBell, FiClock, FiUsers } from "react-icons/fi";
 import { Btn } from "./shared";
 import { bedGenderVariant, bedOccupantName } from "./bed/BedCard";
 import { WardBedBoard } from "./bed/WardBedBoard";
-import ICU from "./ICU";
+import IcuDepartment from "./IcuDepartment";
 import { apiFetch } from "../lib/api";
 import { formatDateTimeIST } from "../lib/format";
 
@@ -375,7 +375,7 @@ export default function Inpatient({ navigate, onOpenPatientClinical, permissions
                 )}
               </div>
               {activeWard === "ICU" ? (
-                <ICU embedded navigate={navigate} onOpenPatientClinical={onOpenPatientClinical} permissions={permissions} />
+                <IcuDepartment embedded navigate={navigate} onOpenPatientClinical={onOpenPatientClinical} permissions={permissions} />
               ) : (
                 <WardBedBoard
                   rooms={activeRooms}

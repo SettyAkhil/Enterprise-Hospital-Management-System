@@ -14,7 +14,7 @@ export type ErTimelineEventLocal = {
 export default function ErTimeline({ events }: { events: ErTimelineEventLocal[] }) {
   if (!events || events.length === 0) {
     return (
-      <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+      <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-none border border-dashed border-gray-300">
         No chronological events recorded yet.
       </div>
     );

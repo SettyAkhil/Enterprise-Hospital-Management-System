@@ -153,29 +153,59 @@ const UNITS = [
   { unit: "Surgical Recovery 2E", total: 20, occupied: 10, critical: 0, icon: Icon.Surgery },
 ];
 
-export default function Dashboard({ navigate }: { navigate: (m: string, s?: string) => void }) {
+export default function Dashboard({
+  navigate,
+  userRole = "ROLE_ADMIN",
+  activeStaff,
+  switchRole,
+}: {
+  navigate: (m: string, s?: string) => void;
+  userRole?: string;
+  activeStaff?: { id: string; name: string; title: string; department: string };
+  switchRole?: (targetRole: string, targetUsername: string, permissions: string[]) => void;
+}) {
   const [_, setRefresh] = useState(0);
+
+  const roleKey = (userRole || "").toUpperCase();
+  const isSuperAdmin = roleKey.includes("SUPERADMIN");
+  const isAdmin = roleKey.includes("ADMIN") && !isSuperAdmin;
+  const isDoctor = roleKey.includes("DOCTOR");
+  const isReception = roleKey.includes("RECEPTION");
+  const isPharmacy = roleKey.includes("PHARMACY");
+  const isLab = roleKey.includes("LAB");
+  const isNurse = roleKey.includes("NURSE") || roleKey.includes("RN");
+
+  const portalBanner = isSuperAdmin ? { title: "Super Admin Platform Control Suite", badge: "SUPER ADMIN", color: "bg-[#1E3A8A] text-white", icon: "👑" } :
+    isAdmin ? { title: "Hospital Operations & Census Command", badge: "HOSPITAL ADMIN", color: "bg-[#166534] text-white", icon: "🏢" } :
+    isDoctor ? { title: "Doctor Clinical EMR & Orders Portal", badge: "PHYSICIAN PORTAL", color: "bg-[#78350F] text-white", icon: "👨‍⚕️" } :
+    isReception ? { title: "Receptionist & Patient Services Portal", badge: "FRONT DESK", color: "bg-[#581C87] text-white", icon: "📋" } :
+    isPharmacy ? { title: "Pharmacy Dispensing & Paper Rx OCR Portal", badge: "PHARMACY PORTAL", color: "bg-[#064E3B] text-white", icon: "💊" } :
+    isLab ? { title: "Laboratory & Diagnostic Testing Portal", badge: "PATHOLOGY & LAB", color: "bg-[#831843] text-white", icon: "🔬" } :
+    { title: "Registered Nurse & ICU Station Portal", badge: "NURSE WARD", color: "bg-[#7C2D12] text-white", icon: "👩‍⚕️" };
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F4F6F9]">
       {/* ── Domain Hero Header ────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-4 shadow-sm">
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-4 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#1B4FD8] to-[#1740B4] flex items-center justify-center text-white shadow-sm">
-                <Icon.Dashboard className="w-4 h-4" />
-              </div>
+              <span className="text-2xl">{portalBanner.icon}</span>
               <div>
-                <h1 className="text-lg font-bold text-gray-900 tracking-tight leading-none">
-                  Hospital Operations Dashboard
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-bold text-gray-900 tracking-tight leading-none">
+                    {portalBanner.title}
+                  </h1>
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded ${portalBanner.color}`}>
+                    {portalBanner.badge}
+                  </span>
+                </div>
                 <p className="text-[12px] text-[#64748B] mt-1 flex items-center gap-2">
-                  <span>General Hospital Central Command</span>
+                  <span>Welcome, <strong>{activeStaff?.name || "User"}</strong> ({activeStaff?.title || "Staff"})</span>
                   <span>·</span>
-                  <span>3-North Medical Wing</span>
+                  <span>{activeStaff?.department || "General Hospital"}</span>
                   <span>·</span>
-                  <span className="font-mono text-[#475569]">Aug 23, 2026</span>
+                  <span className="font-mono text-[#475569]">Sept 11, 2026</span>
                 </p>
               </div>
             </div>
@@ -225,7 +255,7 @@ export default function Dashboard({ navigate }: { navigate: (m: string, s?: stri
               <div
                 key={m.id}
                 onClick={() => navigate(m.target)}
-                className="group relative bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm hover:shadow-md hover:border-[#2563EB] transition-all cursor-pointer overflow-hidden"
+                className="group relative bg-white border border-[#E2E8F0] rounded-none p-4 shadow-sm hover:shadow-md hover:border-[#2563EB] transition-all cursor-pointer overflow-hidden"
               >
                 {/* Domain accent strip */}
                 <div
@@ -557,7 +587,7 @@ export default function Dashboard({ navigate }: { navigate: (m: string, s?: stri
               return (
                 <div
                   key={i}
-                  className="bg-[#FAFCFF] border border-[#E2E8F0] rounded-lg p-3.5 flex flex-col justify-between"
+                  className="bg-[#FAFCFF] border border-[#E2E8F0] rounded-none p-3.5 flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-2">
