@@ -68,20 +68,39 @@ export function dispatchConsultation(
   };
 
   // ── Medicines -> pharmacy ────────────────────────────────────────────────
-  if (record.medications.length) {
+  const hasPrescriptionData =
+    record.medications.length > 0 ||
+    !!record.uploadedPrescription ||
+    !!record.whiteboardImage ||
+    !!record.rawText?.trim();
+
+  if (hasPrescriptionData) {
     try {
-      const items: AppPrescriptionItem[] = record.medications.map((med, index) => ({
-        id: `RX-ITEM-${index + 1}`,
-        medicineName: med.name,
-        strength: med.strength,
-        dosage: med.dosage || "1 dose",
-        frequency: med.frequency,
-        duration: med.duration,
-        route: med.route,
-        instructions: med.instructions,
-        quantity: med.quantity > 0 ? med.quantity : 1,
-        substitutionAllowed: true,
-      }));
+      const items: AppPrescriptionItem[] =
+        record.medications.length > 0
+          ? record.medications.map((med, index) => ({
+              id: `RX-ITEM-${index + 1}`,
+              medicineName: med.name,
+              strength: med.strength,
+              dosage: med.dosage || "1 dose",
+              frequency: med.frequency,
+              duration: med.duration,
+              route: med.route,
+              instructions: med.instructions,
+              quantity: med.quantity > 0 ? med.quantity : 1,
+              substitutionAllowed: true,
+            }))
+          : [
+              {
+                id: "RX-ITEM-1",
+                medicineName: record.diagnosis ? `Prescription (${record.diagnosis})` : "Doctor Prescription Sheet",
+                dosage: "As directed",
+                duration: "3 days",
+                quantity: 1,
+                substitutionAllowed: true,
+                instructions: record.advice || record.summary || "Pharmacist verification required",
+              },
+            ];
 
       const prescription: AppPrescription = {
         id: `RX-${Date.now().toString(36).toUpperCase()}`,

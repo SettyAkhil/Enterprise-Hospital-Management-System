@@ -139,7 +139,7 @@ export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps = {
   const [transferMed, setTransferMed] = useState("");
   const [transferQty, setTransferQty] = useState(1);
 
-  useEffect(() => {
+  const reloadPharmacyData = () => {
     setCategories(PharmacyDatabase.getCategories());
     setMedicines(PharmacyDatabase.getMedicines());
     setSuppliers(PharmacyDatabase.getSuppliers());
@@ -151,6 +151,22 @@ export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps = {
     setBills(PharmacyDatabase.getBills());
     setReturns(PharmacyDatabase.getReturns());
     setTransfers(PharmacyDatabase.getTransfers());
+  };
+
+  useEffect(() => {
+    reloadPharmacyData();
+
+    const handleStorageChange = () => {
+      reloadPharmacyData();
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("hospai_pharmacy_updated", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("hospai_pharmacy_updated", handleStorageChange);
+    };
   }, []);
 
   // Shortcut buttons move the sidebar too, so its highlight keeps matching the panel on screen.

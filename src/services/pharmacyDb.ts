@@ -407,7 +407,11 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static savePrescriptions(rx: AppPrescription[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(PRESCRIPTIONS_KEY, JSON.stringify(rx));
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(PRESCRIPTIONS_KEY, JSON.stringify(rx));
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"));
+    }
   }
 
   // Bills
