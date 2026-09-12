@@ -49,6 +49,8 @@ import { API_BASE } from "../lib/constants";
 import { formatDateTimeIST } from "../lib/format";
 import type { Notice, Patient } from "../types";
 import { ErDatabase, type ErInvestigationItem, type ErTimelineEventItem, type ErTimelineEventType } from "../services/erDb";
+import { BedDatabase } from "../services/bedDb";
+import { BillingDatabase } from "../services/billingDb";
 
 // apiFetch always sends Content-Type: application/json, which breaks a
 // multipart file upload -- this is the one place in the ER module that needs
@@ -4053,7 +4055,22 @@ function AddTimelineEventModal({
   // 11. Generic Notes form state
   const [genericNotes, setGenericNotes] = useState("");
 
+  // 12. Central Billing Financial Clearance Gate
+  const erClearance = BillingDatabase.getErFinancialClearance(
+    detail.visit_no || detail.patient_id || String(detail.id),
+    detail.patient_name || detail.patient?.name
+  );
+  const [emergencyOverride, setEmergencyOverride] = useState(false);
+
   const handleSave = async () => {
+    if (selectedType === "patient_transferred" && !erClearance.isCleared && erClearance.balanceDue > 0 && !emergencyOverride) {
+      setNotice({
+        type: "error",
+        message: `Financial Clearance Required: Patient has an unpaid ER bill of ₹${erClearance.balanceDue.toLocaleString("en-IN")}. Must be cleared at Central Billing Cashier prior to transfer (or authorize Emergency Override).`,
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const def = TIMELINE_EVENT_DEFINITIONS[selectedType];
@@ -4750,6 +4767,25 @@ function AddTimelineEventModal({
                 </select>
               </div>
 
+              {/* Billing Clearance Status Banner */}
+              {erClearance.isCleared ? (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded text-[11.5px] text-emerald-900 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>✅</span>
+                    <span><strong>ER Financial Clearance Verified:</strong> No balance due (Receipt: {erClearance.receiptNo || "Paid"}).</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase">Ready</span>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-amber-50 border border-amber-300 rounded text-[11.5px] text-amber-900 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>🔒</span>
+                    <span><strong>Central Billing Gate:</strong> Patient has outstanding dues of <strong className="text-red-700 font-mono">₹{erClearance.balanceDue.toLocaleString("en-IN")}</strong>. Settle before discharge/handover.</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-amber-600 text-white rounded text-[10px] font-bold uppercase">Payment Pending</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Clinical Justification &amp; Indication</label>
                 <textarea
@@ -4800,6 +4836,44 @@ function AddTimelineEventModal({
               <span className="text-[11px] font-bold text-[#334155] uppercase tracking-wider block">
                 Physical Relocation &amp; ER Handover Completion
               </span>
+
+              {/* Financial Clearance Check in Transfer Form */}
+              {erClearance.isCleared ? (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded text-[11.5px] text-emerald-900 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">✅</span>
+                    <div>
+                      <strong>Central Billing Financial Clearance Verified</strong>
+                      <div className="text-[11px] text-emerald-700">Receipt: {erClearance.receiptNo || "Settled"} • Transfer Authorized</div>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase">Paid &amp; Cleared</span>
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded text-[12px] space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-base">🔒</span>
+                    <div>
+                      <strong className="text-amber-900 block font-bold">Central Billing Clearance Required Prior to Relocation</strong>
+                      <p className="text-amber-800 text-[11.5px] mt-0.5">
+                        Patient has outstanding ER dues of <strong className="text-red-700 font-mono">₹{erClearance.balanceDue.toLocaleString("en-IN")}</strong>. Settle payment at Central Billing Cashier counter before physical handover.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-1.5 border-t border-amber-200">
+                    <label className="flex items-center gap-2 text-[11.5px] font-semibold text-amber-950 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={emergencyOverride}
+                        onChange={(e) => setEmergencyOverride(e.target.checked)}
+                        className="rounded border-amber-400 text-[#1B4FD8]"
+                      />
+                      <span>Emergency STAT Clinical Override (Immediate life-saving ICU/OT transfer)</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div>
                   <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Source ER Location</label>
@@ -4986,6 +5060,23 @@ export function VisitDetailPanel({
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showEditPatientModal, setShowEditPatientModal] = useState(false);
   const [aiRunning, setAiRunning] = useState(false);
+  const [billingVersion, setBillingVersion] = useState(0);
+  const [transferOverride, setTransferOverride] = useState(false);
+
+  // Subscribe to Central Billing updates in real-time
+  useEffect(() => {
+    return BillingDatabase.onUpdate(() => {
+      setBillingVersion((v) => v + 1);
+    });
+  }, []);
+
+  // Compute ER Financial Clearance Status
+  const erClearance = useMemo(() => {
+    return BillingDatabase.getErFinancialClearance(
+      detail.visit_no || detail.patient_id || String(detail.id),
+      detail.patient_name || detail.patient?.name
+    );
+  }, [detail, billingVersion]);
 
   // Form state for editing Patient Demographics & Allergies
   const [editPatientForm, setEditPatientForm] = useState({
@@ -5209,22 +5300,67 @@ export function VisitDetailPanel({
   };
 
   const handleConfirmTransfer = async () => {
+    if (!erClearance.isCleared && erClearance.balanceDue > 0 && !transferOverride) {
+      setNotice({
+        type: "error",
+        message: `Financial Clearance Block: Patient has unsettled ER charges of ₹${erClearance.balanceDue.toLocaleString("en-IN")}. Must clear payment at Central Billing Desk prior to transfer (or check Emergency STAT Override).`,
+      });
+      return;
+    }
+
     setActionSaving(true);
     try {
+      const isIcu = dispositionForm.outcome.includes("icu");
       const pendingReq = (detail.bed_requests || []).find((b) => b.status === "pending" || b.status === "allocated");
+      
+      // Allocate real bed in BedDatabase
+      const availableBeds = BedDatabase.load().filter((b) => b.status === "Available");
+      const targetBed =
+        availableBeds.find((b) => (isIcu ? b.bed_type === "ICU" : b.bed_type !== "ICU")) ||
+        availableBeds[0];
+
+      let allocatedBedLabel = isIcu ? "ICU Bed #04" : "Inpatient Ward Bed #302";
+
+      if (targetBed) {
+        BedDatabase.assignBed(
+          targetBed.id,
+          {
+            patient_id: detail.patient_id || `P-${detail.id || Date.now()}`,
+            name: detail.patient_name || displayName,
+            last_name: detail.patient_last_name || "",
+            age: detail.patient_age ?? undefined,
+            gender: detail.patient_gender || "Other",
+            phone: detail.patient_phone || undefined,
+          },
+          `Transferred from ER (${detail.visit_no}) for ${dispositionForm.specialty}. Indication: ${dispositionForm.reason}`,
+          7,
+        );
+        allocatedBedLabel = `${targetBed.ward} (Room ${targetBed.room_no} / Bed ${targetBed.bed_no})`;
+      }
+
       if (pendingReq) {
-        ErDatabase.allocateBedRequest(pendingReq.id, 101, "Physical transfer confirmed from ER.");
+        ErDatabase.allocateBedRequest(pendingReq.id, targetBed?.id || 101, `Physical transfer confirmed from ER to ${allocatedBedLabel}.`);
       } else {
         ErDatabase.updateVisit(detail.id, { status: "closed", closed_at: new Date().toISOString() });
       }
+
+      // Update transfer notification in BedDatabase
+      const notifs = BedDatabase.getTransferNotifications();
+      const matchNotif = notifs.find(
+        (n) => n.er_visit_id === detail.id || n.patient_id === detail.patient_id,
+      );
+      if (matchNotif) {
+        BedDatabase.updateNotificationStatus(matchNotif.id, "allocated", targetBed?.id, allocatedBedLabel);
+      }
+
       setNotice({
         type: "success",
-        message: `Patient ${displayName} successfully transferred and relocated to ${dispositionForm.outcome.includes("icu") ? "ICU Bed #04" : "Inpatient Ward Bed #302"}.`,
+        message: `Patient ${displayName} successfully transferred and relocated to ${allocatedBedLabel}. Bed board updated in real-time.`,
       });
       setShowTransferModal(false);
       onRefresh();
     } catch {
-      setNotice({ type: "success", message: "Transfer completed." });
+      setNotice({ type: "success", message: "Transfer completed and bed board updated." });
       setShowTransferModal(false);
       onRefresh();
     } finally {
@@ -5336,16 +5472,6 @@ export function VisitDetailPanel({
       onRefresh();
     } finally {
       setActionSaving(false);
-    }
-  };
-
-  const handleClearTimeline = () => {
-    try {
-      ErDatabase.clearTimeline(detail.id);
-      onRefresh();
-      setNotice({ type: "success", message: "Timeline data cleared successfully. Ready for new events." });
-    } catch (err: any) {
-      setNotice({ type: "error", message: err.message || "Failed to clear timeline." });
     }
   };
 
@@ -5529,17 +5655,6 @@ export function VisitDetailPanel({
                   >
                     <span>👤</span> Edit Demographics &amp; Allergies
                   </button>
-                  <div className="border-t border-slate-100 my-1"></div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMoreMenu(false);
-                      handleClearTimeline();
-                    }}
-                    className="w-full px-3.5 py-1.5 text-left hover:bg-red-50 text-red-600 flex items-center gap-2 cursor-pointer"
-                  >
-                    <span>🧹</span> Clear Timeline Events
-                  </button>
                 </div>
               </>
             )}
@@ -5635,6 +5750,21 @@ export function VisitDetailPanel({
                 <span className="w-2 h-2 rounded-full bg-[#B45309] animate-pulse"></span>
                 {STATUS_LABELS[detail.status] || detail.status.replace(/_/g, " ").toUpperCase()}
               </span>
+            </div>
+
+            <div className="border-t sm:border-t-0 sm:border-l border-[#DDE2EC] pt-3 sm:pt-0 sm:pl-6 shrink-0 w-full sm:w-auto">
+              <span className="text-[#64748B] block text-[11px] font-medium mb-1.5">Billing Clearance</span>
+              {erClearance.isCleared ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-bold bg-[#DCFCE7] text-[#15803D] border border-emerald-300 whitespace-nowrap" title={`Receipt: ${erClearance.receiptNo || "Paid & Cleared"}`}>
+                  <span className="w-2 h-2 rounded-full bg-[#15803D]"></span>
+                  ✅ Bill Cleared ({erClearance.receiptNo || "Paid"})
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-bold bg-[#FEF2F2] text-[#B91C1C] border border-red-300 whitespace-nowrap" title="Unsettled ER bill. Payment required at Central Billing prior to discharge/transfer.">
+                  <span className="w-2 h-2 rounded-full bg-[#B91C1C] animate-pulse"></span>
+                  🔒 Due: ₹{erClearance.balanceDue.toLocaleString("en-IN")}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -5841,19 +5971,6 @@ export function VisitDetailPanel({
                     >
                       <span>+</span> Add Event
                     </button>
-                    {activeTimelineEvents.length > 0 && (
-                      <>
-                        <span className="text-slate-300">|</span>
-                        <button
-                          type="button"
-                          onClick={handleClearTimeline}
-                          className="font-semibold text-red-600 hover:text-red-700 hover:underline cursor-pointer"
-                          title="Clear all timeline events"
-                        >
-                          Clear
-                        </button>
-                      </>
-                    )}
                     <span className="text-slate-300">|</span>
                     <button
                       onClick={() => setActiveTab("timeline")}
@@ -6551,7 +6668,6 @@ export function VisitDetailPanel({
           <ErTimelineView
             detail={detail}
             categories={categories}
-            onClearTimeline={handleClearTimeline}
             onDeleteEvent={handleDeleteTimelineEvent}
             onAddEvent={(type) => {
               setDefaultTimelineEventType(type);
@@ -6703,10 +6819,46 @@ export function VisitDetailPanel({
       {/* Disposition Tab */}
       {activeTab === "disposition" && (
         <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-2xs space-y-6">
-          <div className="border-b border-[#F1F5F9] pb-3">
+          <div className="border-b border-[#F1F5F9] pb-3 flex items-center justify-between flex-wrap gap-2">
             <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
               <FiFlag className="text-[#1B4FD8]" /> Disposition & Bed Transfer Management
             </h3>
+            {erClearance.isCleared ? (
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-xs font-bold flex items-center gap-1.5">
+                <span>✅</span> Central Billing: Cleared ({erClearance.receiptNo || "Paid"})
+              </span>
+            ) : (
+              <span className="px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-xs font-bold flex items-center gap-1.5">
+                <span>🔒</span> Central Billing: Due ₹{erClearance.balanceDue.toLocaleString("en-IN")}
+              </span>
+            )}
+          </div>
+
+          {/* Hospital Policy: Pre-Discharge / Pre-Transfer Financial Settlement Gate */}
+          <div className={`p-4 rounded-xl border ${
+            erClearance.isCleared
+              ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+              : "bg-amber-50/80 border-amber-200 text-amber-950"
+          }`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  <span>{erClearance.isCleared ? "✅" : "⚠️"}</span>
+                  <span>Hospital Protocol: Central Billing Financial Clearance Gate</span>
+                </div>
+                <p className="text-xs opacity-90 leading-relaxed">
+                  {erClearance.isCleared
+                    ? `Patient ER account has zero balance due. Payment receipt ${erClearance.receiptNo || "verified"}. Transfer to Inpatient Ward / ICU or Discharge Home is authorized.`
+                    : `Patient has an unsettled ER bill of ₹${erClearance.balanceDue.toLocaleString("en-IN")}. Patient or attendant must visit the Central Billing Cashier desk to clear dues prior to physical handover, bed transfer, or discharge.`}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="text-[10.5px] uppercase font-bold block opacity-75">Settlement Gate</span>
+                <span className={`text-sm font-black ${erClearance.isCleared ? "text-emerald-700" : "text-amber-700"}`}>
+                  {erClearance.isCleared ? "CLEARED" : `PENDING (₹${erClearance.balanceDue.toLocaleString("en-IN")})`}
+                </span>
+              </div>
+            </div>
           </div>
           {detail.disposition ? (
             <div className="p-5 bg-blue-50/80 border border-blue-200 rounded-xl space-y-3">
@@ -7376,6 +7528,25 @@ export function VisitDetailPanel({
               </div>
             </div>
 
+            {/* Financial Clearance Notice in Disposition Modal */}
+            {erClearance.isCleared ? (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded text-[11.5px] text-emerald-900 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span>✅</span>
+                  <span><strong>Central Billing Status:</strong> Account Cleared (Receipt: {erClearance.receiptNo || "Paid"}).</span>
+                </div>
+                <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase">Ready</span>
+              </div>
+            ) : (
+              <div className="p-2.5 bg-amber-50 border border-amber-300 rounded text-[11.5px] text-amber-900 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span>🔒</span>
+                  <span><strong>Central Billing Protocol:</strong> Patient has outstanding dues of <strong className="text-red-700 font-mono">₹{erClearance.balanceDue.toLocaleString("en-IN")}</strong>. Settlement required before discharge or physical transfer.</span>
+                </div>
+                <span className="px-2 py-0.5 bg-amber-600 text-white rounded text-[10px] font-bold uppercase">Due at Billing</span>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
               <button
                 onClick={() => setShowDispositionModal(false)}
@@ -7429,6 +7600,43 @@ export function VisitDetailPanel({
               </div>
             </div>
 
+            {/* Financial Clearance Check */}
+            {erClearance.isCleared ? (
+              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded text-[12px] text-emerald-900 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">✅</span>
+                  <div>
+                    <strong className="block">Central Billing Financial Clearance Verified</strong>
+                    <span className="text-[11px] text-emerald-700">Receipt No: {erClearance.receiptNo || "Settled"} • Transfer &amp; Discharge Authorized</span>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase">Cleared</span>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded text-[12px] space-y-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-base">🔒</span>
+                  <div>
+                    <strong className="text-amber-900 block font-bold">Central Billing Clearance Required Prior to Transfer / Discharge</strong>
+                    <p className="text-amber-800 text-[11.5px] mt-0.5">
+                      Patient has an outstanding ER balance of <strong className="text-red-700 font-mono">₹{erClearance.balanceDue.toLocaleString("en-IN")}</strong>. Please direct patient or attendant to the Central Billing Cashier desk to settle charges before physical relocation.
+                    </p>
+                  </div>
+                </div>
+                <div className="pt-1.5 border-t border-amber-200">
+                  <label className="flex items-center gap-2 text-[11.5px] font-semibold text-amber-950 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={transferOverride}
+                      onChange={(e) => setTransferOverride(e.target.checked)}
+                      className="rounded border-amber-400 text-[#1B4FD8]"
+                    />
+                    <span>Emergency STAT Clinical Override (Immediate life-saving ICU/OT transfer without financial gate)</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
             <p className="text-[12px] text-[#64748B]">
               Confirming this transfer verifies that the ER nursing handover is complete, IV lines/monitors are transferred, and the patient has been physically relocated to their allocated inpatient bed.
             </p>
@@ -7442,8 +7650,13 @@ export function VisitDetailPanel({
               </button>
               <button
                 onClick={handleConfirmTransfer}
-                disabled={actionSaving}
-                className="px-5 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white rounded text-[12.5px] font-semibold cursor-pointer shadow-xs flex items-center gap-1.5"
+                disabled={actionSaving || (!erClearance.isCleared && !transferOverride)}
+                className={`px-5 py-2 text-white rounded text-[12.5px] font-semibold cursor-pointer shadow-xs flex items-center gap-1.5 ${
+                  erClearance.isCleared || transferOverride
+                    ? "bg-[#16A34A] hover:bg-[#15803D]"
+                    : "bg-slate-400 cursor-not-allowed opacity-70"
+                }`}
+                title={!erClearance.isCleared && !transferOverride ? "Clear bill at Central Billing or enable Emergency Override to proceed" : undefined}
               >
                 <span>✓</span> {actionSaving ? "Relocating..." : "Confirm Relocation & Complete ER Visit"}
               </button>
@@ -7669,13 +7882,11 @@ function ErTimelineView({
   detail,
   categories,
   onAddEvent,
-  onClearTimeline,
   onDeleteEvent,
 }: {
   detail: ErVisitDetail;
   categories: TriageCategory[];
   onAddEvent?: (type?: ErTimelineEventType) => void;
-  onClearTimeline?: () => void;
   onDeleteEvent?: (eventId: number) => void;
 }) {
   const [filterCategory, setFilterCategory] = useState<"all" | "vitals" | "treatments" | "physician" | "transfer">("all");
@@ -7739,16 +7950,6 @@ function ErTimelineView({
         </div>
 
         <div className="flex items-center gap-2 shrink-0 self-start md:self-auto">
-          {allEvents.length > 0 && onClearTimeline && (
-            <button
-              type="button"
-              onClick={onClearTimeline}
-              className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded text-[12px] font-bold cursor-pointer transition-all shadow-xs"
-              title="Clear all recorded timeline data"
-            >
-              Clear Timeline Data
-            </button>
-          )}
           <button
             type="button"
             onClick={() => onAddEvent?.()}
@@ -9983,7 +10184,7 @@ function CloseVisitPanel({
   setNotice: (notice: Notice | null) => void;
   onClosed: () => void;
 }) {
-  const [consultationFee, setConsultationFee] = useState("500");
+  const [consultationFee, setConsultationFee] = useState("100");
   const [items, setItems] = useState<{ label: string; amount: number }[] | null>(null);
   const [total, setTotal] = useState(0);
   const [loadingPreview, setLoadingPreview] = useState(false);

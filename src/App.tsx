@@ -625,7 +625,10 @@ export default function App() {
               {module === "dashboard" && <Dashboard navigate={navigate} />}
               {module === "patients" && (
                 <PatientSearch
-                  onSelect={() => setModule("chart")}
+                  onSelect={(p) => {
+                    setClinicalPatientId(p.umr || (p as any).patient_id || (p as any).id);
+                    setModule("chart");
+                  }}
                   onRegister={() => setModule("register")}
                   onNavigateToWorkflow={(encounterId) => {
                     setSelectedWorkflowEncounterId(encounterId);
@@ -783,12 +786,22 @@ export default function App() {
 
           {/* ── Overlays ─────────────────────────────────────────────────── */}
           <OrderDrawer open={orderOpen} onClose={() => setOrderOpen(false)} />
-          <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)}
+          <CommandPalette
+            open={cmdOpen}
+            onClose={() => setCmdOpen(false)}
             onNavigate={(key) => {
               if (key === "order") { setModule("chart"); setOrderOpen(true); }
               else if (key === "register") { setModule("register"); }
               else { setModule(key as Module); }
-            }} />
+            }}
+            onSelectPatient={(patientId, encounterId) => {
+              setClinicalPatientId(patientId);
+              if (encounterId) {
+                setSelectedWorkflowEncounterId(encounterId);
+              }
+              setModule("chart");
+            }}
+          />
         </>
       )}
     </div>

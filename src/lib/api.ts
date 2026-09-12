@@ -2,6 +2,8 @@ import { API_BASE } from "./constants";
 import type { Notice } from "../types";
 import { ErDatabase } from "../services/erDb";
 import { BedDatabase } from "../services/bedDb";
+import { db } from "../services/db";
+import { BillingDatabase } from "../services/billingDb";
 
 const HOSPITAL_CODE_KEY = "hospai_hospital_code";
 const DEFAULT_HOSPITAL_CODE = "hosp-default";
@@ -283,13 +285,65 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
     return { discharged_patients: list } as T;
   }
 
+  // GET /api/beds/transfer-notifications
+  if (pathname === "/api/beds/transfer-notifications" && method === "GET") {
+    const list = BedDatabase.getTransferNotifications();
+    return { notifications: list, unread_count: list.filter((n) => !n.is_read && n.status !== "dismissed").length } as T;
+  }
+
+  // POST /api/beds/transfer-notifications
+  if (pathname === "/api/beds/transfer-notifications" && method === "POST") {
+    const notif = BedDatabase.addTransferNotification(body);
+    return { notification: notif } as T;
+  }
+
+  // POST /api/beds/transfer-notifications/read-all
+  if (pathname === "/api/beds/transfer-notifications/read-all" && method === "POST") {
+    BedDatabase.markAllNotificationsRead();
+    return { success: true } as T;
+  }
+
+  // POST /api/beds/transfer-notifications/:id/read
+  const readNotifMatch = pathname.match(/^\/api\/beds\/transfer-notifications\/(.+)\/read$/);
+  if (readNotifMatch && method === "POST") {
+    const notifId = readNotifMatch[1];
+    BedDatabase.markNotificationRead(notifId);
+    return { success: true } as T;
+  }
+
+  // POST /api/beds/transfer-notifications/:id/status
+  const statusNotifMatch = pathname.match(/^\/api\/beds\/transfer-notifications\/(.+)\/status$/);
+  if (statusNotifMatch && method === "POST") {
+    const notifId = statusNotifMatch[1];
+    BedDatabase.updateNotificationStatus(notifId, body.status, body.bed_id, body.bed_label);
+    return { success: true } as T;
+  }
+
+  // DELETE /api/beds/transfer-notifications/:id
+  const deleteNotifMatch = pathname.match(/^\/api\/beds\/transfer-notifications\/(.+)$/);
+  if (deleteNotifMatch && method === "DELETE") {
+    const notifId = deleteNotifMatch[1];
+    BedDatabase.dismissNotification(notifId);
+    return { success: true } as T;
+  }
+
   // GET /api/beds/:id/discharge-checklist
   const checklistMatch = pathname.match(/^\/api\/beds\/(\d+)\/discharge-checklist$/);
   if (checklistMatch && method === "GET") {
     const bedId = parseInt(checklistMatch[1]);
     const bed = BedDatabase.getBed(bedId);
+    const clearance = BillingDatabase.getInpatientFinancialClearance(
+      bed?.patient_id || bedId,
+      bed?.patient_name || undefined,
+    );
+    const billingOk = clearance.isCleared;
+    const pendingInvoices = (clearance.pendingInvoices || []).map((p) => ({
+      invoice_no: p.invoiceNo,
+      due_amount: p.dueAmount,
+    }));
+
     return {
-      billing: { ok: true, pending_invoices: [] },
+      billing: { ok: billingOk, pending_invoices: pendingInvoices },
       prescriptions: { ok: true, pending_count: 0 },
       documents: { count: 2 },
       room_charges: {
@@ -305,7 +359,7 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
         ],
         total: (bed?.daily_rate || 2500) * 3,
       },
-      clear: true,
+      clear: billingOk,
     } as T;
   }
 
@@ -355,9 +409,348 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
 
   // GET /api/patients
   if (pathname === "/api/patients" && method === "GET") {
-    const q = url.searchParams.get("q") || "";
-    const patients = ErDatabase.searchPatients(q);
-    return { patients } as T;
+    const q = (url.searchParams.get("q") || "").toLowerCase().trim();
+    const careType = (url.searchParams.get("care_type") || "all").toLowerCase();
+
+    // 1. OP Patients from db
+    const opPatients = db.getPatients();
+    const opEncounters = db.getEncounters();
+
+    // 2. ER Patients & Visits from ErDatabase
+    const erPatients = ErDatabase.getPatients();
+    const erVisits = ErDatabase.getVisits("all");
+
+    // 3. Inpatient & ICU Beds from BedDatabase
+    const beds = BedDatabase.getBeds();
+
+    // Build unified PatientRow list
+    const patientRows: any[] = [];
+    const seenIds = new Set<string>();
+
+    // Add Inpatient / ICU patients
+    for (const bed of beds) {
+      if (bed.status === "Occupied" && (bed.patient_name || bed.patient_id)) {
+        const pId = bed.patient_id || `IP-${bed.id}`;
+        if (!seenIds.has(pId)) {
+          seenIds.add(pId);
+          patientRows.push({
+            patient_id: pId,
+            name: bed.patient_name || "Patient",
+            last_name: bed.patient_last_name || "",
+            age: bed.patient_age || 45,
+            gender: bed.patient_gender || "Male",
+            phone: bed.patient_phone || "(617) 555-0100",
+            care_stream: "IP",
+            active_bed: `${bed.ward} · ${bed.bed_no}`,
+            appointment_dept: bed.ward,
+            appointment_doctor: "Dr. Rajesh Sharma",
+          });
+        }
+      }
+    }
+
+    // Add ER Active Visits
+    for (const visit of erVisits) {
+      const p = erPatients.find((ep) => ep.patient_id === visit.patient_id);
+      const pId = visit.patient_id || `ER-${visit.id}`;
+      if (!seenIds.has(pId)) {
+        seenIds.add(pId);
+        patientRows.push({
+          patient_id: pId,
+          name: p?.name || visit.patient_name || "Emergency Patient",
+          last_name: p?.last_name || "",
+          age: p?.age || 35,
+          gender: p?.gender || "Male",
+          phone: p?.phone || p?.emergency_contact || "(617) 555-0199",
+          care_stream: "ER",
+          active_er_visit_id: visit.id,
+          active_er_visit_no: visit.visit_no,
+          active_er_status: visit.status,
+          er_triage_category: visit.triage?.category || "Yellow",
+          appointment_doctor: visit.assigned_doctor_name || "Dr. Anita Roy",
+          appointment_dept: "Emergency Medicine",
+        });
+      }
+    }
+
+    // Add OP Patients
+    for (const p of opPatients) {
+      const pEnc = opEncounters.filter((e) => e.umr === p.umr);
+      const latestEnc = pEnc[0];
+      const pId = p.umr;
+      if (!seenIds.has(pId)) {
+        seenIds.add(pId);
+        patientRows.push({
+          patient_id: pId,
+          name: p.name,
+          last_name: "",
+          age: p.age,
+          gender: p.sex,
+          phone: p.phone,
+          care_stream: "OP",
+          appointment_status: latestEnc?.status || "Registered",
+          appointment_doctor: latestEnc?.assignedDoctor || "Dr. Rajesh Sharma",
+          appointment_dept: latestEnc?.dept || "General Medicine",
+        });
+      }
+    }
+
+    // Also include any other ER patients in records
+    for (const ep of erPatients) {
+      if (!seenIds.has(ep.patient_id)) {
+        seenIds.add(ep.patient_id);
+        patientRows.push({
+          patient_id: ep.patient_id,
+          name: ep.name,
+          last_name: ep.last_name || "",
+          age: ep.age,
+          gender: ep.gender,
+          phone: ep.phone,
+          care_stream: "ER",
+          appointment_dept: "Emergency",
+          appointment_doctor: "Dr. Anita Roy",
+        });
+      }
+    }
+
+    // Filter by search query if present
+    let filtered = patientRows;
+    if (q) {
+      filtered = filtered.filter(
+        (p) =>
+          (p.name || "").toLowerCase().includes(q) ||
+          (p.last_name || "").toLowerCase().includes(q) ||
+          (p.patient_id || "").toLowerCase().includes(q) ||
+          (p.phone || "").toLowerCase().includes(q) ||
+          (p.appointment_doctor || "").toLowerCase().includes(q) ||
+          (p.appointment_dept || "").toLowerCase().includes(q) ||
+          (p.active_bed || "").toLowerCase().includes(q) ||
+          (p.active_er_visit_no || "").toLowerCase().includes(q),
+      );
+    }
+
+    // Filter by care stream
+    if (careType === "op") {
+      filtered = filtered.filter((p) => p.care_stream === "OP");
+    } else if (careType === "ip") {
+      filtered = filtered.filter((p) => p.care_stream === "IP");
+    } else if (careType === "er") {
+      filtered = filtered.filter((p) => p.care_stream === "ER");
+    }
+
+    const counts = {
+      all: patientRows.length,
+      op: patientRows.filter((p) => p.care_stream === "OP").length,
+      ip: patientRows.filter((p) => p.care_stream === "IP").length,
+      er: patientRows.filter((p) => p.care_stream === "ER").length,
+    };
+
+    return { patients: filtered, counts } as T;
+  }
+
+  // GET /api/emr/:id
+  const emrMatch = pathname.match(/^\/api\/emr\/(.+)$/);
+  if (emrMatch && method === "GET") {
+    const pId = decodeURIComponent(emrMatch[1]);
+    const opP = db.getPatientByUmr(pId);
+    const opEnc = db.getEncounters().filter((e) => e.umr === pId);
+    const erP = ErDatabase.getPatients().find((p) => p.patient_id === pId);
+    const erVisits = ErDatabase.getVisits("all").filter((v) => v.patient_id === pId);
+    const bed = BedDatabase.getBeds().find((b) => b.patient_id === pId);
+    const claims = BillingDatabase.getClaims().filter((c) => c.mrn === pId || c.patientName === opP?.name || c.patientName === erP?.name);
+
+    const name = opP?.name || erP?.name || bed?.patient_name || "Patient Record";
+    const age = opP?.age || erP?.age || bed?.patient_age || 42;
+    const gender = opP?.sex || erP?.gender || bed?.patient_gender || "Male";
+    const phone = opP?.phone || erP?.phone || bed?.patient_phone || "(617) 555-0100";
+    const address = opP?.address || erP?.address || "Main Street, Boston, MA";
+    const bloodGroup = opP?.bloodGroup || erP?.blood_group || "O+";
+
+    const patientObj = {
+      id: 1,
+      patient_id: pId,
+      name,
+      last_name: erP?.last_name || bed?.patient_last_name || "",
+      age,
+      gender,
+      phone,
+      address,
+      blood_group: bloodGroup,
+      allergies: erP?.allergies || "No Known Drug Allergies (NKDA)",
+      emergency_contact: erP?.emergency_contact || "(617) 555-0199",
+      guardian_name: erP?.guardian_name || "",
+      created_at: opP?.createdAt || erP?.created_at || new Date().toISOString(),
+      status: "Active",
+    };
+
+    const notes = opEnc.map((e, idx) => ({
+      id: idx + 1,
+      chief_complaint: e.chiefComplaint,
+      notes: `${e.diagnosis}. ${e.advice || ""}`,
+      follow_up: "In 7 days if symptoms persist",
+      created_at: new Date(Date.now() - (idx + 1) * 86400000).toISOString(),
+    }));
+
+    const vitals = opEnc.map((e, idx) => ({
+      id: idx + 1,
+      bp: e.vitals?.bp || "120/80 mmHg",
+      pulse: e.vitals?.pulse || "74 bpm",
+      temperature: e.vitals?.temp || "98.6 °F",
+      created_at: new Date(Date.now() - (idx + 1) * 86400000).toISOString(),
+    }));
+
+    if (vitals.length === 0) {
+      vitals.push({
+        id: 1,
+        bp: "124/82 mmHg",
+        pulse: "76 bpm",
+        temperature: "98.4 °F",
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    const diagnoses = opEnc.map((e, idx) => ({
+      id: idx + 1,
+      diagnosis_name: `${e.diagnosis} (${e.icd10 || "R07.9"})`,
+      created_at: new Date(Date.now() - (idx + 1) * 86400000).toISOString(),
+    }));
+
+    const observation_notes = [
+      {
+        id: 1,
+        doctor_name: opEnc[0]?.assignedDoctor || "Dr. Rajesh Sharma",
+        note: `Patient presented with ${opEnc[0]?.chiefComplaint || "routine clinical symptoms"}. Alert, oriented, vitals stable.`,
+        treatment_plan: opEnc[0]?.advice || "Standard supportive medical management.",
+        created_at: new Date().toISOString(),
+        role: "doctor",
+      },
+      {
+        id: 2,
+        doctor_name: "RN Jessica Carter",
+        note: "Initial triage completed. Vitals logged. Patient resting comfortably.",
+        treatment_plan: "Continuous monitoring as per clinical protocol.",
+        created_at: new Date(Date.now() - 3600000).toISOString(),
+        role: "nurse",
+      },
+    ];
+
+    const prescriptions = (opEnc[0]?.prescription || []).map((rx, idx) => ({
+      prescription_id: idx + 1,
+      medicine_name: rx.medicine,
+      dosage: `${rx.dosage} · ${rx.frequency} · ${rx.duration}`,
+      quantity: 30,
+      unit_price: 15,
+      status: "Fulfilled",
+      created_at: new Date().toISOString(),
+      fulfilled_at: new Date().toISOString(),
+    }));
+
+    const medication_schedules = prescriptions.map((p, idx) => ({
+      id: idx + 1,
+      medicine_name: p.medicine_name,
+      dosage: p.dosage,
+      schedule_time: "08:00 AM, 08:00 PM",
+      administered: true,
+      notes: "Given with food",
+    }));
+
+    const labs = (opEnc[0]?.investigations || ["Complete Blood Count (CBC)", "Lipid Panel"]).map((test, idx) => ({
+      id: idx + 1,
+      test_name: test,
+      amount: 450,
+      status: "Completed",
+      doctor_name: opEnc[0]?.assignedDoctor || "Dr. Rajesh Sharma",
+      created_at: new Date().toISOString(),
+    }));
+
+    const invoices = claims.map((c, idx) => ({
+      id: idx + 1,
+      invoice_no: c.invoiceNo,
+      module: c.department,
+      total_amount: c.totalAmount,
+      paid_amount: c.amountPaid,
+      due_amount: c.balanceDue,
+      payment_status: c.status === "Paid" ? "Paid" : "Pending",
+      created_at: c.dateOfService || new Date().toISOString(),
+    }));
+
+    const invoice_payments = claims.flatMap((c) =>
+      c.payments.map((p, pIdx) => ({
+        id: pIdx + 1,
+        invoice_id: 1,
+        amount: p.amount,
+        payment_mode: p.paymentMethod,
+        created_at: p.paymentDate,
+      })),
+    );
+
+    const insurance_claims = claims.map((c, idx) => ({
+      id: idx + 1,
+      invoice_id: idx + 1,
+      insurer_name: c.insuranceProvider,
+      claim_amount: c.totalAmount,
+      approved_amount: c.insurancePortion || c.totalAmount,
+      claim_status: c.status,
+      submitted_at: c.dateOfService || new Date().toISOString(),
+    }));
+
+    const documents = [
+      {
+        id: 1,
+        doc_type: "Prescription Scan",
+        file_name: `Rx_${pId}.pdf`,
+        mime_type: "application/pdf",
+        created_at: new Date().toISOString(),
+        ocr_text: `PATIENT: ${name}\nDIAGNOSIS: ${opEnc[0]?.diagnosis || "Clinical Management"}\nMEDICATIONS: ${prescriptions.map((p) => p.medicine_name).join(", ")}`,
+        has_ocr_text: true,
+      },
+    ];
+
+    const certificates = [
+      {
+        id: 1,
+        certificate_type: "Medical Fitness",
+        title: "Clinical Fitness Certificate",
+        body: `This is to certify that ${name} (Age: ${age}, ${gender}) has been examined and is clinically fit for regular duties.`,
+        issued_by: opEnc[0]?.assignedDoctor || "Dr. Rajesh Sharma",
+        created_at: new Date().toISOString(),
+      },
+    ];
+
+    const admissions = bed
+      ? [
+          {
+            id: 1,
+            admission_date: bed.admission_date || new Date(Date.now() - 86400000 * 3).toISOString(),
+            discharge_date: bed.expected_discharge_date || null,
+            notes: bed.admission_notes || `Admitted to ${bed.ward} Bed ${bed.bed_no}`,
+          },
+        ]
+      : [];
+
+    return {
+      patient: patientObj,
+      admissions,
+      notes,
+      vitals,
+      diagnoses,
+      observation_notes,
+      medication_schedules,
+      prescriptions,
+      labs,
+      documents,
+      invoices,
+      invoice_payments,
+      insurance_claims,
+      certificates,
+      timeline: [],
+      icu_ventilator_settings: [],
+      icu_infusions: [],
+      icu_io_records: [],
+      icu_rass_scores: [],
+      icu_lab_results: [],
+      icu_consults: [],
+    } as T;
   }
 
   // GET /api/registration/departments
