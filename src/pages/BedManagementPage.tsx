@@ -33,6 +33,8 @@ import { formatDateTimeIST } from "../lib/format";
 import type { Notice, Patient } from "../types";
 import DischargedDirectoryView from "../components/bed/DischargedDirectoryView";
 import { WardBedBoard } from "../components/bed/WardBedBoard";
+import { BedTransferNotificationPanel } from "../components/bed/BedTransferNotificationPanel";
+import { BedDatabase, type BedTransferNotification } from "../services/bedDb";
 
 type Props = {
   setNotice: (notice: Notice | null) => void;
@@ -362,6 +364,25 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
     setFilterMatchingOnly(true);
   };
 
+  const handleAllocateFromNotification = (notif: BedTransferNotification) => {
+    setActiveView("bed_board");
+    setAllocatingRequest({
+      id: notif.er_bed_request_id || 1000 + Math.floor(Math.random() * 9000),
+      er_visit_id: notif.er_visit_id || 1,
+      visit_no: `ER-${notif.patient_id}`,
+      patient_id: notif.patient_id,
+      patient_name: notif.patient_name,
+      patient_last_name: notif.patient_last_name || null,
+      is_unknown_patient: false,
+      unknown_patient_label: null,
+      requested_level_of_care: notif.target_bed_type === "ICU" ? "ICU" : notif.target_destination,
+      requested_specialty: notif.target_ward || notif.target_destination,
+      requested_at: notif.sent_at,
+    });
+    setAllocateNotes(`Admitted via Transfer from ${notif.source_department}. Clinical Notes: ${notif.clinical_reason}`);
+    setAllocateFilter(notif.target_bed_type === "ICU" ? "ICU" : "");
+  };
+
   const handleAllocateErBed = async () => {
     if (!allocatingRequest || !allocateBedId) return;
     setAllocating(true);
@@ -370,7 +391,27 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
         method: "POST",
         body: JSON.stringify({ bed_id: allocateBedId, notes: allocateNotes }),
       });
-      setNotice({ type: "success", message: "Bed allocated from ER request." });
+
+      // Synchronize Transfer Notification status
+      const allocatedBed = beds.find((b) => b.id === allocateBedId);
+      const bedLabel = allocatedBed
+        ? `${allocatedBed.ward} (Room ${allocatedBed.room_no} / Bed ${allocatedBed.bed_no})`
+        : `Bed #${allocateBedId}`;
+
+      const notifs = BedDatabase.getTransferNotifications();
+      const matchNotif = notifs.find(
+        (n) =>
+          n.er_bed_request_id === allocatingRequest.id ||
+          n.patient_id === allocatingRequest.patient_id,
+      );
+      if (matchNotif) {
+        BedDatabase.updateNotificationStatus(matchNotif.id, "allocated", allocateBedId, bedLabel);
+      }
+
+      setNotice({
+        type: "success",
+        message: `Bed allocated for ${erRequestPatientLabel(allocatingRequest)} in ${bedLabel}.`,
+      });
       closeAllocateModal();
       await Promise.all([loadBeds(), loadErRequests()]);
     } catch (error) {
@@ -848,13 +889,21 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
           </button>
         </div>
 
-        {activeView === "bed_board" && canManageBeds && (
-          <div className="pb-2">
+        <div className="flex items-center gap-3 pb-2">
+          {/* Notification Icon & Flyout Panel */}
+          <BedTransferNotificationPanel
+            onAllocateTransfer={handleAllocateFromNotification}
+            onViewPatientChart={onOpenPatientClinical}
+            canManageBeds={canManageBeds}
+            setNotice={setNotice}
+          />
+
+          {activeView === "bed_board" && canManageBeds && (
             <Button onClick={() => setAddBedOpen(true)}>
               <FiPlus aria-hidden /> Add Bed
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {activeView === "discharged" ? (
@@ -1338,20 +1387,49 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
                 <div
                   className={`discharge-checklist-row${checklist.billing?.ok ? " discharge-checklist-row-ok" : " discharge-checklist-row-warn"}`}
                 >
-                  <span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                     {checklist.billing?.ok ? (
                       <FiCheckCircle aria-hidden />
                     ) : (
                       <FiAlertTriangle aria-hidden />
                     )}{" "}
-                    Billing
+                    Central Billing Financial Clearance
                   </span>
-                  <span>
+                  <span style={{ fontWeight: 700 }}>
                     {checklist.billing?.ok
-                      ? "All invoices settled"
-                      : `${checklist.billing?.pending_invoices?.length || 0} invoice(s) with dues`}
+                      ? "✅ All Inpatient Folios Settled (Receipt Issued)"
+                      : `🔒 Due: ${formatINR(
+                          checklist.billing?.pending_invoices?.reduce(
+                            (sum, inv) => sum + (inv.due_amount || 0),
+                            0,
+                          ) || 0,
+                        )} (${checklist.billing?.pending_invoices?.length || 0} invoice(s) pending)`}
                   </span>
                 </div>
+                {!checklist.billing?.ok && checklist.billing?.pending_invoices && checklist.billing.pending_invoices.length > 0 && (
+                  <div
+                    style={{
+                      background: "#fffbeb",
+                      border: "1px solid #fef3c7",
+                      borderRadius: "6px",
+                      padding: "0.5rem 0.75rem",
+                      fontSize: "0.78rem",
+                      color: "#92400e",
+                      marginTop: "-0.25rem",
+                      marginBottom: "0.35rem",
+                    }}
+                  >
+                    <strong style={{ display: "block", marginBottom: "0.2rem" }}>
+                      Pending Inpatient Invoices (Settle at Central Billing):
+                    </strong>
+                    {checklist.billing.pending_invoices.map((inv, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontFamily: "monospace" }}>
+                        <span>• {inv.invoice_no}</span>
+                        <span style={{ fontWeight: 700, color: "#b45309" }}>{formatINR(inv.due_amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div
                   className={`discharge-checklist-row${checklist.prescriptions?.ok ? " discharge-checklist-row-ok" : " discharge-checklist-row-warn"}`}
                 >

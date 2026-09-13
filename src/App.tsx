@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Icon } from "./components/icons";
+import { Icon, type IconProps } from "./components/icons";
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
 import PatientSearch from "./components/PatientSearch";
@@ -75,7 +75,7 @@ type Module =
 interface NavItem {
   key: Module;
   label: string;
-  Icon: React.FC;
+  Icon: React.FC<IconProps>;
   badge?: number;
   children?: { key: Module; label: string; group?: string }[];
 }
@@ -559,10 +559,13 @@ export default function App() {
           {/* ── Top Header ───────────────────────────────────────────────── */}
           <header className="bg-[#0C1524] border-b border-[#1E2D42] h-12 flex items-center gap-3 px-3 flex-shrink-0 z-40">
             {/* Sidebar toggle */}
-            <button onClick={() => setSidebarCollapsed(c => !c)}
-              className="w-7 h-7 flex items-center justify-center text-[#64748B] hover:text-white transition-colors rounded hover:bg-white/10">
+            <button
+              onClick={() => setSidebarCollapsed(c => !c)}
+              className="w-8 h-8 flex items-center justify-center text-[#94A3B8] hover:text-white transition-colors rounded-lg hover:bg-white/10"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                <path d="M3 4.5h12M3 9h12M3 13.5h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </button>
 
@@ -720,14 +723,14 @@ export default function App() {
             {/* ── Sidebar ──────────────────────────────────────────────── */}
             <aside className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-14" : "w-64"}`}>
               {/* Top Logo Section */}
-              <div className="flex items-center justify-center py-2.5 px-3 border-b border-[#1E2D42]/60 flex-shrink-0">
+              <div className="flex items-center justify-center py-2.5 px-2 border-b border-[#1E2D42]/60 flex-shrink-0">
                 <img
                   src="/logo.png"
                   alt="HospAI Logo"
                   className={`${sidebarCollapsed ? "w-8 h-8" : "w-40 h-40"} object-contain pointer-events-none transition-all duration-200`}
                 />
               </div>
-              <div className="flex-1 py-2 px-2">
+              <div className={`flex-1 py-2 ${sidebarCollapsed ? "px-1" : "px-2"}`}>
                 {NAV.map((item) => {
                   // Module-based Access Control Filtering
                   const hasAccess = userPermissions.includes(item.key);
@@ -747,24 +750,63 @@ export default function App() {
                   const navBadge = childBadgeTotal > 0 ? childBadgeTotal : subBadges[item.key] || item.badge;
 
                   return (
-                    <div key={item.key}>
+                    <div key={item.key} className="relative group">
                       <div
-                        className={`nav-item ${sidebarCollapsed ? "collapsed" : ""} ${isActive ? "active" : ""}`}
-                        title={sidebarCollapsed ? item.label : undefined}
+                        className={
+                          sidebarCollapsed
+                            ? `w-8 h-8 mx-auto my-1 flex items-center justify-center rounded-lg cursor-pointer transition-all duration-150 relative ${
+                                isActive
+                                  ? "bg-[#1B4FD8] text-white shadow-md shadow-blue-500/25 ring-1 ring-blue-400/40"
+                                  : "text-[#94A3B8] hover:text-white hover:bg-white/10"
+                              }`
+                            : `nav-item ${isActive ? "active" : ""}`
+                        }
                         onClick={() => {
                           if (filteredChildren && filteredChildren.length > 0) {
-                            toggleExpand(item.key);
-                            if (!expanded.includes(item.key)) {
+                            if (sidebarCollapsed) {
                               if (item.key === "intelligence") {
                                 setModule("intelligence");
                               } else {
                                 setModule(filteredChildren[0].key);
                               }
+                            } else {
+                              toggleExpand(item.key);
+                              if (!expanded.includes(item.key)) {
+                                if (item.key === "intelligence") {
+                                  setModule("intelligence");
+                                } else {
+                                  setModule(filteredChildren[0].key);
+                                }
+                              }
                             }
+                          } else {
+                            setModule(item.key);
                           }
-                          else setModule(item.key);
-                        }}>
-                        <item.Icon />
+                        }}
+                        title={sidebarCollapsed ? item.label : undefined}
+                      >
+                        <item.Icon
+                          size={sidebarCollapsed ? 18 : 16}
+                          className={sidebarCollapsed ? "w-8 h-8 p-1.5" : "w-4 h-4"}
+                        />
+
+                        {/* Collapsed Badge Dot */}
+                        {sidebarCollapsed && item.badge && !isActive && (
+                          <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-[#DC2626] border border-[#0C1524] rounded-full"></span>
+                        )}
+
+                        {/* Collapsed Hover Tooltip */}
+                        {sidebarCollapsed && (
+                          <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#0F172A] text-white text-[12px] font-semibold rounded-lg shadow-2xl border border-white/10 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 flex items-center gap-2">
+                            <span>{item.label}</span>
+                            {item.badge && (
+                              <span className="bg-[#DC2626] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {!sidebarCollapsed && (
                           <>
                             <span className="flex-1 truncate">{item.label}</span>
@@ -840,7 +882,17 @@ export default function App() {
                 })}
               </div>
 
-              {!sidebarCollapsed && (
+              {sidebarCollapsed ? (
+                <div className="p-2 border-t border-[#1E2D42]/60 flex justify-center">
+                  <button
+                    onClick={() => setCmdOpen(true)}
+                    title="Command Palette (Ctrl+K)"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-[#94A3B8] hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <Icon.Cmd size={18} className="w-8 h-8 p-1.5" />
+                  </button>
+                </div>
+              ) : (
                 <div className="p-3 border-t border-[#1E2D42]">
                   <button onClick={() => setCmdOpen(true)}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded border border-white/10 text-[#64748B] hover:text-white hover:border-white/20 transition-colors text-[11.5px]">
@@ -884,7 +936,10 @@ export default function App() {
               {module === "dashboard" && <Dashboard navigate={navigate} userRole={userRole} activeStaff={activeStaff} switchRole={switchRole} />}
               {module === "patients" && (
                 <PatientSearch
-                  onSelect={() => setModule("chart")}
+                  onSelect={(p) => {
+                    setClinicalPatientId(p.umr || (p as any).patient_id || (p as any).id);
+                    setModule("chart");
+                  }}
                   onRegister={() => setModule("register")}
                   onNavigateToWorkflow={(encounterId) => {
                     setSelectedWorkflowEncounterId(encounterId);
@@ -1048,12 +1103,22 @@ export default function App() {
 
           {/* ── Overlays ─────────────────────────────────────────────────── */}
           <OrderDrawer open={orderOpen} onClose={() => setOrderOpen(false)} />
-          <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)}
+          <CommandPalette
+            open={cmdOpen}
+            onClose={() => setCmdOpen(false)}
             onNavigate={(key) => {
               if (key === "order") { setModule("chart"); setOrderOpen(true); }
               else if (key === "register") { setModule("register"); }
               else { setModule(key as Module); }
-            }} />
+            }}
+            onSelectPatient={(patientId, encounterId) => {
+              setClinicalPatientId(patientId);
+              if (encounterId) {
+                setSelectedWorkflowEncounterId(encounterId);
+              }
+              setModule("chart");
+            }}
+          />
         </>
       )}
     </div>

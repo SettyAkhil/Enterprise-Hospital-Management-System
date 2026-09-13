@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "./icons";
 import { Btn, Input, StatusBadge } from "./shared";
 import { db, DBOPEncounter, DBPatient } from "../services/db";
+import { BillingDatabase, InvoiceItem } from "../services/billingDb";
 import { PharmacyDatabase, AppPrescription, AppPrescriptionItem, PrescriptionSource, AppPharmacyBill } from "../services/pharmacyDb";
 import { AuditDatabase } from "../services/auditDb";
 
@@ -11,6 +12,42 @@ interface DoctorProfile {
   specialty: string;
   room: string;
 }
+
+export interface OrderedClinicalService {
+  id: string;
+  name: string;
+  category: "Procedure / Surgery" | "Nursing" | "Consultation" | "Consumables" | "Radiology / Imaging" | "Laboratory" | "Room / Bed Charges";
+  cptCode: string;
+  price: number;
+  quantity: number;
+}
+
+export interface HospitalServiceItem {
+  id: string;
+  name: string;
+  category: OrderedClinicalService["category"];
+  cpt: string;
+  price: number;
+}
+
+export const MASTER_HOSPITAL_SERVICES: HospitalServiceItem[] = [
+  { id: "SVC-01", name: "Minor Wound Dressing & Sterile Bandaging", category: "Procedure / Surgery", cpt: "12001", price: 40 },
+  { id: "SVC-02", name: "Suture Removal & Wound Inspection", category: "Procedure / Surgery", cpt: "12002", price: 40 },
+  { id: "SVC-03", name: "Nebulization Protocol Therapy (Single Session)", category: "Procedure / Surgery", cpt: "94640", price: 30 },
+  { id: "SVC-04", name: "Therapeutic IM / IV Injection Administration", category: "Nursing", cpt: "96372", price: 20 },
+  { id: "SVC-05", name: "12-Lead Diagnostic ECG Recording & Report", category: "Radiology / Imaging", cpt: "93000", price: 50 },
+  { id: "SVC-06", name: "2D Transthoracic Echocardiography (Echo)", category: "Procedure / Surgery", cpt: "93306", price: 200 },
+  { id: "SVC-07", name: "Bedside Focused Ultrasound Examination", category: "Radiology / Imaging", cpt: "76705", price: 120 },
+  { id: "SVC-08", name: "Ear Syringing & Cerumen Removal", category: "Procedure / Surgery", cpt: "69210", price: 40 },
+  { id: "SVC-09", name: "Minor Incision & Drainage (I&D)", category: "Procedure / Surgery", cpt: "10060", price: 90 },
+  { id: "SVC-10", name: "STAT Glucometer Blood Sugar Test", category: "Laboratory", cpt: "82962", price: 20 },
+  { id: "SVC-11", name: "IV Cannulation & Infusion Line Setup", category: "Nursing", cpt: "99505", price: 30 },
+  { id: "SVC-12", name: "Foley Catheterization & Bladder Care", category: "Nursing", cpt: "51702", price: 50 },
+  { id: "SVC-13", name: "Nasogastric (NG) Tube Insertion", category: "Nursing", cpt: "43752", price: 50 },
+  { id: "SVC-14", name: "Plaster Slab / Splint Application", category: "Procedure / Surgery", cpt: "29125", price: 120 },
+  { id: "SVC-15", name: "Foreign Body Removal (Skin / Subcutaneous)", category: "Procedure / Surgery", cpt: "10120", price: 150 },
+  { id: "SVC-16", name: "Inpatient Bed Admission & Transfer Booking", category: "Room / Bed Charges", cpt: "99222", price: 150 },
+];
 
 const DOCTORS_LIST: DoctorProfile[] = [
   { id: "doc-1", name: "Dr. Arjun Mehta", specialty: "Cardiology", room: "Room 107" },
@@ -40,6 +77,10 @@ const DUMMY_PRESCRIPTION_TEMPLATES = [
       { medicine: "Nitroglycerin 0.4mg Sublingual", dosage: "1 tab", frequency: "PRN (As Needed)", duration: "10 days", instructions: "Dissolve under tongue for acute chest pain" }
     ],
     investigations: ["ECG 12-Lead", "Serum Troponin I", "Lipid Profile", "Complete Blood Count (CBC)"],
+    services: [
+      { id: "svc-c1", name: "12-Lead Diagnostic ECG Recording & Report", category: "Radiology / Imaging" as const, cptCode: "93000", price: 50, quantity: 1 },
+      { id: "svc-c2", name: "2D Transthoracic Echocardiography (Echo)", category: "Procedure / Surgery" as const, cptCode: "93306", price: 200, quantity: 1 }
+    ],
     advice: "Avoid strenuous physical exertion. Follow strict low-sodium heart-healthy diet. Return immediately if chest discomfort radiates or intensifies."
   },
   {
@@ -56,6 +97,9 @@ const DUMMY_PRESCRIPTION_TEMPLATES = [
       { medicine: "Calcium Carbonate 500mg + Vit D3", dosage: "1 tab", frequency: "OD (Once Daily)", duration: "30 days", instructions: "Take after dinner" }
     ],
     investigations: ["X-Ray Spine / Joint", "Serum Uric Acid", "Complete Blood Count (CBC)"],
+    services: [
+      { id: "svc-o1", name: "Minor Wound Dressing & Sterile Bandaging", category: "Procedure / Surgery" as const, cptCode: "12001", price: 40, quantity: 1 }
+    ],
     advice: "Rest affected area. Hot fermentation for 15 minutes twice daily. Avoid heavy lifting and sudden twisting movements."
   },
   {
@@ -72,6 +116,9 @@ const DUMMY_PRESCRIPTION_TEMPLATES = [
       { medicine: "Vitamin C 500mg + Zinc", dosage: "1 tab", frequency: "OD (Once Daily)", duration: "15 days", instructions: "Immune support" }
     ],
     investigations: ["Complete Blood Count (CBC)", "C-Reactive Protein (CRP)", "Urine Routine & Microscopy"],
+    services: [
+      { id: "svc-g1", name: "Therapeutic IM / IV Injection Administration", category: "Nursing" as const, cptCode: "96372", price: 20, quantity: 1 }
+    ],
     advice: "Drink plenty of warm fluids. Steam inhalation twice daily. Adequate rest and return for review if fever does not subside in 48 hours."
   },
   {
@@ -87,6 +134,9 @@ const DUMMY_PRESCRIPTION_TEMPLATES = [
       { medicine: "Amoxicillin + Clavulanate 625mg", dosage: "1 tab", frequency: "BD (Twice Daily)", duration: "5 days", instructions: "Take after food" }
     ],
     investigations: ["X-Ray Chest PA View", "Spirometry / Peak Flow", "Complete Blood Count (CBC)"],
+    services: [
+      { id: "svc-p1", name: "Nebulization Protocol Therapy (Single Session)", category: "Procedure / Surgery" as const, cptCode: "94640", price: 30, quantity: 1 }
+    ],
     advice: "Avoid cold exposure, dust, and pollen. Always carry rescue inhaler. Return immediately if breathlessness worsens at rest."
   }
 ];
@@ -119,6 +169,12 @@ export default function DoctorWorkflow({
     "Complete Blood Count (CBC)",
     "Serum Electrolytes"
   ]);
+  const [orderedServices, setOrderedServices] = useState<OrderedClinicalService[]>([
+    { id: "svc-1", name: "12-Lead Diagnostic ECG Recording & Report", category: "Radiology / Imaging", cptCode: "93000", price: 350, quantity: 1 }
+  ]);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>(MASTER_HOSPITAL_SERVICES[0].id);
+  const [selectedServiceQty, setSelectedServiceQty] = useState<number>(1);
+
   const [advice, setAdvice] = useState(
     "Avoid strenuous physical exertion. Follow low-sodium diet. Return immediately if chest discomfort recurs."
   );
@@ -128,6 +184,8 @@ export default function DoctorWorkflow({
     umr: string;
     opNumber: string;
     medCount: number;
+    servicesCount: number;
+    totalAmount: number;
   } | null>(null);
 
   const handleApplyTemplate = (templateId: string) => {
@@ -151,6 +209,9 @@ export default function DoctorWorkflow({
       };
     }));
     setInvestigations(tmpl.investigations);
+    if (tmpl.services) {
+      setOrderedServices(tmpl.services.map((s, idx) => ({ ...s, id: `svc-tmpl-${idx}` })));
+    }
     setAdvice(tmpl.advice);
   };
 
@@ -202,6 +263,20 @@ export default function DoctorWorkflow({
     }
     if (enc.investigations && enc.investigations.length > 0) {
       setInvestigations(enc.investigations);
+    }
+    if (enc.services && Array.isArray(enc.services) && enc.services.length > 0) {
+      setOrderedServices(enc.services.map((s, idx) => ({
+        id: s.id || `svc-${idx}`,
+        name: s.name,
+        category: (s.category || "Procedure / Surgery") as any,
+        cptCode: s.cptCode || "12001",
+        price: Number(s.price || 350),
+        quantity: Number(s.quantity || 1),
+      })));
+    } else {
+      setOrderedServices([
+        { id: "svc-1", name: "12-Lead Diagnostic ECG Recording & Report", category: "Radiology / Imaging", cptCode: "93000", price: 350, quantity: 1 }
+      ]);
     }
     if (enc.advice) {
       setAdvice(enc.advice);
@@ -255,6 +330,45 @@ export default function DoctorWorkflow({
     );
   };
 
+  // ── Clinical Services Handlers ──
+  const handleAddSelectedService = () => {
+    const serviceDef = MASTER_HOSPITAL_SERVICES.find(s => s.id === selectedServiceId) || MASTER_HOSPITAL_SERVICES[0];
+    if (!serviceDef) return;
+
+    setOrderedServices(prev => {
+      const existing = prev.find(s => s.name === serviceDef.name);
+      if (existing) {
+        return prev.map(s => s.name === serviceDef.name ? { ...s, quantity: s.quantity + selectedServiceQty } : s);
+      }
+      return [
+        ...prev,
+        {
+          id: `svc-${Date.now()}-${Math.random().toString(36).slice(-4)}`,
+          name: serviceDef.name,
+          category: serviceDef.category,
+          cptCode: serviceDef.cpt,
+          price: serviceDef.price, // Fixed hospital tariff
+          quantity: selectedServiceQty
+        }
+      ];
+    });
+    setSelectedServiceQty(1);
+  };
+
+  const handleRemoveService = (id: string) => {
+    setOrderedServices(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleUpdateServiceQty = (id: string, delta: number) => {
+    setOrderedServices(prev => prev.map(s => {
+      if (s.id === id) {
+        const newQty = Math.max(1, s.quantity + delta);
+        return { ...s, quantity: newQty };
+      }
+      return s;
+    }));
+  };
+
   // Submit Consultation Handler (Source of Truth)
   const handleSubmitConsultation = () => {
     if (!activeEncounter) {
@@ -269,18 +383,106 @@ export default function DoctorWorkflow({
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     try {
+      // 1. Update clinical encounter in DB
       db.updateEncounter(activeEncounter.id, {
         assessment: clinicalAssessment,
         diagnosis: diagnosis,
         icd10: icd10,
         prescription: medications,
         investigations: investigations,
+        services: orderedServices,
         advice: advice,
         status: "Consultation Completed",
         timestamps: {
           ...activeEncounter.timestamps,
           consultationEnd: nowTime
         }
+      });
+
+      // 2. Aggregate line-item charges for Central Billing UMR Ledger
+      const invoiceItems: InvoiceItem[] = [
+        {
+          id: `ITM-DOC-${Date.now()}`,
+          description: `Specialist Outpatient Consultation (${selectedDoctor.name} - ${selectedDoctor.specialty})`,
+          category: "Consultation",
+          cptCode: "99205",
+          quantity: 1,
+          unitPrice: 100,
+          total: 100,
+          insuranceCovered: 80,
+          patientPayable: 20,
+        },
+        ...orderedServices.map((svc, idx) => ({
+          id: `ITM-SVC-${idx + 1}-${Date.now()}`,
+          description: svc.name,
+          category: svc.category,
+          cptCode: svc.cptCode,
+          quantity: svc.quantity,
+          unitPrice: svc.price,
+          total: svc.price * svc.quantity,
+          insuranceCovered: Math.round(svc.price * svc.quantity * 0.8),
+          patientPayable: Math.round(svc.price * svc.quantity * 0.2),
+        })),
+        ...investigations.map((inv, idx) => {
+          const invPrice = inv.includes("MRI") ? 350 : inv.includes("Ultrasound") ? 100 : inv.includes("ECG") ? 50 : inv.includes("X-Ray") ? 60 : 50;
+          return {
+            id: `ITM-INV-${idx + 1}-${Date.now()}`,
+            description: `Diagnostic Investigation: ${inv}`,
+            category: (inv.includes("MRI") || inv.includes("X-Ray") || inv.includes("Ultrasound") ? "Radiology / Imaging" : "Laboratory") as any,
+            cptCode: inv.includes("MRI") ? "70551" : inv.includes("ECG") ? "93000" : "80050",
+            quantity: 1,
+            unitPrice: invPrice,
+            total: invPrice,
+            insuranceCovered: Math.round(invPrice * 0.8),
+            patientPayable: Math.round(invPrice * 0.2),
+          };
+        }),
+      ];
+
+      const servicesTotal = invoiceItems.reduce((acc, it) => acc + it.total, 0);
+
+      // 3. Create active Invoice directly in Central Billing POS Cashier Desk
+      const createdClaim = BillingDatabase.createClaim({
+        patientId: activeEncounter.umr,
+        mrn: activeEncounter.umr.replace(/\D/g, "") || "10001",
+        patientName: activeEncounter.patientName,
+        age: activeEncounter.age,
+        gender: activeEncounter.sex as any,
+        phone: activePatientRecord?.phone || "+91 98765 43210",
+        encounterId: activeEncounter.id,
+        department: "Outpatient",
+        carePathway: `OP Consultation & Procedures (${activeEncounter.dept || selectedDoctor.specialty})`,
+        dateOfService: new Date().toISOString().split("T")[0],
+        insuranceProvider: (activePatientRecord as any)?.insurance || "Self-Pay",
+        attendingDoctor: selectedDoctor.name,
+        diagnosisCodes: [icd10 || "I20.9"],
+        items: invoiceItems,
+        status: "Accepted",
+        finalizedByNurse: "Nurse Lead (OPD)",
+      });
+
+      // 4. Update Department Charge record as Invoiced in Central Billing
+      BillingDatabase.createDepartmentCharge({
+        patientId: activeEncounter.umr,
+        mrn: activeEncounter.umr.replace(/\D/g, "") || "10001",
+        patientName: activeEncounter.patientName,
+        age: activeEncounter.age,
+        gender: activeEncounter.sex as any,
+        phone: activePatientRecord?.phone || "+91 98765 43210",
+        encounterId: activeEncounter.id,
+        department: "Outpatient",
+        carePathway: `OP Consultation & Procedures (${activeEncounter.dept || selectedDoctor.specialty})`,
+        dateOfService: new Date().toISOString().split("T")[0],
+        insuranceProvider: (activePatientRecord as any)?.insurance || "Self-Pay",
+        attendingDoctor: selectedDoctor.name,
+        diagnosisCodes: [icd10 || "I20.9"],
+        items: invoiceItems,
+        subtotal: servicesTotal,
+        totalAmount: servicesTotal,
+        status: "Invoiced in Central Billing",
+        invoiceId: createdClaim.id,
+        verifiedByNurse: "Nurse Lead (OPD)",
+        notes: `Clinical consultation finalized by ${selectedDoctor.name}. Sent directly to Central Billing as Invoice ${createdClaim.invoiceNo} (Total: ₹${servicesTotal}).`,
       });
 
       // Create Pharmacy Prescription
@@ -346,7 +548,9 @@ export default function DoctorWorkflow({
         patientName: activeEncounter.patientName,
         umr: activeEncounter.umr,
         opNumber: activeEncounter.opNumber,
-        medCount: rxMode === "DIGITAL" ? medications.length : 1
+        medCount: rxMode === "DIGITAL" ? medications.length : 1,
+        servicesCount: orderedServices.length,
+        totalAmount: servicesTotal,
       });
       setSubmitSuccess(true);
 
@@ -521,10 +725,10 @@ export default function DoctorWorkflow({
                 <div ref={alertRef} className="bg-[#F0FDF4] border-2 border-[#86EFAC] rounded p-4.5 text-center space-y-2 shadow-sm animate-in fade-in">
                   <div className="text-xl">✓</div>
                   <div className="text-[15px] font-bold text-[#166534]">
-                    Consultation Submitted Successfully!
+                    Consultation &amp; Services Submitted Successfully!
                   </div>
                   <p className="text-[12px] text-[#15803D]">
-                    Consultation recorded and linked to permanent <strong>{submittedAlert.umr}</strong> with visit encounter <strong>{submittedAlert.opNumber}</strong>. Summary is now ready in the OP Clinical Journey.
+                    Consultation recorded and linked to permanent <strong>{submittedAlert.umr}</strong> (Visit OP No: <strong>{submittedAlert.opNumber}</strong>). Included <strong>{submittedAlert.medCount} Rx medications</strong>, <strong>{submittedAlert.servicesCount} clinical services &amp; procedures</strong>, and auto-generated <strong>₹{submittedAlert.totalAmount?.toLocaleString("en-IN")}</strong> in Department Charges linked to Central Billing ledger.
                   </p>
                   {onNavigateToOPWorkflow && (
                     <button
@@ -989,6 +1193,158 @@ export default function DoctorWorkflow({
                       );
                     })}
                   </div>
+                </div>
+
+                {/* ── Clinical Services & Bedside Procedures (Add Services with Fixed Tariff) ── */}
+                <div className="space-y-3 pt-3 border-t border-[#E2E8F0]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-bold text-gray-900 flex items-center gap-1.5">
+                          <span>⚡</span> Clinical Services &amp; Bedside Procedures
+                        </span>
+                        <span className="text-[10.5px] font-bold bg-blue-100 text-[#1B4FD8] px-2 py-0.5 rounded border border-blue-200">
+                          {orderedServices.length} Attached
+                        </span>
+                      </div>
+                      <p className="text-[11.5px] text-[#64748B]">
+                        Select hospital clinical service / procedure to order. Fixed hospital tariffs and CPT codes are applied automatically.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Add Service Selector Bar (Fixed Tariffs) */}
+                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] rounded p-3.5 flex flex-col sm:flex-row items-stretch sm:items-end gap-3 shadow-2xs">
+                    <div className="flex-1">
+                      <label className="text-[11px] font-bold text-[#64748B] block mb-1 uppercase tracking-wider">
+                        Select Hospital Service / Procedure (Fixed Tariff)
+                      </label>
+                      <select
+                        value={selectedServiceId}
+                        onChange={(e) => setSelectedServiceId(e.target.value)}
+                        className="w-full bg-white border border-[#CBD5E1] rounded px-3 py-2 text-[12.5px] font-semibold text-gray-900 focus:outline-none focus:border-[#1B4FD8] cursor-pointer shadow-2xs"
+                      >
+                        {MASTER_HOSPITAL_SERVICES.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.category} · CPT {s.cpt}) — ₹{s.price.toLocaleString("en-IN")}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="w-24">
+                      <label className="text-[11px] font-bold text-[#64748B] block mb-1 uppercase tracking-wider text-center">
+                        Qty
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={selectedServiceQty}
+                        onChange={(e) => setSelectedServiceQty(Math.max(1, Number(e.target.value) || 1))}
+                        className="w-full bg-white border border-[#CBD5E1] rounded px-2.5 py-2 text-[12.5px] font-mono font-bold text-gray-900 text-center focus:outline-none focus:border-[#1B4FD8]"
+                      />
+                    </div>
+
+                    <div>
+                      <button
+                        type="button"
+                        onClick={handleAddSelectedService}
+                        className="w-full sm:w-auto px-5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-bold rounded shadow-xs hover:shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap h-[38px]"
+                      >
+                        <span>+</span> Add Service
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Live Itemized Table of Ordered Services */}
+                  {orderedServices.length > 0 ? (
+                    <div className="bg-white border border-[#CBD5E1] rounded overflow-hidden shadow-2xs">
+                      <table className="w-full text-left border-collapse text-[12px]">
+                        <thead>
+                          <tr className="bg-[#F8FAFC] border-b border-[#CBD5E1] text-[#64748B] text-[10.5px] uppercase font-bold tracking-wider">
+                            <th className="py-2 px-3">Service / Procedure Description</th>
+                            <th className="py-2 px-2.5">Category</th>
+                            <th className="py-2 px-2.5">CPT Code</th>
+                            <th className="py-2 px-2.5 text-right">Fixed Rate</th>
+                            <th className="py-2 px-2.5 text-center">Qty</th>
+                            <th className="py-2 px-2.5 text-right">Total (₹)</th>
+                            <th className="py-2 px-2 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#E2E8F0]">
+                          {orderedServices.map((svc) => (
+                            <tr key={svc.id} className="hover:bg-blue-50/40 transition-colors">
+                              <td className="py-2 px-3 font-semibold text-gray-900">
+                                {svc.name}
+                              </td>
+                              <td className="py-2 px-2.5">
+                                <span className="text-[10px] font-semibold bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded border border-gray-200">
+                                  {svc.category}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2.5 font-mono text-[11px] text-gray-600">
+                                {svc.cptCode}
+                              </td>
+                              <td className="py-2 px-2.5 text-right font-mono font-bold text-gray-800">
+                                ₹{svc.price.toLocaleString("en-IN")}
+                              </td>
+                              <td className="py-2 px-2.5 text-center">
+                                <div className="inline-flex items-center border border-[#CBD5E1] rounded bg-white overflow-hidden shadow-2xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateServiceQty(svc.id, -1)}
+                                    className="px-1.5 py-0.5 hover:bg-gray-100 text-gray-700 font-bold cursor-pointer"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="px-2 text-[11.5px] font-mono font-bold text-gray-900">
+                                    {svc.quantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateServiceQty(svc.id, 1)}
+                                    className="px-1.5 py-0.5 hover:bg-gray-100 text-gray-700 font-bold cursor-pointer"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="py-2 px-2.5 text-right font-mono font-bold text-[#1B4FD8]">
+                                ₹{(svc.price * svc.quantity).toLocaleString("en-IN")}
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveService(svc.id)}
+                                  className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 text-xs cursor-pointer"
+                                  title="Remove service"
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-[#F8FAFC] border-t-2 border-[#CBD5E1] font-bold text-[12px]">
+                            <td colSpan={5} className="py-2.5 px-3 text-right text-[#64748B]">
+                              Services Subtotal ({orderedServices.reduce((a, b) => a + b.quantity, 0)} items):
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right font-mono text-[13px] font-bold text-[#166534]">
+                              ₹{orderedServices.reduce((sum, s) => sum + (s.price * s.quantity), 0).toLocaleString("en-IN")}
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="bg-[#F8FAFC] border border-dashed border-[#CBD5E1] rounded p-4 text-center text-[#64748B] text-[12px] space-y-1">
+                      <div className="font-semibold text-gray-700">No clinical services attached yet</div>
+                      <div className="text-[11px]">Select a service from the dropdown above and click &ldquo;+ Add Service&rdquo;.</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Doctor Advice & Instructions */}

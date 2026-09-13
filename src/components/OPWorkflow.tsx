@@ -2050,9 +2050,9 @@ export default function OPWorkflow({
           const consultFee = patient.billing?.consultationFee || 50;
           const labItems = patient.investigations || [];
           const rxItems = patient.prescription || [];
-          const labTotal = labItems.length * 35;
-          const rxTotal = rxItems.length * 15;
-          const nursingFee = 10;
+          const labTotal = labItems.length * 40;
+          const rxTotal = rxItems.length * 20;
+          const nursingFee = 20;
           const grossSubtotal = consultFee + labTotal + rxTotal + nursingFee;
           const isInsurance = patient.billing?.mode === "Insurance Co-Pay";
           const insuranceCoverage = isInsurance ? Math.round(grossSubtotal * 0.8) : 0;
@@ -2158,7 +2158,7 @@ export default function OPWorkflow({
                       <div className="text-[11.5px] text-[#64748B]">Encounter No: <strong className="font-mono text-gray-800">{patient.opNumber}</strong> · Permanent UMR: <strong className="font-mono text-gray-800">{patient.umr}</strong></div>
                     </div>
                     <span className="text-[11px] font-mono font-bold bg-blue-50 text-[#1B4FD8] px-2.5 py-1 rounded border border-blue-200">
-                      Fee Worksheet
+                      Fee Worksheet (INR ₹)
                     </span>
                   </div>
 
@@ -2169,7 +2169,7 @@ export default function OPWorkflow({
                         <div className="font-semibold text-gray-900">1. Physician Consultation Fee</div>
                         <div className="text-[11px] text-[#64748B]">Attending: {patient.assignedDoctor} ({patient.aiSpecialty})</div>
                       </div>
-                      <span className="font-mono font-bold text-gray-900">${consultFee}.00</span>
+                      <span className="font-mono font-bold text-gray-900">₹{consultFee}.00</span>
                     </div>
 
                     {/* 2. Nursing & Triage Fee */}
@@ -2178,7 +2178,7 @@ export default function OPWorkflow({
                         <div className="font-semibold text-gray-900">2. Pre-Consultation Nursing &amp; Vitals Triage</div>
                         <div className="text-[11px] text-[#64748B]">BP: {patient.vitals?.bp} · Pulse: {patient.vitals?.pulse} · Temp: {patient.vitals?.temp}</div>
                       </div>
-                      <span className="font-mono font-bold text-gray-900">${nursingFee}.00</span>
+                      <span className="font-mono font-bold text-gray-900">₹{nursingFee}.00</span>
                     </div>
 
                     {/* 3. Prescription Medications */}
@@ -2188,12 +2188,12 @@ export default function OPWorkflow({
                           <div className="font-semibold text-gray-900">3. Prescribed Pharmacy Medications (Rx Pad)</div>
                           <div className="text-[11px] text-[#64748B]">{rxItems.length} items prescribed</div>
                         </div>
-                        <span className="font-mono font-bold text-gray-900">${rxTotal}.00</span>
+                        <span className="font-mono font-bold text-gray-900">₹{rxTotal}.00</span>
                       </div>
                       {rxItems.map((rx, idx) => (
                         <div key={idx} className="pl-3 text-[11.5px] text-gray-600 flex justify-between">
                           <span>• {rx.medicine} ({rx.dosage} · {rx.frequency})</span>
-                          <span className="font-mono">$15.00</span>
+                          <span className="font-mono">₹150.00</span>
                         </div>
                       ))}
                     </div>
@@ -2205,12 +2205,12 @@ export default function OPWorkflow({
                           <div className="font-semibold text-gray-900">4. Diagnostic Laboratory &amp; Imaging Orders</div>
                           <div className="text-[11px] text-[#64748B]">{labItems.length} investigations requested</div>
                         </div>
-                        <span className="font-mono font-bold text-gray-900">${labTotal}.00</span>
+                        <span className="font-mono font-bold text-gray-900">₹{labTotal}.00</span>
                       </div>
                       {labItems.map((test, idx) => (
                         <div key={idx} className="pl-3 text-[11.5px] text-gray-600 flex justify-between">
                           <span>• {test}</span>
-                          <span className="font-mono">$35.00</span>
+                          <span className="font-mono">₹350.00</span>
                         </div>
                       ))}
                     </div>
@@ -2220,11 +2220,11 @@ export default function OPWorkflow({
                   <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded space-y-2 text-[13px]">
                     <div className="flex justify-between text-gray-600">
                       <span>Gross Subtotal:</span>
-                      <span className="font-mono font-bold">${grossSubtotal}.00</span>
+                      <span className="font-mono font-bold">₹{grossSubtotal}.00</span>
                     </div>
                     <div className="border-t border-[#E2E8F0] pt-2 flex justify-between text-[16px] font-black text-gray-900">
                       <span>Total Amount Due:</span>
-                      <span className="text-[#16A34A] font-mono">${grossSubtotal}.00</span>
+                      <span className="text-[#16A34A] font-mono">₹{grossSubtotal}.00</span>
                     </div>
                   </div>
 
@@ -2252,7 +2252,7 @@ export default function OPWorkflow({
                       ) : (
                         <>
                           <span>💳</span>
-                          <span>Mark OP Visit Completed &amp; Settle Invoice (${grossSubtotal}.00)</span>
+                          <span>Mark OP Visit Completed &amp; Settle Invoice (₹{grossSubtotal}.00)</span>
                         </>
                       )}
                     </button>
@@ -2360,17 +2360,17 @@ export default function OPWorkflow({
                       <div className="bg-[#F8FAFC] border-t border-[#CBD5E1] p-3 space-y-1 text-[12.5px]">
                         <div className="flex justify-between text-gray-600">
                           <span>Gross Total:</span>
-                          <span className="font-mono font-bold">${grossSubtotal}.00</span>
+                          <span className="font-mono font-bold">₹{grossSubtotal}.00</span>
                         </div>
                         {isInsurance && (
                           <div className="flex justify-between text-[#16A34A] font-semibold">
                             <span>Insurance Payer Settlement (80%):</span>
-                            <span className="font-mono">-${insuranceCoverage}.00</span>
+                            <span className="font-mono">-₹{insuranceCoverage}.00</span>
                           </div>
                         )}
                         <div className="border-t border-[#CBD5E1] pt-1 flex justify-between text-[15px] font-black text-gray-900">
                           <span>Total Amount Settled ({patient.billing.mode}):</span>
-                          <span className="text-[#16A34A] font-mono">${netTotalPayable}.00</span>
+                          <span className="text-[#16A34A] font-mono">₹{netTotalPayable}.00</span>
                         </div>
                       </div>
                     </div>

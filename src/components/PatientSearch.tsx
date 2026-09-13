@@ -34,40 +34,54 @@ export default function PatientSearch({
   }, []);
 
   // Filter patients live
-  const filtered = patients.filter(p => {
-    const pEncounters = encounters.filter(e => e.umr === p.umr);
-    const latestEncounter = pEncounters[0];
+  const filtered = patients.filter((p) => {
+    const pEncounters = encounters.filter((e) => e.umr === p.umr);
 
     // Search query matching
     if (q.trim()) {
       const query = q.trim().toLowerCase();
-      const nameMatch = p.name.toLowerCase().includes(query);
-      const umrMatch = p.umr.toLowerCase().includes(query);
-      const phoneMatch = p.phone.toLowerCase().includes(query);
-      const opMatch = pEncounters.some(e => e.opNumber.toLowerCase().includes(query));
-      const deptMatch = pEncounters.some(e => e.dept.toLowerCase().includes(query));
-      const docMatch = pEncounters.some(e => (e.assignedDoctor || "").toLowerCase().includes(query));
+      const nameMatch = (p.name || "").toLowerCase().includes(query);
+      const umrMatch = (p.umr || "").toLowerCase().includes(query);
+      const phoneMatch = (p.phone || "").toLowerCase().includes(query);
+      const addressMatch = (p.address || "").toLowerCase().includes(query);
+      const bloodMatch = (p.bloodGroup || "").toLowerCase().includes(query);
+      const opMatch = pEncounters.some((e) => (e.opNumber || "").toLowerCase().includes(query));
+      const deptMatch = pEncounters.some((e) => (e.dept || "").toLowerCase().includes(query));
+      const docMatch = pEncounters.some((e) => (e.assignedDoctor || "").toLowerCase().includes(query));
+      const complaintMatch = pEncounters.some((e) => (e.chiefComplaint || "").toLowerCase().includes(query));
+      const diagnosisMatch = pEncounters.some((e) => (e.diagnosis || "").toLowerCase().includes(query));
 
-      if (!nameMatch && !umrMatch && !phoneMatch && !opMatch && !deptMatch && !docMatch) {
+      if (
+        !nameMatch &&
+        !umrMatch &&
+        !phoneMatch &&
+        !addressMatch &&
+        !bloodMatch &&
+        !opMatch &&
+        !deptMatch &&
+        !docMatch &&
+        !complaintMatch &&
+        !diagnosisMatch
+      ) {
         return false;
       }
     }
 
     // Department filter
     if (selectedDept !== "All") {
-      const hasDept = pEncounters.some(e => e.dept.toLowerCase() === selectedDept.toLowerCase());
+      const hasDept = pEncounters.some((e) => (e.dept || "").toLowerCase() === selectedDept.toLowerCase());
       if (!hasDept) return false;
     }
 
     // Gender filter
     if (selectedGender !== "All") {
-      if (p.sex.toLowerCase() !== selectedGender.toLowerCase()) return false;
+      if ((p.sex || "").toLowerCase() !== selectedGender.toLowerCase()) return false;
     }
 
     // Type filter
-    if (selectedType === "Pediatric" && p.age >= 18) return false;
-    if (selectedType === "Adult" && (p.age < 18 || p.age >= 60)) return false;
-    if (selectedType === "Senior" && p.age < 60) return false;
+    if (selectedType === "Pediatric" && (p.age || 0) >= 18) return false;
+    if (selectedType === "Adult" && ((p.age || 0) < 18 || (p.age || 0) >= 60)) return false;
+    if (selectedType === "Senior" && (p.age || 0) < 60) return false;
 
     return true;
   });

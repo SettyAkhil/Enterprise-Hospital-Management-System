@@ -54,8 +54,99 @@ export interface BedSummary {
   maintenance: number;
 }
 
+export interface BedTransferNotification {
+  id: string; // e.g. "NOTIF-TR-101"
+  patient_id: string;
+  patient_name: string;
+  patient_last_name?: string;
+  patient_age?: number | null;
+  patient_gender?: string | null;
+  patient_phone?: string | null;
+  source_department: string; // e.g. "Emergency Department (ER Bay 2)"
+  target_destination: string; // e.g. "ICU (Intensive Care Unit)" or "3N Medical/Surgical Ward"
+  target_bed_type: "ICU" | "General" | "Semi-Private" | "Private";
+  target_ward?: string;
+  priority: "Stat / Emergency" | "High Priority" | "Urgent" | "Routine";
+  clinical_reason: string;
+  sent_by: string; // e.g. "Dr. Vikram Seth"
+  sent_at: string; // ISO string
+  status: "pending" | "in_transit" | "allocated" | "completed" | "dismissed";
+  er_visit_id?: number;
+  er_bed_request_id?: number;
+  assigned_bed_id?: number | null;
+  assigned_bed_label?: string | null;
+  is_read: boolean;
+}
+
 const STORAGE_KEY = "hospai_inpatient_beds_v9";
 const DISCHARGED_STORAGE_KEY = "hospai_discharged_patients_v3";
+const NOTIFICATIONS_STORAGE_KEY = "hospai_bed_transfer_notifications_v3";
+
+const INITIAL_TRANSFER_NOTIFICATIONS: BedTransferNotification[] = [
+  {
+    id: "NOTIF-TR-101",
+    patient_id: "P-100245",
+    patient_name: "Vikram",
+    patient_last_name: "Malhotra",
+    patient_age: 58,
+    patient_gender: "Male",
+    patient_phone: "(617) 555-0143",
+    source_department: "Emergency Department (Trauma Bay 1)",
+    target_destination: "ICU (Intensive Care Unit)",
+    target_bed_type: "ICU",
+    target_ward: "Intensive Care Unit (ICU)",
+    priority: "Stat / Emergency",
+    clinical_reason: "Acute Anterior STEMI post-thrombolysis with cardiogenic shock. Requires immediate CCU telemetry & invasive arterial line monitoring.",
+    sent_by: "Dr. Vikram Seth (Cardiology / Critical Care)",
+    sent_at: new Date(Date.now() - 4 * 60000).toISOString(),
+    status: "pending",
+    er_visit_id: 1,
+    er_bed_request_id: 1,
+    is_read: false,
+  },
+  {
+    id: "NOTIF-TR-102",
+    patient_id: "P-100246",
+    patient_name: "Pooja",
+    patient_last_name: "Sharma",
+    patient_age: 34,
+    patient_gender: "Female",
+    patient_phone: "(617) 555-0188",
+    source_department: "Emergency Department (ER Bay 3)",
+    target_destination: "3N Medical/Surgical Ward",
+    target_bed_type: "Semi-Private",
+    target_ward: "3N Medical/Surgical",
+    priority: "High Priority",
+    clinical_reason: "Severe pyelonephritis with high-grade fever and dehydration, stabilized with IV Ceftriaxone. Transfer for continuous IV therapy & vitals monitoring.",
+    sent_by: "Dr. Anita Roy (Emergency Medicine)",
+    sent_at: new Date(Date.now() - 14 * 60000).toISOString(),
+    status: "pending",
+    er_visit_id: 2,
+    er_bed_request_id: 2,
+    is_read: false,
+  },
+  {
+    id: "NOTIF-TR-103",
+    patient_id: "P-100247",
+    patient_name: "Rahul",
+    patient_last_name: "Verma",
+    patient_age: 46,
+    patient_gender: "Male",
+    patient_phone: "(617) 555-0199",
+    source_department: "Emergency Department (ER Bay 5)",
+    target_destination: "General Medical Ward",
+    target_bed_type: "General",
+    target_ward: "3N Medical/Surgical",
+    priority: "Routine",
+    clinical_reason: "Acute severe asthma exacerbation, responsive to nebulization and IV steroids. Admitted for 48h inpatient observation & step-down.",
+    sent_by: "Dr. Rajesh K (Emergency Medicine)",
+    sent_at: new Date(Date.now() - 32 * 60000).toISOString(),
+    status: "in_transit",
+    er_visit_id: 3,
+    er_bed_request_id: 3,
+    is_read: false,
+  },
+];
 
 const INITIAL_BEDS: BedRecord[] = [
   // ── 3N Medical / Surgical Wards ──
@@ -696,5 +787,130 @@ export class BedDatabase {
     const updated = [...beds, ...created];
     this.save(updated);
     return created;
+  }
+
+  // ── Transfer Notifications System ──────────────────────────────────
+
+  static getTransferNotifications(): BedTransferNotification[] {
+    if (typeof window === "undefined") return INITIAL_TRANSFER_NOTIFICATIONS;
+    try {
+      const stored = window.localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+      if (!stored) {
+        this.saveTransferNotifications(INITIAL_TRANSFER_NOTIFICATIONS);
+        return INITIAL_TRANSFER_NOTIFICATIONS;
+      }
+      return JSON.parse(stored);
+    } catch {
+      return INITIAL_TRANSFER_NOTIFICATIONS;
+    }
+  }
+
+  static saveTransferNotifications(list: BedTransferNotification[]): void {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(list));
+      window.dispatchEvent(
+        new CustomEvent("bed:transfer_notification_updated", {
+          detail: { count: list.filter((n) => !n.is_read && n.status !== "dismissed").length, notifications: list },
+        }),
+      );
+    } catch (e) {
+      console.error("Failed to save transfer notifications", e);
+    }
+  }
+
+  static addTransferNotification(
+    data: Partial<BedTransferNotification> & {
+      patient_name: string;
+      target_destination: string;
+      clinical_reason: string;
+    },
+  ): BedTransferNotification {
+    const list = this.getTransferNotifications();
+    const isIcu =
+      data.target_destination.toLowerCase().includes("icu") ||
+      (data.target_bed_type || "").toLowerCase().includes("icu");
+
+    const newNotif: BedTransferNotification = {
+      id: `NOTIF-TR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      patient_id: data.patient_id || `P-${Math.floor(100000 + Math.random() * 900000)}`,
+      patient_name: data.patient_name,
+      patient_last_name: data.patient_last_name || "",
+      patient_age: data.patient_age ?? 45,
+      patient_gender: data.patient_gender || "Male",
+      patient_phone: data.patient_phone || null,
+      source_department: data.source_department || "Emergency Department (ER Bay 1)",
+      target_destination: data.target_destination || (isIcu ? "ICU (Intensive Care Unit)" : "3N Medical/Surgical Ward"),
+      target_bed_type: (data.target_bed_type as any) || (isIcu ? "ICU" : "General"),
+      target_ward: data.target_ward || (isIcu ? "Intensive Care Unit (ICU)" : "3N Medical/Surgical"),
+      priority: data.priority || (isIcu ? "Stat / Emergency" : "High Priority"),
+      clinical_reason: data.clinical_reason || "Transferred for continuous monitoring and inpatient care.",
+      sent_by: data.sent_by || "Attending Emergency Physician",
+      sent_at: new Date().toISOString(),
+      status: data.status || "pending",
+      er_visit_id: data.er_visit_id,
+      er_bed_request_id: data.er_bed_request_id,
+      assigned_bed_id: data.assigned_bed_id || null,
+      assigned_bed_label: data.assigned_bed_label || null,
+      is_read: false,
+    };
+
+    // Prepend to list
+    list.unshift(newNotif);
+    this.saveTransferNotifications(list);
+
+    // Broadcast toast event
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("bed:new_transfer_alert", {
+          detail: newNotif,
+        }),
+      );
+    }
+
+    return newNotif;
+  }
+
+  static markNotificationRead(id: string): void {
+    const list = this.getTransferNotifications();
+    const idx = list.findIndex((n) => n.id === id);
+    if (idx !== -1) {
+      list[idx].is_read = true;
+      this.saveTransferNotifications(list);
+    }
+  }
+
+  static markAllNotificationsRead(): void {
+    const list = this.getTransferNotifications();
+    list.forEach((n) => {
+      n.is_read = true;
+    });
+    this.saveTransferNotifications(list);
+  }
+
+  static updateNotificationStatus(
+    id: string,
+    status: BedTransferNotification["status"],
+    bedId?: number,
+    bedLabel?: string,
+  ): void {
+    const list = this.getTransferNotifications();
+    const idx = list.findIndex((n) => n.id === id);
+    if (idx !== -1) {
+      list[idx].status = status;
+      if (bedId !== undefined) list[idx].assigned_bed_id = bedId;
+      if (bedLabel !== undefined) list[idx].assigned_bed_label = bedLabel;
+      this.saveTransferNotifications(list);
+    }
+  }
+
+  static dismissNotification(id: string): void {
+    const list = this.getTransferNotifications();
+    const filtered = list.filter((n) => n.id !== id);
+    this.saveTransferNotifications(filtered);
+  }
+
+  static clearAllNotifications(): void {
+    this.saveTransferNotifications([]);
   }
 }

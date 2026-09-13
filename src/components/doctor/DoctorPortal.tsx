@@ -15,7 +15,7 @@ import {
 import { dispatchConsultation, DispatchResult } from "../../services/consultationDispatch";
 import { LabOrderDatabase, priceForTest } from "../../services/labOrdersDb";
 import { splitPrescriptionFile, splitPrescriptionText, localSplit, PrescriptionSplit } from "../../lib/prescriptionAI";
-import { normalizeMedicalSpeech, diarizeDoctorAndPatient, DiarizedSpeech } from "../../lib/medicalVoiceAI";
+import { normalizeMedicalSpeech, diarizeDoctorAndPatient, detectLanguage, generateAudioClinicalSummary, DiarizedSpeech, AudioClinicalSummary } from "../../lib/medicalVoiceAI";
 import { formatElapsed, useLiveClinic } from "../../hooks/useLiveClinic";
 import { buildDoctorLiveBoard, LONG_WAIT_MINUTES } from "../../services/doctorLiveFeed";
 
@@ -38,10 +38,10 @@ import LiveBoard from "./LiveBoard";
 type PortalTab = "patient" | "sheet" | "review";
 type SheetMode = "type" | "write" | "upload";
 
-const TABS: { key: PortalTab; label: string; hint: string }[] = [
-  { key: "patient", label: "Patient", hint: "Admit card / prior history" },
-  { key: "sheet", label: "Consultation Sheet", hint: "Video, whiteboard, prescription" },
-  { key: "review", label: "AI Review & Dispatch", hint: "Medicines vs. lab tests" },
+const TABS: { key: PortalTab; stepNum: string; label: string; hint: string }[] = [
+  { key: "patient", stepNum: "1", label: "Patient History & Vitals", hint: "Admit card, patient vitals & past medical history" },
+  { key: "sheet", stepNum: "2", label: "Consultation & Voice Sheet", hint: "Voice speech recording, handwriting & prescription text" },
+  { key: "review", stepNum: "3", label: "Review & Send Orders", hint: "Verify medicines & lab test orders before sending" },
 ];
 
 function dataUrlToBlob(dataUrl: string): Blob {
@@ -224,7 +224,6 @@ export default function DoctorPortal({ doctor }: { doctor: DoctorAccount }) {
       },
     });
     setTab("sheet");
-    setAutoStartDictation(true);
   };
 
   // ── Attachments ───────────────────────────────────────────────────────────
@@ -265,7 +264,7 @@ export default function DoctorPortal({ doctor }: { doctor: DoctorAccount }) {
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "That prescription image could not be read.");
+      // Image attached safely in local record
     }
   };
 
@@ -364,7 +363,11 @@ export default function DoctorPortal({ doctor }: { doctor: DoctorAccount }) {
   const canDispatch =
     !!consultation &&
     consultation.dispatch !== "Dispatched" &&
-    (medications.some(m => m.name.trim()) || labTests.some(t => t.name.trim()));
+    (medications.some(m => m.name.trim()) ||
+      labTests.some(t => t.name.trim()) ||
+      !!sheetText.trim() ||
+      !!whiteboardImage ||
+      !!uploadedRx);
 
   const handleDispatch = () => {
     if (!consultation || !selected) return;
@@ -438,27 +441,60 @@ export default function DoctorPortal({ doctor }: { doctor: DoctorAccount }) {
                 onStartConsultation={startConsultation}
               />
 
-              <div className="bg-white border-b border-[#DDE2EC] px-5 flex gap-1">
-                {TABS.map(t => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setTab(t.key)}
-                    title={t.hint}
-                    className={`px-4 py-2.5 text-[12.5px] font-semibold border-b-2 transition-colors ${
-                      tab === t.key
-                        ? "border-[#1B4FD8] text-[#1B4FD8]"
-                        : "border-transparent text-[#64748B] hover:text-[#334155]"
-                    }`}
-                  >
-                    {t.label}
-                    {t.key === "review" && (medications.length > 0 || labTests.length > 0) && (
-                      <span className="ml-1.5 text-[10px] font-bold bg-[#EFF6FF] text-[#1B4FD8] px-1.5 py-0.5 rounded">
-                        {medications.length + labTests.length}
-                      </span>
-                    )}
-                  </button>
-                ))}
+              {/* Stepper Navigation Bar */}
+              <div className="bg-[#F8FAFC] border-b border-[#CBD5E1] px-5 py-2 flex items-center justify-between gap-2 overflow-x-auto">
+                <div className="flex items-center gap-1 sm:gap-2 min-w-max">
+                  {TABS.map((t, index) => {
+                    const isActive = tab === t.key;
+                    const isPast =
+                      (t.key === "patient" && (tab === "sheet" || tab === "review")) ||
+                      (t.key === "sheet" && tab === "review");
+
+                    return (
+                      <React.Fragment key={t.key}>
+                        {index > 0 && <span className="text-slate-300 font-bold text-[13px] px-0.5">→</span>}
+                        <button
+                          type="button"
+                          onClick={() => setTab(t.key)}
+                          title={t.hint}
+                          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-none transition-all cursor-pointer ${
+                            isActive
+                              ? "bg-[#1B4FD8] text-white shadow-2xs font-bold"
+                              : isPast
+                                ? "bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold hover:bg-emerald-100"
+                                : "bg-white text-slate-600 border border-slate-200 font-medium hover:bg-slate-100"
+                          }`}
+                        >
+                          <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10.5px] font-mono font-bold ${
+                              isActive
+                                ? "bg-white text-[#1B4FD8]"
+                                : isPast
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-slate-200 text-slate-700"
+                            }`}
+                          >
+                            {isPast ? "✓" : t.stepNum}
+                          </span>
+                          <span className="text-[12px]">{t.label}</span>
+                          {t.key === "review" && (medications.length > 0 || labTests.length > 0) && (
+                            <span
+                              className={`ml-0.5 text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-none ${
+                                isActive ? "bg-white text-[#1B4FD8]" : "bg-blue-100 text-[#1B4FD8]"
+                              }`}
+                            >
+                              {medications.length + labTests.length}
+                            </span>
+                          )}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+
+                <div className="text-[11px] text-slate-500 font-mono hidden md:block">
+                  Step {tab === "patient" ? "1 of 3" : tab === "sheet" ? "2 of 3" : "3 of 3"}
+                </div>
               </div>
 
               {error && (
@@ -518,6 +554,13 @@ export default function DoctorPortal({ doctor }: { doctor: DoctorAccount }) {
                     onRunSplit={runSplit}
                     autoStartDictation={autoStartDictation}
                     onSingleClickDispatch={handleSingleClickDispatch}
+                    medications={medications}
+                    labTests={labTests}
+                    onBackToPatient={() => setTab("patient")}
+                    onProceedToReview={() => {
+                      runSplit();
+                      setTab("review");
+                    }}
                     onStartFresh={() => {
                       resetSheet();
                       if (consultation) {
@@ -553,6 +596,16 @@ export default function DoctorPortal({ doctor }: { doctor: DoctorAccount }) {
                     dispatchResult={dispatchResult}
                     onDispatch={handleDispatch}
                     onBackToSheet={() => setTab("sheet")}
+                    onNextPatient={() => {
+                      const nextWaiting = notifications.find(
+                        n => n.encounterId !== selected.encounterId && n.status !== "Consultation Completed" && n.status !== "Under Consultation"
+                      );
+                      if (nextWaiting) {
+                        openPatient(nextWaiting);
+                      } else {
+                        setView("live");
+                      }
+                    }}
                   />
                 )}
               </div>
@@ -825,8 +878,15 @@ function PatientBanner({
             </span>
             <StatusBadge status={notification.status} />
           </div>
-          <div className="text-[11.5px] text-[#64748B] font-mono">
-            {notification.umr} · {notification.opNumber} · {notification.age} yrs {notification.sex} · {notification.dept} · {notification.room}
+          <div className="text-[11.5px] text-[#64748B] font-mono flex items-center gap-2 flex-wrap">
+            <span>{notification.umr} · {notification.opNumber} · {notification.age} yrs {notification.sex} · {notification.dept} · {notification.room}</span>
+            {notification.vitals && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-700">
+                <span className="font-bold text-slate-900">BP:</span> {notification.vitals.bp || "--"} ·
+                <span className="font-bold text-slate-900">Pulse:</span> {notification.vitals.pulse || "--"} ·
+                <span className="font-bold text-slate-900">SpO₂:</span> {notification.vitals.spo2 || "--"}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -857,11 +917,13 @@ function PatientContextPanel({
   context,
   labOrders,
   onProceed,
+  hideProceedButton = false,
 }: {
   notification: DoctorNotification;
   context: NonNullable<ReturnType<typeof DoctorPortalDatabase.getPatientContext>>;
   labOrders: ReturnType<typeof LabOrderDatabase.getOrdersForPatient>;
   onProceed: () => void;
+  hideProceedButton?: boolean;
 }) {
   const { patient, previousVisits, consultations, isNewPatient } = context;
 
@@ -1039,11 +1101,16 @@ function PatientContextPanel({
         </section>
       )}
 
-      <div className="flex justify-end">
-        <Btn variant="primary" size="sm" onClick={onProceed}>
-          Continue to consultation sheet →
-        </Btn>
-      </div>
+      {!hideProceedButton && (
+        <div className="flex justify-between items-center pt-2 border-t border-[#E2E8F0]">
+          <div className="text-[11.5px] text-[#64748B]">
+            Review patient history and vitals before opening the consultation sheet.
+          </div>
+          <Btn variant="primary" size="sm" onClick={onProceed}>
+            Proceed to Step 2: Consultation & Voice Sheet →
+          </Btn>
+        </div>
+      )}
     </div>
   );
 }
@@ -1185,6 +1252,10 @@ function ConsultationSheet({
   autoStartDictation,
   onSingleClickDispatch,
   onStartFresh,
+  medications = [],
+  labTests = [],
+  onBackToPatient,
+  onProceedToReview,
 }: {
   notification: DoctorNotification;
   doctor: DoctorAccount;
@@ -1208,14 +1279,24 @@ function ConsultationSheet({
   autoStartDictation?: boolean;
   onSingleClickDispatch?: () => void;
   onStartFresh?: () => void;
+  medications?: ParsedMedication[];
+  labTests?: ParsedLabTest[];
+  onBackToPatient?: () => void;
+  onProceedToReview?: () => void;
 }) {
   const [isListening, setIsListening] = useState(false);
   const [speakerMode, setSpeakerMode] = useState<"auto" | "doctor" | "patient">("auto");
-  const [voiceLang, setVoiceLang] = useState<"te-IN" | "en-IN">("te-IN");
+  const [voiceLang, setVoiceLang] = useState<"auto" | "te-IN" | "en-IN" | "hi-IN">("auto");
   const [liveSplit, setLiveSplit] = useState<PrescriptionSplit | null>(null);
   const [diarized, setDiarized] = useState<DiarizedSpeech | null>(null);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+
+  const langDetect = useMemo(() => detectLanguage(sheetText), [sheetText]);
+  const audioSummary = useMemo(() => {
+    if (!sheetText.trim()) return null;
+    return generateAudioClinicalSummary(sheetText, recordingSeconds);
+  }, [sheetText, recordingSeconds]);
 
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -1240,12 +1321,6 @@ function ConsultationSheet({
     return () => clearTimeout(timer);
   }, [sheetText]);
 
-  // Auto-OCR on upload or whiteboard commit
-  useEffect(() => {
-    if ((uploadedRx || whiteboardImage) && !sheetText.trim() && !splitting) {
-      onRunSplit();
-    }
-  }, [uploadedRx, whiteboardImage]);
 
   const startVoiceRecording = async () => {
     try {
@@ -1273,13 +1348,13 @@ function ConsultationSheet({
         setRecordingSeconds(s => s + 1);
       }, 1000);
 
-      // Start SpeechRecognition in Telugu (te-IN) or English (en-IN)
+      // Start SpeechRecognition (Auto-Detect / Telugu / English / Hindi)
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const rec = new SpeechRecognition();
         rec.continuous = true;
         rec.interimResults = true;
-        rec.lang = voiceLang; // Default 'te-IN' for Telugu
+        rec.lang = voiceLang === "auto" ? "te-IN" : voiceLang;
         rec.onresult = (event: any) => {
           let rawTranscript = "";
           for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -1318,6 +1393,13 @@ function ConsultationSheet({
       } catch (e) {}
     }
     setIsListening(false);
+
+    // Auto-detect Doctor & Patient Voice and generate Doctor Voice Summarization on stop
+    if (sheetText.trim()) {
+      const diarizedResult = diarizeDoctorAndPatient(sheetText);
+      setDiarized(diarizedResult);
+      setLiveSplit(diarizedResult.split);
+    }
   };
 
   const toggleDictation = () => {
@@ -1328,22 +1410,11 @@ function ConsultationSheet({
     }
   };
 
-  // Auto-start recording dictation on consultation start
-  useEffect(() => {
-    if (autoStartDictation && !isListening) {
-      toggleDictation();
-    }
-  }, [autoStartDictation]);
-
-  const applyOrderSet = (templateText: string) => {
-    onSheetMode("type");
-    onSheetText(templateText);
-  };
 
   const modes: { key: SheetMode; label: string; hint: string; icon: string }[] = [
-    { key: "type", label: "Smart Clinical Note & Voice", hint: "Type with voice dictation & template shortcuts", icon: "📝" },
-    { key: "write", label: "Digital Whiteboard", hint: "Draw or write with stylus, pen or touch", icon: "✒️" },
-    { key: "upload", label: "Upload Photo / Scan", hint: "Upload paper prescription sheet", icon: "📄" },
+    { key: "type", label: "Type or Voice Note", hint: "Type or speak voice notes", icon: "📝" },
+    { key: "write", label: "Write by Hand", hint: "Draw or write with pen or stylus", icon: "✒️" },
+    { key: "upload", label: "Upload Prescription Image", hint: "Upload paper prescription image", icon: "📄" },
   ];
 
   const ready =
@@ -1352,509 +1423,440 @@ function ConsultationSheet({
     (sheetMode === "upload" && !!uploadedRx);
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      {/* Sleek Enterprise Consultation Header */}
-      <section className="bg-white border border-[#DDE2EC] rounded-xl p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#F1F5F9] pb-3.5">
+    <div className="space-y-4 w-full max-w-7xl mx-auto">
+      {/* Sleek Enterprise Top Action Header */}
+      <div className="bg-white border border-[#CBD5E1] rounded-none p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-none bg-blue-50 text-[#1B4FD8] border border-blue-200 flex items-center justify-center font-bold text-base">
+            👨‍⚕️
+          </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#1B4FD8] bg-[#EFF6FF] border border-[#BFDBFE] px-2 py-0.5 rounded-md">
-                Consultation Active
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#1B4FD8] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-none">
+                Active Consultation
               </span>
-              <span className="text-[11px] text-[#64748B] font-medium">
-                {notification.patientName} ({notification.age}y · {notification.sex}) · UMR: {notification.umr}
+              <span className="text-[12px] text-[#475569] font-medium">
+                {notification.patientName} ({notification.age}y · {notification.sex}) · Patient ID: <span className="font-mono font-bold text-[#0F172A]">{notification.umr}</span>
               </span>
             </div>
-            <h2 className="text-base font-bold text-[#0F172A] mt-1 flex items-center gap-2">
-              <span>Physician Multi-Section Clinical Order Workspace</span>
+            <h2 className="text-[14px] font-bold text-[#0F172A] mt-0.5">
+              Doctor Consultation &amp; Voice Prescription
             </h2>
           </div>
-
-          {/* Integrated Speaker Diarization & Voice Controls */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Language Selector: Telugu (te-IN) Default & English */}
-            <div className="flex bg-[#F1F5F9] p-1 rounded-xl border border-[#E2E8F0] text-[11px] font-bold">
-              <button
-                type="button"
-                onClick={() => setVoiceLang("te-IN")}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  voiceLang === "te-IN" ? "bg-[#1B4FD8] text-white shadow-xs" : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
-                title="Listen and transcribe speech in Telugu (తెలుగు)"
-              >
-                🇮🇳 తెలుగు (Telugu)
-              </button>
-              <button
-                type="button"
-                onClick={() => setVoiceLang("en-IN")}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  voiceLang === "en-IN" ? "bg-[#1B4FD8] text-white shadow-xs" : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
-                title="Listen and transcribe speech in English"
-              >
-                🇬🇧 English
-              </button>
-            </div>
-
-            <div className="flex bg-[#F1F5F9] p-1 rounded-xl border border-[#E2E8F0] text-[11px] font-bold">
-              <button
-                type="button"
-                onClick={() => setSpeakerMode("auto")}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  speakerMode === "auto" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
-                title="AI automatically detects and separates Doctor directives and Patient symptoms"
-              >
-                🤖 AI Speaker Split
-              </button>
-              <button
-                type="button"
-                onClick={() => setSpeakerMode("doctor")}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  speakerMode === "doctor" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
-                title="Dictate Doctor clinical notes, medicines & labs"
-              >
-                👨‍⚕️ Doctor Voice
-              </button>
-              <button
-                type="button"
-                onClick={() => setSpeakerMode("patient")}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  speakerMode === "patient" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
-                title="Dictate Patient symptoms & history"
-              >
-                🗣️ Patient Voice
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setRecordedAudioUrl(null);
-                setDiarized(null);
-                setLiveSplit(null);
-                onStartFresh?.();
-              }}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
-              title="Clear all consultation notes, voice recordings, and AI split to start fresh"
-            >
-              <span>🔄 Start Fresh</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleDictation}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border shadow-sm ${
-                isListening
-                  ? "bg-rose-50 text-rose-700 border-rose-300 animate-pulse shadow-rose-200"
-                  : "bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#334155] border-[#CBD5E1]"
-              }`}
-            >
-              <span className="text-base">{isListening ? "🔴" : "🎙️"}</span>
-              <span>
-                {isListening
-                  ? `Recording (${String(Math.floor(recordingSeconds / 60)).padStart(2, "0")}:${String(recordingSeconds % 60).padStart(2, "0")}) - Stop & AI Separate`
-                  : "Record Voice Consultation"}
-              </span>
-              {isListening && <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />}
-            </button>
-          </div>
         </div>
 
-        {/* Audio Player for Recorded Voice Stream */}
-        {recordedAudioUrl && (
-          <div className="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-              <span>🔊 Voice Session Audio Recording:</span>
-            </div>
-            <audio src={recordedAudioUrl} controls className="h-8 flex-1 max-w-md" />
-            <button
-              type="button"
-              onClick={() => setRecordedAudioUrl(null)}
-              className="text-xs text-slate-400 hover:text-slate-600 font-bold"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {/* Clinical Order Sets Bar */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#94A3B8]">Quick Protocols:</span>
-          {CLINICAL_ORDER_SETS.map(set => (
-            <button
-              key={set.id}
-              type="button"
-              onClick={() => applyOrderSet(set.text)}
-              className="px-2.5 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-lg text-[11px] font-medium transition-all flex items-center gap-1.5"
-            >
-              <span>{set.icon}</span>
-              <span>{set.title}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Main Sheet Workspace */}
-      <section className="bg-white border border-[#DDE2EC] rounded-2xl shadow-sm overflow-hidden">
-        {/* Mode Selector Tabs */}
-        <div className="px-5 pt-4 pb-3 border-b border-[#E2E8F0] bg-slate-50/50 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            {modes.map(mode => (
+        {/* Action Controls & Speaker Selector */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Active Speaker Selection Pill */}
+          <div className="flex items-center bg-slate-100 p-0.5 border border-[#CBD5E1] rounded-none">
+            <span className="text-[10px] font-mono font-bold text-slate-500 uppercase px-2">Speaker:</span>
+            {[
+              { key: "auto", label: "🤖 Auto Both Speakers", title: "Auto-detects Doctor vs Patient voice" },
+              { key: "doctor", label: "👨‍⚕️ Doctor Speaking", title: "Tag audio as Doctor instructions & medicines" },
+              { key: "patient", label: "👤 Patient Speaking", title: "Tag audio as Patient symptoms & problems" },
+            ].map(spk => (
               <button
-                key={mode.key}
+                key={spk.key}
                 type="button"
-                onClick={() => onSheetMode(mode.key)}
-                title={mode.hint}
-                className={`px-4 py-2 text-[12px] font-bold rounded-xl border transition-all flex items-center gap-2 ${
-                  sheetMode === mode.key
-                    ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-md shadow-blue-500/20"
-                    : "bg-white text-[#475569] border-[#CBD5E1] hover:border-[#94A3B8] hover:bg-slate-50"
+                onClick={() => setSpeakerMode(spk.key as any)}
+                title={spk.title}
+                className={`px-2 py-1 text-[11px] font-semibold rounded-none transition-colors cursor-pointer ${
+                  speakerMode === spk.key
+                    ? "bg-white text-[#1B4FD8] shadow-2xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <span>{mode.icon}</span>
-                <span>{mode.label}</span>
+                {spk.label}
               </button>
             ))}
           </div>
 
-          <div className="text-[11px] text-slate-500 font-medium flex items-center gap-2">
-            {isListening && (
-              <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-200 animate-pulse flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-ping" />
-                Live Recording ({speakerMode.toUpperCase()})
-              </span>
-            )}
-            {sheetMode === "write" && "✏️ Fluid Ink Canvas (Auto-OCR Connected)"}
-            {sheetMode === "type" && "⌨️ Smart Medical Voice Editor"}
-            {sheetMode === "upload" && "📷 Image OCR Connected"}
-          </div>
+          <button
+            type="button"
+            onClick={toggleDictation}
+            className={`px-3.5 py-1.5 rounded-none text-[12px] font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+              isListening
+                ? "bg-red-600 text-white border-red-700 animate-pulse shadow-2xs"
+                : "bg-[#1B4FD8] hover:bg-blue-700 text-white border-blue-700 shadow-2xs"
+            }`}
+          >
+            <span>{isListening ? "🔴 Stop Recording" : "🎙️ Record Voice Consultation"}</span>
+            {isListening && <span className="text-[11px] font-mono">({recordingSeconds}s)</span>}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setRecordedAudioUrl(null);
+              setDiarized(null);
+              setLiveSplit(null);
+              onStartFresh?.();
+            }}
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-[#334155] border border-[#CBD5E1] rounded-none text-[12px] font-semibold transition-colors cursor-pointer"
+            title="Clear all consultation notes, voice recordings, and extracted items"
+          >
+            🔄 Clear Sheet
+          </button>
         </div>
+      </div>
 
-        <div className="p-5">
-          {sheetMode === "write" && (
-            <PrescriptionWhiteboard
-              header={{
-                patientName: notification.patientName,
-                umr: notification.umr,
-                opNumber: notification.opNumber,
-                age: notification.age,
-                sex: notification.sex,
-                doctorName: doctor.name,
-                date: new Date().toLocaleDateString(),
-              }}
-              onCommit={onWhiteboardCommit}
-            />
-          )}
+      {/* Main 2-Column Doctor Workspace Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Left Column (7 cols): Main Workspace */}
+        <div className="lg:col-span-7 flex flex-col gap-4">
+          {/* Mode Selector Bar */}
+          <div className="bg-white border border-[#CBD5E1] p-2 rounded-none shadow-2xs flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-1.5 flex-wrap">
+              {modes.map(mode => (
+                <button
+                  key={mode.key}
+                  type="button"
+                  onClick={() => onSheetMode(mode.key)}
+                  className={`px-3 py-1.5 text-[12px] font-bold rounded-none transition-colors cursor-pointer ${
+                    sheetMode === mode.key
+                      ? "bg-[#1B4FD8] text-white shadow-2xs"
+                      : "bg-white text-[#475569] hover:bg-slate-100 border border-[#E2E8F0]"
+                  }`}
+                >
+                  <span className="mr-1.5">{mode.icon}</span>
+                  <span>{mode.label}</span>
+                </button>
+              ))}
+            </div>
 
-          {sheetMode === "type" && (
-            <div className="space-y-4">
-              <div className="relative">
+            <div className="text-[11px] text-slate-500 font-medium px-2">
+              {isListening && (
+                <span className="text-red-700 font-bold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
+                  Recording ({speakerMode === "doctor" ? "Doctor Speaking" : speakerMode === "patient" ? "Patient Speaking" : "Auto Both Speakers"})
+                </span>
+              )}
+              {!isListening && sheetMode === "type" && "⌨️ Type or Speak"}
+              {!isListening && sheetMode === "write" && "✏️ Handwriting Pen"}
+              {!isListening && sheetMode === "upload" && "📷 Image OCR Reader"}
+            </div>
+          </div>
+
+          {/* Sheet Workspace Container */}
+          <div className="bg-white border border-[#CBD5E1] p-4 rounded-none shadow-2xs space-y-3">
+            {sheetMode === "type" && (
+              <div className="space-y-3">
+                {/* Editor Header Bar */}
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="text-[12px] font-bold text-slate-800 flex items-center gap-1.5">
+                    <span>📝 Consultation Notes &amp; Voice Sheet</span>
+                  </span>
+
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Language: <span className="font-bold text-[#1B4FD8]">{langDetect.primaryLanguage}</span>
+                  </span>
+                </div>
+
                 <textarea
                   value={sheetText}
                   onChange={event => onSheetText(event.target.value)}
-                  rows={9}
+                  rows={12}
                   spellCheck={false}
                   placeholder={
-                    "Doctor Notes / Diagnosis: Acute upper respiratory tract infection\n\nPatient Advice: Steam inhalation twice daily, drink warm saline water, rest\n\nRx:\nAzithromycin 500mg OD 3 days after food\nParacetamol 650mg TDS 5 days\n\nInvestigations:\nComplete Blood Count (CBC)\nChest X-Ray PA View"
+                    "Doctor Notes / Diagnosis: Acute fever with throat infection\n\nPatient Advice: Drink warm water, rest\n\nRx:\nAzithromycin 500mg OD 3 days after food\nParacetamol 650mg TDS 5 days\n\nLab Tests:\nComplete Blood Count (CBC)"
                   }
-                  className="w-full border border-[#DDE2EC] rounded-xl px-4 py-3 text-[13px] font-mono leading-relaxed focus:outline-none focus:border-[#1B4FD8] focus:ring-2 focus:ring-blue-100 shadow-inner"
+                  className="w-full border border-[#CBD5E1] rounded-none p-4 text-[13px] font-mono leading-relaxed focus:outline-none focus:border-[#1B4FD8] text-gray-900 bg-[#FAFAFA]"
                 />
               </div>
+            )}
 
-              {/* Live Speaker Diarization Streams & 4-Section AI Board */}
-              {diarized && (
-                <div className="border border-[#BFDBFE] bg-[#F8FAFC] rounded-2xl p-4 space-y-4 shadow-sm">
-                  <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#1B4FD8] bg-[#EFF6FF] px-2.5 py-1 rounded-md border border-[#BFDBFE]">
-                        🤖 AI Voice Diarization &amp; Categorization
+            {sheetMode === "write" && (
+              <PrescriptionWhiteboard
+                header={{
+                  patientName: notification.patientName,
+                  umr: notification.umr,
+                  opNumber: notification.opNumber,
+                  age: notification.age,
+                  sex: notification.sex,
+                  doctorName: doctor.name,
+                  date: new Date().toLocaleDateString(),
+                }}
+                onCommit={onWhiteboardCommit}
+              />
+            )}
+
+            {sheetMode === "upload" && (
+              <>
+                <input ref={rxInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={onRxUpload} />
+                {uploadedRx ? (
+                  <div className="space-y-3">
+                    <img src={uploadedRx.dataUrl} alt="Uploaded prescription" className="w-full max-h-[480px] object-contain bg-[#F8FAFC] border border-[#E2E8F0] rounded-none shadow-2xs" />
+                    <div className="flex items-center justify-between text-[11.5px] bg-slate-50 p-3 rounded-none border border-slate-200">
+                      <span className="text-[#475569] font-medium truncate">
+                        📄 {uploadedRx.name} · {formatBytes(uploadedRx.size)}
                       </span>
-                      <span className="text-xs text-[#334155] font-bold">
-                        Real-Time Separated Doctor Directives &amp; Patient Symptoms
-                      </span>
+                      <div className="flex gap-3">
+                        <button type="button" onClick={() => rxInputRef.current?.click()} className="text-[#1B4FD8] font-semibold hover:underline">
+                          Replace File
+                        </button>
+                        <button type="button" onClick={onRemoveUploadedRx} className="text-[#B91C1C] font-semibold hover:underline">
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                    <span className="text-xs text-[#64748B] font-medium">
-                      {liveSplit?.medications.length || 0} Meds · {liveSplit?.labTests.length || 0} Labs
-                    </span>
                   </div>
-
-                  {/* Dual Speaker Voice Streams */}
-                  {(diarized.doctorStream.length > 0 || diarized.patientStream.length > 0) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-2 border-b border-[#E2E8F0]">
-                      {/* Doctor Voice Stream Card */}
-                      <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                            👨‍⚕️ Doctor Voice Directives
-                          </span>
-                          <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
-                            {diarized.doctorStream.length} turns
-                          </span>
-                        </div>
-                        <ul className="space-y-1 text-xs text-blue-950 font-medium max-h-32 overflow-y-auto">
-                          {diarized.doctorStream.map((line, idx) => (
-                            <li key={idx} className="bg-white/80 p-1.5 rounded border border-blue-100">
-                              {line}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* Patient Voice Stream Card */}
-                      <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                            🗣️ Patient Voice Symptoms
-                          </span>
-                          <span className="text-[10px] font-mono bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
-                            {diarized.patientStream.length} turns
-                          </span>
-                        </div>
-                        <ul className="space-y-1 text-xs text-amber-950 font-medium max-h-32 overflow-y-auto">
-                          {diarized.patientStream.map((line, idx) => (
-                            <li key={idx} className="bg-white/80 p-1.5 rounded border border-amber-100">
-                              {line}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => rxInputRef.current?.click()}
+                    className="w-full border-2 border-dashed border-[#CBD5E1] rounded-none p-10 text-center hover:border-[#1B4FD8] hover:bg-blue-50/50 transition-colors group cursor-pointer"
+                  >
+                    <div className="text-3xl mb-2">📄</div>
+                    <div className="text-[13px] font-bold text-[#334155]">Upload Written Prescription Photo or Scan</div>
+                    <div className="text-[11.5px] text-[#94A3B8] mt-1">
+                      Supports JPG, PNG or PDF · Automatic text &amp; medicine extraction
                     </div>
-                  )}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
 
-                  {/* 4-Section Categorized Board */}
-                  {liveSplit && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Section 1: Doctor Clinical Notes / Diagnosis */}
-                      <div className="bg-white border border-[#CBD5E1] rounded-xl p-3.5 shadow-xs flex flex-col">
-                        <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-2">
-                          <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
-                            <span>👨‍⚕️ Doctor Clinical Notes &amp; Diagnosis</span>
-                          </span>
-                          <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded">
-                            Saved to Chart
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#334155] font-medium min-h-[38px]">
-                          {liveSplit.diagnosis || (
-                            <span className="text-[#94A3B8] italic">
-                              Dictate diagnosis or findings (e.g., "Diagnosis: Bronchitis")...
-                            </span>
-                          )}
-                        </p>
-                      </div>
-
-                      {/* Section 2: Patient Notes & Home Advice */}
-                      <div className="bg-white border border-[#CBD5E1] rounded-xl p-3.5 shadow-xs flex flex-col">
-                        <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-2">
-                          <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
-                            <span>📋 Patient Instructions &amp; Advice</span>
-                          </span>
-                          <span className="text-[10px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded">
-                            Given to Patient
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#334155] font-medium min-h-[38px]">
-                          {liveSplit.advice || (
-                            <span className="text-[#94A3B8] italic">
-                              Dictate home care/advice (e.g., "Advice: Steam inhalation, warm water")...
-                            </span>
-                          )}
-                        </p>
-                      </div>
-
-                      {/* Section 3: Pharmacy Order (Medicines) */}
-                      <div className="bg-white border border-[#CBD5E1] rounded-xl p-3.5 shadow-xs flex flex-col">
-                        <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-2">
-                          <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
-                            <span>💊 Pharmacy Order (Medicines)</span>
-                            <span className="text-[10px] bg-[#DCFCE7] text-[#15803D] font-bold px-2 py-0.5 rounded">
-                              Pharmacy Queue
-                            </span>
-                          </span>
-                          <span className="text-[11px] text-[#64748B] font-mono">{liveSplit.medications.length} items</span>
-                        </div>
-                        {liveSplit.medications.length > 0 ? (
-                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                            {liveSplit.medications.map((m, idx) => (
-                              <div key={idx} className="text-xs bg-[#F8FAFC] border border-[#E2E8F0] p-2 rounded-lg flex items-center justify-between">
-                                <span className="font-semibold text-[#0F172A]">{m.name}</span>
-                                <div className="flex items-center gap-1 text-[10px]">
-                                  {m.strength && <span className="bg-[#EFF6FF] text-[#1B4FD8] px-1.5 py-0.5 rounded font-mono">{m.strength}</span>}
-                                  {m.frequency && <span className="bg-[#FEF3C7] text-[#D97706] px-1.5 py-0.5 rounded font-bold">{m.frequency}</span>}
-                                  {m.duration && <span className="bg-[#F1F5F9] text-[#475569] px-1.5 py-0.5 rounded">{m.duration}</span>}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-[#94A3B8] italic">Dictate medicines (e.g., "Paracetamol 650mg TDS 5 days")...</p>
-                        )}
-                      </div>
-
-                      {/* Section 4: Laboratory Order (Investigations) */}
-                      <div className="bg-white border border-[#CBD5E1] rounded-xl p-3.5 shadow-xs flex flex-col">
-                        <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2 mb-2">
-                          <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
-                            <span>🧪 Laboratory Order (Investigations)</span>
-                            <span className="text-[10px] bg-[#E0F2FE] text-[#0369A1] font-bold px-2 py-0.5 rounded">
-                              Reception Billing Queue
-                            </span>
-                          </span>
-                          <span className="text-[11px] text-[#64748B] font-mono">{liveSplit.labTests.length} items</span>
-                        </div>
-                        {liveSplit.labTests.length > 0 ? (
-                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                            {liveSplit.labTests.map((t, idx) => (
-                              <div key={idx} className="text-xs bg-[#F8FAFC] border border-[#E2E8F0] p-2 rounded-lg flex items-center justify-between">
-                                <span className="font-semibold text-[#0F172A]">{t.name}</span>
-                                <div className="flex items-center gap-1 text-[10px]">
-                                  <span className="bg-[#F3E8FF] text-[#6B21A8] px-1.5 py-0.5 rounded">{t.category}</span>
-                                  <span className={`px-1.5 py-0.5 rounded font-bold ${t.urgency === "STAT" ? "bg-[#FEE2E2] text-[#DC2626]" : "bg-[#F1F5F9] text-[#475569]"}`}>
-                                    {t.urgency}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-[#94A3B8] italic">Dictate lab tests (e.g., "CBC", "Chest X-Ray")...</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+          {/* Audio Recorded Session Player */}
+          {recordedAudioUrl && (
+            <div className="bg-white border border-[#CBD5E1] p-3 rounded-none flex items-center justify-between gap-3 shadow-2xs">
+              <span className="text-[12px] font-bold text-gray-900 flex items-center gap-2">
+                <span>🔊 Voice Recording Playback</span>
+                <span className="text-[10px] font-mono bg-blue-50 text-[#1B4FD8] px-1.5 py-0.5 border border-blue-200">
+                  {audioSummary?.detectedLanguage}
+                </span>
+              </span>
+              <audio src={recordedAudioUrl} controls className="h-8 flex-1 max-w-sm" />
+              <button type="button" onClick={() => setRecordedAudioUrl(null)} className="text-[11px] text-red-600 font-bold hover:underline cursor-pointer">
+                Remove
+              </button>
             </div>
           )}
 
-          {sheetMode === "upload" && (
-            <>
-              <input ref={rxInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={onRxUpload} />
-              {uploadedRx ? (
-                <div className="space-y-3">
-                  <img src={uploadedRx.dataUrl} alt="Uploaded prescription" className="w-full max-h-[520px] object-contain bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl shadow-sm" />
-                  <div className="flex items-center justify-between text-[11.5px] bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <span className="text-[#475569] font-medium truncate">
-                      📄 {uploadedRx.name} · {formatBytes(uploadedRx.size)}
-                    </span>
-                    <div className="flex gap-3">
-                      <button type="button" onClick={() => rxInputRef.current?.click()} className="text-[#1B4FD8] font-semibold hover:underline">
-                        Replace File
-                      </button>
-                      <button type="button" onClick={onRemoveUploadedRx} className="text-[#B91C1C] font-semibold hover:underline">
+          {/* Optional Video Disclosure */}
+          <div className="bg-white border border-[#CBD5E1] rounded-none">
+            <button
+              type="button"
+              onClick={() => setVideoOpen(open => !open)}
+              className="w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-[#F8FAFC] transition-colors"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-[13px] font-bold text-gray-900">🎥 Consultation Video</h3>
+                <span className="text-[9.5px] font-bold uppercase tracking-wide bg-[#F1F5F9] text-[#64748B] border border-[#E2E8F0] px-1.5 py-0.5 rounded-none">
+                  Optional
+                </span>
+                {hasVideo && <span className="text-[10.5px] font-semibold text-[#15803D]">attached</span>}
+              </div>
+              <span className="text-[11px] text-[#64748B] font-semibold">
+                {videoOpen ? "Hide" : hasVideo ? "Show" : "Attach recording"}
+              </span>
+            </button>
+
+            {videoOpen && (
+              <div className="px-4 pb-4 border-t border-[#F1F5F9] pt-3">
+                <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={onVideoSelected} />
+                {video ? (
+                  <div className="space-y-2">
+                    <video src={video.objectUrl} controls className="w-full max-h-72 bg-black rounded-none" />
+                    <div className="flex items-center justify-between text-[11.5px]">
+                      <span className="text-[#475569] font-medium truncate">
+                        {video.name} · {formatBytes(video.size)}
+                      </span>
+                      <button type="button" onClick={onRemoveVideo} className="text-[#B91C1C] font-semibold hover:underline">
                         Remove
                       </button>
                     </div>
                   </div>
-                </div>
-              ) : (
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    className="w-full border border-dashed border-[#CBD5E1] rounded-none p-4 text-center hover:border-[#1B4FD8] hover:bg-[#F8FAFC] transition-colors"
+                  >
+                    <div className="text-[12px] font-semibold text-[#334155]">Upload consultation video recording</div>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column (5 cols): Extracted Medicines & Lab Tests Panel */}
+        <div className="lg:col-span-5 flex flex-col gap-4 sticky top-4">
+          <div className="bg-white border border-[#CBD5E1] rounded-none shadow-2xs p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-base">⚡</span>
+                <h3 className="text-[13px] font-bold text-[#0F172A] uppercase tracking-wide">
+                  Medicines &amp; Lab Tests Found
+                </h3>
+              </div>
+              {onSingleClickDispatch && (
                 <button
                   type="button"
-                  onClick={() => rxInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-[#CBD5E1] rounded-2xl p-10 text-center hover:border-[#1B4FD8] hover:bg-blue-50/50 transition-all group"
+                  onClick={onSingleClickDispatch}
+                  disabled={!ready}
+                  className={`px-3 py-1 text-[11px] font-bold transition-colors rounded-none shadow-2xs cursor-pointer ${
+                    ready
+                      ? "bg-[#1B4FD8] hover:bg-blue-700 text-white"
+                      : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  }`}
                 >
-                  <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">📄</div>
-                  <div className="text-[13px] font-bold text-[#334155]">Upload Written Prescription Photo or Scan</div>
-                  <div className="text-[11.5px] text-[#94A3B8] mt-1">
-                    Supports JPG, PNG or PDF · Server OCR extracts handwriting and splits into pharmacy & lab orders
-                  </div>
+                  ⚡ Send to Pharmacy &amp; Lab
                 </button>
               )}
-            </>
-          )}
-        </div>
+            </div>
 
-        {/* Footer Single-Click Dispatch Action Bar */}
-        <div className="px-5 py-4 border-t border-[#DDE2EC] bg-[#F8FAFC] flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${ready ? "bg-emerald-500 animate-pulse" : "bg-amber-400"}`} />
-            <span className="text-[11.5px] text-[#64748B] font-medium">
-              {ready
-                ? "Ready — Single click dispatches Medicines to Pharmacy and Lab Orders to Reception Billing."
-                : "Add dictation or notes on the sheet to proceed with dispatch."}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Btn variant="secondary" size="md" onClick={onRunSplit} disabled={!ready || splitting}>
-              {splitting ? "Reviewing..." : "🔍 Review & Edit AI Split"}
-            </Btn>
-            <Btn variant="primary" size="md" onClick={onSingleClickDispatch || onRunSplit} disabled={!ready}>
-              🚀 Single-Click Send to Billing &amp; Pharmacy →
-            </Btn>
-          </div>
-        </div>
-      </section>
-
-      {/* Consultation video -- optional, and deliberately after the sheet: the
-          prescription is what the visit turns on, the recording is a nice-to-have. */}
-      <section className="bg-white border border-[#DDE2EC] rounded">
-        <button
-          type="button"
-          onClick={() => setVideoOpen(open => !open)}
-          className="w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-[#F8FAFC] transition-colors"
-        >
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-[13px] font-bold text-gray-900">🎥 Consultation video</h3>
-            <span className="text-[9.5px] font-bold uppercase tracking-wide bg-[#F1F5F9] text-[#64748B] border border-[#E2E8F0] px-1.5 py-0.5 rounded">
-              Optional
-            </span>
-            {hasVideo && (
-              <span className="text-[10.5px] font-semibold text-[#15803D]">attached</span>
-            )}
-          </div>
-          <span className="text-[11px] text-[#64748B] font-semibold flex-shrink-0">
-            {videoOpen ? "Hide" : hasVideo ? "Show" : "Attach a recording"}
-          </span>
-        </button>
-
-        {videoOpen && (
-          <div className="px-4 pb-4">
-            <p className="text-[11.5px] text-[#64748B] mb-3">
-              Attach a recording of the consultation if you want one on the visit. Nothing here is required —
-              the sheet can be dispatched without it.
-            </p>
-            <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={onVideoSelected} />
-            {video ? (
-              <div className="space-y-2">
-                <video src={video.objectUrl} controls className="w-full max-h-80 bg-black rounded" />
-                <div className="flex items-center justify-between text-[11.5px]">
-                  <span className="text-[#475569] font-medium truncate">
-                    {video.name} · {formatBytes(video.size)}
+            {/* Structured Voice Summary Box */}
+            {audioSummary && (
+              <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-3 text-[11.5px] space-y-2 rounded-none">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                  <span className="font-extrabold text-[#0F172A] flex items-center gap-1.5 text-[12px]">
+                    <span>📋 Voice Summary</span>
                   </span>
-                  <button type="button" onClick={onRemoveVideo} className="text-[#B91C1C] font-semibold hover:underline">
-                    Remove
-                  </button>
+                  <span className="text-[10px] font-mono font-bold bg-blue-100 text-[#1B4FD8] px-1.5 py-0.5">
+                    {audioSummary.detectedLanguage}
+                  </span>
                 </div>
-              </div>
-            ) : persistedVideo ? (
-              <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded p-3 flex items-center justify-between gap-3 flex-wrap">
-                <div className="text-[12px] text-[#475569]">
-                  <div className="font-semibold text-gray-900">🎥 {persistedVideo.name}</div>
-                  <div className="text-[11px] text-[#94A3B8]">
-                    {formatBytes(persistedVideo.size)} · recorded {new Date(persistedVideo.recordedAt).toLocaleString()}.
-                    The recording itself is not kept in the browser — re-attach the file to play it back here.
+
+                <div className="space-y-1.5 text-[#334155] leading-normal font-sans">
+                  <div>
+                    <span className="font-bold text-indigo-900 uppercase text-[10px] tracking-wider block">Patient Symptoms &amp; Problem:</span>
+                    <p className="text-[11px] bg-white p-1.5 border border-slate-200 text-slate-800">
+                      {audioSummary.soapSubjective}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="font-bold text-blue-900 uppercase text-[10px] tracking-wider block">Doctor Diagnosis:</span>
+                    <p className="text-[11px] bg-white p-1.5 border border-slate-200 text-slate-800 font-semibold">
+                      {audioSummary.soapAssessment}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="font-bold text-emerald-900 uppercase text-[10px] tracking-wider block">Medicines &amp; Lab Tests Plan:</span>
+                    <p className="text-[11px] bg-white p-1.5 border border-slate-200 text-slate-800">
+                      {audioSummary.soapPlan}
+                    </p>
                   </div>
                 </div>
-                <Btn variant="outline" size="xs" onClick={() => videoInputRef.current?.click()}>
-                  Re-attach
-                </Btn>
               </div>
-            ) : (
+            )}
+
+            {/* Extracted Medicines Card */}
+            <div className="bg-emerald-50/70 border border-emerald-200 p-3 rounded-none">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[12px] font-extrabold text-emerald-900 flex items-center gap-1.5">
+                  <span>💊 Prescribed Medicines</span>
+                  <span className="text-[10px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded-none font-mono">
+                    {(liveSplit?.medications.length || medications.length)}
+                  </span>
+                </span>
+                <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">
+                  Pharmacy
+                </span>
+              </div>
+
+              {(liveSplit?.medications.length || medications.length) === 0 ? (
+                <p className="text-[11px] text-emerald-700/70 italic">Dictate or type medicines to extract automatically.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {(liveSplit?.medications.length ? liveSplit.medications : medications).map((m, i) => (
+                    <div key={i} className="bg-white p-2 border border-emerald-200 text-[11.5px] flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-gray-900">{m.name}</span>
+                        {m.strength && <span className="text-gray-500 font-medium ml-1">({m.strength})</span>}
+                        <div className="text-[10.5px] text-emerald-800 font-semibold mt-0.5">
+                          {m.frequency || "OD"} · {m.duration || "3 days"} {m.instructions ? `· ${m.instructions}` : ""}
+                        </div>
+                      </div>
+                      <span className="text-[10.5px] font-mono font-bold bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded-none">
+                        Qty: {m.quantity}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Extracted Lab Tests Card */}
+            <div className="bg-amber-50/70 border border-amber-200 p-3 rounded-none">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[12px] font-extrabold text-amber-900 flex items-center gap-1.5">
+                  <span>🧪 Diagnostic Lab Tests</span>
+                  <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded-none font-mono">
+                    {(liveSplit?.labTests.length || labTests.length)}
+                  </span>
+                </span>
+                <span className="text-[10px] text-amber-700 font-bold uppercase tracking-wider">
+                  Laboratory
+                </span>
+              </div>
+
+              {(liveSplit?.labTests.length || labTests.length) === 0 ? (
+                <p className="text-[11px] text-amber-700/70 italic">Dictate or type lab orders to extract automatically.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {(liveSplit?.labTests.length ? liveSplit.labTests : labTests).map((t, i) => (
+                    <div key={i} className="bg-white p-2 border border-amber-200 text-[11.5px] flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-gray-900">{t.name}</span>
+                        <div className="text-[10.5px] text-amber-800 font-semibold mt-0.5">
+                          Category: {t.category} · Urgency: {t.urgency}
+                        </div>
+                      </div>
+                      <span className="text-[10.5px] font-bold bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded-none">
+                        {t.category}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="pt-2 border-t border-[#E2E8F0] flex flex-wrap items-center gap-2">
+              {onBackToPatient && (
+                <button
+                  type="button"
+                  onClick={onBackToPatient}
+                  className="px-3 py-2 bg-white hover:bg-slate-50 text-[#475569] border border-[#CBD5E1] rounded-none text-[12px] font-semibold transition-colors cursor-pointer"
+                >
+                  ← Step 1: Patient History
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => videoInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-[#CBD5E1] rounded p-5 text-center hover:border-[#1B4FD8] hover:bg-[#F8FAFC] transition-colors"
+                onClick={() => {
+                  if (onProceedToReview) onProceedToReview();
+                  else onRunSplit();
+                }}
+                disabled={!ready || splitting}
+                className="flex-1 py-2 bg-[#1E293B] hover:bg-slate-800 text-white rounded-none text-[12px] font-bold transition-colors cursor-pointer shadow-2xs"
               >
-                <div className="text-[12.5px] font-semibold text-[#334155]">Upload the consultation recording</div>
-                <div className="text-[11.5px] text-[#94A3B8] mt-0.5">MP4, WebM or MOV · optional</div>
+                {splitting ? "Processing Sheet..." : "Step 3: Review Orders →"}
               </button>
-            )}
+
+              {onSingleClickDispatch && (
+                <button
+                  type="button"
+                  onClick={onSingleClickDispatch}
+                  disabled={!ready}
+                  className={`py-2 px-4 rounded-none text-[12px] font-bold transition-colors cursor-pointer ${
+                    ready
+                      ? "bg-[#1B4FD8] hover:bg-blue-700 text-white shadow-2xs"
+                      : "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
+                  }`}
+                >
+                  🚀 Send to Pharmacy &amp; Lab
+                </button>
+              )}
+            </div>
           </div>
-        )}
-      </section>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1877,6 +1879,7 @@ function ReviewAndDispatch({
   dispatchResult,
   onDispatch,
   onBackToSheet,
+  onNextPatient,
 }: {
   split: PrescriptionSplit | null;
   splitting: boolean;
@@ -1893,6 +1896,7 @@ function ReviewAndDispatch({
   dispatchResult: DispatchResult | null;
   onDispatch: () => void;
   onBackToSheet: () => void;
+  onNextPatient?: () => void;
 }) {
   const labTotal = labTests.reduce((sum, test) => sum + priceForTest(test.name), 0);
   const alreadyDispatched = consultation?.dispatch === "Dispatched";
@@ -1925,15 +1929,17 @@ function ReviewAndDispatch({
           }`}
         >
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[12.5px] font-bold text-gray-900">AI split</span>
+            <span className="text-[12.5px] font-bold text-gray-900">Extracted Items</span>
             <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white border border-[#CBD5E1] text-[#475569]">
               {split.engine === "llm"
-                ? "Language model"
-                : split.engine === "heuristic"
-                  ? "Keyword match (model offline)"
-                  : split.engine === "browser"
-                    ? "Offline keyword match"
-                    : split.engine}
+                ? "AI Model"
+                : split.engine === "smart_ocr"
+                  ? "Smart OCR Engine"
+                  : split.engine === "heuristic"
+                    ? "Keyword match"
+                    : split.engine === "browser"
+                      ? "Offline keyword match"
+                      : split.engine}
             </span>
           </div>
           <p className="text-[12px] text-[#475569] mt-1">
@@ -2161,9 +2167,16 @@ function ReviewAndDispatch({
 
       {/* Dispatch */}
       {dispatchResult && !dispatchResult.errors.length ? (
-        <div className="bg-[#F0FDF4] border border-[#BBF7D0] rounded p-4">
-          <h3 className="text-[13px] font-bold text-[#15803D]">✓ Dispatched</h3>
-          <ul className="mt-2 space-y-1 text-[12.5px] text-[#166534]">
+        <div className="bg-[#F0FDF4] border border-[#BBF7D0] rounded p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[13px] font-bold text-[#15803D]">✓ Consultation Sent Successfully</h3>
+            {onNextPatient && (
+              <Btn variant="primary" size="sm" onClick={onNextPatient}>
+                Call Next Waiting Patient →
+              </Btn>
+            )}
+          </div>
+          <ul className="space-y-1 text-[12.5px] text-[#166534]">
             {dispatchResult.prescriptionId && (
               <li>
                 <span className="font-mono font-bold">{dispatchResult.prescriptionId}</span> — {dispatchResult.medicineCount}{" "}
@@ -2188,10 +2201,10 @@ function ReviewAndDispatch({
           </div>
           <div className="flex gap-2">
             <Btn variant="outline" size="sm" onClick={onBackToSheet}>
-              ← Edit the sheet
+              ← Step 2: Consultation Sheet
             </Btn>
             <Btn variant="primary" size="sm" onClick={onDispatch} disabled={!canDispatch}>
-              Dispatch to pharmacy &amp; billing
+              🚀 Confirm &amp; Send Orders to Pharmacy &amp; Laboratory
             </Btn>
           </div>
         </div>

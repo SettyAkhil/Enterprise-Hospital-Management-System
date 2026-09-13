@@ -1835,6 +1835,66 @@ export class ErDatabase {
     });
   }
 
+  static dispatchBedTransferAlert(notifData: {
+    patient_id?: string | null;
+    patient_name: string;
+    patient_last_name?: string;
+    patient_age?: number | null;
+    patient_gender?: string | null;
+    patient_phone?: string | null;
+    source_department: string;
+    target_destination: string;
+    target_bed_type: "ICU" | "General" | "Semi-Private" | "Private";
+    target_ward?: string;
+    priority: "Stat / Emergency" | "High Priority" | "Urgent" | "Routine";
+    clinical_reason: string;
+    sent_by?: string | null;
+    er_visit_id?: number;
+    er_bed_request_id?: number;
+  }) {
+    if (typeof window === "undefined") return;
+    try {
+      const key = "hospai_bed_transfer_notifications_v3";
+      const existing = JSON.parse(window.localStorage.getItem(key) || "[]");
+      const isIcu = notifData.target_destination.toLowerCase().includes("icu") || notifData.target_bed_type === "ICU";
+      const newNotif = {
+        id: `NOTIF-TR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        patient_id: notifData.patient_id,
+        patient_name: notifData.patient_name,
+        patient_last_name: notifData.patient_last_name || "",
+        patient_age: notifData.patient_age ?? 45,
+        patient_gender: notifData.patient_gender || "Male",
+        patient_phone: notifData.patient_phone || null,
+        source_department: notifData.source_department || "Emergency Department (ER Bay 1)",
+        target_destination: notifData.target_destination || (isIcu ? "ICU (Intensive Care Unit)" : "3N Medical/Surgical Ward"),
+        target_bed_type: notifData.target_bed_type || (isIcu ? "ICU" : "General"),
+        target_ward: notifData.target_ward || (isIcu ? "Intensive Care Unit (ICU)" : "3N Medical/Surgical"),
+        priority: notifData.priority || (isIcu ? "Stat / Emergency" : "High Priority"),
+        clinical_reason: notifData.clinical_reason,
+        sent_by: notifData.sent_by || "Attending Emergency Physician",
+        sent_at: new Date().toISOString(),
+        status: "pending",
+        er_visit_id: notifData.er_visit_id,
+        er_bed_request_id: notifData.er_bed_request_id,
+        is_read: false,
+      };
+      existing.unshift(newNotif);
+      window.localStorage.setItem(key, JSON.stringify(existing));
+      window.dispatchEvent(
+        new CustomEvent("bed:transfer_notification_updated", {
+          detail: { count: existing.filter((n: any) => !n.is_read && n.status !== "dismissed").length, notifications: existing },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("bed:new_transfer_alert", {
+          detail: newNotif,
+        }),
+      );
+    } catch (err) {
+      console.error("Failed to dispatch bed transfer alert", err);
+    }
+  }
+
   static recordDisposition(visitId: number, data: any): ErDispositionItem {
     const visit = this.getVisit(visitId);
     if (!visit) throw new Error("Visit not found");
@@ -1844,7 +1904,9 @@ export class ErDatabase {
       outcome.includes("icu") ||
       outcome.includes("ward") ||
       outcome === "admit_inpatient" ||
-      outcome === "admit_icu";
+      outcome === "admit_icu" ||
+      outcome === "transfer_ot" ||
+      outcome === "transfer_facility";
 
     const isIcu = outcome.includes("icu") || (data.required_specialty || "").toLowerCase().includes("icu");
     const reqLoc = isIcu ? "ICU" : data.required_specialty || "General Ward";
@@ -1858,12 +1920,15 @@ export class ErDatabase {
       priority: data.priority || (isIcu ? "Stat / Emergency" : "Routine"),
     };
 
+    let createdBedReqId: number | undefined;
+
     // Auto-create or ensure bed request when disposition is admission or ICU
     if (isAdmission) {
       const existingPendingReq = (visit.bed_requests || []).find((r) => r.status === "pending");
       if (!existingPendingReq) {
+        createdBedReqId = (visit.bed_requests || []).length + 1;
         const newReq: ErBedRequestItem = {
-          id: (visit.bed_requests || []).length + 1,
+          id: createdBedReqId,
           status: "pending",
           requested_level_of_care: reqLoc,
           requested_specialty: data.required_specialty || (isIcu ? "ICU (Intensive Care Unit)" : visit.assigned_specialty || "General Medicine"),
@@ -1873,7 +1938,28 @@ export class ErDatabase {
           allocated_at: null,
         };
         visit.bed_requests = [...(visit.bed_requests || []), newReq];
+      } else {
+        createdBedReqId = existingPendingReq.id;
       }
+
+      // Dispatch Transfer Notification to Bed Board
+      ErDatabase.dispatchBedTransferAlert({
+        patient_id: visit.patient_id,
+        patient_name: visit.patient_name || (visit.is_unknown_patient ? visit.unknown_patient_label || "Unknown Patient" : "Patient"),
+        patient_last_name: visit.patient_last_name || "",
+        patient_age: visit.patient_age,
+        patient_gender: visit.patient_gender,
+        patient_phone: visit.patient_phone,
+        source_department: `Emergency Department (${visit.triage?.triage_bed_label || visit.triage_bed_label || "Triage Bay"})`,
+        target_destination: isIcu ? "ICU (Intensive Care Unit)" : data.required_specialty ? `${data.required_specialty} Ward` : "3N Medical/Surgical Ward",
+        target_bed_type: isIcu ? "ICU" : "General",
+        target_ward: isIcu ? "Intensive Care Unit (ICU)" : "3N Medical/Surgical",
+        priority: disp.priority as any,
+        clinical_reason: disp.clinical_reason,
+        sent_by: disp.decided_by,
+        er_visit_id: visit.id,
+        er_bed_request_id: createdBedReqId,
+      });
     }
 
     const newStatus = isAdmission ? "bed_requested" : outcome === "discharge" || outcome === "death" ? "closed" : "awaiting_disposition";
@@ -2057,6 +2143,24 @@ export class ErDatabase {
       v.status = "closed";
       v.closed_at = fullEvent.timestamp;
       v.triage_bed_label = `${fullEvent.transfer_data.target_destination} (${fullEvent.transfer_data.target_bed})`;
+      
+      // Dispatch Transfer Notification to Bed Board
+      const isIcu = (fullEvent.transfer_data.target_destination || "").toLowerCase().includes("icu");
+      ErDatabase.dispatchBedTransferAlert({
+        patient_id: v.patient_id,
+        patient_name: v.patient_name || (v.is_unknown_patient ? v.unknown_patient_label || "Unknown Patient" : "Patient"),
+        patient_last_name: v.patient_last_name || "",
+        patient_age: v.patient_age,
+        patient_gender: v.patient_gender,
+        patient_phone: v.patient_phone,
+        source_department: `Emergency Department (${fullEvent.transfer_data.source_location || "ER Bay"})`,
+        target_destination: fullEvent.transfer_data.target_destination || (isIcu ? "ICU (Intensive Care Unit)" : "Inpatient Ward"),
+        target_bed_type: isIcu ? "ICU" : "General",
+        priority: isIcu ? "Stat / Emergency" : "High Priority",
+        clinical_reason: fullEvent.transfer_data.handover_notes || `Transferred to ${fullEvent.transfer_data.target_destination} (${fullEvent.transfer_data.target_bed}). Escort: ${fullEvent.transfer_data.escorting_staff || "Staff RN"}`,
+        sent_by: fullEvent.logged_by || "Staff Nurse",
+        er_visit_id: v.id,
+      });
     }
 
     this.save(ER_STORAGE_KEY_VISITS, visits);
@@ -2084,8 +2188,8 @@ export class ErDatabase {
   static closeVisit(visitId: number, consultationFee?: number): { invoice_id: number; total: number } {
     const visit = this.getVisit(visitId);
     if (!visit) throw new Error("Visit not found");
-    const baseFee = consultationFee || 850;
-    const treatFee = (visit.treatments || []).length * 450;
+    const baseFee = consultationFee || 100;
+    const treatFee = (visit.treatments || []).length * 40;
     const total = baseFee + treatFee;
     this.updateVisit(visitId, {
       status: "closed",

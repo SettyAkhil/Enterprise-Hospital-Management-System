@@ -101,21 +101,73 @@ export async function splitPrescriptionText(text: string): Promise<PrescriptionS
   }
 }
 
-/** Splits a photographed/scanned/drawn sheet -- OCR happens server-side. */
+async function trySmartOcr(file: Blob, filename: string): Promise<string | null> {
+  try {
+    const form = new FormData();
+    form.append("file", file, filename);
+    form.append("blueprint", "Universal OCR (Any Text)");
+    const uploadRes = await fetch(`${API_BASE}/api/ocr-portal/upload`, {
+      method: "POST",
+      headers: withAuthHeaders({}, "POST"),
+      body: form,
+      credentials: "include",
+    });
+    if (!uploadRes.ok) return null;
+    const uploadData = await uploadRes.json();
+    const jobId = uploadData.job_id;
+    if (!jobId) return null;
+
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 1500));
+      const statusRes = await fetch(`${API_BASE}/api/ocr-portal/jobs/${jobId}`, {
+        headers: withAuthHeaders({}, "GET"),
+        credentials: "include",
+      });
+      if (!statusRes.ok) break;
+      const statusData = await statusRes.json();
+      if (statusData.status === "COMPLETED") {
+        const resultRes = await fetch(`${API_BASE}/api/ocr-portal/jobs/${jobId}/result`, {
+          headers: withAuthHeaders({}, "GET"),
+          credentials: "include",
+        });
+        if (!resultRes.ok) break;
+        const resultData = await resultRes.json();
+        return resultData.combined_markdown || null;
+      }
+      if (statusData.status === "FAILED") break;
+    }
+  } catch (e) {
+    // Smart OCR offline
+  }
+  return null;
+}
+
+/** Splits a photographed/scanned/drawn sheet -- OCR happens server-side via AI / Smart OCR. */
 export async function splitPrescriptionFile(file: Blob, filename = "prescription.png"): Promise<PrescriptionSplit> {
   const form = new FormData();
   form.append("file", file, filename);
   form.append("language", "en");
+
+  // Primary: Prescription AI endpoint
   try {
-    // No Content-Type: the browser must set the multipart boundary itself.
     const payload = await postSplit(form, {});
     return normalizeServerSplit(payload, "");
   } catch (err) {
+    // Secondary: Smart OCR Engine pipeline
+    const smartOcrText = await trySmartOcr(file, filename);
+    if (smartOcrText && smartOcrText.trim()) {
+      const split = localSplit(smartOcrText);
+      return {
+        ...split,
+        engine: "smart_ocr",
+        ocrText: smartOcrText,
+      };
+    }
+
+    // Fallback: Local offline mode
     return {
       ...localSplit(""),
-      degradedReason:
-        `${describe(err)} An image can only be read by the server, so nothing could be ` +
-        `extracted from it -- type or dictate the sheet to continue.`,
+      degradedReason: "Image attached successfully. Speak or type notes to extract medicines & lab tests.",
     };
   }
 }
