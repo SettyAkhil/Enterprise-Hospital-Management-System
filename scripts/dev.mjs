@@ -26,8 +26,10 @@ const HMS_PORT = parseInt(process.env.PORT || "8443", 10);
 // `sh -c` layer, so a kill on the child hits the wrapper and leaves vite itself
 // orphaned holding the port.
 const viteBin = (dir) => {
-  const local = path.join(dir, "node_modules", ".bin", "vite");
-  return existsSync(local) ? { cmd: local, args: [] } : { cmd: "npx", args: ["vite"] };
+  let local = path.join(dir, "node_modules", ".bin", "vite");
+  if (process.platform === "win32") local += ".cmd";
+  const npx = process.platform === "win32" ? "npx.cmd" : "npx";
+  return existsSync(local) ? { cmd: local, args: [] } : { cmd: npx, args: ["vite"] };
 };
 
 const portInUse = (port) =>
@@ -70,7 +72,7 @@ process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
 function run(name, cmd, args, cwd) {
-  const child = spawn(cmd, args, { cwd, stdio: ["ignore", "pipe", "pipe"], env: process.env });
+  const child = spawn(cmd, args, { cwd, stdio: ["ignore", "pipe", "pipe"], env: process.env, shell: process.platform === "win32" });
   owned.push(child);
   const pipe = (stream, out) => {
     stream.setEncoding("utf8");
@@ -113,15 +115,17 @@ if (await portInUse(OCR_PORT)) {
   if (!existsSync(path.join(OCR_DIR, "node_modules"))) {
     // React 18 tree here vs React 19 in the host app, so npm ci fails on peers.
     log("keppler-ocr", "node_modules missing -- installing (one-time, a few minutes)...");
-    await exec("keppler-ocr:install", "npm", ["install", "--legacy-peer-deps"], OCR_DIR);
+    const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+    await exec("keppler-ocr:install", npm, ["install", "--legacy-peer-deps"], OCR_DIR);
   }
   const out = openSync(OCR_LOG, "a");
   const ocrBin = viteBin(OCR_DIR);
   const ocr = spawn(ocrBin.cmd, [...ocrBin.args, "--port", String(OCR_PORT), "--host", "0.0.0.0"], {
     cwd: OCR_DIR,
     stdio: ["ignore", out, out],
-    detached: true,
+    detached: process.platform !== "win32", // Windows doesn't handle detached well with shell
     env: process.env,
+    shell: process.platform === "win32",
   });
   ocr.unref(); // survives this launcher, so restarting the app won't restart it
   log("keppler-ocr", `started on port ${OCR_PORT} (pid ${ocr.pid}), logging to ${path.relative(ROOT, OCR_LOG)}`);

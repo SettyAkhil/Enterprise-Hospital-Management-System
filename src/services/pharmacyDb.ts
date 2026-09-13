@@ -1,3 +1,34 @@
+
+export interface AppUser {
+  id: string;
+  name: string;
+  role: string;
+  department: string;
+  email: string;
+  phone: string;
+  status: "Active" | "Inactive";
+  lastLogin: string;
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: "alert" | "info" | "success" | "warning";
+  timestamp: string;
+  read: boolean;
+}
+
+export interface AppAuditLog {
+  id: string;
+  timestamp: string;
+  user: string;
+  action: string;
+  module: string;
+  record: string;
+  details: string;
+}
+
 export interface AppCategory {
   id: string;
   categoryName: string;
@@ -23,6 +54,7 @@ export interface AppMedicine {
   medicineName: string;
   genericName: string;
   brandName: string;
+  hsnCode?: string;
   categoryId: string;
   manufacturer: string;
   dosageForm: string;
@@ -196,22 +228,18 @@ export interface AppPharmacyBillItem {
   expiryDate: string;
   quantity: number;
   unitPrice: number;
+  grossAmount: number;
   discount: number;
+  taxableAmount: number;
+  cgstAmount: number;
+  sgstAmount: number;
   tax: number;
   totalPrice: number;
+  hsnCode?: string;
+  mfgShortCode?: string;
 }
 
-export interface AppPharmacyBillItem {
-  medicineId: string;
-  medicineName: string;
-  batchNumber: string;
-  expiryDate: string;
-  quantity: number;
-  unitPrice: number;
-  discount: number;
-  tax: number;
-  totalPrice: number;
-}
+// Removed duplicate interface AppPharmacyBillItem
 
 export interface AppPharmacyBill {
   id: string;
@@ -232,6 +260,9 @@ export interface AppPharmacyBill {
   subTotal: number;
   discount: number;
   tax: number;
+  taxableTotal: number;
+  cgstTotal: number;
+  sgstTotal: number;
   totalAmount: number;
   
   createdBy: string;
@@ -298,23 +329,53 @@ export interface AppStockAdjustment {
   createdAt: string;
 }
 
-const CATEGORIES_KEY = "hospai_pharm_categories_v1";
-const SUPPLIERS_KEY = "hospai_pharm_suppliers_v1";
-const MEDICINES_KEY = "hospai_pharm_medicines_v1";
-const BATCHES_KEY = "hospai_pharm_batches_v1";
-const POS_KEY = "hospai_pharm_pos_v1";
-const GRNS_KEY = "hospai_pharm_grns_v1";
-const STOCK_TXS_KEY = "hospai_pharm_stock_txs_v1";
-const PRESCRIPTIONS_KEY = "hospai_pharm_rx_v1";
-const BILLS_KEY = "hospai_pharm_bills_v1";
-const RETURNS_KEY = "hospai_pharm_returns_v1";
-const TRANSFERS_KEY = "hospai_pharm_transfers_v1";
-const SUPPLIER_RETURNS_KEY = "hospai_pharm_supp_returns_v1";
-const ADJUSTMENTS_KEY = "hospai_pharm_adjustments_v1";
-const CLARIFICATIONS_KEY = "hospai_pharm_clarifications_v1";
+
+const USERS_KEY = "hospai_pharm_users_v2";
+const NOTIFICATIONS_KEY = "hospai_pharm_notifications_v2";
+const AUDIT_LOGS_KEY = "hospai_pharm_audit_logs_v2";
+
+const CATEGORIES_KEY = "hospai_pharm_categories_v2";
+const SUPPLIERS_KEY = "hospai_pharm_suppliers_v2";
+const MEDICINES_KEY = "hospai_pharm_medicines_v2";
+const BATCHES_KEY = "hospai_pharm_batches_v2";
+const POS_KEY = "hospai_pharm_pos_v2";
+const GRNS_KEY = "hospai_pharm_grns_v2";
+const STOCK_TXS_KEY = "hospai_pharm_stock_txs_v2";
+const PRESCRIPTIONS_KEY = "hospai_pharm_rx_v2";
+const BILLS_KEY = "hospai_pharm_bills_v2";
+const RETURNS_KEY = "hospai_pharm_returns_v2";
+const TRANSFERS_KEY = "hospai_pharm_transfers_v2";
+const SUPPLIER_RETURNS_KEY = "hospai_pharm_supp_returns_v2";
+const ADJUSTMENTS_KEY = "hospai_pharm_adjustments_v2";
+const CLARIFICATIONS_KEY = "hospai_pharm_clarifications_v2";
 
 export class PharmacyDatabase {
   // Categories
+
+  static getUsers(): AppUser[] {
+    if (typeof window === "undefined") return [];
+    try { const stored = window.localStorage.getItem(USERS_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
+  }
+  static saveUsers(users: AppUser[]) {
+    if (typeof window !== "undefined") window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  }
+
+  static getNotifications(): AppNotification[] {
+    if (typeof window === "undefined") return [];
+    try { const stored = window.localStorage.getItem(NOTIFICATIONS_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
+  }
+  static saveNotifications(notifications: AppNotification[]) {
+    if (typeof window !== "undefined") window.localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+  }
+
+  static getAuditLogs(): AppAuditLog[] {
+    if (typeof window === "undefined") return [];
+    try { const stored = window.localStorage.getItem(AUDIT_LOGS_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
+  }
+  static saveAuditLogs(logs: AppAuditLog[]) {
+    if (typeof window !== "undefined") window.localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(logs));
+  }
+
   static getCategories(): AppCategory[] {
     if (typeof window === "undefined") return [];
     try {
@@ -324,6 +385,25 @@ export class PharmacyDatabase {
   }
   static saveCategories(categories: AppCategory[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+  }
+
+  static addCategory(cat: AppCategory) {
+    const cats = this.getCategories();
+    cats.push(cat);
+    this.saveCategories(cats);
+  }
+
+  static updateCategory(id: string, updates: Partial<AppCategory>) {
+    const cats = this.getCategories();
+    const idx = cats.findIndex(c => c.id === id);
+    if (idx !== -1) {
+      cats[idx] = { ...cats[idx], ...updates };
+      this.saveCategories(cats);
+    }
+  }
+
+  static deleteCategory(id: string) {
+    this.saveCategories(this.getCategories().filter(c => c.id !== id));
   }
 
   // Suppliers
@@ -338,6 +418,25 @@ export class PharmacyDatabase {
     if (typeof window !== "undefined") window.localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(suppliers));
   }
 
+  static addSupplier(sup: AppSupplier) {
+    const sups = this.getSuppliers();
+    sups.push(sup);
+    this.saveSuppliers(sups);
+  }
+
+  static updateSupplier(id: string, updates: Partial<AppSupplier>) {
+    const sups = this.getSuppliers();
+    const idx = sups.findIndex(s => s.id === id);
+    if (idx !== -1) {
+      sups[idx] = { ...sups[idx], ...updates };
+      this.saveSuppliers(sups);
+    }
+  }
+
+  static deleteSupplier(id: string) {
+    this.saveSuppliers(this.getSuppliers().filter(s => s.id !== id));
+  }
+
   // Medicines
   static getMedicines(): AppMedicine[] {
     if (typeof window === "undefined") return [];
@@ -348,6 +447,26 @@ export class PharmacyDatabase {
   }
   static saveMedicines(medicines: AppMedicine[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(MEDICINES_KEY, JSON.stringify(medicines));
+  }
+
+  static addMedicine(med: AppMedicine) {
+    const meds = this.getMedicines();
+    meds.push(med);
+    this.saveMedicines(meds);
+  }
+
+  static updateMedicine(id: string, updates: any) {
+    const meds = this.getMedicines();
+    const idx = meds.findIndex(m => m.id === id);
+    if (idx !== -1) {
+      meds[idx] = { ...meds[idx], ...updates, medicineName: updates.name || meds[idx].medicineName };
+      this.saveMedicines(meds);
+    }
+  }
+
+  static deleteMedicine(id: string) {
+    const meds = this.getMedicines();
+    this.saveMedicines(meds.filter(m => m.id !== id));
   }
 
   // Batches
@@ -362,6 +481,26 @@ export class PharmacyDatabase {
     if (typeof window !== "undefined") window.localStorage.setItem(BATCHES_KEY, JSON.stringify(batches));
   }
 
+  static addBatch(batch: any) {
+    const batches = this.getBatches();
+    batches.push({
+      id: "B" + Date.now() + Math.floor(Math.random()*100),
+      medicineId: batch.medicineId,
+      batchNumber: batch.batchNumber,
+      expiryDate: batch.expiryDate,
+      manufacturingDate: batch.mfg || "2024-01-01",
+      quantity: batch.quantity,
+      availableQuantity: batch.availableQuantity ?? batch.quantity,
+      purchasePrice: batch.purchasePrice,
+      mrp: batch.mrp,
+      grnId: batch.grnId || "GRN-SYS",
+      location: batch.location || "Main Pharmacy",
+      status: "Available",
+      createdAt: new Date().toISOString()
+    });
+    this.saveBatches(batches);
+  }
+
   // Purchase Orders
   static getPurchaseOrders(): AppPurchaseOrder[] {
     if (typeof window === "undefined") return [];
@@ -372,6 +511,21 @@ export class PharmacyDatabase {
   }
   static savePurchaseOrders(pos: AppPurchaseOrder[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(POS_KEY, JSON.stringify(pos));
+  }
+
+  static addPurchaseOrder(po: AppPurchaseOrder) {
+    const pos = this.getPurchaseOrders();
+    pos.push(po);
+    this.savePurchaseOrders(pos);
+  }
+
+  static updatePurchaseOrder(id: string, updates: Partial<AppPurchaseOrder>) {
+    const pos = this.getPurchaseOrders();
+    const idx = pos.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      pos[idx] = { ...pos[idx], ...updates };
+      this.savePurchaseOrders(pos);
+    }
   }
 
   // GRNs
@@ -484,6 +638,26 @@ export class PharmacyDatabase {
   }
   static saveClarifications(clarifications: AppPrescriptionClarification[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(CLARIFICATIONS_KEY, JSON.stringify(clarifications));
+  }
+
+
+  static updatePrescription(id: string, updates: Partial<AppPrescription>) {
+    const rxs = this.getPrescriptions();
+    const idx = rxs.findIndex(r => r.id === id);
+    if (idx > -1) {
+      rxs[idx] = { ...rxs[idx], ...updates };
+      this.savePrescriptions(rxs);
+    }
+  }
+
+  static logAudit(user: string, action: string, module: string, record: string, details: string) {
+    const logs = this.getAuditLogs();
+    logs.unshift({
+      id: "LOG" + Date.now(),
+      timestamp: new Date().toISOString(),
+      user, action, module, record, details
+    });
+    this.saveAuditLogs(logs);
   }
 
   // FEFO Helper Engine
