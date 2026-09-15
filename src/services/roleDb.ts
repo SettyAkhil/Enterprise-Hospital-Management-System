@@ -15,7 +15,7 @@ export interface AppUser {
   status?: "Active" | "Inactive";
 }
 
-const ROLES_STORAGE_KEY = "hospai_rbac_roles_v4";
+const ROLES_STORAGE_KEY = "hospai_rbac_roles_v5";
 const USERS_STORAGE_KEY = "hospai_rbac_users_v2";
 
 export const ALL_SYSTEM_MODULES = [
@@ -28,7 +28,7 @@ export const ALL_SYSTEM_MODULES = [
   "surgery", "billing",
   "icu", "discharge", "triage", "insurance", "analytics",
   "reports", "admin", "chart", "register",
-  "outpatient", "queue", "op_management", "op_registration", "op_workflow",
+  "outpatient", "queue", "op_management", "op_registration", "op_workflow", "op_nurse",
   "doctor_workflow", "doctor_portal", "scheduling", "admissions", "readmission",
   "lab_billing",
   "payments", "revenue_reports", "hrms", "employees", "patient_exp",
@@ -45,7 +45,7 @@ const INITIAL_ROLES: AppRole[] = [
     name: "Attending Physician / Doctor",
     allowedModules: [
       "dashboard", "doctor_portal", "patients", "appointments", "clinical", "chart", "emergency", "triage",
-      "icu", "inpatient", "pharmacy", "pharmacy_dispensing", "pharmacy_rx", "pharmacy_ocr",
+      "icu", "inpatient", "op_nurse", "pharmacy", "pharmacy_dispensing", "pharmacy_rx", "pharmacy_ocr",
       "pharmacy_medicine", "pharmacy_ledger", "pharmacy_expiry",
       "laboratory", "radiology", "intelligence", "dpi_ocr", "discharge"
     ]
@@ -55,6 +55,7 @@ const INITIAL_ROLES: AppRole[] = [
     name: "Receptionist / Front Desk",
     allowedModules: [
       "dashboard", "patients", "register", "appointments", "outpatient", "queue", "op_management",
+      // No op_nurse: vitals are the OP department's job, not the front desk's.
       "op_registration", "billing", "payments", "lab_billing", "laboratory"
     ]
   },
@@ -77,7 +78,7 @@ const INITIAL_ROLES: AppRole[] = [
   {
     id: "ROLE_NURSE",
     name: "Registered Nurse",
-    allowedModules: ["dashboard", "inpatient", "nursing", "icu", "beds", "chart", "emergency", "triage"]
+    allowedModules: ["dashboard", "inpatient", "nursing", "icu", "beds", "chart", "emergency", "triage", "op_nurse", "outpatient"]
   },
   {
     id: "ROLE_PHARMACY_MANAGER",

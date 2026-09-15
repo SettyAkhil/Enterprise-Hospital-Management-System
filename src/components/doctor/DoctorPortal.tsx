@@ -1024,6 +1024,20 @@ function PatientInbox({
                   </div>
                 )}
 
+                {/* Where the patient physically is. A visit sits at "Doctor
+                    Assigned" until the OP nurse has taken vitals and sent them
+                    in, so this separates "waiting on my colleague" from
+                    "waiting on me". */}
+                {notification.status === "Doctor Assigned" ? (
+                  <div className="mt-1.5 inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                    With the nurse · vitals pending
+                  </div>
+                ) : notification.status === "In Queue" ? (
+                  <div className="mt-1.5 inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded bg-[#DCFCE7] text-[#15803D] border border-[#BBF7D0]">
+                    Vitals done · ready for you
+                  </div>
+                ) : null}
+
                 <div className="flex items-center justify-between mt-2 text-[10.5px]">
                   <span className="font-mono text-[#94A3B8]">Token {notification.token || "--"}</span>
                   <span
@@ -1255,6 +1269,16 @@ function PatientContextPanel({
               </div>
             ))}
           </div>
+
+          {/* What the OP nurse wrote when handing the patient over. It is the
+              only thing anyone has observed about this patient before the doctor
+              walks in, so it belongs next to the readings rather than nowhere. */}
+          {notification.vitals?.notes?.trim() && (
+            <div className="mt-3 bg-[#F0F9FF] border border-[#BAE6FD] rounded px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wide text-[#0369A1] font-bold">Nurse note</div>
+              <p className="text-[12.5px] text-[#0C4A6E] mt-0.5">{notification.vitals.notes}</p>
+            </div>
+          )}
         </div>
       </section>
 

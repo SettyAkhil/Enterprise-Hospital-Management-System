@@ -17,7 +17,15 @@ const calculateAge = (dobString: string): number => {
   return Math.max(0, age);
 };
 
-export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?: (patient: DBOPEncounter) => void }) {
+export default function OPRegistration({
+  onProceedToQueue,
+  onBookAppointment,
+  onGoToBilling
+}: {
+  onProceedToQueue?: (patient: DBOPEncounter) => void;
+  onBookAppointment?: (patient: DBOPEncounter) => void;
+  onGoToBilling?: () => void;
+}) {
   const [activeTab, setActiveTab] = useState<"new" | "revisit" | "records">("new");
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -560,14 +568,36 @@ export default function OPRegistration({ onProceedToQueue }: { onProceedToQueue?
                       Shows patient permanent UMR alongside the active visit OP number.
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Btn variant="outline" size="sm" onClick={() => window.print()}>
                       <Icon.Download /> Print OP Pass
                     </Btn>
-                    {onProceedToQueue && (
-                      <Btn variant="primary" size="sm" onClick={() => onProceedToQueue(selectedEncounter)}>
-                        Proceed to Symptoms &amp; AI Triage →
-                      </Btn>
+                    {onBookAppointment && selectedEncounter && (
+                      <button
+                        type="button"
+                        onClick={() => onBookAppointment(selectedEncounter)}
+                        className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-semibold rounded shadow-xs transition-colors cursor-pointer"
+                      >
+                        📅 Book Doctor Appointment →
+                      </button>
+                    )}
+                    {onProceedToQueue && selectedEncounter && (
+                      <button
+                        type="button"
+                        onClick={() => onProceedToQueue(selectedEncounter)}
+                        className="px-3.5 py-1.5 bg-white hover:bg-gray-50 border border-[#DDE2EC] text-[#1B4FD8] text-[12px] font-semibold rounded transition-colors cursor-pointer"
+                      >
+                        ✨ OP Clinical Journey (AI Triage) →
+                      </button>
+                    )}
+                    {onGoToBilling && (
+                      <button
+                        type="button"
+                        onClick={onGoToBilling}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[12px] font-semibold rounded transition-colors cursor-pointer"
+                      >
+                        Go to Billing →
+                      </button>
                     )}
                   </div>
                 </div>

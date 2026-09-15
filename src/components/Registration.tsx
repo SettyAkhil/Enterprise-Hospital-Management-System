@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useStickyState } from "../hooks/useStickyState";
 import { Icon } from "./icons";
 import { Btn, Input } from "./shared";
 import { db, DBPatient, DBOPEncounter, findMatchingPatient } from "../services/db";
@@ -20,14 +21,19 @@ const calculateAge = (dobString: string): number => {
 export default function Registration({
   onProceedToQueue,
   onComplete,
-  onBack
+  onBack,
+  onBookAppointment,
+  onGoToBilling,
 }: {
   onProceedToQueue?: (patient: DBOPEncounter) => void;
   onComplete?: () => void;
   onBack?: () => void;
+  /** Reception's next step: symptom triage picks the doctor on the appointment desk. */
+  onBookAppointment?: (patient: DBOPEncounter) => void;
+  onGoToBilling?: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<"new" | "revisit" | "records">("new");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useStickyState<"new" | "revisit" | "records">("registration_tab", "new");
+  const [searchQuery, setSearchQuery] = useStickyState("registration_search", "");
 
   // Database live state
   const [patients, setPatients] = useState<DBPatient[]>([]);
@@ -64,7 +70,10 @@ export default function Registration({
   }, []);
 
   // Form State
-  const [formData, setFormData] = useState({
+  // Draft-backed: App.tsx unmounts this screen when the user navigates, so plain
+  // component state meant a half-filled patient form vanished the moment
+  // reception glanced at the queue. Cleared by `resetForm` once registered.
+  const [formData, setFormData, clearFormDraft] = useStickyState("registration_form", {
     // Personal Information
     firstName: "",
     middleName: "",
@@ -195,6 +204,7 @@ export default function Registration({
   };
 
   const resetForm = () => {
+    clearFormDraft();
     setFormData({
       firstName: "",
       middleName: "",
@@ -318,13 +328,25 @@ export default function Registration({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {onProceedToQueue && selectedEncounter && (
+              {/* Reception's job ends at registration. The doctor is chosen on
+                  the appointment desk, where symptom triage runs, and payment is
+                  taken at billing -- so those are the two ways out of here. */}
+              {onBookAppointment && selectedEncounter && (
                 <button
                   type="button"
-                  onClick={() => onProceedToQueue(selectedEncounter)}
+                  onClick={() => onBookAppointment(selectedEncounter)}
                   className="text-xs px-3.5 py-1.5 rounded-lg bg-[#1B4FD8] hover:bg-[#1740B4] text-white font-semibold shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                 >
-                  Proceed to Symptoms &amp; AI Triage →
+                  Book appointment &amp; triage →
+                </button>
+              )}
+              {onGoToBilling && (
+                <button
+                  type="button"
+                  onClick={onGoToBilling}
+                  className="text-xs px-3.5 py-1.5 rounded-lg bg-white hover:bg-[#F8FAFC] border border-[#DDE2EC] text-[#334155] font-semibold transition-colors cursor-pointer"
+                >
+                  Go to billing →
                 </button>
               )}
               <button

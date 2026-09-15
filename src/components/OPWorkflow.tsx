@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "./icons";
 import { StatusBadge, Btn, Input } from "./shared";
 import { db, DBPatient, DBOPEncounter } from "../services/db";
+import { getDoctorMaster } from "../services/doctorMaster";
 
 export interface OPPatient {
   id?: string;
@@ -57,7 +58,9 @@ export interface OPPatient {
     doctorAssigned?: string;
     consultationStart?: string;
     consultationEnd?: string;
+    /** Set by the OP nurse station when baseline observations are saved. */
     vitalsRecorded?: string;
+    vitalsBy?: string;
     billingCompleted?: string;
     visitCompleted?: string;
   };
@@ -190,6 +193,10 @@ export default function OPWorkflow({
   initialStep?: number;
   initialEncounterId?: string;
 }) {
+  // Deliberately NOT persisted. Sticky form *fields* are what the user asked for;
+  // a sticky step number meant reception opened the journey on whatever panel they
+  // last used -- often billing, and often for a different patient than the one now
+  // in front of them. The position resets; the typed data does not.
   const [currentStep, setCurrentStep] = useState<number>(initialStep || 2);
   const [dbEncounters, setDbEncounters] = useState<DBOPEncounter[]>([]);
 
@@ -236,6 +243,8 @@ export default function OPWorkflow({
     }
   });
 
+  const [step2BookingMode, setStep2BookingMode] = useState<"direct" | "ai">("direct");
+  const [selectedDirectSpecialty, setSelectedDirectSpecialty] = useState<string>("Cardiology");
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiAnalysisResult, setAiAnalysisResult] = useState<{
     specialty: string;
@@ -746,13 +755,25 @@ export default function OPWorkflow({
     }
   };
 
+  /**
+   * Reception's three jobs: register the patient, book the doctor, take payment.
+   *
+   * Each visible step covers one or more internal panels, so the desk sees three
+   * things to do rather than a six-stage clinical pathway it is not responsible
+   * for. Booking is one job even though it is two panels -- symptom triage picks
+   * the specialty and the allocation panel confirms the doctor and queue token --
+   * and the read-only consultation summary sits inside Billing, which is where
+   * reception needs it: it is the itemisation of what they are about to charge for.
+   *
+   * Vitals are not here at all; the OP nurse records those at the Nurse Station
+   * after reception is done. Nor is the consultation: the doctor writes that in
+   * their own workspace, and the prescription is split to pharmacy and the lab
+   * from there (`consultationDispatch.ts`).
+   */
   const steps = [
-    { num: 1, label: "Digital OP Pass", shortLabel: "OP Pass" },
-    { num: 2, label: "Symptoms & AI Triage", shortLabel: "AI Triage" },
-    { num: 3, label: "Nurse Triage & Vitals Check", shortLabel: "Nurse Vitals" },
-    { num: 4, label: "Doctor & Queue Allocation", shortLabel: "Doctor Queue" },
-    { num: 5, label: "Physician Consultation", shortLabel: "Consultation" },
-    { num: 6, label: "Billing & Completion", shortLabel: "Billing & Exit" },
+    { nums: [1], label: "Registration", shortLabel: "Register" },
+    { nums: [2, 4], label: "Doctor Appointment", shortLabel: "Appointment" },
+    { nums: [5, 6], label: "Billing", shortLabel: "Billing" },
   ];
 
   return (
@@ -761,13 +782,13 @@ export default function OPWorkflow({
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 flex-shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold text-gray-900">Outpatient Clinical Journey</h1>
+            <h1 className="text-base font-semibold text-gray-900">Reception — Outpatient Desk</h1>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-[#1B4FD8] border border-blue-200">
               Active OP Pathway
             </span>
           </div>
           <p className="text-[11.5px] text-[#64748B]">
-            Unified outpatient care pathway: Digital Pass, Clinical Triage, AI Doctor Match, Consultation, Vitals &amp; Checkout.
+            Register the patient, book their doctor, take payment. Vitals are recorded by the OP nurse afterwards; the consultation is the doctor&apos;s own workspace.
           </p>
         </div>
 
@@ -799,12 +820,12 @@ export default function OPWorkflow({
       <div className="bg-[#0C1524] px-6 py-3 border-b border-[#1E2D42] flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-1 sm:gap-2 w-full max-w-5xl mx-auto justify-between">
           {steps.map((s, idx) => {
-            const isCompleted = currentStep > s.num;
-            const isCurrent = currentStep === s.num;
+            const isCurrent = s.nums.includes(currentStep);
+            const isCompleted = !isCurrent && currentStep > Math.max(...s.nums);
             return (
-              <React.Fragment key={s.num}>
+              <React.Fragment key={s.label}>
                 <div
-                  onClick={() => setCurrentStep(s.num)}
+                  onClick={() => setCurrentStep(s.nums[0])}
                   className={`flex items-center gap-2 cursor-pointer transition-all ${
                     isCurrent ? "text-white font-semibold" : isCompleted ? "text-[#93C5FD]" : "text-[#64748B]"
                   }`}
@@ -818,7 +839,7 @@ export default function OPWorkflow({
                         : "bg-white/10 text-[#94A3B8]"
                     }`}
                   >
-                    {isCompleted ? "✓" : s.num}
+                    {isCompleted ? "✓" : idx + 1}
                   </div>
                   <span className="text-[12px] hidden md:inline">{s.label}</span>
                 </div>
@@ -985,13 +1006,127 @@ export default function OPWorkflow({
         {currentStep === 2 && (
           <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6">
             <div>
-              <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">2</span>
-                Clinical Triage &amp; AI Specialty Recommendation
-              </h2>
-              <p className="text-[12px] text-[#64748B] mt-0.5">
-                Capture the patient's complaints. The Clinical AI Engine assists staff in analyzing symptom patterns and recommending the right medical department.
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#DDE2EC] pb-3 mb-4">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">2</span>
+                    Doctor Appointment &amp; Specialty Allocation
+                  </h2>
+                  <p className="text-[12px] text-[#64748B] mt-0.5">
+                    Pick an attending doctor directly from the roster or run AI specialty triage to match patient symptoms.
+                  </p>
+                </div>
+
+                <div className="flex bg-[#F1F5F9] p-1 rounded border border-[#CBD5E1] gap-1 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setStep2BookingMode("direct")}
+                    className={`px-3 py-1.5 text-[12px] font-bold rounded transition-colors cursor-pointer ${
+                      step2BookingMode === "direct" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-gray-700 hover:bg-white"
+                    }`}
+                  >
+                    👨‍⚕️ Direct Doctor Roster
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStep2BookingMode("ai")}
+                    className={`px-3 py-1.5 text-[12px] font-bold rounded transition-colors cursor-pointer ${
+                      step2BookingMode === "ai" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-gray-700 hover:bg-white"
+                    }`}
+                  >
+                    ✨ AI Symptom Triage
+                  </button>
+                </div>
+              </div>
+
+              {step2BookingMode === "direct" && (
+                <div className="bg-[#F8FAFC] border-2 border-blue-200 p-4 rounded space-y-4">
+                  <h3 className="text-[13.5px] font-bold text-gray-900 flex items-center justify-between">
+                    <span>👨‍⚕️ Direct Attending Doctor Roster Selection</span>
+                    <span className="text-[11px] font-mono text-[#1B4FD8]">{getDoctorMaster().filter(d => d.verified).length} Verified Doctors</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[12px] font-semibold text-gray-700 mb-1">Select Specialty / Department</label>
+                      <select
+                        value={selectedDirectSpecialty}
+                        onChange={e => setSelectedDirectSpecialty(e.target.value)}
+                        className="w-full h-10 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                      >
+                        {Array.from(new Set(getDoctorMaster().filter(d => d.verified && d.specialty).map(d => d.specialty as string))).sort().map(spec => (
+                          <option key={spec} value={spec}>{spec}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[12px] font-semibold text-gray-700 mb-1">Select Doctor for {patient.name}</label>
+                      <select
+                        onChange={e => {
+                          const doc = getDoctorMaster().find(d => d.name === e.target.value);
+                          if (doc) {
+                            handleNurseBookAppointment({
+                              id: doc.id,
+                              name: doc.name,
+                              specialty: doc.specialty || selectedDirectSpecialty,
+                              gender: "Male",
+                              status: "Available",
+                              room: doc.room,
+                              workload: 1,
+                              qualifications: doc.qualification,
+                              timing: "09:00 AM - 05:00 PM",
+                              nextSlot: "Immediate"
+                            });
+                          }
+                        }}
+                        className="w-full h-10 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                      >
+                        <option value="">-- Choose Doctor to Assign --</option>
+                        {getDoctorMaster().filter(d => d.verified && d.specialty === selectedDirectSpecialty).map(doc => (
+                          <option key={doc.id} value={doc.name}>
+                            {doc.name} ({doc.qualification}) — {doc.room} [{doc.section}]
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+                    {getDoctorMaster().filter(d => d.verified && d.specialty === selectedDirectSpecialty).map(doc => (
+                      <div
+                        key={doc.id}
+                        onClick={() => {
+                          handleNurseBookAppointment({
+                            id: doc.id,
+                            name: doc.name,
+                            specialty: doc.specialty || selectedDirectSpecialty,
+                            gender: "Male",
+                            status: "Available",
+                            room: doc.room,
+                            workload: 1,
+                            qualifications: doc.qualification,
+                            timing: "09:00 AM - 05:00 PM",
+                            nextSlot: "Immediate"
+                          });
+                        }}
+                        className={`p-3 rounded border transition-all cursor-pointer ${
+                          patient.assignedDoctor === doc.name
+                            ? "bg-blue-50 border-[#1B4FD8] ring-2 ring-blue-500/20"
+                            : "bg-white border-[#E2E8F0] hover:border-[#1B4FD8]"
+                        }`}
+                      >
+                        <div className="font-bold text-[13px] text-gray-900">{doc.name}</div>
+                        <div className="text-[11px] text-[#64748B] mt-0.5">{doc.qualification}</div>
+                        <div className="flex items-center justify-between text-[11px] font-mono mt-2 pt-2 border-t border-gray-100">
+                          <span className="text-[#1B4FD8] font-bold">{doc.room}</span>
+                          <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold">Assign →</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Chief Complaint Input */}
@@ -1299,7 +1434,7 @@ export default function OPWorkflow({
                       </div>
                       <div>
                         <div className="font-bold text-[15px] text-[#166534] flex items-center gap-2 flex-wrap">
-                          <span>Doctor Appointment Successfully Booked by Nurse!</span>
+                          <span>Doctor appointment booked</span>
                           <span className="text-[10.5px] font-mono font-bold bg-[#16A34A] text-white px-2 py-0.5 rounded">
                             CONFIRMED &amp; DISPATCHED TO DOCTOR PORTAL
                           </span>
@@ -1310,7 +1445,7 @@ export default function OPWorkflow({
                       </div>
                     </div>
 
-                    {/* Direct Actions: Proceed to Step 3 or Doctor Portal */}
+                    {/* Direct Actions: doctor allocation, or jump to the portal */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {onOpenDoctorPortal && (
                         <button
@@ -1321,10 +1456,10 @@ export default function OPWorkflow({
                         </button>
                       )}
                       <button
-                        onClick={() => setCurrentStep(3)}
+                        onClick={() => setCurrentStep(4)}
                         className="px-5 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold rounded shadow-md transition-all flex items-center gap-2 cursor-pointer"
                       >
-                        <span>👩‍⚕️</span> Proceed to Step 3: Nurse Triage &amp; Vitals Station →
+                        <span>🩺</span> Proceed to Doctor &amp; Queue Allocation →
                       </button>
                     </div>
                   </div>
@@ -1381,103 +1516,13 @@ export default function OPWorkflow({
         )}
 
         {/* ── STEP 3: PRE-CONSULTATION NURSE TRIAGE & VITALS STATION ── */}
-        {currentStep === 3 && (
-          <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6 max-w-5xl mx-auto">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
-              <div>
-                <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">3</span>
-                  Pre-Consultation Nursing Triage &amp; Vital Signs Station
-                </h2>
-                <p className="text-[12.5px] text-[#64748B] mt-0.5">
-                  Staff Nurse Jessica Carter records baseline physiological vitals and triage observations before patient enters doctor consultation.
-                </p>
-              </div>
-              <span className="text-[11px] font-mono font-bold bg-blue-50 text-[#1B4FD8] border border-blue-200 px-2.5 py-1 rounded self-start sm:self-auto">
-                👩‍⚕️ Nurse Station · 3N Triage
-              </span>
-            </div>
-
-            {/* Vitals Form Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
-              <div>
-                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Blood Pressure (BP)</label>
-                <Input value={patient.vitals.bp} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, bp: v } })} placeholder="120/80 mmHg" />
-              </div>
-              <div>
-                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Heart Rate / Pulse</label>
-                <Input value={patient.vitals.pulse} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, pulse: v } })} placeholder="76 bpm" />
-              </div>
-              <div>
-                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Temperature</label>
-                <Input value={patient.vitals.temp} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, temp: v } })} placeholder="98.6 °F" />
-              </div>
-              <div>
-                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Oxygen SpO2</label>
-                <Input value={patient.vitals.spo2} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, spo2: v } })} placeholder="99%" />
-              </div>
-              <div>
-                <label className="text-[11.5px] font-bold text-gray-800 block mb-1">Body Weight</label>
-                <Input value={patient.vitals.weight} onChange={v => setPatient({ ...patient, vitals: { ...patient.vitals, weight: v } })} placeholder="74 kg" />
-              </div>
-            </div>
-
-            {/* Nurse Clinical Assessment Notes */}
-            <div>
-              <label className="text-[12px] font-bold text-gray-800 block mb-1">
-                Nurse Triage Clinical Observation &amp; Baseline Notes
-              </label>
-              <textarea
-                rows={2}
-                value={patient.vitals.notes}
-                onChange={e => setPatient({ ...patient, vitals: { ...patient.vitals, notes: e.target.value } })}
-                placeholder="Enter nursing triage assessment (e.g. Patient conscious, alert, baseline vitals within normal parameters, cleared for physician consultation)..."
-                className="w-full border border-[#CBD5E1] rounded p-3 text-[12.5px] text-gray-900 focus:outline-none focus:border-[#1B4FD8] bg-white font-medium"
-              />
-            </div>
-
-            {/* Navigation and Save Actions */}
-            <div className="flex justify-between items-center pt-3 border-t border-[#E2E8F0]">
-              <button
-                onClick={() => setCurrentStep(2)}
-                className="text-[12.5px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
-              >
-                ← Back to Symptoms &amp; AI Triage
-              </button>
-
-              <button
-                onClick={() => {
-                  const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                  const nextState = {
-                    ...patient,
-                    status: "In Queue" as const,
-                    timestamps: { ...patient.timestamps, vitalsRecorded: nowTime }
-                  };
-                  setPatient(nextState);
-
-                  if (patient.id) {
-                    try {
-                      db.updateEncounter(patient.id, {
-                        vitals: patient.vitals,
-                        furtherAction: patient.furtherAction,
-                        status: "In Queue",
-                        timestamps: { ...patient.timestamps, vitalsRecorded: nowTime }
-                      });
-                    } catch (e) {
-                      console.warn("DB update failed:", e);
-                    }
-                  }
-
-                  setCurrentStep(4);
-                }}
-                className="px-6 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white text-[13px] font-bold rounded shadow-md transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <span>✓</span> Save &amp; Submit Vitals to Doctor Queue (Step 4) →
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Vitals are not recorded here. Reception registers, triages and
+            allocates the doctor; the patient then walks to the OP department,
+            where the nurse takes baseline observations at the Nurse Station
+            (`NurseStation.tsx`) and only then hands them to the consulting room.
+            Keeping a second vitals form on the reception journey meant two
+            screens writing the same field, with no way to tell which one the
+            doctor was looking at. */}
 
         {/* ── STEP 4: DOCTOR & LIVE QUEUE ALLOCATION ─────────────────── */}
         {currentStep === 4 && (
@@ -1533,24 +1578,59 @@ export default function OPWorkflow({
               </div>
             </div>
 
-            {/* Verified Nurse Vitals Snapshot Card */}
-            <div className="bg-[#F0FDF4] border border-green-200 p-3.5 rounded text-[12px] space-y-1.5 shadow-2xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#166534] flex items-center gap-1.5">
-                  <span>✓</span> Nurse-Recorded Vital Signs (Attached to Queue)
-                </span>
-                <span className="text-[10.5px] font-mono font-bold text-[#16A34A] bg-white px-2 py-0.5 rounded border border-green-200">
-                  Ready for Physician
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 font-mono text-[12px] text-gray-800">
-                <div><span className="text-[#64748B] text-[10px] block">BP:</span> <strong>{patient.vitals.bp}</strong></div>
-                <div><span className="text-[#64748B] text-[10px] block">Pulse:</span> <strong>{patient.vitals.pulse}</strong></div>
-                <div><span className="text-[#64748B] text-[10px] block">Temp:</span> <strong>{patient.vitals.temp}</strong></div>
-                <div><span className="text-[#64748B] text-[10px] block">SpO2:</span> <strong>{patient.vitals.spo2}</strong></div>
-                <div><span className="text-[#64748B] text-[10px] block">Weight:</span> <strong>{patient.vitals.weight}</strong></div>
-              </div>
-            </div>
+            {/* Vitals status, read-only. Reception does not record these -- the OP
+                nurse does, after the patient walks over -- so this reports whether
+                that has happened yet. It used to claim "Ready for Physician"
+                unconditionally, including for patients whose vitals were blank. */}
+            {(() => {
+              const takenAt = patient.timestamps?.vitalsRecorded;
+              const hasVitals = Boolean(
+                patient.vitals.bp || patient.vitals.pulse || patient.vitals.temp ||
+                patient.vitals.spo2 || patient.vitals.weight
+              );
+              if (!takenAt && !hasVitals) {
+                return (
+                  <div className="bg-[#FFFBEB] border border-[#FDE68A] p-3.5 rounded text-[12px] shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#92400E] flex items-center gap-1.5">
+                        <span>🩺</span> Vitals not taken yet
+                      </span>
+                      <span className="text-[10.5px] font-mono font-bold text-[#B45309] bg-white px-2 py-0.5 rounded border border-[#FDE68A]">
+                        With OP department
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] text-[#B45309] mt-1.5">
+                      Send the patient to the OP department. The nurse records baseline observations at the Nurse
+                      Station and the doctor is notified the moment they are saved.
+                    </p>
+                  </div>
+                );
+              }
+              return (
+                <div className="bg-[#F0FDF4] border border-green-200 p-3.5 rounded text-[12px] space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#166534] flex items-center gap-1.5">
+                      <span>✓</span> Nurse-recorded vital signs
+                      {patient.timestamps?.vitalsBy && (
+                        <span className="font-normal normal-case tracking-normal text-[#15803D]">
+                          — {patient.timestamps.vitalsBy}{takenAt ? ` at ${takenAt}` : ""}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10.5px] font-mono font-bold text-[#16A34A] bg-white px-2 py-0.5 rounded border border-green-200">
+                      Ready for Physician
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 font-mono text-[12px] text-gray-800">
+                    <div><span className="text-[#64748B] text-[10px] block">BP:</span> <strong>{patient.vitals.bp || "--"}</strong></div>
+                    <div><span className="text-[#64748B] text-[10px] block">Pulse:</span> <strong>{patient.vitals.pulse || "--"}</strong></div>
+                    <div><span className="text-[#64748B] text-[10px] block">Temp:</span> <strong>{patient.vitals.temp || "--"}</strong></div>
+                    <div><span className="text-[#64748B] text-[10px] block">SpO2:</span> <strong>{patient.vitals.spo2 || "--"}</strong></div>
+                    <div><span className="text-[#64748B] text-[10px] block">Weight:</span> <strong>{patient.vitals.weight || "--"}</strong></div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Check if Doctor has already finished consultation */}
             {hasDoctorConsulted ? (
@@ -1579,13 +1659,13 @@ export default function OPWorkflow({
                     onClick={() => setCurrentStep(5)}
                     className="px-6 py-2.5 bg-white hover:bg-gray-50 border border-[#CBD5E1] text-gray-800 text-[13px] font-bold rounded shadow-2xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>📋</span> View Clinical Prescription Pad (Step 5) →
+                    <span>📋</span> View consultation summary →
                   </button>
                   <button
                     onClick={() => setCurrentStep(6)}
                     className="px-6 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded shadow-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>💳</span> Proceed Directly to Billing Settlement (Step 6) →
+                    <span>💳</span> Go straight to billing →
                   </button>
                 </div>
               </div>
@@ -1650,7 +1730,7 @@ export default function OPWorkflow({
                     onClick={() => setCurrentStep(5)}
                     className="px-6 py-2.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-semibold rounded shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
                   >
-                    <span>🩺</span> Proceed to Doctor Consultation Workspace (Step 5) →
+                    <span>🩺</span> View consultation summary →
                   </button>
                 </div>
               </div>
@@ -1660,13 +1740,26 @@ export default function OPWorkflow({
             <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={() => setCurrentStep(3)}
+                onClick={() => setCurrentStep(2)}
                 className="text-[12.5px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
               >
-                ← Back to Nurse Vitals (Step 3)
+                ← Back to Symptoms &amp; AI Triage
               </button>
 
               <div className="flex items-center gap-2">
+                {/* Reception takes the consultation fee when the appointment is
+                    booked, not after the doctor has seen the patient. The only
+                    route to billing used to sit inside the "consultation
+                    finished" branch, so the front desk could not collect the fee
+                    up front at all -- which is when the patient is actually
+                    standing there. */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(6)}
+                  className="px-3 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[11.5px] font-semibold rounded shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <span>💳</span> Collect consultation fee →
+                </button>
                 <button
                   type="button"
                   onClick={handleDoctorCallNext}
@@ -1886,7 +1979,7 @@ export default function OPWorkflow({
                       onClick={() => setCurrentStep(4)}
                       className="text-[12.5px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
                     >
-                      ← Back to Doctor Queue (Step 4)
+                      ← Back to Doctor Appointment
                     </button>
                   </div>
                 </div>
@@ -2010,7 +2103,7 @@ export default function OPWorkflow({
                       onClick={() => setCurrentStep(4)}
                       className="text-[12px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
                     >
-                      ← Back to Doctor Queue (Step 4)
+                      ← Back to Doctor Appointment
                     </button>
 
                     <button
@@ -2036,7 +2129,7 @@ export default function OPWorkflow({
                       }}
                       className="px-6 py-3 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[13px] font-bold rounded shadow-md transition-all flex items-center gap-2 cursor-pointer"
                     >
-                      <span>💳</span> Proceed to Billing &amp; Encounter Completion (Step 6) →
+                      <span>💳</span> Continue to invoice →
                     </button>
                   </div>
                 </div>
@@ -2235,7 +2328,7 @@ export default function OPWorkflow({
                       onClick={() => setCurrentStep(5)}
                       className="text-[12.5px] text-[#64748B] hover:text-gray-900 font-medium cursor-pointer"
                     >
-                      ← Back to Consultation Summary (Step 5)
+                      ← Back to consultation summary
                     </button>
 
                     <button

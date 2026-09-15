@@ -27,6 +27,7 @@ export type LiveSeverity = "critical" | "warning" | "info";
 
 export type LiveAlertKind =
   | "new-patient"
+  | "vitals-ready"
   | "waiting-long"
   | "in-consultation"
   | "lab-awaiting-payment"
@@ -199,6 +200,37 @@ export function buildDoctorLiveBoard(doctor: DoctorAccount, now: number = Date.n
   for (const entry of queue) {
     const e = entry.encounter;
     const arrived = e.timestamps?.arrival || e.registrationTime;
+
+    // The OP nurse has taken baseline observations and sent the patient in.
+    // This is the doctor's notification that the patient is physically ready:
+    // the visit only reaches "In Queue" via `db.recordVitals`, so the presence
+    // of a `vitalsRecorded` stamp is the handover, not a guess.
+    const vitalsAt = e.timestamps?.vitalsRecorded;
+    if (vitalsAt && e.status === "In Queue") {
+      const v = e.vitals || ({} as typeof e.vitals);
+      const readings = [
+        v.bp && `BP ${v.bp}`,
+        v.pulse && `Pulse ${v.pulse}`,
+        v.temp && `Temp ${v.temp}`,
+        v.spo2 && `SpO2 ${v.spo2}`,
+      ].filter(Boolean).join(" · ");
+      push({
+        id: buildAlertId("vitals-ready", e.id, vitalsAt),
+        kind: "vitals-ready",
+        severity: "info",
+        actionable: true,
+        title: `Vitals done — ${e.patientName} is ready for you`,
+        detail: [
+          readings || "No readings recorded",
+          e.timestamps?.vitalsBy ? `by ${e.timestamps.vitalsBy}` : null,
+          v.notes || null,
+        ].filter(Boolean).join(" · "),
+        at: vitalsAt,
+        patientName: e.patientName,
+        umr: e.umr,
+        encounterId: e.id,
+      });
+    }
 
     if (entry.waitingMinutes >= LONG_WAIT_MINUTES) {
       push({

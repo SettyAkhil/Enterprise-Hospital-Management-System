@@ -23,6 +23,7 @@ import Insurance from "./components/Insurance";
 import OrderDrawer from "./components/OrderDrawer";
 import CommandPalette from "./components/CommandPalette";
 import Registration from "./components/Registration";
+import NurseStation from "./components/NurseStation";
 import OPWorkflow from "./components/OPWorkflow";
 import SmartOCR from "./components/SmartOCR";
 import DpiOcrPortal from "./components/DpiOcrPortal";
@@ -66,6 +67,7 @@ type Module =
   | "reports" | "admin"
   | "chart" | "register"
   | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow"
+  | "op_nurse"
   | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing"
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
@@ -97,6 +99,7 @@ const NAV: NavItem[] = [
       { key: "op_management", label: "OP Management" },
       { key: "op_workflow", label: "OP Clinical Journey" },
       { key: "appointments", label: "Appointments" },
+      { key: "op_nurse", label: "Nurse Station" },
       { key: "queue", label: "Queue Management" },
     ]
   },
@@ -431,6 +434,19 @@ export default function App() {
   const [selectedTriageVisitId, setSelectedTriageVisitId] = useState<number | null>(null);
 
   const isNurse = userRole === "rn";
+
+  /**
+   * Whether this user may open a clinical consultation screen at all.
+   *
+   * The sidebar is already filtered by permission, but the OP screens also carry
+   * their own "View in Doctor Portal" / "Doctor Portal ➔" buttons, and those
+   * bypassed the nav entirely: a receptionist clicking one was bounced to the
+   * dashboard by the route guard below with no explanation. Reception books the
+   * appointment and takes payment -- the consultation is not theirs to open --
+   * so the entry points are withheld rather than left to fail.
+   */
+  const canOpenConsultation =
+    userPermissions.includes("doctor_workflow") || userPermissions.includes("doctor_portal");
 
   // Check route access
   useEffect(() => {
@@ -954,6 +970,11 @@ export default function App() {
               )}
               {module === "register" && (
                 <Registration
+                  onBookAppointment={(patient) => {
+                    if (patient?.id) setSelectedWorkflowEncounterId(patient.id);
+                    setModule("appointments");
+                  }}
+                  onGoToBilling={() => setModule("billing")}
                   onProceedToQueue={(patient) => {
                     if (patient?.id) {
                       setSelectedWorkflowEncounterId(patient.id);
@@ -973,7 +994,13 @@ export default function App() {
                   onConsumeInitialPatient={() => setClinicalPatientId(null)}
                 />
               )}
-              {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
+              {module === "appointments" && (
+                <Appointments
+                  initialEncounterId={selectedWorkflowEncounterId}
+                  onSelect={() => setModule("chart")}
+                  onGoToBilling={() => setModule("billing")}
+                />
+              )}
               {module === "emergency" && (
                 <ErPage
                   setNotice={setNotice}
@@ -1014,6 +1041,7 @@ export default function App() {
               {module === "insurance" && <Insurance />}
               {module === "clinical" && <PlaceholderModule title="Clinical" sub="Encounters, orders, results, and care plans" />}
               {module === "reports" && <PlaceholderModule title="Reports" sub="Operational and clinical reporting" />}
+              {module === "op_nurse" && <NurseStation nurseName={activeStaff?.name || "OP Nurse"} />}
               {module === "admin" && <Administration />}
 
               {/* New modules */}
@@ -1024,7 +1052,7 @@ export default function App() {
                     if (step !== undefined) setWorkflowInitialStep(step);
                     setModule("op_workflow");
                   }}
-                  onNavigateToDoctorWorkflow={(encId) => {
+                  onNavigateToDoctorWorkflow={!canOpenConsultation ? undefined : (encId) => {
                     if (encId) setSelectedWorkflowEncounterId(encId);
                     setModule("doctor_workflow");
                   }}
@@ -1035,12 +1063,15 @@ export default function App() {
               )}
               {module === "op_management" && (
                 <OPManagement
+                  onNavigateToNurseStation={
+                    userPermissions.includes("op_nurse") ? () => setModule("op_nurse") : undefined
+                  }
                   onNavigateToOPWorkflow={(encId, step) => {
                     if (encId) setSelectedWorkflowEncounterId(encId);
                     if (step !== undefined) setWorkflowInitialStep(step);
                     setModule("op_workflow");
                   }}
-                  onNavigateToDoctorWorkflow={(encId) => {
+                  onNavigateToDoctorWorkflow={!canOpenConsultation ? undefined : (encId) => {
                     if (encId) setSelectedWorkflowEncounterId(encId);
                     setModule("doctor_workflow");
                   }}
@@ -1063,7 +1094,7 @@ export default function App() {
                   initialStep={workflowInitialStep}
                   initialEncounterId={selectedWorkflowEncounterId}
                   onComplete={() => setModule("op_management")}
-                  onOpenDoctorPortal={(encId) => {
+                  onOpenDoctorPortal={!canOpenConsultation ? undefined : (encId) => {
                     if (encId) setSelectedWorkflowEncounterId(encId);
                     setModule("doctor_workflow");
                   }}

@@ -4,6 +4,7 @@ import { db, DBOPEncounter, DBPatient } from '../services/db';
 
 interface OPManagementProps {
   onNavigateToOPWorkflow?: (encId: string, step?: number) => void;
+  onNavigateToNurseStation?: () => void;
   onNavigateToDoctorWorkflow?: (encId: string) => void;
   onNavigateToQueue?: (dept?: string) => void;
   onNavigateToOPRegistration?: () => void;
@@ -98,6 +99,7 @@ const DEPARTMENTS_CONFIG: DepartmentCapacity[] = [
 
 export default function OPManagement({
   onNavigateToOPWorkflow,
+  onNavigateToNurseStation,
   onNavigateToDoctorWorkflow,
   onNavigateToQueue,
   onNavigateToOPRegistration,
@@ -129,6 +131,11 @@ export default function OPManagement({
   }, []);
 
   // Top Statistics Calculations
+  // Patients the OP nurse still has to see -- the same set the Nurse Station lists.
+  const awaitingVitals = encounters.filter(e =>
+    ["Registered", "Symptoms Captured", "AI Recommended", "Awaiting Doctor", "Doctor Assigned"].includes(e.status)
+  ).length;
+
   const stats = useMemo(() => {
     const totalVisits = encounters.length;
     const waiting = encounters.filter(e => 
@@ -468,11 +475,14 @@ export default function OPManagement({
                 },
                 { 
                   stage: "2. Nurse Triage & Vitals", 
-                  count: `${stats.waiting} in triage`, 
-                  desc: "Physiological vitals & assessment", 
+                  count: `${awaitingVitals} awaiting vitals`, 
+                  desc: "Baseline observations before the consulting room", 
                   color: "border-emerald-500 text-emerald-600 bg-emerald-50",
-                  actionText: "Vitals Triage ➔",
-                  onClick: () => onNavigateToOPWorkflow?.(encounters[0]?.id || "", 3) 
+                  actionText: onNavigateToNurseStation ? "Nurse Station ➔" : undefined,
+                  // Opens the nurse's own worklist. This used to deep-link into
+                  // the workflow for `encounters[0]` -- whichever patient happened
+                  // to be first in the array, not the one actually waiting.
+                  onClick: onNavigateToNurseStation 
                 },
                 { 
                   stage: "3. Doctor Consultations", 
@@ -480,7 +490,12 @@ export default function OPManagement({
                   desc: "Live chamber clinical examinations", 
                   color: "border-purple-500 text-purple-600 bg-purple-50",
                   actionText: "Doctor Portal ➔",
-                  onClick: () => onNavigateToDoctorWorkflow?.(encounters[0]?.id || "") 
+                  // Wrapping this in an arrow made it always truthy, so the tile
+                  // rendered a Doctor Portal link even for roles that cannot open
+                  // one -- clicking it bounced them to the dashboard.
+                  onClick: onNavigateToDoctorWorkflow
+                    ? () => onNavigateToDoctorWorkflow(encounters[0]?.id || "")
+                    : undefined
                 },
                 { 
                   stage: "4. Billing & Cashier", 
