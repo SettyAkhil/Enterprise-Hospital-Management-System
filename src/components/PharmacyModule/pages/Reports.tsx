@@ -53,7 +53,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
   const topMedSales = medSalesData[0]?.sales || 0;
 
   const gstData = [
-    { name: "5% Slab", value: gstMap["5%"], color: "#3b82f6" },
+    { name: "5% Slab", value: gstMap["5%"], color: "#1B4FD8" },
     { name: "12% Slab", value: gstMap["12%"], color: "#f59e0b" },
     { name: "18% Slab", value: gstMap["18%"], color: "#10b981" },
   ];
@@ -82,9 +82,9 @@ export default function Reports({ onNavigate }: ReportsProps) {
         description="Insights and business intelligence for pharmacy operations"
         actions={
           <div className="flex gap-2">
-            <button className="flex items-center gap-1.5 px-3 py-2 rounded-none border border-[#e5e7eb] bg-white text-[13px] text-[#374151] hover:bg-[#f9fafb] transition-colors"><Printer size={13} /> Print</button>
-            <button className="flex items-center gap-1.5 px-3 py-2 rounded-none border border-[#e5e7eb] bg-white text-[13px] text-[#374151] hover:bg-[#f9fafb] transition-colors"><FileText size={13} /> PDF</button>
-            <button className="flex items-center gap-1.5 px-4 py-2 rounded-none text-white text-[13px] font-medium" style={{ background: "#16a34a" }}><Download size={14} /> Export Excel</button>
+            <button className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors"><Printer size={13} /> Print</button>
+            <button className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors"><FileText size={13} /> PDF</button>
+            <button className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium" style={{ background: "#16a34a" }}><Download size={14} /> Export Excel</button>
           </div>
         }
         onNavigate={onNavigate}
@@ -93,14 +93,14 @@ export default function Reports({ onNavigate }: ReportsProps) {
       <div className="flex gap-5">
         <div className="w-60 flex-shrink-0 space-y-2">
           {reportCategories.map(cat => (
-            <div key={cat.id} className="bg-white rounded-none border border-[#e5e7eb] overflow-hidden">
-              <p className="px-4 py-2.5 text-[11px] font-bold text-[#9ca3af] uppercase tracking-wider bg-[#f9fafb] border-b border-[#f3f4f6]">{cat.label}</p>
+            <div key={cat.id} className="bg-white rounded border border-[#DDE2EC] overflow-hidden">
+              <p className="px-4 py-2.5 text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider bg-[#F5F7FA] border-b border-[#F0F2F5]">{cat.label}</p>
               {cat.items.map(item => (
                 <button
                   key={item}
                   onClick={() => setActiveReport(item)}
-                  className="w-full text-left px-4 py-2.5 text-[13px] font-medium border-b last:border-b-0 border-[#f9fafb] transition-colors"
-                  style={{ background: activeReport === item ? "#eff6ff" : "#fff", color: activeReport === item ? "#4f46e5" : "#374151" }}
+                  className="w-full text-left px-4 py-2.5 text-[13px] font-medium border-b last:border-b-0 border-[#F5F7FA] transition-colors"
+                  style={{ background: activeReport === item ? "#E8EDF5" : "#fff", color: activeReport === item ? "#1B4FD8" : "#334155" }}
                 >
                   {item}
                 </button>
@@ -110,17 +110,17 @@ export default function Reports({ onNavigate }: ReportsProps) {
         </div>
 
         <div className="flex-1 space-y-5">
-          <div className="bg-white rounded-none border border-[#e5e7eb] p-4">
+          <div className="bg-white rounded border border-[#DDE2EC] p-4">
             <div className="flex items-center gap-3 flex-wrap">
               <div>
-                <label className="block text-[10px] font-semibold text-[#9ca3af] uppercase tracking-wide mb-1">Date Range</label>
+                <label className="block text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wide mb-1">Date Range</label>
                 <div className="flex items-center gap-2">
-                  <input type="date" defaultValue="2026-09-01" className="px-3 py-1.5 rounded-none border border-[#e5e7eb] text-[12px] focus:border-[#4f46e5] focus:outline-none" />
-                  <span className="text-[#9ca3af]">—</span>
-                  <input type="date" defaultValue="2026-09-12" className="px-3 py-1.5 rounded-none border border-[#e5e7eb] text-[12px] focus:border-[#4f46e5] focus:outline-none" />
+                  <input type="date" defaultValue="2026-09-01" className="px-3 py-1.5 rounded border border-[#DDE2EC] text-[12px] focus:border-[#1B4FD8] focus:outline-none" />
+                  <span className="text-[#94A3B8]">—</span>
+                  <input type="date" defaultValue="2026-09-12" className="px-3 py-1.5 rounded border border-[#DDE2EC] text-[12px] focus:border-[#1B4FD8] focus:outline-none" />
                 </div>
               </div>
-              <button className="mt-4 flex items-center gap-1.5 px-4 py-1.5 rounded-none text-white text-[12px] font-medium" style={{ background: "#4f46e5" }}>
+              <button className="mt-4 flex items-center gap-1.5 px-4 py-1.5 rounded text-white text-[12px] font-medium" style={{ background: "#1B4FD8" }}>
                 <Filter size={12} /> Generate Report
               </button>
             </div>
@@ -128,43 +128,43 @@ export default function Reports({ onNavigate }: ReportsProps) {
 
           <div className="grid grid-cols-4 gap-3">
             {kpis.map(k => (
-              <div key={k.label} className="bg-white rounded-none p-4 border border-[#e5e7eb]">
-                <p className="text-[11px] text-[#6b7280] font-medium">{k.label}</p>
-                <p className="text-[17px] font-bold text-[#111827] mt-1">{k.value}</p>
+              <div key={k.label} className="bg-white rounded p-4 border border-[#DDE2EC]">
+                <p className="text-[11px] text-[#64748B] font-medium">{k.label}</p>
+                <p className="text-[17px] font-bold text-[#0F1624] mt-1">{k.value}</p>
                 <p className="text-[11px] text-[#15803d] font-medium mt-0.5">{k.change}</p>
               </div>
             ))}
           </div>
 
           <div className="grid grid-cols-2 gap-5">
-            <div className="bg-white rounded-none border border-[#e5e7eb] p-5">
-              <p className="font-semibold text-[14px] text-[#111827] mb-4">Daily Sales Trend</p>
+            <div className="bg-white rounded border border-[#DDE2EC] p-5">
+              <p className="font-semibold text-[14px] text-[#0F1624] mb-4">Daily Sales Trend</p>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => [`₹${v.toLocaleString("en-IN")}`, "Sales"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                  <Line type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={2} dot={{ fill: "#4f46e5", r: 4 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F0F2F5" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v) => [`₹${Number(v ?? 0).toLocaleString("en-IN")}`, "Sales"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  <Line type="monotone" dataKey="revenue" stroke="#1B4FD8" strokeWidth={2} dot={{ fill: "#1B4FD8", r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-white rounded-none border border-[#e5e7eb] p-5">
-              <p className="font-semibold text-[14px] text-[#111827] mb-4">Medicine-wise Sales</p>
+            <div className="bg-white rounded border border-[#DDE2EC] p-5">
+              <p className="font-semibold text-[14px] text-[#0F1624] mb-4">Medicine-wise Sales</p>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={medSalesData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
-                  <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} width={80} />
-                  <Tooltip formatter={(v: number) => [`₹${v.toLocaleString("en-IN")}`, "Sales"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F0F2F5" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
+                  <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} width={80} />
+                  <Tooltip formatter={(v) => [`₹${Number(v ?? 0).toLocaleString("en-IN")}`, "Sales"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
                   <Bar dataKey="sales" fill="#16a34a" radius={[0,4,4,0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-white rounded-none border border-[#e5e7eb] p-5">
-              <p className="font-semibold text-[14px] text-[#111827] mb-4">GST Collection Breakup</p>
+            <div className="bg-white rounded border border-[#DDE2EC] p-5">
+              <p className="font-semibold text-[14px] text-[#0F1624] mb-4">GST Collection Breakup</p>
               <div className="flex items-center">
                 <ResponsiveContainer width="50%" height={150}>
                   <PieChart>
@@ -177,39 +177,39 @@ export default function Reports({ onNavigate }: ReportsProps) {
                   {gstData.map(d => (
                     <div key={d.name} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-none" style={{ background: d.color }} />
-                        <span className="text-[12px] text-[#6b7280]">{d.name}</span>
+                        <div className="w-2.5 h-2.5 rounded" style={{ background: d.color }} />
+                        <span className="text-[12px] text-[#64748B]">{d.name}</span>
                       </div>
-                      <span className="text-[13px] font-semibold text-[#111827]">₹{d.value.toLocaleString("en-IN")}</span>
+                      <span className="text-[13px] font-semibold text-[#0F1624]">₹{d.value.toLocaleString("en-IN")}</span>
                     </div>
                   ))}
-                  <div className="border-t border-[#f3f4f6] pt-2">
+                  <div className="border-t border-[#F0F2F5] pt-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[12px] font-semibold text-[#6b7280]">Total GST</span>
-                      <span className="text-[14px] font-bold text-[#111827]">₹{gstData.reduce((s,d)=>s+d.value,0).toLocaleString("en-IN")}</span>
+                      <span className="text-[12px] font-semibold text-[#64748B]">Total GST</span>
+                      <span className="text-[14px] font-bold text-[#0F1624]">₹{gstData.reduce((s,d)=>s+d.value,0).toLocaleString("en-IN")}</span>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-none border border-[#e5e7eb] p-5">
-              <p className="font-semibold text-[14px] text-[#111827] mb-4">Pharmacist-wise Performance</p>
+            <div className="bg-white rounded border border-[#DDE2EC] p-5">
+              <p className="font-semibold text-[14px] text-[#0F1624] mb-4">Pharmacist-wise Performance</p>
               <div className="space-y-3">
                 {pharmData.map(p => (
                   <div key={p.name}>
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-none flex items-center justify-center text-[10px] font-bold" style={{ background: "#eff6ff", color: "#4f46e5" }}>{p.name[0]}</div>
-                        <span className="text-[13px] font-medium text-[#111827]">{p.name}</span>
+                        <div className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold" style={{ background: "#E8EDF5", color: "#1B4FD8" }}>{p.name[0]}</div>
+                        <span className="text-[13px] font-medium text-[#0F1624]">{p.name}</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[13px] font-semibold text-[#111827]">{p.value}</span>
-                        <span className="text-[11px] text-[#9ca3af] ml-1">({p.bills} bills)</span>
+                        <span className="text-[13px] font-semibold text-[#0F1624]">{p.value}</span>
+                        <span className="text-[11px] text-[#94A3B8] ml-1">({p.bills} bills)</span>
                       </div>
                     </div>
-                    <div className="h-1.5 w-full bg-[#f3f4f6] rounded-none overflow-hidden">
-                      <div className="h-full rounded-none" style={{ width: `${p.pct}%`, background: "#4f46e5" }} />
+                    <div className="h-1.5 w-full bg-[#F0F2F5] rounded overflow-hidden">
+                      <div className="h-full rounded" style={{ width: `${p.pct}%`, background: "#1B4FD8" }} />
                     </div>
                   </div>
                 ))}

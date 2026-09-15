@@ -32,15 +32,15 @@ export default function Settings({ onNavigate }: SettingsProps) {
             <button
               key={s.id}
               onClick={() => setActive(s.id)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-none border text-left transition-all"
-              style={{ background: active === s.id ? "#eff6ff" : "#fff", borderColor: active === s.id ? "#bfdbfe" : "#e5e7eb" }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded border text-left transition-all"
+              style={{ background: active === s.id ? "#E8EDF5" : "#fff", borderColor: active === s.id ? "#bfdbfe" : "#DDE2EC" }}
             >
-              <s.icon size={15} style={{ color: active === s.id ? "#4f46e5" : "#6b7280" }} />
+              <s.icon size={15} style={{ color: active === s.id ? "#1B4FD8" : "#64748B" }} />
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold" style={{ color: active === s.id ? "#4f46e5" : "#111827" }}>{s.label}</p>
-                <p className="text-[11px] text-[#9ca3af] truncate">{s.desc}</p>
+                <p className="text-[13px] font-semibold" style={{ color: active === s.id ? "#1B4FD8" : "#0F1624" }}>{s.label}</p>
+                <p className="text-[11px] text-[#94A3B8] truncate">{s.desc}</p>
               </div>
-              <ChevronRight size={12} style={{ color: active === s.id ? "#4f46e5" : "#9ca3af" }} />
+              <ChevronRight size={12} style={{ color: active === s.id ? "#1B4FD8" : "#94A3B8" }} />
             </button>
           ))}
         </div>
@@ -61,9 +61,9 @@ export default function Settings({ onNavigate }: SettingsProps) {
 
 function SettingsCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-none border border-[#e5e7eb] overflow-hidden">
-      <div className="px-6 py-4 border-b border-[#f3f4f6]">
-        <p className="font-semibold text-[15px] text-[#111827]">{title}</p>
+    <div className="bg-white rounded border border-[#DDE2EC] overflow-hidden">
+      <div className="px-6 py-4 border-b border-[#F0F2F5]">
+        <p className="font-semibold text-[15px] text-[#0F1624]">{title}</p>
       </div>
       <div className="p-6 space-y-4">{children}</div>
     </div>
@@ -74,8 +74,8 @@ function Field({ label, desc, children }: { label: string; desc?: string; childr
   return (
     <div className="flex items-start justify-between gap-8">
       <div className="flex-1">
-        <p className="text-[13px] font-medium text-[#111827]">{label}</p>
-        {desc && <p className="text-[12px] text-[#9ca3af] mt-0.5">{desc}</p>}
+        <p className="text-[13px] font-medium text-[#0F1624]">{label}</p>
+        {desc && <p className="text-[12px] text-[#94A3B8] mt-0.5">{desc}</p>}
       </div>
       <div className="flex-shrink-0">{children}</div>
     </div>
@@ -85,22 +85,22 @@ function Field({ label, desc, children }: { label: string; desc?: string; childr
 function Toggle({ defaultChecked = false }: { defaultChecked?: boolean }) {
   const [on, setOn] = useState(defaultChecked);
   return (
-    <button onClick={() => setOn(!on)} className="relative w-11 h-6 rounded-none transition-colors flex-shrink-0" style={{ background: on ? "#4f46e5" : "#e5e7eb" }}>
-      <div className="absolute top-0.5 w-5 h-5 bg-white rounded-none shadow transition-transform" style={{ left: on ? "22px" : "2px" }} />
+    <button onClick={() => setOn(!on)} className="relative w-11 h-6 rounded-full transition-colors flex-shrink-0" style={{ background: on ? "#1B4FD8" : "#DDE2EC" }}>
+      <div className="absolute top-0.5 w-5 h-5 bg-white rounded shadow transition-transform" style={{ left: on ? "22px" : "2px" }} />
     </button>
   );
 }
 
 function SaveButton() {
   return (
-    <button className="flex items-center gap-2 px-4 py-2 rounded-none text-white text-[13px] font-medium" style={{ background: "#4f46e5" }}>
+    <button className="flex items-center gap-2 px-4 py-2 rounded text-white text-[13px] font-medium" style={{ background: "#1B4FD8" }}>
       <Save size={13} /> Save Changes
     </button>
   );
 }
 
 function Input({ placeholder, defaultValue }: { placeholder?: string; defaultValue?: string }) {
-  return <input defaultValue={defaultValue} placeholder={placeholder} className="px-3 py-2 rounded-none border border-[#e5e7eb] text-[13px] focus:border-[#4f46e5] focus:outline-none transition-colors w-64" />;
+  return <input defaultValue={defaultValue} placeholder={placeholder} className="px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none transition-colors w-64" />;
 }
 
 function PharmacySettings() {
@@ -127,7 +127,7 @@ function BillingSettings() {
       <SettingsCard title="Invoice Settings">
         <Field label="Invoice Prefix" desc="Prefix for all generated invoices"><Input defaultValue="INV-2026-" /></Field>
         <Field label="Default GST Slab" desc="Applied when medicine GST is not specified">
-          <select className="px-3 py-2 rounded-none border border-[#e5e7eb] text-[13px] focus:border-[#4f46e5] focus:outline-none w-40">
+          <select className="px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none w-40">
             <option>5%</option><option>12%</option><option>18%</option>
           </select>
         </Field>

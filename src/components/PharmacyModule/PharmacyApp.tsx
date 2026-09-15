@@ -2,7 +2,6 @@ import "./index.css";
 import { useState, useEffect } from "react";
 import Layout from "./components/Layout";
 import GlobalSearch from "./components/GlobalSearch";
-import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Dispensing from "./pages/Dispensing";
 import PrescriptionQueue from "./pages/PrescriptionQueue";
@@ -43,25 +42,23 @@ const pages: Record<string, React.ComponentType<{ onNavigate: (page: string) => 
   settings: Settings,
 };
 
-export default function App() {
-  const [loggedIn, setLoggedIn] = useState(true);
-  const [activePage, setActivePage] = useState("dashboard");
+interface PharmacyAppProps {
+  /** Page to show, derived from the HMS sidebar selection. */
+  page: string;
+  /** Reports in-page navigation back to the host so the sidebar stays in sync. */
+  onNavigate: (page: string) => void;
+}
+
+export default function PharmacyApp({ page, onNavigate }: PharmacyAppProps) {
   const [showSearch, setShowSearch] = useState(false);
 
+  // There is no separate pharmacy sign-in: the user is already authenticated by
+  // the HMS shell, and module access is decided by RoleDatabase. The module's own
+  // Login screen and its one-time `hospai_pharm_*` wipe are both gone -- that wipe
+  // deleted the prescription queue the doctor portal dispatches into, so a
+  // prescription sent from a consultation could vanish before the pharmacist
+  // ever saw it.
   useEffect(() => {
-    if (localStorage.getItem("data_cleared_v1") !== "true") {
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith("hospai_pharm_") && key !== "hospai_pharm_medicines_v2") {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(k => localStorage.removeItem(k));
-      localStorage.setItem("data_cleared_v1", "true");
-      window.location.reload();
-    }
-
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
@@ -72,19 +69,18 @@ export default function App() {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  if (!loggedIn) {
-    return <Login onLogin={() => setLoggedIn(true)} />;
-  }
-
-  const PageComponent = pages[activePage] ?? Dashboard;
+  const PageComponent = pages[page] ?? Dashboard;
 
   return (
     <>
-      <Layout activePage={activePage} onNavigate={setActivePage} onGlobalSearch={() => setShowSearch(true)}>
-        <PageComponent onNavigate={setActivePage} />
+      <Layout>
+        <PageComponent onNavigate={onNavigate} />
       </Layout>
       {showSearch && (
-        <GlobalSearch onClose={() => setShowSearch(false)} onNavigate={page => { setActivePage(page); setShowSearch(false); }} />
+        <GlobalSearch
+          onClose={() => setShowSearch(false)}
+          onNavigate={next => { onNavigate(next); setShowSearch(false); }}
+        />
       )}
     </>
   );

@@ -64,6 +64,60 @@ flowsheet shows on the patient journey rather than living as a side file.
 to a dropped network; the UI shows `Saved to record` / `Offline — saved locally` accordingly. Saves
 broadcast on a `BroadcastChannel` so other open tabs reload the same patient-day immediately.
 
+## Reaching the backend from a browser
+
+`API_BASE` ([src/lib/constants.ts](src/lib/constants.ts)) is **`/hms-api`, a same-origin
+path**, not `http://localhost:8010`. `vite.config.ts` reverse-proxies that prefix onto the
+gateway, stripping it before forwarding (the backend's own routes already live under
+`/api`, and plain `/api` belongs to the embedded Keppler app).
+
+An absolute localhost URL only resolves when the browser happens to run on the same
+machine as the backend. Opened through a tunnel, a forwarded port, or from another device,
+`localhost:8010` is the *viewer's* machine, nothing is listening there, and every call
+fails as **"Failed to fetch"** — which is what an uploaded prescription did, since a typed
+sheet degrades to the browser splitter but a photograph has no browser-side OCR to fall
+back on. Two more walls stood behind that one: the gateway's CORS allowlist admits
+localhost origins only (a tunnel hostname is rejected outright), and the session cookie is
+`SameSite=Lax`, so it would be withheld from cross-site POSTs anyway. Going through this
+server makes the calls same-origin and settles all three at once.
+
+The `preview` block carries the same proxies — it had none, so a previewed build (which is
+what gets tunneled for demo links) 404'd on every backend call and on the whole embedded
+Keppler app. `VITE_API_BASE` still overrides everything at build time for the Cloudflare
+Pages deploy, where the backend is a tunnel URL this server cannot proxy.
+
+## Demo logins and the backend session
+
+The login screen's role picker fills a demo account from
+[src/lib/demoCredentials.ts](src/lib/demoCredentials.ts). **Two separate things have to
+agree there**, and for a long time they did not:
+
+- the **local RBAC store** (`RoleDatabase`), which decides which modules the signed-in
+  user may navigate to -- every account in it uses `password123`;
+- the **backend** (`create_default_users` in `hospital-backend/backend/core/auth.py`),
+  which issues the session cookie authenticated APIs need. It seeds `employee`,
+  `admin`, `staff` and `doctor`, each with its own password, none of them `password123`.
+
+The picker used to fill `password123` for every role, so `/api/auth/login` always
+returned **401**, `apiFetch` fell through to its offline mock, and the user was logged in
+with no backend session. Nothing looked wrong until an authenticated endpoint was needed
+-- **uploading a prescription failed with a 401 nobody could see**, because a typed sheet
+degrades to the browser splitter but a photograph cannot: there is no OCR in the browser.
+
+So `Login.tsx` now does two things at once: it authenticates against the local store for
+identity and module access, and *separately* opens a backend session with that role's
+mapped credentials. The backend call is best-effort -- the app stays usable offline -- and
+module access deliberately comes from the local store, never from the backend's
+`permissions` (granular strings like `patients.appointments.write`, not the module names
+`App.tsx` gates navigation on) or its much shorter `module_access`. Taking either would
+strip a doctor of `doctor_portal` and lock them out of their own portal.
+
+`checkPrescriptionAiStatus()` in [src/lib/prescriptionAI.ts](src/lib/prescriptionAI.ts)
+reports whether that session exists, and the prescription step says so *before* the
+doctor uploads. It uses a raw `fetch` on purpose: `apiFetch` answers `/api/auth/session`
+from its own offline mock with `authenticated: true`, which is right for a UI that must
+work without a backend and useless for deciding whether server-side OCR will succeed.
+
 ## Doctor portal
 
 Each physician signs in as **themselves** (the login's Role dropdown gains a *Physician* picker when
@@ -80,20 +134,71 @@ medication, investigations and results. Reception's `isNew` flag wins over the l
 "not new" — see `isFirstVisit` in
 [src/services/doctorPortalDb.ts](src/services/doctorPortalDb.ts).
 
-**One sheet, split by AI.** The doctor writes medicines *and* lab tests on a single page — typed, drawn
-on the whiteboard ([src/components/doctor/PrescriptionWhiteboard.tsx](src/components/doctor/PrescriptionWhiteboard.tsx),
-vector strokes with an ink layer separate from the ruled sheet so the eraser doesn't punch through), or
-photographed/scanned. A consultation video is **optional** — it sits in a collapsed disclosure *below*
-the sheet so it never competes with it, and nothing gates on it (metadata is persisted, the bytes are
-not — a video would blow the localStorage quota and take the rest of the chart with it).
+**The conversation and the prescription are two different things.** The portal is
+four steps -- patient history, *consultation*, *prescription sheet*, review and send --
+and steps 2 and 3 are deliberately separate. What is spoken in the room is history,
+examination and advice; a doctor does not read a prescription out at the patient. So
+the voice transcript produces a **clinical note and nothing else**, and orders come
+only from the sheet. [src/lib/medicalVoiceAI.ts](src/lib/medicalVoiceAI.ts) has no
+drug or test vocabulary in it at all -- that is the enforcement, not a convention --
+because a medicine invented out of a noisy microphone is a dispensing error.
+
+**Step 2 -- voice, speaker separation, note**
+([`ConsultationConversation`](src/components/doctor/DoctorPortal.tsx)). Web Speech
+recognition in Telugu, Hindi, Tamil, Kannada or English, normalised into chart
+vocabulary by `normalizeMedicalSpeech` (symptom, anatomy, timing and numeral rules;
+numerals run first, since the duration rules consume the word they anchor to).
+
+Speaker separation works three ways at once, strongest first: the doctor holding the
+Doctor/Patient switch (`forcedSpeaker`, which skips the heuristics entirely); weighted
+phrasing cues in `attributeSpeaker` -- who a sentence is about, whether it asks or
+answers, plus a `TURN_GAP_MS` pause as the floor changing hands; and one-click
+correction on any turn. A one-point win over whoever just spoke is *overruled* by turn
+order rather than reported as a decision. Every turn keeps the `cues` that decided it
+and a `confidence`, so a shaky attribution is flagged for the doctor instead of
+disappearing into a wall of text -- `setTurnSpeaker` then makes the correction
+authoritative (`basis: "manual"`).
+
+`summariseConsultation` builds the SOAP note from those turns, each section claiming
+its lines before the next one looks, so an impression ("this looks like a viral
+infection") never files itself as an examination finding. It also reports what the
+conversation did *not* cover. The note is derived on every read, never stored
+separately, so it cannot drift from the transcript it summarises; the turns and the
+note are persisted on `ConsultationRecord.voice` (the audio is not -- same quota
+reasoning as the video).
+
+**Step 3 -- the prescription sheet**
+([`PrescriptionSheetStep`](src/components/doctor/DoctorPortal.tsx)). Typed, drawn on
+the whiteboard ([src/components/doctor/PrescriptionWhiteboard.tsx](src/components/doctor/PrescriptionWhiteboard.tsx),
+vector strokes with an ink layer separate from the ruled sheet so the eraser doesn't
+punch through), or photographed/scanned. **Uploading is the action**: the split runs
+the moment the file lands, because handing over the sheet *is* the instruction. PDFs
+go through `readPrescriptionFile` rather than a canvas (which silently dropped them),
+and every failure is surfaced -- `splitPrescriptionFile` tries the prescription
+endpoint, then Smart OCR, and if both are down says so and tells the doctor to type
+the lines, rather than returning an empty split that reads as "this prescription has
+no medicines on it". A consultation video is optional and sits below the sheet.
 
 `POST /api/ai/prescription-parse` (ai-service; `split_prescription` in
-`backend/ai/service.py`, route in `backend/modules/ai_exports/routes.py`) OCRs an image if needed and
-returns the two halves separately. It degrades rather than fails: vLLM first, then a server-side
-keyword split, and if the request itself fails,
-[src/lib/prescriptionAI.ts](src/lib/prescriptionAI.ts)'s `localSplit` does the same match in the
-browser. The `engine` field says which ran, and the UI warns when it wasn't the model. **The split is
-always editable before dispatch** — it is a first pass over handwriting, not an authority.
+`backend/ai/service.py`, route in `backend/modules/ai_exports/routes.py`) OCRs an image
+if needed and returns the two halves separately. The `engine` field says which ran, and
+the UI labels it. **The split is always editable before dispatch** -- it is a first
+pass over handwriting, not an authority. The note's impression and advice are *offered*
+at review as one-click fills, never written into the chart automatically.
+
+**Two things that silently broke the handoff**, both fixed and both worth not
+reintroducing:
+
+- Dispatch moves the encounter to `Awaiting Billing`, which is not in `OPEN_STATUSES`,
+  so resolving the selected visit from the *open inbox alone* made the patient vanish
+  the instant the doctor pressed send -- taking the confirmation, the prescription id and
+  the lab order id with it. A dispatch that had in fact succeeded looked exactly like one
+  that had failed. `selected` now falls back to the full list, closed visits included.
+- The pharmacy dashboard's "awaiting verification" tile kept its own status list and
+  omitted `Sent To Pharmacy` -- the very status the portal dispatches with -- so a
+  prescription sat in the verification queue while the pharmacist's landing screen
+  reported nothing to do. Both now share `isAwaitingVerification` from
+  [src/services/pharmacyDb.ts](src/services/pharmacyDb.ts).
 
 **Live board.** The portal opens on a real-time board (Live Board / Patient switch in its header,
 [src/components/doctor/LiveBoard.tsx](src/components/doctor/LiveBoard.tsx)) rather than a blank
@@ -118,7 +223,31 @@ the timers. It returns `revision` (data) separately from `now` (clock) so derive
 recomputed sixty times a minute for a display-only timer.
 
 **Dispatch** ([src/services/consultationDispatch.ts](src/services/consultationDispatch.ts)) sends each
-half to its own department:
+half to its own department, and **the two halves are independent**. A consultation routinely
+produces only one of them — medicines with no investigations, or investigations with no
+medicines — so neither waits on the other. `dispatchConsultation(record, doctor, targets)`
+takes an optional `{ pharmacy, lab }`; omit it and whatever is still outstanding goes.
+`dispatchableHalves()` is the single answer to "what is left to send", derived from the
+sheet's content and from `prescriptionId`/`labOrderId` on the record, which are the
+receipts — so a half is never sent twice, and the doctor can send the medicines now and
+add an investigation afterwards without reopening anything. Each half locks in the review
+tables on its own receipt (`pharmacySent` / `labSent`), because medicines already at the
+pharmacy must not be edited while investigations that have gone nowhere still can be.
+
+An investigations-only sheet used to land in the pharmacy queue anyway: `hasPrescriptionData`
+was true for any sheet content at all, and the empty-medications branch then invented a
+placeholder item named "Doctor Prescription Sheet" — a phantom drug to dispense against a
+lab-only order. Pharmacy now requires either an actual medicine or an **unread sheet**
+(nothing legible *and* no investigations either, which means a photograph the AI could not
+read and the pharmacist must). That placeholder still exists for exactly that case and now
+says what it is rather than looking like something to dispense.
+
+The visit close-out reasons about the sheet as a whole rather than this one call, so sending
+the halves separately leaves the encounter in the same state as sending them together: a
+lab order means `Awaiting Billing`, a half still outstanding means the visit stays `Under
+Consultation`, and only a fully-sent sheet marks the consultation `Dispatched`.
+
+The two destinations are:
 
 - **Medicines → pharmacy.** An `AppPrescription` in the existing `PharmacyDatabase` queue, status
   `Sent To Pharmacy`, carrying the patient's details plus a one-line clinical summary in
@@ -132,9 +261,6 @@ half to its own department:
   laboratory worklist ([src/components/Laboratory.tsx](src/components/Laboratory.tsx)) for sample
   collection, processing and result entry. That screen's original static demo data is still there but
   only renders while no real order exists.
-
-The visit itself is closed out at the same time: a sheet with investigations leaves the encounter
-`Awaiting Billing`, one without leaves it `Consultation Completed`.
 
 Both stores are localStorage-backed with `BroadcastChannel` fan-out, like the rest of this frontend.
 `hospai_rbac_roles_v3` (bumped from v2) is what grants the new `doctor_portal` and `lab_billing`

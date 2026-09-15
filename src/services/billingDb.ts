@@ -1591,7 +1591,6 @@ export class BillingDatabase {
 
       if (labChanged) {
         this.save(STORAGE_KEY_LAB_ORDERS, updatedLabOrders);
-        this.emitUpdate();
         return {
           success: true,
           updatedCount,
@@ -1621,7 +1620,6 @@ export class BillingDatabase {
         };
         const newLabOrders = [newLabOrder, ...labOrders];
         this.save(STORAGE_KEY_LAB_ORDERS, newLabOrders);
-        this.emitUpdate();
         return {
           success: true,
           updatedCount: 1,
@@ -1649,7 +1647,6 @@ export class BillingDatabase {
 
       if (radChanged) {
         this.save(STORAGE_KEY_RAD_STUDIES, updatedRadStudies);
-        this.emitUpdate();
         return {
           success: true,
           updatedCount,
@@ -1680,7 +1677,6 @@ export class BillingDatabase {
         };
         const newRadStudies = [newRadStudy, ...radStudies];
         this.save(STORAGE_KEY_RAD_STUDIES, newRadStudies);
-        this.emitUpdate();
         return {
           success: true,
           updatedCount: 1,

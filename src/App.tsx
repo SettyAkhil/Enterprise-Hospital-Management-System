@@ -50,7 +50,7 @@ import { AuditDatabase } from "./services/auditDb";
 import { ALL_SYSTEM_MODULES, RoleDatabase } from "./services/roleDb";
 import { DoctorAccount, DoctorPortalDatabase, resolveDoctorAccount } from "./services/doctorPortalDb";
 import { LabOrderDatabase } from "./services/labOrdersDb";
-import { PharmacyDatabase } from "./services/pharmacyDb";
+import { PharmacyDatabase, isAwaitingVerification } from "./services/pharmacyDb";
 
 type Module =
   | "dashboard" | "patients" | "appointments" | "emergency"
@@ -60,6 +60,7 @@ type Module =
   | "pharmacy_medicine" | "pharmacy_category" | "pharmacy_suppliers"
   | "pharmacy_po" | "pharmacy_grn" | "pharmacy_ledger"
   | "pharmacy_transfers" | "pharmacy_expiry" | "pharmacy_analytics"
+  | "pharmacy_notifications" | "pharmacy_users" | "pharmacy_audit" | "pharmacy_settings"
   | "surgery" | "billing"
   | "icu" | "discharge" | "triage" | "insurance" | "analytics"
   | "reports" | "admin"
@@ -82,7 +83,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { key: "dashboard", label: "Dashboard", Icon: Icon.Dashboard },
-  { key: "doctor_portal", label: "My Doctor Portal", Icon: Icon.Stethoscope },
+  { key: "doctor_portal", label: "Doctor Workspace", Icon: Icon.Stethoscope },
   {
     key: "patients", label: "Patients", Icon: Icon.Patients,
     children: [
@@ -103,7 +104,6 @@ const NAV: NavItem[] = [
     key: "clinical", label: "Clinical", Icon: Icon.Clinical,
     children: [
       { key: "chart", label: "Encounters" },
-      { key: "doctor_workflow", label: "Doctor Workflow" },
     ]
   },
   {
@@ -144,6 +144,10 @@ const NAV: NavItem[] = [
       { key: "pharmacy_transfers", label: "Stock Transfers", group: "Inventory" },
       { key: "pharmacy_expiry", label: "Expiry Management", group: "Inventory" },
       { key: "pharmacy_analytics", label: "Analytics & Reports", group: "Reporting" },
+      { key: "pharmacy_notifications", label: "Notifications", group: "Administration" },
+      { key: "pharmacy_users", label: "User Management", group: "Administration" },
+      { key: "pharmacy_audit", label: "Audit Log", group: "Administration" },
+      { key: "pharmacy_settings", label: "Settings", group: "Administration" },
     ]
   },
   { key: "surgery", label: "Surgery", Icon: Icon.Surgery },
@@ -184,6 +188,36 @@ const NAV: NavItem[] = [
   { key: "analytics", label: "Analytics", Icon: Icon.Analytics },
   { key: "admin", label: "Administration", Icon: Icon.Admin },
 ];
+
+// Breadcrumb label for a module. NAV already carries a proper label for every
+// entry -- including all 18 pharmacy screens -- so the trail is read from there
+// instead of a ternary chain that had to be extended by hand and fell through to
+// the raw module key ("Pharmacy_rx") for anything nobody had added yet.
+const BREADCRUMB_OVERRIDES: Record<string, string> = {
+  chart: "Patient Chart",
+  register: "Registration",
+  discharge: "Discharge Workflow",
+  op_management: "OP Management",
+  op_workflow: "OP Clinical Journey",
+  patient_exp: "Patient Experience",
+  clinical_rag: "Clinical RAG",
+};
+
+function moduleTrail(module: string): string[] {
+  const override = BREADCRUMB_OVERRIDES[module];
+  if (override) return [override];
+
+  for (const item of NAV) {
+    if (item.key === module && !item.children) return [item.label];
+    const child = item.children?.find(c => c.key === module);
+    if (child) {
+      // A module's own landing page repeats the section name otherwise.
+      return child.key === item.key ? [item.label] : [item.label, child.label];
+    }
+    if (item.key === module) return [item.label];
+  }
+  return [module];
+}
 
 function NotificationPanel({ onClose }: { onClose: () => void }) {
   return (
@@ -356,7 +390,6 @@ export default function App() {
     setModule("chart");
   };
   const [expanded, setExpanded] = useState<string[]>([]);
-  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [subBadges, setSubBadges] = useState<Record<string, number>>({});
   // Bumped whenever the doctor inbox or the lab-order queue changes, so the
   // sidebar counts move without waiting for the next navigation.
@@ -511,11 +544,17 @@ export default function App() {
         doctor_portal: activeDoctor ? DoctorPortalDatabase.getUnreadCount(activeDoctor.id) : 0,
         lab_billing: LabOrderDatabase.getBillingQueue().length,
         laboratory: LabOrderDatabase.getLabWorklist().filter(o => o.status !== "Completed").length,
-        pharmacy_rx: prescriptions.filter(p => p.status === "Verification Pending" || p.status === "OCR Processing").length,
+        // Shared helper, not a list kept here: this badge omitted "Sent To Pharmacy"
+        // -- the status the doctor portal dispatches with -- so a prescription sat
+        // in the queue while the sidebar reported nothing waiting.
+        pharmacy_rx: prescriptions.filter(p => isAwaitingVerification(p.status)).length,
         pharmacy_ocr: prescriptions.filter(
           p => (p.sourceType === "OCR" || p.sourceType === "UPLOADED_IMAGE") && p.items.some(i => !i.medicineId)
         ).length,
-        pharmacy_dispensing: prescriptions.filter(p => p.status === "Verified" || p.status === "Approved").length,
+        pharmacy_dispensing: prescriptions.filter(
+          p => p.status === "Verified" || p.status === "Approved"
+            || p.status === "Preparing" || p.status === "Ready For Dispensing"
+        ).length,
         pharmacy_expiry: expiringSoon,
         pharmacy_medicine: lowStock,
       });
@@ -530,15 +569,7 @@ export default function App() {
     const parent = NAV.find(n => n.children?.some(c => c.key === module && c.key !== n.key));
     if (!parent) return;
     setExpanded(prev => (prev.includes(parent.key) ? prev : [...prev, parent.key]));
-    const group = parent.children?.find(c => c.key === module)?.group;
-    if (group) {
-      const groupKey = `${parent.key}:${group}`;
-      setExpandedGroups(prev => (prev.includes(groupKey) ? prev : [...prev, groupKey]));
-    }
   }, [module]);
-
-  const toggleGroup = (groupKey: string) =>
-    setExpandedGroups(prev => (prev.includes(groupKey) ? prev.filter(g => g !== groupKey) : [...prev, groupKey]));
 
   const toggleExpand = (key: string) => {
     setExpanded(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -834,44 +865,31 @@ export default function App() {
                             </div>
                           ))}
 
+                          {/* Grouped children are laid out under a plain section
+                              caption rather than a second accordion: the group was
+                              a third click before you could reach a page that the
+                              module itself listed in one flat sidebar. The caption
+                              keeps the grouping legible without hiding anything. */}
                           {[...new Set(filteredChildren.filter(c => c.group).map(c => c.group as string))].map(group => {
-                            const groupKey = `${item.key}:${group}`;
-                            const groupOpen = expandedGroups.includes(groupKey);
                             const groupChildren = filteredChildren.filter(c => c.group === group);
-                            const groupHasActive = groupChildren.some(c => c.key === module);
 
                             return (
-                              <div key={groupKey}>
-                                <div
-                                  className={`nav-item sub justify-between font-semibold ${groupHasActive && !groupOpen ? "!text-[#93C5FD]" : "!text-[#94A3B8]"}`}
-                                  onClick={() => toggleGroup(groupKey)}
-                                >
-                                  <span className="flex-1 truncate">{group}</span>
-                                  {!groupOpen && groupChildren.reduce((a, c) => a + (subBadges[c.key] || 0), 0) > 0 && (
-                                    <span className="badge bg-[#334155] text-[#CBD5E1]">
-                                      {groupChildren.reduce((a, c) => a + (subBadges[c.key] || 0), 0)}
-                                    </span>
-                                  )}
-                                  <span className={`transition-transform ${groupOpen ? "rotate-90" : ""}`}>
-                                    <Icon.ChevronRight className="w-3.5 h-3.5" />
-                                  </span>
+                              <div key={`${item.key}:${group}`} className="mt-2 first:mt-1">
+                                <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748B] select-none">
+                                  {group}
                                 </div>
-                                {groupOpen && (
-                                  <div className="ml-[22px] border-l border-[#1E2D42] pl-1 my-0.5 space-y-0.5">
-                                    {groupChildren.map(child => (
-                                      <div
-                                        key={`${child.key}_${child.label}`}
-                                        className={`nav-item sub !pl-3 justify-between ${module === child.key && isActive ? "active" : ""}`}
-                                        onClick={() => setModule(child.key)}
-                                      >
-                                        <span className="flex-1 truncate">{child.label}</span>
-                                        {(subBadges[child.key] || 0) > 0 && module !== child.key && (
-                                          <span className="badge bg-[#334155] text-[#CBD5E1]">{subBadges[child.key]}</span>
-                                        )}
-                                      </div>
-                                    ))}
+                                {groupChildren.map(child => (
+                                  <div
+                                    key={`${child.key}_${child.label}`}
+                                    className={`nav-item sub justify-between ${module === child.key && isActive ? "active" : ""}`}
+                                    onClick={() => setModule(child.key)}
+                                  >
+                                    <span className="flex-1 truncate">{child.label}</span>
+                                    {(subBadges[child.key] || 0) > 0 && module !== child.key && (
+                                      <span className="badge bg-[#334155] text-[#CBD5E1]">{subBadges[child.key]}</span>
+                                    )}
                                   </div>
-                                )}
+                                ))}
                               </div>
                             );
                           })}
@@ -910,26 +928,12 @@ export default function App() {
               <div className="bg-white border-b border-[#DDE2EC] px-5 py-1.5 flex items-center gap-1.5 text-[11.5px] text-[#94A3B8] flex-shrink-0">
                 <span>HospAI</span>
                 <Icon.ChevronRight />
-                <span className="text-gray-700 font-medium capitalize">{
-                  module === "chart" ? "Patient Chart" : module === "register" ? "Registration" :
-                    module === "icu" ? "ICU" : module === "discharge" ? "Discharge Workflow" :
-                      module === "triage" ? "Triage" : module === "analytics" ? "Analytics" :
-                        module === "radiology" ? "Radiology" :
-                          module === "op_management" ? "OP Management" :
-                            module === "op_workflow" ? "OP Clinical Journey" :
-                                module === "patient_exp" ? "Patient Experience" :
-                                  module === "doctor_portal" ? "My Doctor Portal" :
-                                  module === "lab_billing" ? "Lab Test Billing" :
-                                  module === "doctor_workflow" ? "Doctor Workflow" :
-                                    module === "scheduling" ? "Doctor Scheduling" :
-                                      module === "revenue_reports" ? "Revenue Reports" :
-                                        module === "symptom_ai" ? "Symptom AI" :
-                                          module === "clinical_rag" ? "Clinical RAG" :
-                                            module === "clinical_summaries" ? "Clinical Summaries" :
-                                              module === "bulk_ai" ? "Bulk Patient AI" :
-                                                module === "nl_filtering" ? "NL Patient Filtering" :
-                                                  module
-                }</span>
+                {moduleTrail(module).map((crumb, i, all) => (
+                  <span key={crumb} className="flex items-center gap-1.5">
+                    {i > 0 && <Icon.ChevronRight />}
+                    <span className={i === all.length - 1 ? "text-gray-700 font-medium" : ""}>{crumb}</span>
+                  </span>
+                ))}
               </div>
 
               {/* Module Content */}

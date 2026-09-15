@@ -51,14 +51,14 @@ export default function Suppliers({ onNavigate }: SuppliersProps) {
         title="Supplier Management"
         description={`${suppliers.length} suppliers`}
         actions={
-          <button onClick={handleAdd} className="flex items-center gap-1.5 px-4 py-2 rounded-none text-white text-[13px] font-medium" style={{ background: "#4f46e5" }}>
+          <button onClick={handleAdd} className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium" style={{ background: "#1B4FD8" }}>
             <Plus size={14} /> Add Supplier
           </button>
         }
         onNavigate={onNavigate}
       />
 
-      <div className="bg-white rounded-none border border-[#e5e7eb] overflow-hidden">
+      <div className="bg-white rounded border border-[#DDE2EC] overflow-hidden">
         <table>
           <thead><tr>
             <th>Supplier</th><th>Contact Person</th><th>Phone / Email</th><th>GSTIN</th><th>Status</th><th>Actions</th>
@@ -67,21 +67,21 @@ export default function Suppliers({ onNavigate }: SuppliersProps) {
             {suppliers.map(s => (
               <tr key={s.id}>
                 <td>
-                  <p className="font-semibold text-[13px] text-[#111827]">{s.supplierName || s.name}</p>
-                  <p className="text-[11px] text-[#9ca3af]">{s.address}</p>
+                  <p className="font-semibold text-[13px] text-[#0F1624]">{s.supplierName || s.name}</p>
+                  <p className="text-[11px] text-[#94A3B8]">{s.address}</p>
                 </td>
-                <td className="text-[13px] text-[#374151]">{s.contactInformation || s.contact}</td>
+                <td className="text-[13px] text-[#334155]">{s.contactInformation || s.contact}</td>
                 <td>
-                  <p className="text-[12px] flex items-center gap-1 text-[#374151]"><Phone size={11} /> {s.phone || "N/A"}</p>
-                  <p className="text-[12px] flex items-center gap-1 text-[#6b7280] mt-0.5"><Mail size={11} /> {s.email || "N/A"}</p>
+                  <p className="text-[12px] flex items-center gap-1 text-[#334155]"><Phone size={11} /> {s.phone || "N/A"}</p>
+                  <p className="text-[12px] flex items-center gap-1 text-[#64748B] mt-0.5"><Mail size={11} /> {s.email || "N/A"}</p>
                 </td>
-                <td className="font-mono text-[12px] text-[#6b7280]">{s.gstInformation || s.gstin}</td>
+                <td className="font-mono text-[12px] text-[#64748B]">{s.gstInformation || s.gstin}</td>
                 <td><StatusBadge status={s.status} size="sm" /></td>
                 <td>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setSelected(s)} className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#6b7280] transition-colors"><Eye size={13} /></button>
-                    <button onClick={() => handleEdit(s)} className="p-1.5 rounded hover:bg-[#eff6ff] text-[#4f46e5] transition-colors"><Edit2 size={13} /></button>
-                    <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded hover:bg-[#fef2f2] text-[#dc2626] transition-colors"><Trash2 size={13} /></button>
+                    <button onClick={() => setSelected(s)} className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B] transition-colors"><Eye size={13} /></button>
+                    <button onClick={() => handleEdit(s)} className="p-1.5 rounded hover:bg-[#E8EDF5] text-[#1B4FD8] transition-colors"><Edit2 size={13} /></button>
+                    <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded hover:bg-[#FEE2E2] text-[#dc2626] transition-colors"><Trash2 size={13} /></button>
                   </div>
                 </td>
               </tr>
@@ -94,10 +94,10 @@ export default function Suppliers({ onNavigate }: SuppliersProps) {
       {selected && (
         <div className="fixed inset-0 z-50 flex">
           <div className="flex-1" onClick={() => setSelected(null)} />
-          <div className="w-[480px] bg-white shadow-2xl border-l border-[#e5e7eb] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#f3f4f6]">
-              <p className="font-bold text-[16px] text-[#111827]">{selected.supplierName || selected.name}</p>
-              <button onClick={() => setSelected(null)} className="p-2 rounded-none hover:bg-[#f3f4f6] text-[#9ca3af]"><X size={16} /></button>
+          <div className="w-[480px] bg-white shadow-2xl border-l border-[#DDE2EC] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#F0F2F5]">
+              <p className="font-bold text-[16px] text-[#0F1624]">{selected.supplierName || selected.name}</p>
+              <button onClick={() => setSelected(null)} className="p-2 rounded hover:bg-[#F0F2F5] text-[#94A3B8]"><X size={16} /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
               <Section icon={<Building2 size={14} />} title="Company Information">
@@ -113,8 +113,8 @@ export default function Suppliers({ onNavigate }: SuppliersProps) {
                 <Row label="Payment Terms" value={selected.paymentTerms} />
               </Section>
             </div>
-            <div className="p-5 border-t border-[#e5e7eb] flex gap-3">
-              <button onClick={() => { setSelected(null); handleEdit(selected); }} className="flex-1 py-2.5 rounded-none border border-[#e5e7eb] text-[13px] font-medium text-[#374151] hover:bg-[#f9fafb] transition-colors">Edit Supplier</button>
+            <div className="p-5 border-t border-[#DDE2EC] flex gap-3">
+              <button onClick={() => { setSelected(null); handleEdit(selected); }} className="flex-1 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors">Edit Supplier</button>
             </div>
           </div>
         </div>
@@ -123,30 +123,30 @@ export default function Suppliers({ onNavigate }: SuppliersProps) {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(15,23,42,0.6)" }}>
-          <div className="bg-white rounded-none shadow-2xl w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#f3f4f6]">
-              <p className="font-bold text-[16px] text-[#111827]">{editingId ? "Edit Supplier" : "Add Supplier"}</p>
-              <button onClick={() => setShowModal(false)} className="p-2 rounded-none hover:bg-[#f3f4f6] text-[#9ca3af]"><X size={16} /></button>
+          <div className="bg-white rounded shadow-2xl w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#F0F2F5]">
+              <p className="font-bold text-[16px] text-[#0F1624]">{editingId ? "Edit Supplier" : "Add Supplier"}</p>
+              <button onClick={() => setShowModal(false)} className="p-2 rounded hover:bg-[#F0F2F5] text-[#94A3B8]"><X size={16} /></button>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Supplier Name</label><input value={form.supplierName} onChange={e=>setForm({...form, supplierName: e.target.value})} className="w-full px-3 py-2 border border-[#e5e7eb] text-[13px]" /></div>
-                <div><label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Contact Person</label><input value={form.contactInformation} onChange={e=>setForm({...form, contactInformation: e.target.value})} className="w-full px-3 py-2 border border-[#e5e7eb] text-[13px]" /></div>
-                <div className="col-span-2"><label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Address</label><input value={form.address} onChange={e=>setForm({...form, address: e.target.value})} className="w-full px-3 py-2 border border-[#e5e7eb] text-[13px]" /></div>
-                <div><label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1">GSTIN</label><input value={form.gstInformation} onChange={e=>setForm({...form, gstInformation: e.target.value})} className="w-full px-3 py-2 border border-[#e5e7eb] text-[13px]" /></div>
-                <div><label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Drug License</label><input value={form.licenseDetails} onChange={e=>setForm({...form, licenseDetails: e.target.value})} className="w-full px-3 py-2 border border-[#e5e7eb] text-[13px]" /></div>
-                <div><label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Payment Terms</label><input value={form.paymentTerms} onChange={e=>setForm({...form, paymentTerms: e.target.value})} className="w-full px-3 py-2 border border-[#e5e7eb] text-[13px]" /></div>
+                <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Supplier Name</label><input value={form.supplierName} onChange={e=>setForm({...form, supplierName: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
+                <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Contact Person</label><input value={form.contactInformation} onChange={e=>setForm({...form, contactInformation: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
+                <div className="col-span-2"><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Address</label><input value={form.address} onChange={e=>setForm({...form, address: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
+                <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">GSTIN</label><input value={form.gstInformation} onChange={e=>setForm({...form, gstInformation: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
+                <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Drug License</label><input value={form.licenseDetails} onChange={e=>setForm({...form, licenseDetails: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
+                <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Payment Terms</label><input value={form.paymentTerms} onChange={e=>setForm({...form, paymentTerms: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Status</label>
-                  <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full px-3 py-2 border border-[#e5e7eb] text-[13px]">
+                  <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Status</label>
+                  <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]">
                     <option value="Active">Active</option>
                     <option value="Inactive">Inactive</option>
                   </select>
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
-                <button onClick={handleSave} className="flex-1 py-2.5 rounded-none text-white font-semibold text-[13px]" style={{ background: "#4f46e5" }}>Save</button>
-                <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded-none border border-[#e5e7eb] text-[13px] font-medium text-[#374151] hover:bg-[#f9fafb] transition-colors">Cancel</button>
+                <button onClick={handleSave} className="flex-1 py-2.5 rounded text-white font-semibold text-[13px]" style={{ background: "#1B4FD8" }}>Save</button>
+                <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors">Cancel</button>
               </div>
             </div>
           </div>
@@ -159,10 +159,10 @@ export default function Suppliers({ onNavigate }: SuppliersProps) {
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <p className="flex items-center gap-1.5 text-[13px] font-bold text-[#111827] uppercase tracking-wide">
+      <p className="flex items-center gap-1.5 text-[13px] font-bold text-[#0F1624] uppercase tracking-wide">
         {icon} {title}
       </p>
-      <div className="space-y-2 border-l-2 border-[#f3f4f6] pl-3 ml-1">
+      <div className="space-y-2 border-l-2 border-[#F0F2F5] pl-3 ml-1">
         {children}
       </div>
     </div>
@@ -172,8 +172,8 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
 function Row({ label, value, mono, highlight }: { label: string; value: string | React.ReactNode; mono?: boolean; highlight?: boolean }) {
   return (
     <div className="flex justify-between items-start gap-4">
-      <span className="text-[12px] font-medium text-[#6b7280]">{label}</span>
-      <span className={`text-[13px] text-right ${mono ? 'font-mono' : ''} ${highlight ? 'font-bold text-[#d97706]' : 'font-medium text-[#111827]'}`}>
+      <span className="text-[12px] font-medium text-[#64748B]">{label}</span>
+      <span className={`text-[13px] text-right ${mono ? 'font-mono' : ''} ${highlight ? 'font-bold text-[#d97706]' : 'font-medium text-[#0F1624]'}`}>
         {value}
       </span>
     </div>

@@ -180,7 +180,7 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
       });
       
       if (rxId) {
-          PharmacyDatabase.updatePrescription(rxId, { status: "dispensed", dispensingStatus: "Dispensed" });
+          PharmacyDatabase.updatePrescription(rxId, { status: "Dispensed", dispensingStatus: "Dispensed" });
       }
 
       PharmacyDatabase.logAudit("Pharmacist (You)", "Created", "Billing", billId, "Created bill for " + finalAmount);
@@ -197,16 +197,16 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
       {/* Invoice Modal Overlay */}
       {showInvoice && (
         <div className="absolute inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm print:bg-white print:p-0 print:block">
-            <div className="bg-white rounded-none shadow-2xl w-full max-w-2xl max-h-full overflow-y-auto print:max-w-none print:shadow-none print:w-[80mm] print:m-0 print:overflow-visible">
-                <div className="p-6 print:p-2 border-b border-[#e5e7eb] flex justify-between items-center print:hidden bg-[#f9fafb]">
-                    <h2 className="text-xl font-bold text-[#111827] flex items-center gap-2">
+            <div className="bg-white rounded shadow-2xl w-full max-w-2xl max-h-full overflow-y-auto print:max-w-none print:shadow-none print:w-[80mm] print:m-0 print:overflow-visible">
+                <div className="p-6 print:p-2 border-b border-[#DDE2EC] flex justify-between items-center print:hidden bg-[#F5F7FA]">
+                    <h2 className="text-xl font-bold text-[#0F1624] flex items-center gap-2">
                         <CheckCircle className="text-green-600" /> Transaction Complete
                     </h2>
                     <div className="flex gap-2">
                         <button onClick={printInvoice} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm font-semibold flex items-center gap-2 transition-colors">
                             <Printer size={16} /> Print Receipt
                         </button>
-                        <button onClick={() => { setShowInvoice(false); setCart([]); setRxId(""); setPatientName(""); }} className="bg-white border border-[#e5e7eb] hover:bg-gray-50 text-[#111827] px-4 py-2 text-sm font-semibold transition-colors">
+                        <button onClick={() => { setShowInvoice(false); setCart([]); setRxId(""); setPatientName(""); }} className="bg-white border border-[#DDE2EC] hover:bg-gray-50 text-[#0F1624] px-4 py-2 text-sm font-semibold transition-colors">
                             Close
                         </button>
                     </div>
@@ -333,63 +333,63 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
 
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
           {/* Patient / Rx Info */}
-          <div className="bg-white rounded-none border border-[#e5e7eb] p-4 flex gap-4 items-end">
+          <div className="bg-white rounded border border-[#DDE2EC] p-4 flex gap-4 items-end">
             <div className="grid grid-cols-2 gap-4 flex-1">
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Prescription ID</label>
+                  <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Prescription ID</label>
                   <input
                     value={rxId}
                     onChange={e => setRxId(e.target.value)}
                     placeholder="e.g. RX-2026-1041"
-                    className="w-full px-3 py-2 rounded-none border border-[#e5e7eb] text-[13px] text-[#111827] focus:border-[#4f46e5] focus:outline-none transition-colors bg-[#f9fafb] focus:bg-white"
+                    className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] text-[#0F1624] focus:border-[#1B4FD8] focus:outline-none transition-colors bg-[#F5F7FA] focus:bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Patient Name</label>
+                  <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Patient Name</label>
                   <input
                     value={patientName}
                     onChange={e => setPatientName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-none border border-[#e5e7eb] text-[13px] text-[#111827] focus:border-[#4f46e5] focus:outline-none transition-colors bg-[#f9fafb] focus:bg-white"
+                    className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] text-[#0F1624] focus:border-[#1B4FD8] focus:outline-none transition-colors bg-[#F5F7FA] focus:bg-white"
                   />
                 </div>
             </div>
-            <button onClick={loadPrescriptionFEFO} className="bg-[#4f46e5] text-white px-4 py-2 h-[38px] text-[13px] font-bold hover:bg-[#4338ca] transition-colors whitespace-nowrap">
+            <button onClick={loadPrescriptionFEFO} className="bg-[#1B4FD8] text-white px-4 py-2 h-[38px] text-[13px] font-bold hover:bg-[#1742B8] transition-colors whitespace-nowrap">
                 Load Rx & Auto-Allocate
             </button>
           </div>
 
           {/* Medicine Search */}
           <div className="relative">
-            <div className="flex items-center gap-2 bg-white rounded-none border border-[#e5e7eb] px-4 py-3 focus-within:border-[#4f46e5] transition-colors">
-              <Search size={16} className="text-[#6b7280] flex-shrink-0" />
+            <div className="flex items-center gap-2 bg-white rounded border border-[#DDE2EC] px-4 py-3 focus-within:border-[#1B4FD8] transition-colors">
+              <Search size={16} className="text-[#64748B] flex-shrink-0" />
               <input
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search medicine by name, generic, SKU or scan barcode…"
-                className="flex-1 text-[14px] text-[#111827] outline-none placeholder:text-[#9ca3af]"
+                className="flex-1 text-[14px] text-[#0F1624] outline-none placeholder:text-[#94A3B8]"
               />
-              {searchQuery && <button onClick={() => setSearchQuery("")}><X size={14} className="text-[#9ca3af]" /></button>}
+              {searchQuery && <button onClick={() => setSearchQuery("")}><X size={14} className="text-[#94A3B8]" /></button>}
             </div>
             {filteredMeds.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 mt-1 bg-white rounded-none border border-[#e5e7eb] shadow-xl overflow-hidden">
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white rounded border border-[#DDE2EC] shadow-xl overflow-hidden">
                 {filteredMeds.map(m => (
                   <button
                     key={m.id}
                     onClick={() => addMedicine(m)}
-                    className="w-full flex items-center px-4 py-3 hover:bg-[#f9fafb] transition-colors border-b border-[#f3f4f6] last:border-0"
+                    className="w-full flex items-center px-4 py-3 hover:bg-[#F5F7FA] transition-colors border-b border-[#F0F2F5] last:border-0"
                   >
                     <div className="flex-1 text-left">
-                      <p className="text-[13px] font-semibold text-[#111827]">{m.name}</p>
-                      <p className="text-[11px] text-[#6b7280]">{m.generic} · {m.form} · {m.manufacturer}</p>
+                      <p className="text-[13px] font-semibold text-[#0F1624]">{m.name}</p>
+                      <p className="text-[11px] text-[#64748B]">{m.generic} · {m.form} · {m.manufacturer}</p>
                     </div>
                     <div className="text-right ml-4">
-                      <p className="text-[13px] font-bold text-[#111827]">₹{m.mrp}</p>
+                      <p className="text-[13px] font-bold text-[#0F1624]">₹{m.mrp}</p>
                       <p className="text-[11px]" style={{ color: m.stock > 50 ? "#15803d" : m.stock > 0 ? "#d97706" : "#dc2626" }}>
                         {m.stock > 0 ? `Stock: ${m.stock}` : "Out of stock"}
                       </p>
                     </div>
-                    <div className="ml-3 w-7 h-7 rounded-none flex items-center justify-center flex-shrink-0" style={{ background: "#eff6ff" }}>
-                      <Plus size={14} style={{ color: "#4f46e5" }} />
+                    <div className="ml-3 w-7 h-7 rounded flex items-center justify-center flex-shrink-0" style={{ background: "#E8EDF5" }}>
+                      <Plus size={14} style={{ color: "#1B4FD8" }} />
                     </div>
                   </button>
                 ))}
@@ -398,42 +398,42 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
           </div>
 
           {/* Cart Table */}
-          <div className="bg-white rounded-none border border-[#e5e7eb] overflow-hidden">
+          <div className="bg-white rounded border border-[#DDE2EC] overflow-hidden">
             <table>
               <thead><tr>
-                <th className="text-left px-4 py-3 bg-[#f9fafb] text-[11px] font-bold text-[#6b7280] uppercase tracking-wider border-b border-[#e5e7eb]">Medicine</th>
-                <th className="text-left px-4 py-3 bg-[#f9fafb] text-[11px] font-bold text-[#6b7280] uppercase tracking-wider border-b border-[#e5e7eb]">Batch</th>
-                <th className="text-left px-4 py-3 bg-[#f9fafb] text-[11px] font-bold text-[#6b7280] uppercase tracking-wider border-b border-[#e5e7eb]">Expiry</th>
-                <th className="text-center px-4 py-3 bg-[#f9fafb] text-[11px] font-bold text-[#6b7280] uppercase tracking-wider border-b border-[#e5e7eb]">Qty</th>
-                <th className="text-right px-4 py-3 bg-[#f9fafb] text-[11px] font-bold text-[#6b7280] uppercase tracking-wider border-b border-[#e5e7eb]">MRP (₹)</th>
-                <th className="text-center px-4 py-3 bg-[#f9fafb] text-[11px] font-bold text-[#6b7280] uppercase tracking-wider border-b border-[#e5e7eb]">Tax%</th>
-                <th className="text-right px-4 py-3 bg-[#f9fafb] text-[11px] font-bold text-[#6b7280] uppercase tracking-wider border-b border-[#e5e7eb]">Total (₹)</th>
-                <th className="px-4 py-3 bg-[#f9fafb] border-b border-[#e5e7eb]"></th>
+                <th className="text-left px-4 py-3 bg-[#F5F7FA] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#DDE2EC]">Medicine</th>
+                <th className="text-left px-4 py-3 bg-[#F5F7FA] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#DDE2EC]">Batch</th>
+                <th className="text-left px-4 py-3 bg-[#F5F7FA] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#DDE2EC]">Expiry</th>
+                <th className="text-center px-4 py-3 bg-[#F5F7FA] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#DDE2EC]">Qty</th>
+                <th className="text-right px-4 py-3 bg-[#F5F7FA] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#DDE2EC]">MRP (₹)</th>
+                <th className="text-center px-4 py-3 bg-[#F5F7FA] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#DDE2EC]">Tax%</th>
+                <th className="text-right px-4 py-3 bg-[#F5F7FA] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#DDE2EC]">Total (₹)</th>
+                <th className="px-4 py-3 bg-[#F5F7FA] border-b border-[#DDE2EC]"></th>
               </tr></thead>
               <tbody>
                 {cart.length === 0 ? (
-                  <tr><td colSpan={9} className="py-12 text-center text-[#9ca3af]">
+                  <tr><td colSpan={9} className="py-12 text-center text-[#94A3B8]">
                     <Search size={28} className="mx-auto mb-2 opacity-40" />
                     <p className="font-medium">No medicines added</p>
                     <p className="text-[12px] mt-1">Search or Load Rx above</p>
                   </td></tr>
                 ) : cart.map((item, i) => (
-                  <tr key={i} className="border-b border-[#e5e7eb] last:border-0 hover:bg-[#f9fafb]">
-                    <td className="px-4 py-3 font-medium text-[13px] text-[#111827]">{item.medicine}</td>
-                    <td className="px-4 py-3 text-[#6b7280] font-mono text-[12px]">{item.batch}</td>
-                    <td className="px-4 py-3 text-[#6b7280] text-[13px]">{item.expiry}</td>
+                  <tr key={i} className="border-b border-[#DDE2EC] last:border-0 hover:bg-[#F5F7FA]">
+                    <td className="px-4 py-3 font-medium text-[13px] text-[#0F1624]">{item.medicine}</td>
+                    <td className="px-4 py-3 text-[#64748B] font-mono text-[12px]">{item.batch}</td>
+                    <td className="px-4 py-3 text-[#64748B] text-[13px]">{item.expiry}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => updateQty(item.id, -1)} className="p-1 hover:bg-[#e5e7eb] rounded-none text-[#6b7280]"><Minus size={14} /></button>
-                        <span className="w-8 text-center font-medium text-[13px] text-[#111827]">{item.qty}</span>
-                        <button onClick={() => updateQty(item.id, 1)} className="p-1 hover:bg-[#e5e7eb] rounded-none text-[#6b7280]"><Plus size={14} /></button>
+                        <button onClick={() => updateQty(item.id, -1)} className="p-1 hover:bg-[#DDE2EC] rounded text-[#64748B]"><Minus size={14} /></button>
+                        <span className="w-8 text-center font-medium text-[13px] text-[#0F1624]">{item.qty}</span>
+                        <button onClick={() => updateQty(item.id, 1)} className="p-1 hover:bg-[#DDE2EC] rounded text-[#64748B]"><Plus size={14} /></button>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right text-[13px] text-[#111827]">{(item.mrp || 0).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-center text-[13px] text-[#111827]">{item.tax || 0}%</td>
-                    <td className="px-4 py-3 text-right font-bold text-[13px] text-[#111827]">{(item.total || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right text-[13px] text-[#0F1624]">{(item.mrp || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-center text-[13px] text-[#0F1624]">{item.tax || 0}%</td>
+                    <td className="px-4 py-3 text-right font-bold text-[13px] text-[#0F1624]">{(item.total || 0).toFixed(2)}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => removeItem(item.id)} className="p-1 text-[#9ca3af] hover:text-[#dc2626] transition-colors"><Trash2 size={16} /></button>
+                      <button onClick={() => removeItem(item.id)} className="p-1 text-[#94A3B8] hover:text-[#dc2626] transition-colors"><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -444,54 +444,54 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
       </div>
 
       {/* Right: Payment summary */}
-      <div className="w-[340px] bg-white border-l border-[#e5e7eb] flex flex-col print:hidden">
-        <div className="p-5 border-b border-[#e5e7eb]">
-          <h3 className="font-bold text-[16px] text-[#111827]">Payment Summary</h3>
+      <div className="w-[340px] bg-white border-l border-[#DDE2EC] flex flex-col print:hidden">
+        <div className="p-5 border-b border-[#DDE2EC]">
+          <h3 className="font-bold text-[16px] text-[#0F1624]">Payment Summary</h3>
         </div>
 
         <div className="p-5 space-y-4 flex-1 overflow-y-auto">
           {/* Bill Breakup */}
-          <div className="space-y-3 bg-[#f9fafb] p-4 rounded-none border border-[#f3f4f6]">
-            <div className="flex justify-between text-[13px] text-[#4b5563]">
-              <span>Subtotal</span><span className="font-medium text-[#111827]">₹{subtotal.toFixed(2)}</span>
+          <div className="space-y-3 bg-[#F5F7FA] p-4 rounded border border-[#F0F2F5]">
+            <div className="flex justify-between text-[13px] text-[#475569]">
+              <span>Subtotal</span><span className="font-medium text-[#0F1624]">₹{subtotal.toFixed(2)}</span>
             </div>
             
-            <div className="flex justify-between items-center text-[13px] text-[#4b5563]">
+            <div className="flex justify-between items-center text-[13px] text-[#475569]">
               <span>Discount</span>
               <div className="flex items-center gap-2">
                 <input
                   type="number" value={discount} onChange={e => setDiscount(Number(e.target.value))}
-                  className="w-12 px-2 py-1 text-right border border-[#e5e7eb] bg-white text-[#111827] focus:border-[#4f46e5] focus:outline-none"
+                  className="w-12 px-2 py-1 text-right border border-[#DDE2EC] bg-white text-[#0F1624] focus:border-[#1B4FD8] focus:outline-none"
                 />
-                <span className="text-[#9ca3af]">%</span>
+                <span className="text-[#94A3B8]">%</span>
                 <span className="font-medium text-[#16a34a]">-₹{discountAmt.toFixed(2)}</span>
               </div>
             </div>
 
-            <div className="flex justify-between text-[13px] text-[#4b5563]">
-              <span>CGST</span><span className="font-medium text-[#111827]">₹{totalCGST.toFixed(2)}</span>
+            <div className="flex justify-between text-[13px] text-[#475569]">
+              <span>CGST</span><span className="font-medium text-[#0F1624]">₹{totalCGST.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-[13px] text-[#4b5563]">
-              <span>SGST</span><span className="font-medium text-[#111827]">₹{totalSGST.toFixed(2)}</span>
+            <div className="flex justify-between text-[13px] text-[#475569]">
+              <span>SGST</span><span className="font-medium text-[#0F1624]">₹{totalSGST.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-[13px] text-[#4b5563]">
-              <span>Round Off</span><span className="font-medium text-[#111827]">₹{roundOff > 0 ? "+" : ""}{roundOff.toFixed(2)}</span>
+            <div className="flex justify-between text-[13px] text-[#475569]">
+              <span>Round Off</span><span className="font-medium text-[#0F1624]">₹{roundOff > 0 ? "+" : ""}{roundOff.toFixed(2)}</span>
             </div>
             
-            <div className="h-px bg-[#e5e7eb] my-3"></div>
+            <div className="h-px bg-[#DDE2EC] my-3"></div>
             
             <div className="flex justify-between items-end">
-              <span className="text-[13px] font-bold text-[#4b5563] uppercase tracking-wide">Net Payable</span>
+              <span className="text-[13px] font-bold text-[#475569] uppercase tracking-wide">Net Payable</span>
               <div className="text-right">
-                <span className="text-[11px] text-[#6b7280] block mb-1">Total Amount</span>
-                <span className="text-[28px] font-black text-[#4f46e5] leading-none">₹{finalAmount}</span>
+                <span className="text-[11px] text-[#64748B] block mb-1">Total Amount</span>
+                <span className="text-[28px] font-black text-[#1B4FD8] leading-none">₹{finalAmount}</span>
               </div>
             </div>
           </div>
 
           {/* Payment Method */}
           <div>
-            <label className="block text-[11px] font-semibold text-[#6b7280] uppercase tracking-wide mb-3">Payment Method</label>
+            <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-3">Payment Method</label>
             <div className="grid grid-cols-2 gap-2">
               {paymentMethods.map(method => {
                 const Icon = method.icon;
@@ -499,11 +499,11 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                 return (
                   <button
                     key={method.id} onClick={() => setPayment(method.id)}
-                    className={`flex items-center gap-2 px-3 py-3 rounded-none border text-[13px] font-medium transition-colors ${
-                      active ? "border-[#4f46e5] bg-[#eff6ff] text-[#4f46e5]" : "border-[#e5e7eb] bg-white text-[#4b5563] hover:border-[#d1d5db]"
+                    className={`flex items-center gap-2 px-3 py-3 rounded border text-[13px] font-medium transition-colors ${
+                      active ? "border-[#1B4FD8] bg-[#E8EDF5] text-[#1B4FD8]" : "border-[#DDE2EC] bg-white text-[#475569] hover:border-[#CBD5E1]"
                     }`}
                   >
-                    <Icon size={16} className={active ? "text-[#4f46e5]" : "text-[#9ca3af]"} />
+                    <Icon size={16} className={active ? "text-[#1B4FD8]" : "text-[#94A3B8]"} />
                     {method.label}
                   </button>
                 );
@@ -512,12 +512,12 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
           </div>
         </div>
 
-        <div className="p-5 border-t border-[#e5e7eb] bg-white">
+        <div className="p-5 border-t border-[#DDE2EC] bg-white">
           <button 
             disabled={cart.length === 0}
             onClick={completeTransaction}
             className={`w-full py-4 text-[14px] font-bold shadow-sm transition-colors uppercase tracking-wide ${
-                cart.length > 0 ? "bg-[#4f46e5] text-white hover:bg-[#4338ca]" : "bg-[#f3f4f6] text-[#9ca3af] cursor-not-allowed"
+                cart.length > 0 ? "bg-[#1B4FD8] text-white hover:bg-[#1742B8]" : "bg-[#F0F2F5] text-[#94A3B8] cursor-not-allowed"
             }`}
           >
             Complete Transaction

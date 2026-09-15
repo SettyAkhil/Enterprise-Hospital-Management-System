@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { StatusBadge, Btn, Card, Table, TR, TD } from "./shared";
 import { Icon } from "./icons";
 import { db, DBOPEncounter } from "../services/db";
+import { pickDoctorForSpecialty, availabilityOf } from "../services/doctorMaster";
 
 const INITIAL_APPOINTMENTS = [
   { time: "08:00", patient: "Harold Thompson", age: 68, type: "Post-op Follow-up", provider: "Dr. Sanjay Kapoor", room: "Room 116", duration: "30m", status: "Completed", mrn: "100401" },
@@ -19,23 +20,63 @@ const INITIAL_APPOINTMENTS = [
 const DAYS = ["Mon\nAug 19", "Tue\nAug 20", "Wed\nAug 21", "Thu\nAug 22", "Fri\nAug 23", "Sat\nAug 24", "Sun\nAug 25"];
 const SELECTED_DAY = 4;
 
-const detectDepartmentFromSymptoms = (text: string): { dept: string, doc: string, urgency: string } | null => {
+/**
+ * Symptom triage -> specialty -> an actual Imperial Hospitals consultant.
+ *
+ * The doctor is no longer a hardcoded name per branch. Each branch names a
+ * specialty and `pickDoctorForSpecialty` resolves it against the doctor master,
+ * preferring a resident (Main panel) doctor and, among equals, whoever has the
+ * fewest patients waiting right now -- so a busy clinic spreads instead of
+ * every booking landing on the same consultant.
+ *
+ * A specialty with nobody usable behind it falls back to General Medicine and
+ * says so, rather than naming a doctor who cannot take the patient. That is a
+ * real case here: both orthopaedists printed on the OP card have names the
+ * transcription could not read, so Orthopedics currently has no bookable
+ * doctor until the hospital completes those rows.
+ */
+const SYMPTOM_RULES: { pattern: RegExp; specialty: string; urgency: string }[] = [
+  { pattern: /\b(chest|heart|palpitat|breathless|cardio|angina|tachycardia|ecg|hypertens|bp\b|pressure)\b/i, specialty: "Cardiology", urgency: "High - Same Day" },
+  { pattern: /\b(knee|bone|fractur|joint|sprain|ortho|spine|back pain|arthritis|ligament|swollen ankle|shoulder)\b/i, specialty: "Orthopedics", urgency: "Moderate" },
+  { pattern: /\b(pregnan|prenatal|period|menstrua|gynec|pelvic|ovary|uterus|delivery|obstetric)\b/i, specialty: "Gynecology", urgency: "Routine" },
+  { pattern: /\b(child|infant|baby|paediatric|pediatric|toddler|newborn|immunis|immuniz|vaccin)\b/i, specialty: "Pediatrics", urgency: "Moderate" },
+  { pattern: /\b(ear|nose|throat|sinus|tonsil|hearing|deaf|vertigo|snor|hoarse)\b/i, specialty: "ENT", urgency: "Routine" },
+  { pattern: /\b(diabet|sugar|insulin|thyroid|hba1c|glycem)\b/i, specialty: "Diabetology", urgency: "Moderate" },
+  { pattern: /\b(tumor|tumour|cancer|oncolog|lump|biopsy|malignan)\b/i, specialty: "Surgical Oncology", urgency: "High - Same Day" },
+  { pattern: /\b(hernia|appendic|gallbladder|piles|fistula|abscess|surgical)\b/i, specialty: "General Surgery", urgency: "Moderate" },
+  { pattern: /\b(scan|x-ray|xray|mri|ct\b|ultrasound|imaging|radiolog)\b/i, specialty: "Radiology", urgency: "Routine" },
+  { pattern: /\b(fever|cold|cough|weakness|fatigue|infect|body pain|chill|viral|malaise|typhoid|malaria|headache|vomit|diarrhea|nausea|dizz)\b/i, specialty: "General Medicine", urgency: "Moderate" },
+];
+
+const detectDepartmentFromSymptoms = (
+  text: string,
+  load: (doctorName: string) => number,
+): { dept: string; doc: string; urgency: string; onRequest: boolean; note?: string } | null => {
   if (!text || text.trim().length < 2) return null;
-  const lower = text.toLowerCase();
-  
-  if (/\b(chest|heart|palpitat|breathless|cardio|angina|tachycardia|ecg|hypertens|bp\b|pressure)\b/i.test(lower)) {
-    return { dept: "Cardiology", doc: "Dr. Arjun Mehta", urgency: "High - Same Day" };
+
+  const matched = SYMPTOM_RULES.find(r => r.pattern.test(text));
+  const specialty = matched?.specialty || "General Medicine";
+  const urgency = matched?.urgency || "Routine";
+
+  const direct = pickDoctorForSpecialty(specialty, load);
+  if (direct) {
+    return {
+      dept: specialty,
+      doc: direct.name,
+      urgency,
+      onRequest: availabilityOf(direct).onRequest,
+    };
   }
-  if (/\b(knee|bone|fractur|joint|sprain|ortho|spine|back pain|arthritis|ligament|swollen ankle|shoulder)\b/i.test(lower)) {
-    return { dept: "Orthopedics", doc: "Dr. Sanjay Kapoor", urgency: "Moderate" };
-  }
-  if (/\b(pregnan|prenatal|period|menstrua|gynec|pelvic|ovary|uterus|cramp|delivery)\b/i.test(lower)) {
-    return { dept: "Gynecology", doc: "Dr. Sunita Rao", urgency: "Routine" };
-  }
-  if (/\b(fever|cold|cough|weakness|fatigue|infect|body pain|chill|viral|malaise|typhoid|malaria|diabet|headache|vomit|diarrhea|nausea|dizz)\b/i.test(lower)) {
-    return { dept: "General Medicine", doc: "Dr. Vikram Malhotra", urgency: "Moderate" };
-  }
-  return { dept: "General Medicine", doc: "Dr. Ramesh Kumar", urgency: "Routine" };
+
+  const fallback = pickDoctorForSpecialty("General Medicine", load);
+  if (!fallback) return null;
+  return {
+    dept: "General Medicine",
+    doc: fallback.name,
+    urgency,
+    onRequest: availabilityOf(fallback).onRequest,
+    note: `No bookable ${specialty} consultant on the current doctor master -- routed to General Medicine.`,
+  };
 };
 
 function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSchedule: (appt: any) => void }) {
@@ -50,7 +91,7 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
   const [symptomDuration, setSymptomDuration] = useState("");
   const [symptomSeverity, setSymptomSeverity] = useState("moderate");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<{ dept: string, doc: string, urgency: string } | null>(null);
+  const [result, setResult] = useState<{ dept: string; doc: string; urgency: string; onRequest?: boolean; note?: string } | null>(null);
 
   const handleAnalyze = () => {
     if (!symptoms && !complaint) return;
@@ -59,7 +100,18 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
 
     setTimeout(() => {
       const combined = `${complaint} ${symptoms}`;
-      const res = detectDepartmentFromSymptoms(combined) || { dept: "General Medicine", doc: "Dr. Vikram Malhotra", urgency: "Routine" };
+      // How many patients each doctor already has waiting, so triage can pick
+      // the least-loaded consultant in the matching specialty.
+      const open = db.getEncounters().filter(
+        e => e.status !== "OP Completed" && e.status !== "Consultation Completed"
+      );
+      const load = (doctorName: string) => open.filter(e => e.assignedDoctor === doctorName).length;
+
+      const res = detectDepartmentFromSymptoms(combined, load);
+      if (!res) {
+        setIsAnalyzing(false);
+        return;
+      }
       if (registryType === "IP") {
          res.urgency = res.urgency === "Routine" ? "Ward Admission" : "ICU Admission";
       }
@@ -75,15 +127,15 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
     const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
     onSchedule({
-      time: time,
-      patient: patient,
+      time,
+      patient,
       age: parseInt(age) || 30,
-      type: registryType === "IP" ? "IP Admission" : (complaint || "New Patient"),
-      provider: result.doc,
-      room: registryType === "IP" ? "Ward Pending" : "Room 103",
-      duration: registryType === "IP" ? "Admitted" : "30m",
-      status: "Checked In",
-      mrn: `100${Math.floor(Math.random() * 900) + 100}`
+      sex: gender,
+      phone,
+      complaint: complaint || symptoms || "New Patient",
+      dept: result.dept,
+      doctor: result.doc,
+      registryType,
     });
     onClose();
   };
@@ -199,6 +251,11 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
                 <div>
                   <div className="text-[11px] text-[#64748B] mb-0.5">{registryType === "IP" ? "Admitting Physician" : "Assigned Provider"}</div>
                   <div className="text-[13px] font-semibold text-gray-900">{result.doc}</div>
+                  {result.onRequest && (
+                    <div className="text-[10.5px] text-[#B45309] mt-0.5">
+                      Visiting consultant &mdash; confirm attendance before the visit
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-[11px] text-[#64748B] mb-0.5">{registryType === "IP" ? "Suggested Unit" : "Urgency"}</div>
@@ -207,6 +264,12 @@ function AIAppointmentModal({ onClose, onSchedule }: { onClose: () => void, onSc
                   </div>
                 </div>
               </div>
+
+              {result.note && (
+                <div className="mt-3 px-3 py-2 rounded bg-[#FEF3C7] border border-[#FDE68A] text-[11.5px] text-[#92400E]">
+                  {result.note}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -236,7 +299,7 @@ export default function Appointments({ onSelect }: { onSelect?: () => void }) {
           patient: enc.patientName,
           age: enc.age,
           type: enc.chiefComplaint || enc.dept,
-          provider: enc.assignedDoctor || "Dr. Sanjay Kapoor",
+          provider: enc.assignedDoctor || "Unassigned",
           room: enc.room || "Room 116",
           duration: "30m",
           status: enc.status === "OP Completed" ? "Completed" : enc.status === "Under Consultation" ? "In Progress" : "Checked In",
@@ -264,11 +327,40 @@ export default function Appointments({ onSelect }: { onSelect?: () => void }) {
   const inProgress = appointments.filter(a => a.status === "In Progress").length;
   const pending = appointments.filter(a => a.status === "Pending" || a.status === "Checked In").length;
 
-  const handleAddAppointment = (appt: any) => {
-    setAppointments(prev => {
-      const updated = [...prev, appt];
-      updated.sort((a, b) => a.time.localeCompare(b.time));
-      return updated;
+  // Booking an appointment registers a real patient and a real encounter, with
+  // the doctor actually assigned on it.
+  //
+  // This used to push the booking into local React state and nothing else: it
+  // never reached the database, so it vanished on reload and -- because a
+  // doctor's portal inbox is matched on `encounter.assignedDoctor` -- the
+  // doctor it was booked with never saw the patient at all. The schedule still
+  // looked right, because the row below fell back to a hardcoded provider name
+  // whenever no doctor was assigned.
+  const handleAddAppointment = (booking: {
+    time: string; patient: string; age: number; sex: string; phone: string;
+    complaint: string; dept: string; doctor: string; registryType: "OP" | "IP";
+  }) => {
+    const sex = booking.sex === "Female" ? "Female" : booking.sex === "Other" ? "Other" : "Male";
+    const parts = booking.patient.trim().split(" ");
+    const { encounter } = db.registerNewPatient({
+      firstName: parts[0],
+      lastName: parts.slice(1).join(" ") || "Patient",
+      age: booking.age,
+      sex,
+      phone: booking.phone,
+      dept: booking.dept,
+      chiefComplaint: booking.complaint,
+    });
+
+    // "In Queue" is an open status, so the encounter lands in the assigned
+    // doctor's inbox straight away rather than sitting in a state no screen
+    // watches.
+    db.updateEncounter(encounter.id, {
+      dept: booking.dept,
+      assignedDoctor: booking.doctor,
+      room: booking.registryType === "IP" ? "Ward Pending" : "Room 103",
+      queueToken: `${booking.dept.charAt(0).toUpperCase()}-${encounter.opNumber}`,
+      status: "In Queue",
     });
   };
 

@@ -31,7 +31,48 @@ export interface DispatchResult {
   labTotal: number;
   medicineCount: number;
   labTestCount: number;
+  /** Which halves actually went out on this call. */
+  sentToPharmacy: boolean;
+  sentToLab: boolean;
   errors: string[];
+}
+
+/**
+ * Which halves of the sheet to send.
+ *
+ * A consultation routinely produces only one of them -- medicines with no
+ * investigations, or investigations with no medicines -- and each half travels
+ * to a different department on its own. Omit a field to let the content decide.
+ */
+export interface DispatchTargets {
+  pharmacy?: boolean;
+  lab?: boolean;
+}
+
+/**
+ * What is worth sending where, given what is on the sheet and what has already
+ * gone out. Each half is independent: the doctor can send the medicines now and
+ * the investigations later, or only ever send one of them.
+ */
+export function dispatchableHalves(record: ConsultationRecord): {
+  pharmacy: boolean;
+  lab: boolean;
+  /** A sheet was attached but nothing could be read off it. */
+  unreadSheet: boolean;
+} {
+  const medicines = record.medications.filter(m => m.name.trim()).length;
+  const tests = record.labTests.filter(t => t.name.trim()).length;
+  const hasSheetImage = !!record.uploadedPrescription || !!record.whiteboardImage;
+  const unreadSheet = medicines === 0 && tests === 0 && hasSheetImage;
+
+  return {
+    // Nothing legible and no investigations either means the sheet is a
+    // photograph the AI could not read -- the pharmacist reading the original is
+    // then a real workflow, and the only one left.
+    pharmacy: !record.prescriptionId && (medicines > 0 || unreadSheet),
+    lab: !record.labOrderId && tests > 0,
+    unreadSheet,
+  };
 }
 
 /** One-line digest of the sheet, so the pharmacist sees the clinical context at a glance. */
@@ -48,7 +89,8 @@ function buildPharmacySummary(record: ConsultationRecord, encounter: DBOPEncount
 
 export function dispatchConsultation(
   record: ConsultationRecord,
-  doctor: DoctorAccount
+  doctor: DoctorAccount,
+  targets: DispatchTargets = {}
 ): DispatchResult {
   const encounter = db.getEncounterById(record.encounterId);
   if (!encounter) {
@@ -56,29 +98,49 @@ export function dispatchConsultation(
       labTotal: 0,
       medicineCount: 0,
       labTestCount: 0,
+      sentToPharmacy: false,
+      sentToLab: false,
       errors: ["The visit this consultation belongs to no longer exists."],
     };
   }
 
+  const medications = record.medications.filter(m => m.name.trim());
+  const labTests = record.labTests.filter(t => t.name.trim());
+  const available = dispatchableHalves(record);
+
+  // An explicit choice wins; otherwise send whichever half has something on it.
+  // A half is never sent twice -- `prescriptionId`/`labOrderId` on the record are
+  // the receipts, so sending the medicines now and the investigations later is
+  // just two calls.
+  const toPharmacy = (targets.pharmacy ?? available.pharmacy) && available.pharmacy;
+  const toLab = (targets.lab ?? available.lab) && available.lab;
+
   const result: DispatchResult = {
     labTotal: 0,
-    medicineCount: record.medications.length,
-    labTestCount: record.labTests.length,
+    medicineCount: toPharmacy ? medications.length : 0,
+    labTestCount: toLab ? labTests.length : 0,
+    sentToPharmacy: false,
+    sentToLab: false,
     errors: [],
   };
 
-  // ── Medicines -> pharmacy ────────────────────────────────────────────────
-  const hasPrescriptionData =
-    record.medications.length > 0 ||
-    !!record.uploadedPrescription ||
-    !!record.whiteboardImage ||
-    !!record.rawText?.trim();
+  if (!toPharmacy && !toLab) {
+    result.errors.push(
+      "There is nothing left to send: add a medicine or an investigation to the sheet, or both halves have already gone."
+    );
+    return result;
+  }
 
-  if (hasPrescriptionData) {
+  // ── Medicines -> pharmacy ────────────────────────────────────────────────
+  // Only when there are medicines (or an unreadable sheet the pharmacist must
+  // read themselves). A sheet carrying investigations and nothing else used to
+  // land in the pharmacy queue anyway, as a placeholder item named "Doctor
+  // Prescription Sheet" -- a phantom drug to dispense against a lab-only order.
+  if (toPharmacy) {
     try {
       const items: AppPrescriptionItem[] =
-        record.medications.length > 0
-          ? record.medications.map((med, index) => ({
+        medications.length > 0
+          ? medications.map((med, index) => ({
               id: `RX-ITEM-${index + 1}`,
               medicineName: med.name,
               strength: med.strength,
@@ -93,12 +155,19 @@ export function dispatchConsultation(
           : [
               {
                 id: "RX-ITEM-1",
-                medicineName: record.diagnosis ? `Prescription (${record.diagnosis})` : "Doctor Prescription Sheet",
-                dosage: "As directed",
-                duration: "3 days",
+                // Reached only for a sheet nothing could be read off, so this
+                // stands for "read the attached image", not for a drug. It says
+                // so, because a pharmacist should never see an item that looks
+                // like something to dispense when no drug was actually named.
+                medicineName: "Unread prescription sheet - read the attached image",
+                dosage: "As written on the sheet",
+                duration: "As written",
                 quantity: 1,
-                substitutionAllowed: true,
-                instructions: record.advice || record.summary || "Pharmacist verification required",
+                substitutionAllowed: false,
+                instructions:
+                  record.advice ||
+                  record.summary ||
+                  "The sheet could not be digitised. Dispense from the attached image and confirm with the prescriber.",
               },
             ];
 
@@ -119,7 +188,7 @@ export function dispatchConsultation(
         // pharmacist is looking at machine-read text and should verify it against
         // the original -- which is what the OCR source type means in that queue.
         sourceType: record.uploadedPrescription || record.whiteboardImage ? "OCR" : "DIGITAL",
-        priority: record.labTests.some(t => t.urgency === "STAT") ? "Urgent" : "Normal",
+        priority: labTests.some(t => t.urgency === "STAT") ? "Urgent" : "Normal",
         status: "Sent To Pharmacy",
         dispensingStatus: "Waiting",
         imageUrl: record.uploadedPrescription?.dataUrl || record.whiteboardImage,
@@ -130,6 +199,7 @@ export function dispatchConsultation(
 
       PharmacyDatabase.savePrescriptions([prescription, ...PharmacyDatabase.getPrescriptions()]);
       result.prescriptionId = prescription.id;
+      result.sentToPharmacy = true;
     } catch (err) {
       result.errors.push(
         `Medicines could not be sent to pharmacy: ${err instanceof Error ? err.message : "unknown error"}`
@@ -138,7 +208,7 @@ export function dispatchConsultation(
   }
 
   // ── Investigations -> reception/billing, then the lab ────────────────────
-  if (record.labTests.length) {
+  if (toLab) {
     try {
       const order = LabOrderDatabase.createOrder({
         consultationId: record.id,
@@ -154,10 +224,11 @@ export function dispatchConsultation(
         department: encounter.dept || doctor.specialty,
         diagnosis: record.diagnosis || encounter.diagnosis,
         clinicalNotes: record.summary,
-        tests: record.labTests,
+        tests: labTests,
       });
       result.labOrderId = order.id;
       result.labTotal = order.billing.total;
+      result.sentToLab = true;
     } catch (err) {
       result.errors.push(
         `Investigations could not be sent for billing: ${err instanceof Error ? err.message : "unknown error"}`
@@ -166,27 +237,35 @@ export function dispatchConsultation(
   }
 
   // ── Close the loop on the visit itself ───────────────────────────────────
+  // Everything below reasons about the sheet as a whole -- what has gone out on
+  // any dispatch, not just this one -- so sending the two halves separately
+  // leaves the visit in the same state as sending them together.
+  const prescriptionId = record.prescriptionId || result.prescriptionId;
+  const labOrderId = record.labOrderId || result.labOrderId;
+  const labsStillToSend = labTests.length > 0 && !labOrderId;
+  const medicinesStillToSend = medications.length > 0 && !prescriptionId;
+
   try {
     db.updateEncounter(encounter.id, {
       diagnosis: record.diagnosis || encounter.diagnosis,
       assessment: record.summary || encounter.assessment,
       advice: record.advice || encounter.advice,
-      prescription: record.medications.map(m => ({
+      prescription: medications.map(m => ({
         medicine: [m.name, m.strength].filter(Boolean).join(" "),
         dosage: m.dosage,
         frequency: m.frequency,
         duration: m.duration,
         instructions: m.instructions,
       })),
-      investigations: record.labTests.map(t => t.name),
-      // Investigations have to clear reception before the lab starts, so a sheet
-      // with tests on it leaves the visit awaiting billing rather than complete.
-      status: record.labTests.length ? "Awaiting Billing" : "Consultation Completed",
-      furtherAction: record.labTests.length
-        ? "Laboratory"
-        : record.medications.length
-          ? "Pharmacy"
-          : "None",
+      investigations: labTests.map(t => t.name),
+      // Investigations have to clear reception before the lab starts, so once an
+      // order exists the visit is awaiting billing rather than complete. A visit
+      // with a half still to send is not finished either.
+      status:
+        labOrderId ? "Awaiting Billing"
+        : labsStillToSend || medicinesStillToSend ? "Under Consultation"
+        : "Consultation Completed",
+      furtherAction: labOrderId ? "Laboratory" : prescriptionId ? "Pharmacy" : "None",
       timestamps: {
         ...encounter.timestamps,
         consultationEnd: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -199,18 +278,24 @@ export function dispatchConsultation(
   }
 
   DoctorPortalDatabase.updateConsultation(record.id, {
-    dispatch: "Dispatched",
+    // "Dispatched" means nothing is left to send. A sheet with one half still
+    // waiting stays a draft, so the portal keeps offering to send the rest
+    // instead of locking the consultation on the first half out of the door.
+    dispatch: labsStillToSend || medicinesStillToSend ? "Draft" : "Dispatched",
     dispatchedAt: new Date().toISOString(),
-    prescriptionId: result.prescriptionId,
-    labOrderId: result.labOrderId,
+    prescriptionId,
+    labOrderId,
   });
+
+  const sent = [
+    result.sentToPharmacy ? `${result.medicineCount} medicine(s) to pharmacy (${result.prescriptionId})` : "",
+    result.sentToLab ? `${result.labTestCount} investigation(s) to billing (${result.labOrderId})` : "",
+  ].filter(Boolean);
 
   AuditDatabase.logEvent(
     "Consultation Dispatched",
     "Clinical",
-    `${doctor.name} dispatched ${result.medicineCount} medicine(s) to pharmacy` +
-      (result.labOrderId ? ` and ${result.labTestCount} investigation(s) to billing (${result.labOrderId})` : "") +
-      ` for ${encounter.patientName} (${encounter.umr}).`,
+    `${doctor.name} sent ${sent.join(" and ")} for ${encounter.patientName} (${encounter.umr}).`,
     result.errors.length ? "Failed" : "Success",
     doctor.staffId,
     doctor.name

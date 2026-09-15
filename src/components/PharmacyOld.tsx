@@ -353,11 +353,14 @@ export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps = {
            expiryDate: item.expiryDate,
            manufacturingDate: item.manufacturingDate,
            initialQuantity: item.receivedQty,
+           quantity: item.receivedQty,
            availableQuantity: item.receivedQty, // FEFO Base
            purchasePrice: item.purchasePrice,
            sellingPrice: item.sellingPrice,
+           mrp: item.sellingPrice,
            supplierId: editingGRN.supplierId,
            invoiceNumber: editingGRN.invoiceNumber,
+           grnId: editingGRN.id,
            createdAt: new Date().toISOString()
         });
 
@@ -466,6 +469,8 @@ export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps = {
      const newStockTxs = [...stockTxs];
      const billItems: AppPharmacyBillItem[] = [];
      let totalAmount = 0;
+     let taxableTotal = 0;
+     let taxTotal = 0;
 
      // 1. Process each item through FEFO
      for (const item of rx.items) {
@@ -505,6 +510,10 @@ export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps = {
            const lineTax = lineBase * (tax / 100);
            const lineTotal = lineBase + lineTax;
 
+           // GST is levied half as CGST and half as SGST on an intra-state sale,
+           // which is what this pharmacy bills.
+           const halfTax = lineTax / 2;
+
            billItems.push({
               medicineId: item.medicineId,
               medicineName: med ? med.brandName : "Unknown",
@@ -512,12 +521,18 @@ export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps = {
               expiryDate: split.batch.expiryDate,
               quantity: split.usedQty,
               unitPrice: price,
+              grossAmount: lineBase,
               discount: 0,
+              taxableAmount: lineBase,
+              cgstAmount: halfTax,
+              sgstAmount: halfTax,
               tax: tax,
               totalPrice: lineTotal
            });
 
            totalAmount += lineTotal;
+           taxableTotal += lineBase;
+           taxTotal += lineTax;
 
            newStockTxs.push({
               id: "TX_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
@@ -547,9 +562,12 @@ export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps = {
         paymentStatus: dispenseBillType === "IP_Ward" ? "Pending" : "Paid",
         prescriptionId: rx.id,
         items: billItems,
-        subTotal: totalAmount, // Simplification for UI
+        subTotal: taxableTotal,
         discount: 0,
-        tax: 0, // In reality, tax should be aggregated
+        tax: taxTotal,
+        taxableTotal: taxableTotal,
+        cgstTotal: taxTotal / 2,
+        sgstTotal: taxTotal / 2,
         totalAmount: totalAmount,
         createdBy: "Pharmacist",
         createdAt: new Date().toISOString()

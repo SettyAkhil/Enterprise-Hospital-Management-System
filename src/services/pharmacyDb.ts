@@ -27,6 +27,10 @@ export interface AppAuditLog {
   module: string;
   record: string;
   details: string;
+  // Origin address, when something upstream recorded one. Entries written by
+  // `logAudit` in the browser have no way to know it, so this stays unset and
+  // the log renders it as unknown -- an audit trail must not invent an origin.
+  ip?: string;
 }
 
 export interface AppCategory {
@@ -77,12 +81,20 @@ export interface AppBatch {
   batchNumber: string;
   expiryDate: string;
   manufacturingDate: string;
-  initialQuantity: number;
   availableQuantity: number; // For FEFO
   purchasePrice: number;
-  sellingPrice: number;
-  supplierId: string;
-  invoiceNumber: string;
+  // Quantity received and the retail price, as `addBatch` actually stores them.
+  // The GRN path (PharmacyOld) additionally fills in the procurement fields
+  // below; batches created by `addBatch` leave them unset, so everything the
+  // lean path omits is optional rather than a lie about what is on disk.
+  quantity: number;
+  mrp: number;
+  grnId?: string;
+  status?: string;
+  initialQuantity?: number;
+  sellingPrice?: number;
+  supplierId?: string;
+  invoiceNumber?: string;
   location?: string; // Phase 4 - Transfer capability
   createdAt: string;
 }
@@ -153,6 +165,26 @@ export interface AppStockTransaction {
 
 export type PrescriptionSource = "DIGITAL" | "UPLOADED_IMAGE" | "OCR";
 export type PrescriptionStatus = "Draft" | "Sent To Pharmacy" | "Received" | "OCR Processing" | "Verification Pending" | "Verified" | "Approved" | "Preparing" | "Ready For Dispensing" | "Dispensed" | "Cancelled" | "Rejected";
+
+/**
+ * Statuses that mean a prescription is still waiting on the pharmacist.
+ *
+ * Shared rather than re-listed per screen: the dashboard's "awaiting
+ * verification" tile used its own shorter list and omitted "Sent To Pharmacy",
+ * which is exactly the status the doctor portal dispatches with -- so a
+ * prescription sat in the verification queue while the pharmacist's landing
+ * screen told them there was nothing to do.
+ */
+export const AWAITING_VERIFICATION_STATUSES: PrescriptionStatus[] = [
+  "Sent To Pharmacy",
+  "Received",
+  "OCR Processing",
+  "Verification Pending",
+];
+
+export function isAwaitingVerification(status: PrescriptionStatus): boolean {
+  return AWAITING_VERIFICATION_STATUSES.includes(status);
+}
 export type DispensingStatus = "Waiting" | "Preparing" | "Ready" | "Dispensed" | "Cancelled";
 export type PrescriptionPriority = "Normal" | "Urgent" | "Emergency";
 
@@ -481,6 +513,15 @@ export class PharmacyDatabase {
     if (typeof window !== "undefined") window.localStorage.setItem(BATCHES_KEY, JSON.stringify(batches));
   }
 
+  static updateBatch(id: string, updates: Partial<AppBatch>) {
+    const batches = this.getBatches();
+    const idx = batches.findIndex(b => b.id === id);
+    if (idx !== -1) {
+      batches[idx] = { ...batches[idx], ...updates };
+      this.saveBatches(batches);
+    }
+  }
+
   static addBatch(batch: any) {
     const batches = this.getBatches();
     batches.push({
@@ -578,6 +619,12 @@ export class PharmacyDatabase {
   }
   static saveBills(bills: AppPharmacyBill[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(BILLS_KEY, JSON.stringify(bills));
+  }
+
+  static addPharmacyBill(bill: AppPharmacyBill) {
+    const bills = this.getBills();
+    bills.unshift(bill);
+    this.saveBills(bills);
   }
 
   // Returns

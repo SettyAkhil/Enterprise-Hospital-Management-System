@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { apiFetch } from "../lib/api";
 import { AuditDatabase } from "../services/auditDb";
 import { DOCTOR_ROSTER } from "../services/doctorPortalDb";
+import { RoleDatabase } from "../services/roleDb";
+import { credentialsForRole } from "../lib/demoCredentials";
 
 interface LoginProps {
   onLogin: (userData: {
@@ -45,25 +47,47 @@ export default function Login({ onLogin }: LoginProps) {
     setError("");
     setLoading(true);
     try {
-      const data = await apiFetch("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ username: user, password: pass }),
-      });
-      
+      const username = user.trim();
+      const demo = credentialsForRole(username);
+
+      // The local RBAC store is the authority on who this person is and which
+      // modules they may open, and it is what the rest of the app reads.
+      const local = RoleDatabase.authenticate(username, pass);
+      if (!local) throw new Error("Invalid credentials.");
+
+      // Separately, open a backend session so authenticated APIs work -- the AI
+      // prescription splitter and Smart OCR need one. The backend's own accounts
+      // have different passwords from the demo store, so the mapped credentials
+      // are sent rather than what was typed. This is best-effort on purpose: the
+      // app is fully usable offline, so a failure here must not block the login,
+      // only the AI features, and `backendSession` is what tells the user which.
+      let backendSession = false;
+      if (demo) {
+        try {
+          await apiFetch("/api/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ username: demo.backendUsername, password: demo.backendPassword }),
+          });
+          backendSession = true;
+        } catch {
+          backendSession = false;
+        }
+      }
+
       AuditDatabase.logEvent(
         "Login Successful",
         "Authentication",
-        `User ${user.trim()} logged in successfully.`,
+        `User ${username} logged in successfully${backendSession ? "" : " (local session only -- AI services unavailable)"}.`,
         "Success",
-        data.user.employee_id,
-        user.trim()
+        local.user.staffId,
+        username
       );
 
       onLogin({
-        user: user.trim(),
-        role: data.user.role,
-        staffId: data.user.employee_id,
-        permissions: data.user.permissions || [],
+        user: username,
+        role: local.role.id,
+        staffId: local.user.staffId,
+        permissions: local.role.allowedModules,
         doctorId: isDoctorLogin ? doctorId : undefined,
       });
     } catch (err) {
@@ -247,7 +271,7 @@ export default function Login({ onLogin }: LoginProps) {
                         type="button"
                         onClick={() => {
                           setUser(r.value);
-                          setPass("password123");
+                          setPass(credentialsForRole(r.value)?.localPassword || "password123");
                           setOpenRoleDropdown(false);
                         }}
                         className={`w-full px-3.5 py-2 text-left flex items-center justify-between transition-colors cursor-pointer ${
