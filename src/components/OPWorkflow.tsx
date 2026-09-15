@@ -243,8 +243,6 @@ export default function OPWorkflow({
     }
   });
 
-  const [step2BookingMode, setStep2BookingMode] = useState<"direct" | "ai">("direct");
-  const [selectedDirectSpecialty, setSelectedDirectSpecialty] = useState<string>("Cardiology");
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiAnalysisResult, setAiAnalysisResult] = useState<{
     specialty: string;
@@ -570,51 +568,129 @@ export default function OPWorkflow({
         confidence = 97;
         rationale = "Symptoms of chest discomfort, cardiac risk indicators, or shortness of breath require immediate clinical assessment by Cardiology.";
       } else if (
+        symptomsStr.includes("bone") || 
+        symptomsStr.includes("joint") || 
+        symptomsStr.includes("fracture") || 
+        symptomsStr.includes("back pain") || 
+        symptomsStr.includes("sprain") || 
+        symptomsStr.includes("knee") || 
+        symptomsStr.includes("ankle") ||
+        symptomsStr.includes("ligament")
+      ) {
+        specialty = "Orthopedics";
+        confidence = 94;
+        rationale = "Musculoskeletal symptoms, joint swelling, or mechanical trauma necessitate orthopedic physical evaluation and imaging review.";
+      } else if (
+        symptomsStr.includes("headache") || 
+        symptomsStr.includes("head injury") || 
+        symptomsStr.includes("seizure") || 
+        symptomsStr.includes("stroke") || 
+        symptomsStr.includes("paralysis") ||
+        symptomsStr.includes("spine") ||
+        symptomsStr.includes("brain") ||
+        symptomsStr.includes("numbness")
+      ) {
+        specialty = "Neurosurgery";
+        confidence = 95;
+        rationale = "Neurological presenting symptoms, intracranial, or spine indicators require clinical evaluation by Neurosurgery.";
+      } else if (
+        symptomsStr.includes("stomach") || 
+        symptomsStr.includes("abdominal") || 
+        symptomsStr.includes("gastric") || 
+        symptomsStr.includes("acidity") || 
+        symptomsStr.includes("reflux") ||
+        symptomsStr.includes("jaundice") ||
+        symptomsStr.includes("liver")
+      ) {
+        specialty = "Gastroenterology";
+        confidence = 93;
+        rationale = "Gastrointestinal symptoms, abdominal discomfort, or hepatic indicators require clinical evaluation by Gastroenterology.";
+      } else if (
+        symptomsStr.includes("diabet") || 
+        symptomsStr.includes("sugar") || 
+        symptomsStr.includes("glucose") || 
+        symptomsStr.includes("insulin")
+      ) {
+        specialty = "Diabetology";
+        confidence = 96;
+        rationale = "Glycemic control indicators and metabolic symptoms require evaluation by Diabetology.";
+      } else if (
+        symptomsStr.includes("ear") || 
+        symptomsStr.includes("nose") || 
+        symptomsStr.includes("throat") || 
+        symptomsStr.includes("sinus") || 
+        symptomsStr.includes("tonsil")
+      ) {
+        specialty = "ENT";
+        confidence = 92;
+        rationale = "Ear, nose, throat presentation or sinus discomfort warrants clinical evaluation by ENT specialists.";
+      } else if (
         symptomsStr.includes("cough") || 
         symptomsStr.includes("wheezing") || 
         symptomsStr.includes("lung") || 
         symptomsStr.includes("asthma") || 
         symptomsStr.includes("sputum") ||
         symptomsStr.includes("phlegm") ||
-        symptomsStr.includes("respiratory") ||
-        symptomsStr.includes("bronch")
+        symptomsStr.includes("respiratory")
       ) {
         specialty = "Pulmonology";
         confidence = 94;
         rationale = "Respiratory symptoms require pulmonary evaluation for airway obstruction, asthma, or lower respiratory tract assessment.";
       } else if (
-        symptomsStr.includes("joint") || 
-        symptomsStr.includes("bone") || 
-        symptomsStr.includes("back pain") || 
-        symptomsStr.includes("fracture") || 
-        symptomsStr.includes("sprain") || 
-        symptomsStr.includes("knee") || 
-        symptomsStr.includes("swelling") ||
-        symptomsStr.includes("ankle") ||
-        symptomsStr.includes("ligament")
+        symptomsStr.includes("urine") || 
+        symptomsStr.includes("kidney") || 
+        symptomsStr.includes("bladder")
       ) {
-        specialty = "Orthopedics";
+        specialty = "Urology";
         confidence = 93;
-        rationale = "Musculoskeletal symptoms or mechanical trauma necessitate orthopedic physical evaluation and imaging review.";
+        rationale = "Renal, bladder, or urinary tract complaints require clinical evaluation by Urology.";
       } else if (
-        symptomsStr.includes("fever") || 
-        symptomsStr.includes("headache") || 
-        symptomsStr.includes("abdominal") || 
-        symptomsStr.includes("stomach") || 
-        symptomsStr.includes("vomiting") || 
-        symptomsStr.includes("dizziness") || 
-        symptomsStr.includes("fatigue") ||
-        symptomsStr.includes("body pain") ||
-        symptomsStr.includes("chills") ||
-        symptomsStr.includes("weakness")
+        symptomsStr.includes("period") || 
+        symptomsStr.includes("pregnant") || 
+        symptomsStr.includes("pelvic") || 
+        symptomsStr.includes("gynec")
       ) {
+        specialty = "Gynecology";
+        confidence = 95;
+        rationale = "Obstetric and gynecological symptoms require clinical evaluation in Gynecology.";
+      } else {
         specialty = "General Medicine";
-        confidence = 92;
-        rationale = "Acute systemic presentation (fever, headache, general malaise, or abdominal discomfort) warrants comprehensive internal medicine evaluation.";
+        confidence = 91;
+        rationale = "Acute systemic presentation (fever, malaise, or non-specific symptoms) warrants comprehensive internal medicine evaluation.";
       }
 
-      // Filter all available doctors in the recommended specialty
-      const deptDoctors = INITIAL_DOCTORS.filter(d => d.specialty === specialty);
+      // Filter all available doctors in the recommended specialty from getDoctorMaster()
+      const masterDocs = getDoctorMaster().filter(d => d.verified);
+      let deptDoctors: DoctorProfileInfo[] = masterDocs
+        .filter(d => d.specialty === specialty || (specialty === "General Medicine" && (!d.specialty || d.specialty === "General Medicine")))
+        .map((doc, idx) => ({
+          id: doc.id,
+          name: doc.name,
+          specialty: doc.specialty || specialty,
+          gender: doc.name.toLowerCase().includes("keerthana") || doc.name.toLowerCase().includes("amulya") || doc.name.toLowerCase().includes("deepthi") || doc.name.toLowerCase().includes("meena") ? ("Female" as const) : ("Male" as const),
+          status: "Available" as const,
+          room: doc.room,
+          workload: (idx % 3) + 1,
+          qualifications: doc.qualification,
+          timing: doc.section === "Main" ? "09:00 AM - 05:00 PM" : "Visiting Consultant (On Call)",
+          nextSlot: "Immediate (~5m wait)"
+        }));
+
+      // Fallback if no doctor found for exact specialty
+      if (deptDoctors.length === 0) {
+        deptDoctors = masterDocs.slice(0, 3).map((doc, idx) => ({
+          id: doc.id,
+          name: doc.name,
+          specialty: doc.specialty || specialty,
+          gender: "Male" as const,
+          status: "Available" as const,
+          room: doc.room,
+          workload: (idx % 3) + 1,
+          qualifications: doc.qualification,
+          timing: "09:00 AM - 05:00 PM",
+          nextSlot: "Immediate"
+        }));
+      }
 
       // Sort doctors: Same gender match first, Available first, lowest workload first
       const targetGender = patient.doctorGenderPref === "Female" ? "Female" : patient.doctorGenderPref === "Male" ? "Male" : patientGender;
@@ -626,7 +702,7 @@ export default function OPWorkflow({
         return a.workload - b.workload;
       });
 
-      const topMatchedDoctor = deptDoctors[0] || INITIAL_DOCTORS[0];
+      const topMatchedDoctor = deptDoctors[0];
 
       setAiAnalysisResult({
         specialty,
@@ -1006,127 +1082,15 @@ export default function OPWorkflow({
         {currentStep === 2 && (
           <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6">
             <div>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#DDE2EC] pb-3 mb-4">
-                <div>
-                  <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                    <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">2</span>
-                    Doctor Appointment &amp; Specialty Allocation
-                  </h2>
-                  <p className="text-[12px] text-[#64748B] mt-0.5">
-                    Pick an attending doctor directly from the roster or run AI specialty triage to match patient symptoms.
-                  </p>
-                </div>
-
-                <div className="flex bg-[#F1F5F9] p-1 rounded border border-[#CBD5E1] gap-1 self-start sm:self-auto">
-                  <button
-                    type="button"
-                    onClick={() => setStep2BookingMode("direct")}
-                    className={`px-3 py-1.5 text-[12px] font-bold rounded transition-colors cursor-pointer ${
-                      step2BookingMode === "direct" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-gray-700 hover:bg-white"
-                    }`}
-                  >
-                    👨‍⚕️ Direct Doctor Roster
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStep2BookingMode("ai")}
-                    className={`px-3 py-1.5 text-[12px] font-bold rounded transition-colors cursor-pointer ${
-                      step2BookingMode === "ai" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-gray-700 hover:bg-white"
-                    }`}
-                  >
-                    ✨ AI Symptom Triage
-                  </button>
-                </div>
+              <div className="border-b border-[#DDE2EC] pb-3 mb-4">
+                <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-[#1B4FD8] text-white text-[12px] flex items-center justify-center font-bold">2</span>
+                  Clinical Symptom Triage &amp; Specialty Doctor Allocation
+                </h2>
+                <p className="text-[12px] text-[#64748B] mt-0.5">
+                  Input patient presenting symptoms or chief complaint to run AI clinical triage, recommend the target specialty, and allocate from our 30 verified attending doctors.
+                </p>
               </div>
-
-              {step2BookingMode === "direct" && (
-                <div className="bg-[#F8FAFC] border-2 border-blue-200 p-4 rounded space-y-4">
-                  <h3 className="text-[13.5px] font-bold text-gray-900 flex items-center justify-between">
-                    <span>👨‍⚕️ Direct Attending Doctor Roster Selection</span>
-                    <span className="text-[11px] font-mono text-[#1B4FD8]">{getDoctorMaster().filter(d => d.verified).length} Verified Doctors</span>
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[12px] font-semibold text-gray-700 mb-1">Select Specialty / Department</label>
-                      <select
-                        value={selectedDirectSpecialty}
-                        onChange={e => setSelectedDirectSpecialty(e.target.value)}
-                        className="w-full h-10 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
-                      >
-                        {Array.from(new Set(getDoctorMaster().filter(d => d.verified && d.specialty).map(d => d.specialty as string))).sort().map(spec => (
-                          <option key={spec} value={spec}>{spec}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[12px] font-semibold text-gray-700 mb-1">Select Doctor for {patient.name}</label>
-                      <select
-                        onChange={e => {
-                          const doc = getDoctorMaster().find(d => d.name === e.target.value);
-                          if (doc) {
-                            handleNurseBookAppointment({
-                              id: doc.id,
-                              name: doc.name,
-                              specialty: doc.specialty || selectedDirectSpecialty,
-                              gender: "Male",
-                              status: "Available",
-                              room: doc.room,
-                              workload: 1,
-                              qualifications: doc.qualification,
-                              timing: "09:00 AM - 05:00 PM",
-                              nextSlot: "Immediate"
-                            });
-                          }
-                        }}
-                        className="w-full h-10 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
-                      >
-                        <option value="">-- Choose Doctor to Assign --</option>
-                        {getDoctorMaster().filter(d => d.verified && d.specialty === selectedDirectSpecialty).map(doc => (
-                          <option key={doc.id} value={doc.name}>
-                            {doc.name} ({doc.qualification}) — {doc.room} [{doc.section}]
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
-                    {getDoctorMaster().filter(d => d.verified && d.specialty === selectedDirectSpecialty).map(doc => (
-                      <div
-                        key={doc.id}
-                        onClick={() => {
-                          handleNurseBookAppointment({
-                            id: doc.id,
-                            name: doc.name,
-                            specialty: doc.specialty || selectedDirectSpecialty,
-                            gender: "Male",
-                            status: "Available",
-                            room: doc.room,
-                            workload: 1,
-                            qualifications: doc.qualification,
-                            timing: "09:00 AM - 05:00 PM",
-                            nextSlot: "Immediate"
-                          });
-                        }}
-                        className={`p-3 rounded border transition-all cursor-pointer ${
-                          patient.assignedDoctor === doc.name
-                            ? "bg-blue-50 border-[#1B4FD8] ring-2 ring-blue-500/20"
-                            : "bg-white border-[#E2E8F0] hover:border-[#1B4FD8]"
-                        }`}
-                      >
-                        <div className="font-bold text-[13px] text-gray-900">{doc.name}</div>
-                        <div className="text-[11px] text-[#64748B] mt-0.5">{doc.qualification}</div>
-                        <div className="flex items-center justify-between text-[11px] font-mono mt-2 pt-2 border-t border-gray-100">
-                          <span className="text-[#1B4FD8] font-bold">{doc.room}</span>
-                          <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold">Assign →</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Chief Complaint Input */}
@@ -1556,21 +1520,21 @@ export default function OPWorkflow({
                   <select
                     value={patient.assignedDoctor}
                     onChange={(e) => {
-                      const selectedDoc = INITIAL_DOCTORS.find(d => d.name === e.target.value);
+                      const selectedDoc = getDoctorMaster().find(d => d.name === e.target.value);
                       if (selectedDoc) {
                         setPatient(prev => ({
                           ...prev,
                           assignedDoctor: selectedDoc.name,
                           room: selectedDoc.room,
-                          doctorStatus: selectedDoc.status as any
+                          doctorStatus: "Available"
                         }));
                       }
                     }}
                     className="text-[11.5px] font-semibold text-gray-700 bg-white border border-[#CBD5E1] rounded px-2.5 py-1.5 focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
                   >
-                    {INITIAL_DOCTORS.filter(d => d.specialty === patient.aiSpecialty).map(d => (
+                    {getDoctorMaster().filter(d => d.verified && (d.specialty === patient.aiSpecialty || !patient.aiSpecialty)).map(d => (
                       <option key={d.id} value={d.name}>
-                        {d.name} ({d.room})
+                        {d.name} ({d.qualification}) — {d.room}
                       </option>
                     ))}
                   </select>
