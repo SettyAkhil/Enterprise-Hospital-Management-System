@@ -11,15 +11,25 @@ const typeConfig = {
   warning:  { icon: Clock, color: "#d97706", bg: "#FEF3C7", border: "#fcd34d", dot: "#f59e0b" },
   info:     { icon: Info, color: "#1B4FD8", bg: "#E8EDF5", border: "#93c5fd", dot: "#60a5fa" },
 };
+import { PharmacyDatabase } from "../../../services/pharmacyDb";
 
 export default function Notifications({ onNavigate }: NotificationsProps) {
   const {  notifications: initialNotifs } = usePharmacyData();
   const [notifs, setNotifs] = useState(initialNotifs);
   const [activeFilter, setActiveFilter] = useState("All");
 
-  const markAll = () => setNotifs(prev => prev.map(n => ({ ...n, read: true })));
-  const markOne = (id: string) => setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  const remove = (id: string) => setNotifs(prev => prev.filter(n => n.id !== id));
+  const markAll = () => {
+    notifs.forEach(n => PharmacyDatabase.updateNotification(n.id, { read: true }));
+    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+  };
+  const markOne = (id: string) => {
+    PharmacyDatabase.updateNotification(id, { read: true });
+    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+  const remove = (id: string) => {
+    PharmacyDatabase.deleteNotification(id);
+    setNotifs(prev => prev.filter(n => n.id !== id));
+  };
 
   const filtered = notifs.filter(n => {
     if (activeFilter === "Unread") return !n.read;

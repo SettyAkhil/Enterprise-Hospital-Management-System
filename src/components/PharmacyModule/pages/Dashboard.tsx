@@ -23,6 +23,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const {  salesData, prescriptions, medicines, expiringMedicines  } = usePharmacyData();
   const [chartView, setChartView] = useState<"weekly" | "monthly">("weekly");
   const chartData = salesData || [];
+  
+  const totalSales = chartData.reduce((sum, d) => sum + d.revenue, 0);
+  const totalOrders = chartData.reduce((sum, d) => sum + d.orders, 0);
+  const avgSales = chartData.length > 0 ? totalSales / chartData.length : 0;
 
   const kpis = [
     { title: "Today's Sales", value: `₹${(chartData[chartData.length-1]?.revenue || 0).toLocaleString()}`, change: "0%", up: true, sub: "vs yesterday ₹0", icon: ShoppingCart, color: "#1B4FD8", bg: "#E8EDF5" },
@@ -101,9 +105,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4 mb-4 pb-4 border-b border-[#F0F2F5]">
-            <div><p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide">Total Sales</p><p className="text-[18px] font-bold text-[#0F1624]">₹0</p></div>
-            <div><p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide">Avg / Day</p><p className="text-[18px] font-bold text-[#0F1624]">₹0</p></div>
-            <div><p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide">Transactions</p><p className="text-[18px] font-bold text-[#0F1624]">0</p></div>
+            <div><p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide">Total Sales</p><p className="text-[18px] font-bold text-[#0F1624]">₹{totalSales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p></div>
+            <div><p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide">Avg / Day</p><p className="text-[18px] font-bold text-[#0F1624]">₹{avgSales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p></div>
+            <div><p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide">Transactions</p><p className="text-[18px] font-bold text-[#0F1624]">{totalOrders}</p></div>
           </div>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={chartData}>
@@ -114,10 +118,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#F0F2F5" vertical={false} />
-              <XAxis dataKey={chartView === "weekly" ? "day" : "month"} tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
               <Tooltip formatter={(v) => [`₹${Number(v ?? 0).toLocaleString("en-IN")}`, "Sales"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #DDE2EC" }} />
-              <Area type="monotone" dataKey="sales" stroke="#1B4FD8" strokeWidth={2} fill="url(#salesGrad)" dot={false} />
+              <Area type="monotone" dataKey="revenue" stroke="#1B4FD8" strokeWidth={2} fill="url(#salesGrad)" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>

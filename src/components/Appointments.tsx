@@ -4,18 +4,7 @@ import { Icon } from "./icons";
 import { db, DBOPEncounter } from "../services/db";
 import { pickDoctorForSpecialty, availabilityOf } from "../services/doctorMaster";
 
-const INITIAL_APPOINTMENTS = [
-  { time: "08:00", patient: "Harold Thompson", age: 68, type: "Post-op Follow-up", provider: "Dr. Sanjay Kapoor", room: "Room 116", duration: "30m", status: "Completed", mrn: "100401" },
-  { time: "08:30", patient: "Sandra Brown", age: 44, type: "Follow-up", provider: "Dr. Vikram Malhotra", room: "Room 111", duration: "20m", status: "Completed", mrn: "100331" },
-  { time: "09:00", patient: "Sarah Connelly", age: 35, type: "Annual Physical", provider: "Dr. Ramesh Kumar", room: "Room 103", duration: "45m", status: "Completed", mrn: "100289" },
-  { time: "09:30", patient: "Marcus Webb", age: 43, type: "New Patient", provider: "Dr. Arjun Mehta", room: "Room 107", duration: "60m", status: "In Progress", mrn: "100500" },
-  { time: "10:00", patient: "Elena Torres", age: 57, type: "Diabetes Follow-up", provider: "Dr. Anita Desai", room: "Room 101", duration: "30m", status: "Checked In", mrn: "100198" },
-  { time: "10:30", patient: "Robert Kim", age: 52, type: "Cardiac Consult", provider: "Dr. Rajesh Sharma", room: "Room 104", duration: "45m", status: "Pending", mrn: "100377" },
-  { time: "11:00", patient: "Jennifer Walsh", age: 29, type: "GYN Consult", provider: "Dr. Priya Patel", room: "Room 105", duration: "30m", status: "Pending", mrn: "100511" },
-  { time: "11:30", patient: "David Chu", age: 61, type: "Hypertension", provider: "Dr. Ramesh Kumar", room: "Room 103", duration: "20m", status: "Pending", mrn: "100289" },
-  { time: "13:00", patient: "Helen Park", age: 72, type: "Post-discharge", provider: "Dr. Michael Chen", room: "Room 108", duration: "30m", status: "Pending", mrn: "100402" },
-  { time: "13:30", patient: "Frank Torres", age: 55, type: "Lab Review", provider: "Dr. David Anderson", room: "Room 112", duration: "20m", status: "Pending", mrn: "100501" },
-];
+const INITIAL_APPOINTMENTS: any[] = [];
 
 const DAYS = ["Mon\nAug 19", "Tue\nAug 20", "Wed\nAug 21", "Thu\nAug 22", "Fri\nAug 23", "Sat\nAug 24", "Sun\nAug 25"];
 const SELECTED_DAY = 4;

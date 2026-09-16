@@ -141,7 +141,6 @@ const NAV: NavItem[] = [
       { key: "pharmacy_po", label: "Purchase Orders", group: "Procurement" },
       { key: "pharmacy_grn", label: "GRN Receiving", group: "Procurement" },
       { key: "pharmacy_ledger", label: "Inventory Ledger", group: "Inventory" },
-      { key: "pharmacy_transfers", label: "Stock Transfers", group: "Inventory" },
       { key: "pharmacy_expiry", label: "Expiry Management", group: "Inventory" },
       { key: "pharmacy_analytics", label: "Analytics & Reports", group: "Reporting" },
       { key: "pharmacy_notifications", label: "Notifications", group: "Administration" },

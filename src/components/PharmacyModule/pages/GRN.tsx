@@ -7,42 +7,118 @@ import { PharmacyDatabase } from "../../../services/pharmacyDb";
 interface GRNProps { onNavigate: (page: string) => void }
 
 export default function GRN({ onNavigate }: GRNProps) {
-  const { medicines, refresh } = usePharmacyData();
+  const { medicines, purchaseOrders, refresh } = usePharmacyData();
   const [items, setItems] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [selectedPoId, setSelectedPoId] = useState<string>("");
+
+  const approvedPOs = purchaseOrders.filter(po => po.status === "Approved");
+
+  const handlePoSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const poId = e.target.value;
+    setSelectedPoId(poId);
+    if (!poId) {
+      setItems([]);
+      return;
+    }
+    const po = purchaseOrders.find(p => p.id === poId);
+    if (po) {
+      const newItems = po.items.map((pi: any) => {
+        const med = medicines.find(m => m.id === pi.medicineId) || {} as any;
+        return {
+          medicineId: pi.medicineId, medicine: med.name || "Unknown", ordered: pi.quantity, received: "", damaged: "", 
+          batch: "", mfg: "", expiry: "", price: med.price || 0, mrp: med.mrp || 0, gst: med.gst || 12, status: "short"
+        };
+      });
+      setItems(newItems);
+    }
+  };
 
   const updateItem = (idx: number, field: string, value: any) => {
     setItems(prev => prev.map((item, i) => {
       if (i !== idx) return item;
       const updated = { ...item, [field]: value };
-      const issues = updated.received < updated.ordered ? "short" : updated.damaged > 0 ? "damaged" : "ok";
+      const receivedNum = Number(updated.received) || 0;
+      const damagedNum = Number(updated.damaged) || 0;
+      const issues = receivedNum < updated.ordered ? "short" : damagedNum > 0 ? "damaged" : "ok";
       return { ...updated, status: issues };
     }));
   };
 
   const handlePost = () => {
     if (items.length === 0) return alert("Add items to receive.");
+    const grnId = "GRN" + Date.now();
+    const grnItems: any[] = [];
+    
     items.forEach(item => {
+      const received = Number(item.received) || 0;
+      const damaged = Number(item.damaged) || 0;
+      const available = Math.max(0, received - damaged);
+      
+      const batchId = "BAT" + Math.floor(Math.random() * 100000);
       PharmacyDatabase.addBatch({
+        id: batchId,
         medicineId: item.medicineId,
         batchNumber: item.batch || ("B" + Date.now()),
         expiryDate: item.expiry || "2026-12-31",
-        quantity: item.received,
-        availableQuantity: item.received - item.damaged,
-        mrp: item.mrp || 0,
-        purchasePrice: item.price || 0,
-        grnId: "GRN" + Date.now()
+        quantity: received,
+        availableQuantity: available,
+        mrp: Number(item.mrp) || 0,
+        purchasePrice: Number(item.price) || 0,
+        grnId: grnId,
+        createdAt: new Date().toISOString(),
+        manufacturingDate: item.mfg || "2024-01-01"
+      });
+
+      grnItems.push({
+        medicineId: item.medicineId,
+        orderedQty: item.ordered,
+        receivedQty: received,
+        batchNumber: item.batch || ("B" + Date.now()),
+        manufacturingDate: item.mfg || "2024-01-01",
+        expiryDate: item.expiry || "2026-12-31",
+        purchasePrice: Number(item.price) || 0,
+        sellingPrice: Number(item.mrp) || 0
+      });
+
+      PharmacyDatabase.addTransaction({
+        id: "TXN" + Math.floor(Math.random() * 100000),
+        date: new Date().toISOString(),
+        medicineId: item.medicineId,
+        batchId: batchId,
+        quantity: available,
+        transactionType: "PURCHASE_RECEIVED",
+        userId: "SYS",
+        reason: "Received via GRN: " + grnId
       });
     });
+
+    const newGrn = {
+      id: grnId,
+      purchaseOrderId: selectedPoId || "",
+      supplierId: selectedPoId ? purchaseOrders.find(p=>p.id===selectedPoId)?.supplierId || "" : "",
+      invoiceNumber: "INV-" + Date.now(),
+      grnDate: new Date().toISOString(),
+      items: grnItems,
+      receivedBy: "SYS",
+      createdAt: new Date().toISOString()
+    };
+    PharmacyDatabase.addGRN(newGrn);
+
+    if (selectedPoId) {
+      PharmacyDatabase.updatePurchaseOrder(selectedPoId, { status: "Received" } as any);
+    }
+
     alert("Stock posted successfully!");
     setItems([]);
+    setSelectedPoId("");
     refresh();
   };
 
   const addMedicine = (med: any) => {
     setItems([...items, {
-      medicineId: med.id, medicine: med.name, ordered: 0, received: 0, damaged: 0, 
-      batch: "", mfg: "", expiry: "", price: med.price, mrp: med.mrp, status: "short"
+      medicineId: med.id, medicine: med.name, ordered: 0, received: "", damaged: "", 
+      batch: "", mfg: "", expiry: "", price: med.price || 0, mrp: med.mrp || 0, gst: med.gst || 12, status: "short"
     }]);
     setSearch("");
   };
@@ -77,10 +153,21 @@ export default function GRN({ onNavigate }: GRNProps) {
       {/* GRN Header */}
       <div className="bg-white rounded border border-[#DDE2EC] p-5">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div>
+            <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">GRN Number</label>
+            <p className="px-3 py-2 rounded bg-[#F5F7FA] text-[13px] font-medium text-[#0F1624]">-</p>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Purchase Order</label>
+            <select value={selectedPoId} onChange={handlePoSelect} className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none transition-colors bg-white">
+              <option value="">-- Select PO --</option>
+              {approvedPOs.map(po => (
+                <option key={po.id} value={po.id}>{po.id} - {po.supplier}</option>
+              ))}
+            </select>
+          </div>
           {[
-            { label: "GRN Number", value: "-", editable: false },
-            { label: "Purchase Order", value: "-", editable: false },
-            { label: "Supplier", value: "-", editable: false },
+            { label: "Supplier", value: selectedPoId ? (purchaseOrders.find(p=>p.id===selectedPoId)?.supplier || "-") : "-", editable: false },
             { label: "Invoice Number", value: "", editable: true, placeholder: "Enter invoice no." },
             { label: "Invoice Date", value: "", editable: true, type: "date" },
             { label: "Received Date", value: "-", editable: true, type: "date" },
@@ -151,7 +238,7 @@ export default function GRN({ onNavigate }: GRNProps) {
                     <input
                       type="number"
                       value={item.received}
-                      onChange={e => updateItem(idx, "received", +e.target.value)}
+                      onChange={e => updateItem(idx, "received", e.target.value)}
                       className="w-20 px-2 py-1 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none text-center"
                     />
                   </td>
@@ -159,7 +246,7 @@ export default function GRN({ onNavigate }: GRNProps) {
                     <input
                       type="number"
                       value={item.damaged}
-                      onChange={e => updateItem(idx, "damaged", +e.target.value)}
+                      onChange={e => updateItem(idx, "damaged", e.target.value)}
                       className="w-16 px-2 py-1 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none text-center"
                     />
                   </td>
@@ -200,12 +287,12 @@ export default function GRN({ onNavigate }: GRNProps) {
           </div>
           <div>
             <p className="text-[11px] text-[#64748B] uppercase font-semibold tracking-wide">Total Received</p>
-            <p className="text-[20px] font-bold text-[#0F1624]">{items.reduce((s,i)=>s+i.received,0)} units</p>
+            <p className="text-[20px] font-bold text-[#0F1624]">{items.reduce((s,i)=>s+(Number(i.received)||0),0)} units</p>
           </div>
           <div>
             <p className="text-[11px] text-[#64748B] uppercase font-semibold tracking-wide">Invoice Value</p>
             <p className="text-[20px] font-bold text-[#0F1624]">
-              ₹{items.reduce((s,i)=>s+(i.received*i.price*(1+i.gst/100)),0).toLocaleString("en-IN", {minimumFractionDigits:2})}
+              ₹{items.reduce((s,i)=>s+((Number(i.received)||0)*(Number(i.price)||0)*(1+(Number(i.gst)||0)/100)),0).toLocaleString("en-IN", {minimumFractionDigits:2})}
             </p>
           </div>
         </div>

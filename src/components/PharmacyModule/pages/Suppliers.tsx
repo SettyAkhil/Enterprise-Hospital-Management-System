@@ -13,17 +13,17 @@ export default function Suppliers({ onNavigate }: SuppliersProps) {
   const [selected, setSelected] = useState<typeof suppliers[0] | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ supplierName: "", contactInformation: "", address: "", gstInformation: "", licenseDetails: "", paymentTerms: "", status: "Active" as any });
+  const [form, setForm] = useState({ supplierName: "", contactInformation: "", phone: "", email: "", address: "", gstInformation: "", licenseDetails: "", paymentTerms: "", status: "Active" as any });
 
   const handleEdit = (s: typeof suppliers[0]) => {
     setEditingId(s.id);
-    setForm({ supplierName: s.supplierName || s.name, contactInformation: s.contactInformation || s.contact, address: s.address, gstInformation: s.gstInformation || s.gstin, licenseDetails: s.licenseDetails || s.drugLicense || "", paymentTerms: s.paymentTerms, status: s.status as any });
+    setForm({ supplierName: s.supplierName || s.name, contactInformation: s.contactInformation || s.contact, phone: s.phone || "", email: s.email || "", address: s.address, gstInformation: s.gstInformation || s.gstin, licenseDetails: s.licenseDetails || s.drugLicense || "", paymentTerms: s.paymentTerms, status: s.status as any });
     setShowModal(true);
   };
 
   const handleAdd = () => {
     setEditingId(null);
-    setForm({ supplierName: "", contactInformation: "", address: "", gstInformation: "", licenseDetails: "", paymentTerms: "Net 30", status: "Active" });
+    setForm({ supplierName: "", contactInformation: "", phone: "", email: "", address: "", gstInformation: "", licenseDetails: "", paymentTerms: "Net 30", status: "Active" });
     setShowModal(true);
   };
 
@@ -132,6 +132,8 @@ export default function Suppliers({ onNavigate }: SuppliersProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Supplier Name</label><input value={form.supplierName} onChange={e=>setForm({...form, supplierName: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
                 <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Contact Person</label><input value={form.contactInformation} onChange={e=>setForm({...form, contactInformation: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
+                <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Phone</label><input value={form.phone} onChange={e=>setForm({...form, phone: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
+                <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Email</label><input value={form.email} onChange={e=>setForm({...form, email: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
                 <div className="col-span-2"><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Address</label><input value={form.address} onChange={e=>setForm({...form, address: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
                 <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">GSTIN</label><input value={form.gstInformation} onChange={e=>setForm({...form, gstInformation: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
                 <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Drug License</label><input value={form.licenseDetails} onChange={e=>setForm({...form, licenseDetails: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
