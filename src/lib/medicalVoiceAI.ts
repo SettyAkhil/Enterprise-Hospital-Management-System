@@ -1,16 +1,44 @@
 /**
- * Medical Voice Engine & AI Speaker Diarization with Multi-lingual Auto-Detection
- * Supporting Telugu (తెలుగు), Hindi (हिंदी), English & Indian Regional Languages
+ * Consultation voice engine: transcription clean-up, speaker separation and the
+ * clinical note summary built from what was actually said in the room.
  *
- * Provides:
- * 1. Multi-lingual Language Auto-Detection (Telugu, Hindi, Tamil, Kannada, English, Mixed).
- * 2. High-accuracy Phonetic Normalization & Translation (Telugu/Hindi -> Medical English).
- * 3. AI Speaker Diarization (separating Doctor Voice vs. Patient Voice).
- * 4. Complete Audio Encounter Summarization with Auto-Extracted Medicines & Lab Tests.
+ * Scope note -- this module deliberately produces **no orders**. A doctor does
+ * not read a prescription out loud to the patient; what is spoken in a
+ * consultation is history, examination and advice. Medicines and investigations
+ * come from the prescription sheet the doctor writes, draws or uploads, and are
+ * parsed there (see `prescriptionAI.ts`). Nothing here is allowed to create a
+ * medicine or a lab test, because a drug conjured out of a noisy microphone
+ * transcript is a dispensing error waiting to happen.
+ *
+ * What it does provide:
+ *  1. Language auto-detection across Telugu, Hindi, Tamil, Kannada and English.
+ *  2. Phonetic/terminology normalisation of raw speech-recognition output.
+ *  3. Turn-level speaker separation (doctor vs. patient), with the cues that
+ *     decided each turn kept on the turn so the attribution can be judged -- and
+ *     corrected -- by the doctor rather than silently trusted.
+ *  4. A structured clinical note (SOAP) summarised from those turns.
  */
 
-import { PrescriptionSplit, localSplit } from "./prescriptionAI";
-import type { ParsedMedication, ParsedLabTest } from "../services/doctorPortalDb";
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export type Speaker = "doctor" | "patient";
+
+/** How a turn's speaker was decided, weakest last. */
+export type SpeakerBasis = "manual" | "label" | "cues" | "turn-taking";
+
+export interface TranscriptTurn {
+  id: string;
+  speaker: Speaker;
+  text: string;
+  /** Milliseconds from the start of the recording. */
+  atMs: number;
+  /** 0..1. Always 1 when the doctor set the speaker by hand. */
+  confidence: number;
+  basis: SpeakerBasis;
+  /** The phrases that decided the speaker, shown in the UI as the reason. */
+  cues: string[];
+  languageCode: string;
+}
 
 export interface LanguageDetectionResult {
   primaryLanguage: string;
@@ -20,154 +48,142 @@ export interface LanguageDetectionResult {
   confidence: number;
 }
 
-export interface AudioClinicalSummary {
-  detectedLanguage: string;
+export interface ConsultationNoteSummary {
+  language: string;
   languageCode: string;
   isMultiLingual: boolean;
-  audioDurationFormatted: string;
+  durationSeconds: number;
+  durationFormatted: string;
+
+  turnCount: number;
+  doctorTurns: number;
+  patientTurns: number;
+  /** Turns the diarizer is not confident about -- the doctor should check these. */
+  uncertainTurns: number;
+  /** Share of the conversation the patient spoke, 0..1. */
+  patientShare: number;
+
   chiefComplaint: string;
-  patientHistory: string;
-  doctorImpression: string;
-  diagnosis: string;
-  advice: string;
-  summaryParagraph: string;
-  extractedMedications: ParsedMedication[];
-  extractedLabTests: ParsedLabTest[];
-  fullTranscript: string;
-  doctorStream: string[];
-  patientStream: string[];
-  soapSubjective: string;
-  soapObjective: string;
-  soapAssessment: string;
-  soapPlan: string;
+  historyOfPresentIllness: string;
+  /** Symptoms recognised in the patient's own words, with onset where stated. */
+  symptoms: RecognisedSymptom[];
+  patientReported: string[];
+  doctorObservations: string[];
+  assessment: string;
+  advice: string[];
+  followUp: string;
+
+  soap: { subjective: string; objective: string; assessment: string; plan: string };
+  /** One paragraph, written into the consultation record and the patient journey. */
+  narrative: string;
+  /** What the conversation did and did not cover -- prompts, not judgements. */
+  coverage: { symptoms: boolean; onset: boolean; examination: boolean; advice: boolean; followUp: boolean };
 }
 
-// ── Multi-Lingual Medical Phonetic & Translation Dictionary ──
+export interface RecognisedSymptom {
+  term: string;
+  /** The patient's own phrasing, before normalisation. */
+  saidAs: string;
+  onset: string;
+}
+
+// ── Multi-lingual medical phonetic & terminology normalisation ───────────────
+// Speech recognition returns a phonetic guess; these rules turn the common
+// Indian-clinic variants of a term into the term a chart would use. They cover
+// symptoms, anatomy, timing and advice -- the vocabulary of a consultation.
+// Drug and test names are deliberately absent: see the scope note above.
 
 const PHONETIC_MAP: [RegExp, string][] = [
-  // ── Telugu Clinical Symptoms & Terms Translation ──
-  [/జ్వరం\s*(వచ్చింది|ఉంది)?/gi, "Fever"],
-  [/గొంతు\s*నొప్పి/gi, "Throat Pain"],
-  [/తలనొప్పి/gi, "Headache"],
-  [/(కడుపు|పొట్ట)\s*నొప్పి/gi, "Abdominal Pain"],
-  [/దగ్గు/gi, "Cough"],
-  [/ఆయాసం/gi, "Shortness of Breath"],
-  [/వాంతులు/gi, "Vomiting / Nausea"],
-  [/నీరసం/gi, "General Weakness"],
-  [/చలి\s*జ్వరం/gi, "Fever with Chills"],
-  [/రక్తపోటు|బిపి/gi, "Blood Pressure (Hypertension)"],
-  [/షుగర్\s*వ్యాధి|మధుమేహం/gi, "Diabetes Mellitus"],
-  [/మోషన్స్|విరేచనాలు/gi, "Diarrhea / Loose Motions"],
-  [/ఆకలి\s*లేకపోవడం/gi, "Loss of Appetite"],
-  [/ఛాతీ\s*నొప్పి/gi, "Chest Pain"],
-  [/కీళ్ళ\s*నొప్పులు/gi, "Joint Pain"],
+  // ── Spoken numerals, so a duration survives into the note as a number ──
+  [/\bone\b(?=\s+(day|week|month|year))/gi, "1"],
+  [/\btwo\b(?=\s+(day|week|month|year))/gi, "2"],
+  [/\bthree\b(?=\s+(day|week|month|year))/gi, "3"],
+  [/\bfour\b(?=\s+(day|week|month|year))/gi, "4"],
+  [/\bfive\b(?=\s+(day|week|month|year))/gi, "5"],
+  [/\bsix\b(?=\s+(day|week|month|year))/gi, "6"],
+  [/\bseven\b(?=\s+(day|week|month|year))/gi, "7"],
+  [/\b(ten|10)\b(?=\s+(day|week|month|year))/gi, "10"],
+  [/ఒక(టి)?\s*(?=రోజు|వారం|నెల)/gi, "1 "],
+  [/రెండు\s*(?=రోజు|వారా|నెల)/gi, "2 "],
+  [/మూడు\s*(?=రోజు|వారా|నెల)/gi, "3 "],
+  [/నాలుగు\s*(?=రోజు|వారా|నెల)/gi, "4 "],
+  [/ఐదు\s*(?=రోజు|వారా|నెల)/gi, "5 "],
+  [/పది\s*(?=రోజు|వారా|నెల)/gi, "10 "],
+  [/एक\s*(?=दिन|हफ्त|महीन)/gi, "1 "],
+  [/दो\s*(?=दिन|हफ्त|महीन)/gi, "2 "],
+  [/तीन\s*(?=दिन|हफ्त|महीन)/gi, "3 "],
+  [/चार\s*(?=दिन|हफ्त|महीन)/gi, "4 "],
+  [/पांच\s*(?=दिन|हफ्त|महीन)/gi, "5 "],
+
+  // ── Telugu symptoms & clinical terms ──
+  [/జ్వరం\s*(వచ్చింది|ఉంది)?/gi, "fever"],
+  [/చలి\s*జ్వరం/gi, "fever with chills"],
+  [/గొంతు\s*నొప్పి/gi, "throat pain"],
+  [/తలనొప్పి/gi, "headache"],
+  [/(కడుపు|పొట్ట)\s*నొప్పి/gi, "abdominal pain"],
+  [/ఛాతీ\s*నొప్పి/gi, "chest pain"],
+  [/వీపు\s*నొప్పి|నడుము\s*నొప్పి/gi, "back pain"],
+  [/కీళ్ళ\s*నొప్పులు/gi, "joint pain"],
+  [/దగ్గు/gi, "cough"],
+  [/ఆయాసం|ఊపిరి\s*ఆడటం\s*లేదు/gi, "breathlessness"],
+  [/వాంతులు/gi, "vomiting"],
+  [/వికారం/gi, "nausea"],
+  [/నీరసం|బలహీనత/gi, "weakness"],
+  [/తల\s*తిరుగుతుంది/gi, "dizziness"],
+  [/మోషన్స్|విరేచనాలు/gi, "loose motions"],
+  [/మలబద్ధకం/gi, "constipation"],
+  [/ఆకలి\s*లేకపోవడం/gi, "loss of appetite"],
+  [/నిద్ర\s*పట్టడం\s*లేదు/gi, "disturbed sleep"],
+  [/దురద/gi, "itching"],
+  [/వాపు/gi, "swelling"],
+  [/రక్తపోటు|బిపి/gi, "blood pressure"],
+  [/షుగర్\s*వ్యాధి|మధుమేహం/gi, "diabetes"],
   [/రోజుల\s*నుండి|రోజుల\s*నుంచి/gi, "days"],
   [/వారాల\s*నుండి/gi, "weeks"],
   [/నెలల\s*నుండి/gi, "months"],
   [/నిన్నటి\s*నుండి/gi, "since yesterday"],
+  [/విశ్రాంతి\s*తీసుకోండి/gi, "take rest"],
+  [/(మంచి\s*)?నీళ్ళు\s*ఎక్కువగా\s*తాగండి/gi, "drink plenty of fluids"],
 
-  // Telugu Medications & Dosages
-  [/పారాసిటమాల్/gi, "Paracetamol 650mg"],
-  [/అజిత్రోమైసిన్/gi, "Azithromycin 500mg"],
-  [/అమాక్సిసిలిన్/gi, "Amoxicillin 500mg"],
-  [/పాంటోప్రాజోల్|ప్యాన్\s*40/gi, "Pantoprazole 40mg"],
-  [/సెటిరిజైన్/gi, "Cetirizine 10mg"],
-  [/డొలో\s*650/gi, "Paracetamol 650mg (Dolo)"],
-  [/(మాత్రలు|మాత్ర)/gi, "Tab"],
-  [/సిరప్/gi, "Syrup"],
-  [/ఇంజెక్షన్/gi, "Inj"],
-  [/ఇన్హేలర్/gi, "Inhaler"],
-  [/రోజుకి\s*ఒకసారి|ఉదయం\s*ఒకసారి/gi, "OD"],
-  [/రోజుకి\s*రెండు\s*సార్లు|ఉదయం\s*రాత్రి/gi, "BD"],
-  [/రోజుకి\s*మూడు\s*సార్లు/gi, "TDS"],
-  [/అన్నం\s*తిన్నాక|భోజనం\s*తరువాత/gi, "after food"],
-  [/అన్నం\s*తినకముందు|ఖాళీ\s*కడుపుతో/gi, "before food"],
-  [/రాత్రి\s*పడుకునేముందు/gi, "HS (at bedtime)"],
-
-  // Telugu Lab Tests & Diagnostics
-  [/రక్తం\s*పరీక్ష|బ్లడ్\s*టెస్ట్/gi, "Blood Test"],
-  [/మూత్ర\s*పరీక్ష/gi, "Urine Routine & Microscopy"],
-  [/సిబిసి/gi, "Complete Blood Count (CBC)"],
-  [/ఎక్స్\s*రే|ఎక్స్-రే/gi, "Chest X-Ray PA View"],
-  [/ఈసిజి|గుండె\s*పరీక్ష/gi, "ECG 12-Lead"],
-  [/స్కానింగ్|అల్ట్రాసౌండ్/gi, "Ultrasound Abdomen (USG)"],
-  [/విశ్రాంతి\s*తీసుకోండి/gi, "Take proper rest"],
-  [/మంచి\s*నీళ్ళు\s*ఎక్కువగా\s*తాగండి/gi, "Maintain high fluid hydration"],
-
-  // ── Hindi Clinical Symptoms & Terms Translation ──
-  [/बुखार\s*(है)?/gi, "Fever"],
-  [/सर\s*दर्द|सिर\s*दर्द/gi, "Headache"],
-  [/पेट\s*दर्द/gi, "Abdominal Pain"],
-  [/खाँसी|खांसी/gi, "Cough"],
-  [/सांस\s*फूलना/gi, "Shortness of Breath"],
-  [/उल्टी/gi, "Vomiting / Nausea"],
-  [/कमजोरी/gi, "General Weakness"],
-  [/गले\s*में\s*दर्द/gi, "Throat Pain"],
-  [/छाती\s*में\s*दर्द/gi, "Chest Pain"],
-  [/दस्त|लूज\s*मोशन/gi, "Diarrhea"],
+  // ── Hindi symptoms & clinical terms ──
+  [/बुखार\s*(है)?/gi, "fever"],
+  [/सर\s*दर्द|सिर\s*दर्द/gi, "headache"],
+  [/पेट\s*दर्द/gi, "abdominal pain"],
+  [/छाती\s*में\s*दर्द|सीने\s*में\s*दर्द/gi, "chest pain"],
+  [/कमर\s*दर्द/gi, "back pain"],
+  [/गले\s*में\s*दर्द/gi, "throat pain"],
+  [/खाँसी|खांसी/gi, "cough"],
+  [/सांस\s*फूलना|सांस\s*लेने\s*में\s*तकलीफ/gi, "breathlessness"],
+  [/उल्टी/gi, "vomiting"],
+  [/जी\s*मिचलाना/gi, "nausea"],
+  [/कमजोरी/gi, "weakness"],
+  [/चक्कर\s*आना/gi, "dizziness"],
+  [/दस्त|लूज\s*मोशन/gi, "loose motions"],
+  [/कब्ज/gi, "constipation"],
+  [/भूख\s*नहीं\s*लगती/gi, "loss of appetite"],
+  [/सूजन/gi, "swelling"],
   [/दिनों\s*से/gi, "days"],
-  [/पैरासिटामोल/gi, "Paracetamol 650mg"],
-  [/एजिथ्रोमाइसिन/gi, "Azithromycin 500mg"],
-  [/गोली|दवाई/gi, "Tab"],
-  [/दिन\s*में\s*दो\s*बार/gi, "BD"],
-  [/दिन\s*में\s*तीन\s*बार/gi, "TDS"],
-  [/खाने\s*के\s*बाद/gi, "after food"],
-  [/खाने\s*से\s*पहले/gi, "before food"],
-  [/रात\s*को/gi, "HS"],
-  [/खून\s*की\s*जांच|ब्लड\s*टेस्ट/gi, "Blood Test"],
+  [/हफ्तों\s*से/gi, "weeks"],
+  [/महीनों\s*से/gi, "months"],
+  [/आराम\s*कीजिए/gi, "take rest"],
 
-  // Common Medication Names Phonetic Corrections
-  [/\b(para\s*citacol|para\s*cetamol|crocin|calpol|p\s*650)\b/gi, "Paracetamol"],
-  [/\b(azithro|azithromycin|azithral|zithromax)\b/gi, "Azithromycin"],
-  [/\b(amox|amoxicillin|mox|augmentin)\b/gi, "Amoxicillin"],
-  [/\b(pantop|pantoprazole|pan\s*40|pantocid)\b/gi, "Pantoprazole"],
-  [/\b(cetrizine|cetrizin|cetzine|ziyrtec)\b/gi, "Cetirizine"],
-  [/\b(metformin|glycomet|glucophage)\b/gi, "Metformin"],
-  [/\b(ondem|ondansetron|emset)\b/gi, "Ondansetron"],
-  [/\b(ibuprofen|brufen|combiflam)\b/gi, "Ibuprofen"],
-  [/\b(telmi|telmisartan|micardis)\b/gi, "Telmisartan"],
-  [/\b(amlo|amlodipine|norvasc)\b/gi, "Amlodipine"],
-  [/\b(atorva|atorvastatin|lipitor)\b/gi, "Atorvastatin"],
-  [/\b(dolo|dolo\s*650)\b/gi, "Paracetamol 650mg"],
-  [/\b(ors|oral\s*rehydration)\b/gi, "ORS Sachet"],
-  [/\b(oflox|ofloxacin|zenflox)\b/gi, "Ofloxacin"],
-  [/\b(ranitidine|aciloc)\b/gi, "Ranitidine"],
+  // ── English speech-recognition clean-up ──
+  [/\b(feverish|temperature\s+is\s+high|running\s+temperature)\b/gi, "fever"],
+  [/\b(loose\s+motion|loose\s+motions|lose\s+motion)\b/gi, "loose motions"],
+  [/\b(short\s+of\s+breath|breathlessness|breathing\s+difficulty|shortness\s+of\s+breath)\b/gi, "breathlessness"],
+  [/\b(stomach\s+ache|tummy\s+pain|belly\s+pain)\b/gi, "abdominal pain"],
+  [/\b(head\s+ache|head\s+pain)\b/gi, "headache"],
+  [/\b(giddiness|light\s+headed|lightheaded)\b/gi, "dizziness"],
+  [/\b(throwing\s+up|puking)\b/gi, "vomiting"],
+  [/\b(b\s*p|blood\s+pressure)\b/gi, "blood pressure"],
+  [/\b(sugar\s+problem|sugar\s+patient)\b/gi, "diabetes"],
+  [/\b(since\s+how\s+many\s+days)\b/gi, "since how many days"],
+  // Speech recognition loves spelling out digits next to units.
+  [/\b(\d+)\s+(days?|weeks?|months?|years?)\b/gi, "$1 $2"],
 
-  // Frequencies & Dosages Phonetic Corrections
-  [/\b(once\s*a?\s*day|once\s*daily|one\s*time\s*a?\s*day|o\s*d)\b/gi, "OD"],
-  [/\b(twice\s*a?\s*day|twice\s*daily|two\s*times\s*a?\s*day|b\s*d)\b/gi, "BD"],
-  [/\b(thrice\s*a?\s*day|thrice\s*daily|three\s*times\s*a?\s*day|t\s*d\s*s|t\s*i\s*d)\b/gi, "TDS"],
-  [/\b(four\s*times\s*a?\s*day|q\s*i\s*d|q\s*d\s*s)\b/gi, "QID"],
-  [/\b(at\s*night|at\s*bedtime|h\s*s)\b/gi, "HS"],
-  [/\b(when\s*needed|as\s*needed|if\s*required|s\s*o\s*s)\b/gi, "SOS"],
-  [/\b(before\s*food|before\s*meals|empty\s*stomach)\b/gi, "before food"],
-  [/\b(after\s*food|after\s*meals)\b/gi, "after food"],
-  [/\b(milligram|milligrams|m\s*g)\b/gi, "mg"],
-  [/\b(microgram|micrograms|m\s*c\s*g)\b/gi, "mcg"],
-  [/\b(gram|grams|g\s*m)\b/gi, "g"],
-  [/\b(milliliter|milliliters|m\s*l)\b/gi, "ml"],
-  [/\b(tablet|tablets|tab)\b/gi, "Tab"],
-  [/\b(capsule|capsules|cap)\b/gi, "Cap"],
-  [/\b(syrup|syp)\b/gi, "Syrup"],
-  [/\b(injection|inj)\b/gi, "Inj"],
-
-  // Laboratory & Diagnostic Phonetic Corrections
-  [/\b(c\s*b\s*c|see\s*bee\s*see|complete\s*blood|blood\s*count)\b/gi, "Complete Blood Count (CBC)"],
-  [/\b(h\s*b\s*a\s*1\s*c|hba1c|glycated\s*hemoglobin)\b/gi, "HbA1c"],
-  [/\b(l\s*f\s*t|liver\s*function)\b/gi, "Liver Function Test (LFT)"],
-  [/\b(k\s*f\s*t|r\s*f\s*t|kidney\s*function|renal\s*function)\b/gi, "Kidney Function Test (KFT)"],
-  [/\b(e\s*c\s*g|electrocardiogram)\b/gi, "ECG 12-Lead"],
-  [/\b(chest\s*x\s*ray|chest\s*xray|xray\s*chest)\b/gi, "Chest X-Ray PA View"],
-  [/\b(u\s*s\s*g|ultrasound|sonography)\b/gi, "Ultrasound Abdomen"],
-  [/\b(lipid\s*profile|cholesterol\s*test)\b/gi, "Lipid Profile"],
-  [/\b(fasting\s*sugar|f\s*b\s*s)\b/gi, "Fasting Blood Sugar (FBS)"],
-  [/\b(post\s*meal\s*sugar|p\s*p\s*b\s*s)\b/gi, "Postprandial Blood Sugar (PPBS)"],
-  [/\b(thyroid|t\s*s\s*h|t3\s*t4)\b/gi, "Thyroid Profile (TSH)"],
-  [/\b(urine\s*routine|urine\s*test)\b/gi, "Urine Routine & Microscopy"],
-  [/\b(stool\s*routine|stool\s*test)\b/gi, "Stool Routine & Microscopy"],
 ];
 
-/** Auto-detects spoken language(s) from transcript text */
+/** Auto-detects the spoken language(s) of a transcript. */
 export function detectLanguage(text: string): LanguageDetectionResult {
   if (!text || !text.trim()) {
     return {
@@ -175,239 +191,462 @@ export function detectLanguage(text: string): LanguageDetectionResult {
       languageCode: "en-IN",
       isMultiLingual: false,
       detectedLanguages: ["English"],
-      confidence: 1.0,
+      confidence: 1,
     };
   }
 
-  const teluguCount = (text.match(/[\u0C00-\u0C7F]/g) || []).length;
-  const hindiCount = (text.match(/[\u0900-\u097F]/g) || []).length;
-  const tamilCount = (text.match(/[\u0B80-\u0BFF]/g) || []).length;
-  const kannadaCount = (text.match(/[\u0C80-\u0CFF]/g) || []).length;
-  const englishCount = (text.match(/[a-zA-Z]/g) || []).length;
+  const scripts: { name: string; code: string; count: number }[] = [
+    { name: "Telugu (తెలుగు)", code: "te-IN", count: (text.match(/[ఀ-౿]/g) || []).length },
+    { name: "Hindi (हिंदी)", code: "hi-IN", count: (text.match(/[ऀ-ॿ]/g) || []).length },
+    { name: "Tamil (தமிழ்)", code: "ta-IN", count: (text.match(/[஀-௿]/g) || []).length },
+    { name: "Kannada (ಕನ್ನಡ)", code: "kn-IN", count: (text.match(/[ಀ-೿]/g) || []).length },
+    { name: "English", code: "en-IN", count: (text.match(/[a-zA-Z]/g) || []).length },
+  ];
 
-  const detected: string[] = [];
-  if (teluguCount > 3) detected.push("Telugu (తెలుగు)");
-  if (hindiCount > 3) detected.push("Hindi (हिंदी)");
-  if (tamilCount > 3) detected.push("Tamil (தமிழ்)");
-  if (kannadaCount > 3) detected.push("Kannada (ಕನ್ನಡ)");
-  if (englishCount > 5) detected.push("English");
+  const detected = scripts.filter(s => s.count > (s.code === "en-IN" ? 5 : 3));
+  const ranked = [...scripts].sort((a, b) => b.count - a.count);
+  const primary = ranked[0].count > 0 ? ranked[0] : scripts[4];
+  const total = scripts.reduce((sum, s) => sum + s.count, 0) || 1;
 
-  let primary = "English";
-  let code = "en-IN";
-
-  if (teluguCount > hindiCount && teluguCount > englishCount) {
-    primary = "Telugu (తెలుగు)";
-    code = "te-IN";
-  } else if (hindiCount > teluguCount && hindiCount > englishCount) {
-    primary = "Hindi (हिंदी)";
-    code = "hi-IN";
-  } else if (tamilCount > teluguCount && tamilCount > englishCount) {
-    primary = "Tamil (தமிழ்)";
-    code = "ta-IN";
-  } else if (kannadaCount > teluguCount && kannadaCount > englishCount) {
-    primary = "Kannada (కನ್ನಡ)";
-    code = "kn-IN";
-  }
-
-  const isMultiLingual = detected.length > 1;
-  const displayPrimary = isMultiLingual
-    ? `${detected.join(" + ")} (Auto-Detected)`
-    : `${primary} (Auto-Detected)`;
+  const names = detected.map(s => s.name);
+  const isMultiLingual = names.length > 1;
 
   return {
-    primaryLanguage: displayPrimary,
-    languageCode: code,
+    primaryLanguage: isMultiLingual ? names.join(" + ") : primary.name,
+    languageCode: primary.code,
     isMultiLingual,
-    detectedLanguages: detected.length > 0 ? detected : ["English"],
-    confidence: 0.95,
+    detectedLanguages: names.length ? names : ["English"],
+    confidence: Math.min(1, primary.count / total),
   };
 }
 
-/** Corrects raw speech recognition transcript into clean medical terms */
+/** Cleans one utterance of raw speech-recognition output into chart vocabulary. */
 export function normalizeMedicalSpeech(rawText: string): string {
   if (!rawText) return "";
-  let text = rawText;
+  let text = rawText.replace(/\s+/g, " ").trim();
   for (const [regex, replacement] of PHONETIC_MAP) {
     text = text.replace(regex, replacement);
   }
-  return text;
+  // Sentence-case the utterance; recognisers return everything lower-cased.
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-// ── AI Speaker Diarization (Doctor Voice vs Patient Voice) ─────────
+// ── Speaker separation ───────────────────────────────────────────────────────
+// Weighted cues rather than a flat keyword count: "how long has this been going
+// on" is a doctor asking, "it has been going on three days" is a patient
+// answering, and the two share most of their words. Weight is what separates
+// them, plus the fact that a consultation alternates.
 
-export interface DiarizedSpeech {
-  doctorStream: string[];
-  patientStream: string[];
-  fullTranscript: string;
-  split: PrescriptionSplit;
+interface Cue {
+  pattern: RegExp;
+  weight: number;
+  label: string;
 }
 
-const PATIENT_SYMPTOM_INDICATORS = [
-  // English
-  "i have", "i feel", "suffering from", "pain", "fever", "headache", "vomiting",
-  "nausea", "cough", "coughing", "chest pain", "stomach pain", "dizziness",
-  "weakness", "tired", "throat pain", "diarrhea", "loose motion", "since", "days",
-  "weeks", "months", "started yesterday", "my head", "my leg", "my arm", "my stomach",
-  // Telugu
-  "నాకు", "ఉంది", "నొప్పి", "జ్వరం", "దగ్గు", "వాంతులు", "నీరసం", "తలనొప్పి", "బాధపడుతున్నాను",
-  "రోజుల నుండి", "వచ్చింది", "నొప్పుగా", "ఆయాసం", "పొట్ట", "గొంతు", "షుగర్", "బిపి",
-  // Hindi
-  "मुझे", "दर्द", "बुखार", "खांसी", "उल्टी", "कमजोरी", "दिनों से", "सिर दर्द", "पेट दर्द",
+/** Phrases only the clinician in the room says. */
+const DOCTOR_CUES: Cue[] = [
+  { pattern: /\b(since\s+when|how\s+long|how\s+many\s+days|when\s+did\s+it\s+start|any\s+other|anything\s+else)\b/i, weight: 3, label: "history question" },
+  { pattern: /\b(do\s+you|did\s+you|have\s+you|are\s+you|is\s+there\s+any|were\s+you)\b/i, weight: 3, label: "asks the patient" },
+  { pattern: /\b(let\s+me\s+(see|check|examine)|open\s+your\s+mouth|show\s+me|lie\s+down|take\s+a\s+deep\s+breath|breathe\s+in)\b/i, weight: 4, label: "examination instruction" },
+  { pattern: /\b(on\s+examination|i\s+can\s+(see|hear|feel)|there\s+is\s+no|your\s+(blood\s+pressure|pulse|temperature|throat|chest|abdomen))\b/i, weight: 4, label: "examination finding" },
+  { pattern: /\b(looks\s+like|appears\s+to\s+be|seems\s+to\s+be)\b/i, weight: 2, label: "clinical statement" },
+  { pattern: /\b(you\s+(should|need\s+to|must|can)|avoid|take\s+rest|drink\s+(plenty|more|plenty\s+of\s+fluids)|come\s+back|follow\s+up|review\s+after|see\s+me\s+again|don'?t\s+worry|nothing\s+to\s+worry)\b/i, weight: 3, label: "advice to patient" },
+  { pattern: /^(any|is\s+there\s+any|anything)\b/i, weight: 3, label: "review of systems" },
+  { pattern: /\b(diagnosis|i\s+will\s+write|i\s+am\s+writing|this\s+is\s+a|it\s+is\s+a|viral|bacterial|infection|inflammation)\b/i, weight: 2, label: "clinical judgement" },
+  { pattern: /(ఎప్పటి\s*నుండి|ఎన్ని\s*రోజుల|చూపించండి|పడుకోండి|నోరు\s*తెరవండి|భయపడకండి)/i, weight: 3, label: "doctor (Telugu)" },
+  { pattern: /(कब\s*से|कितने\s*दिन|दिखाइए|लेट\s*जाइए|मुँह\s*खोलिए|घबराइए\s*मत)/i, weight: 3, label: "doctor (Hindi)" },
 ];
 
-const DOCTOR_DIRECTIVE_INDICATORS = [
-  // English
-  "diagnosis", "impression", "prescribing", "take", "tab", "tablet", "cap",
-  "injection", "syrup", "daily", "after food", "before food", "test", "cbc",
-  "x-ray", "xray", "ultrasound", "ecg", "advice", "follow up", "rest", "saline",
-  "steam", "drink water", "come back", "review",
-  // Telugu
-  "డాక్టర్", "మందులు", "మాత్రలు", "వేసుకోండి", "పరీక్షలు", "చేయించండి", "పారాసిటమాల్",
-  "ఎక్స్ రే", "సిబిసి", "విశ్రాంతి", "తాగండి", "వాడండి", "రోజుకి",
-  // Hindi
-  "डॉक्टर", "दवाई", "गोली", "जांच", "लेना", "टेस्ट", "आराम",
+/** Phrases only the person with the illness says. */
+const PATIENT_CUES: Cue[] = [
+  { pattern: /\b(i\s+(have|feel|am\s+having|had|get|got|can'?t|cannot)|i'?m\s+(having|feeling))\b/i, weight: 4, label: "first-person symptom" },
+  { pattern: /\bmy\s+(head|chest|stomach|throat|back|leg|arm|knee|eye|ear|body|joints?|tummy)\b/i, weight: 4, label: "own body part" },
+  { pattern: /\b(it\s+(hurts|pains|burns)|paining|hurting|not\s+able\s+to\s+(eat|sleep|walk|breathe))\b/i, weight: 3, label: "describes symptom" },
+  { pattern: /\b(yes\s+(doctor|sir|madam)|no\s+(doctor|sir|madam)|okay\s+doctor|thank\s+you\s+doctor)\b/i, weight: 4, label: "answers the doctor" },
+  { pattern: /\b(since|from|for\s+the\s+last|past)\s+\d*\s*(day|days|week|weeks|month|months|yesterday|morning|night)\b/i, weight: 2, label: "states duration" },
+  { pattern: /(నాకు|నాది|నా\s|బాధపడుతున్నాను|అవుతుంది|తగ్గడం\s*లేదు)/i, weight: 4, label: "patient (Telugu)" },
+  { pattern: /(मुझे|मेरा|मेरी|मेरे|हो\s*रहा\s*है|नहीं\s*हो\s*रहा)/i, weight: 4, label: "patient (Hindi)" },
+  { pattern: /\b(will\s+it\s+(go|get|take)|is\s+it\s+(serious|dangerous|bad)|how\s+long\s+will\s+it\s+take|can\s+i\s+|should\s+i\s+|do\s+i\s+(have|need)|what\s+happened\s+to\s+me)\b/i, weight: 3, label: "asks about their illness" },
 ];
+
+const SECOND_PERSON = /\b(you|your|మీ|మీకు|आप|आपको|आपका)\b/i;
+const FIRST_PERSON = /\b(i|me|my|mine|నాకు|నా|मुझे|मेरा|मेरी)\b/i;
+
+export interface SpeakerAttribution {
+  speaker: Speaker;
+  confidence: number;
+  basis: SpeakerBasis;
+  cues: string[];
+}
 
 /**
- * Diarizes dialogue text into Doctor vs Patient streams.
+ * Decides who said one utterance.
+ *
+ * `previousSpeaker` matters: a consultation alternates, so an utterance with no
+ * cues of its own most likely came from whoever did *not* just speak -- but that
+ * is the weakest signal available, and it is reported as such so the UI can flag
+ * the turn for the doctor to correct instead of presenting a guess as a fact.
  */
-export function diarizeDoctorAndPatient(transcript: string): DiarizedSpeech {
-  const doctorLines: string[] = [];
-  const patientLines: string[] = [];
+export function attributeSpeaker(text: string, previousSpeaker?: Speaker): SpeakerAttribution {
+  const clean = text.trim();
+  if (!clean) {
+    return { speaker: previousSpeaker || "doctor", confidence: 0, basis: "turn-taking", cues: [] };
+  }
 
-  const rawLines = transcript.split("\n").map(l => l.trim()).filter(Boolean);
+  const explicit = /^(doctor|dr|physician|డాక్టర్|डॉक्टर)\s*[:\-]/i.test(clean)
+    ? "doctor"
+    : /^(patient|pt|पेशेंट|పేషెంట్|मरीज)\s*[:\-]/i.test(clean)
+      ? "patient"
+      : null;
+  if (explicit) {
+    return { speaker: explicit as Speaker, confidence: 1, basis: "label", cues: ["explicit label"] };
+  }
 
-  let currentSpeaker: "doctor" | "patient" = "doctor";
+  let doctorScore = 0;
+  let patientScore = 0;
+  const cues: string[] = [];
 
-  for (const rawLine of rawLines) {
-    const line = normalizeMedicalSpeech(rawLine);
-    const lower = line.toLowerCase();
-
-    if (/^(doctor|dr|physician|డాక్టర్|डॉक्टर)\s*[:\-]/i.test(line)) {
-      const content = line.replace(/^(doctor|dr|physician|డాక్టర్|डॉक्टर)\s*[:\-]\s*/i, "").trim();
-      if (content) doctorLines.push(content);
-      currentSpeaker = "doctor";
-      continue;
+  for (const cue of DOCTOR_CUES) {
+    if (cue.pattern.test(clean)) {
+      doctorScore += cue.weight;
+      cues.push(cue.label);
     }
-
-    if (/^(patient|pt|user|పేషెంట్|मरीज)\s*[:\-]/i.test(line)) {
-      const content = line.replace(/^(patient|pt|user|పేషెంట్|मरीज)\s*[:\-]\s*/i, "").trim();
-      if (content) patientLines.push(content);
-      currentSpeaker = "patient";
-      continue;
+  }
+  for (const cue of PATIENT_CUES) {
+    if (cue.pattern.test(clean)) {
+      patientScore += cue.weight;
+      cues.push(cue.label);
     }
+  }
 
-    // Heuristic scoring for un-tagged audio streams
-    const patientScore = PATIENT_SYMPTOM_INDICATORS.reduce(
-      (acc, kw) => (lower.includes(kw.toLowerCase()) ? acc + 1 : acc),
-      0
-    );
-    const doctorScore = DOCTOR_DIRECTIVE_INDICATORS.reduce(
-      (acc, kw) => (lower.includes(kw.toLowerCase()) ? acc + 1 : acc),
-      0
-    );
-
-    if (patientScore > doctorScore && patientScore > 0) {
-      patientLines.push(line);
-      currentSpeaker = "patient";
-    } else if (doctorScore > 0) {
-      doctorLines.push(line);
-      currentSpeaker = "doctor";
+  // A question is a strong signal, but of *whom* depends on the pronoun: "how
+  // long have you had it" is the doctor, "will it go away" is the patient.
+  const isQuestion = /\?\s*$/.test(clean) || /^(how|what|when|where|why|which|is|are|do|does|did|can|will|should|have|has)\b/i.test(clean);
+  if (isQuestion) {
+    if (SECOND_PERSON.test(clean) && !FIRST_PERSON.test(clean)) {
+      doctorScore += 3;
+      cues.push("asks about you");
+    } else if (FIRST_PERSON.test(clean) && !SECOND_PERSON.test(clean)) {
+      patientScore += 2;
+      cues.push("asks about self");
     } else {
-      if (currentSpeaker === "patient") {
-        patientLines.push(line);
-      } else {
-        doctorLines.push(line);
-      }
+      doctorScore += 1;
     }
   }
 
-  const combinedText = [
-    patientLines.length > 0 ? `Patient Advice: ${patientLines.join(". ")}` : "",
-    doctorLines.join("\n"),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  const split = localSplit(combinedText);
-  if (patientLines.length > 0 && !split.advice) {
-    split.advice = `Patient reported symptoms: ${patientLines.join("; ")}`;
+  if (doctorScore === patientScore) {
+    // Nothing in the words separates them. Fall back on alternation.
+    const speaker: Speaker = previousSpeaker === "doctor" ? "patient" : "doctor";
+    return {
+      speaker,
+      confidence: doctorScore === 0 ? 0.25 : 0.4,
+      basis: "turn-taking",
+      cues: cues.length ? cues : ["no distinguishing cues"],
+    };
   }
+
+  let winner: Speaker = doctorScore > patientScore ? "doctor" : "patient";
+  let margin = Math.abs(doctorScore - patientScore);
+
+  // A one-point win over whoever just finished speaking is not evidence of
+  // anything -- people take turns. Hand the floor over and say so, rather than
+  // reporting a coin flip as a decision.
+  if (previousSpeaker && winner === previousSpeaker && margin <= 1) {
+    winner = previousSpeaker === "doctor" ? "patient" : "doctor";
+    return {
+      speaker: winner,
+      confidence: 0.35,
+      basis: "turn-taking",
+      cues: cues.length ? [...cues, "weak against turn order"] : ["turn order"],
+    };
+  }
+  const total = doctorScore + patientScore;
+  // Confidence is the margin as a share of the evidence, floored so a single
+  // weak cue never reads as certainty and capped below an explicit label.
+  const confidence = Math.max(0.35, Math.min(0.95, margin / Math.max(total, 1) * 0.6 + Math.min(margin, 6) / 12));
+
+  return { speaker: winner, confidence, basis: "cues", cues };
+}
+
+let turnCounter = 0;
+function nextTurnId(): string {
+  turnCounter += 1;
+  return `turn-${Date.now().toString(36)}-${turnCounter.toString(36)}`;
+}
+
+/**
+ * Builds one turn from a freshly recognised utterance.
+ *
+ * `forcedSpeaker` is the doctor's own Doctor/Patient toggle. When it is set the
+ * heuristics are not consulted at all -- a human in the room beats a keyword
+ * list, and the turn is marked `manual` so the UI does not flag it for review.
+ */
+export function buildTurn(
+  rawText: string,
+  options: { atMs: number; previousSpeaker?: Speaker; forcedSpeaker?: Speaker | null }
+): TranscriptTurn | null {
+  const text = normalizeMedicalSpeech(rawText).replace(/^(doctor|dr|patient|pt)\s*[:\-]\s*/i, "");
+  if (!text.trim()) return null;
+
+  const attribution = options.forcedSpeaker
+    ? { speaker: options.forcedSpeaker, confidence: 1, basis: "manual" as SpeakerBasis, cues: ["set by the doctor"] }
+    : attributeSpeaker(text, options.previousSpeaker);
 
   return {
-    doctorStream: doctorLines,
-    patientStream: patientLines,
-    fullTranscript: combinedText,
-    split,
+    id: nextTurnId(),
+    speaker: attribution.speaker,
+    text,
+    atMs: Math.max(0, options.atMs),
+    confidence: attribution.confidence,
+    basis: attribution.basis,
+    cues: attribution.cues,
+    languageCode: detectLanguage(text).languageCode,
   };
 }
 
+/** Parses a pasted or typed conversation into turns, one per line. */
+export function diarizeTranscript(transcript: string): TranscriptTurn[] {
+  const lines = transcript.split(/\n+/).map(line => line.trim()).filter(Boolean);
+  const turns: TranscriptTurn[] = [];
+  for (const line of lines) {
+    const turn = buildTurn(line, {
+      atMs: turns.length * 1000,
+      previousSpeaker: turns[turns.length - 1]?.speaker,
+    });
+    if (turn) turns.push(turn);
+  }
+  return turns;
+}
+
+/** Re-assigns one turn's speaker. The correction is authoritative from then on. */
+export function setTurnSpeaker(turns: TranscriptTurn[], turnId: string, speaker: Speaker): TranscriptTurn[] {
+  return turns.map(turn =>
+    turn.id === turnId
+      ? { ...turn, speaker, confidence: 1, basis: "manual" as SpeakerBasis, cues: ["corrected by the doctor"] }
+      : turn
+  );
+}
+
+/** The transcript as a speaker-labelled block, for the record and for export. */
+export function formatTranscript(turns: TranscriptTurn[]): string {
+  return turns
+    .map(turn => `${turn.speaker === "doctor" ? "Doctor" : "Patient"}: ${turn.text}`)
+    .join("\n");
+}
+
+// ── Clinical note summarisation ──────────────────────────────────────────────
+
+const SYMPTOM_LEXICON: { term: string; pattern: RegExp }[] = [
+  { term: "Fever", pattern: /\bfever\b/i },
+  { term: "Cough", pattern: /\bcough\b/i },
+  { term: "Headache", pattern: /\bheadache\b/i },
+  { term: "Throat pain", pattern: /\bthroat pain\b/i },
+  { term: "Chest pain", pattern: /\bchest pain\b/i },
+  { term: "Abdominal pain", pattern: /\babdominal pain\b/i },
+  { term: "Back pain", pattern: /\bback pain\b/i },
+  { term: "Joint pain", pattern: /\bjoint pain\b/i },
+  { term: "Breathlessness", pattern: /\bbreathlessness\b/i },
+  { term: "Vomiting", pattern: /\bvomiting\b/i },
+  { term: "Nausea", pattern: /\bnausea\b/i },
+  { term: "Loose motions", pattern: /\bloose motions\b/i },
+  { term: "Constipation", pattern: /\bconstipation\b/i },
+  { term: "Dizziness", pattern: /\bdizziness\b/i },
+  { term: "Weakness", pattern: /\bweakness\b/i },
+  { term: "Loss of appetite", pattern: /\bloss of appetite\b/i },
+  { term: "Swelling", pattern: /\bswelling\b/i },
+  { term: "Itching", pattern: /\bitching\b/i },
+  { term: "Disturbed sleep", pattern: /\bdisturbed sleep\b/i },
+  { term: "Burning micturition", pattern: /\bburning (urination|micturition)\b/i },
+  { term: "Rash", pattern: /\brash\b/i },
+  { term: "Palpitations", pattern: /\bpalpitations?\b/i },
+];
+
+const ONSET_RE = /\b((?:since|from|for the last|past)\s+(?:\d+\s+)?(?:day|days|week|weeks|month|months|year|years|yesterday|morning|night|evening)|\d+\s+(?:day|days|week|weeks|month|months|year|years))\b/i;
+
+// An examination finding is something the doctor observed, stated as a fact
+// about the patient's body -- not an instruction ("open your mouth") and not a
+// conclusion ("this looks like a viral infection"), both of which belong in
+// other sections and both of which an over-broad pattern will swallow.
+const EXAM_RE = /\b(on examination|i can (see|hear|feel)|your (blood pressure|pulse|temperature|throat|chest|abdomen|tongue|eyes|heart|lungs)\s+(is|are|looks|appears|seems)|there (is|are) (no )?(tenderness|swelling|rash|redness|congestion)|(is|are|looks|appears) (tender|swollen|congested|clear|normal|red|pale))/i;
+const EXAM_INSTRUCTION_RE = /\b(let me (see|check|examine)|open your mouth|show me|lie down|sit up|take a deep breath|breathe in)\b/i;
+const ADVICE_RE = /\b(take rest|get rest|avoid|drink|diet|fluids|steam|warm water|gargle|walk|exercise|do not|don'?t|stop|continue|monitor)\b/i;
+const FOLLOWUP_RE = /\b(come back|follow up|follow-up|review (after|in)|see me (again|after)|next visit|revisit|after (\d+|a|one|two|three) (day|days|week|weeks|month|months))\b/i;
+const ASSESSMENT_RE = /\b(this (is|looks like|seems)|it (is|looks like|seems)|diagnosis|most likely|probably|viral|bacterial|infection|inflammation|gastritis|migraine|allergy|allergic|sprain|strain|anemia|anaemia|uncontrolled|under control)\b/i;
+
+function firstSentence(text: string): string {
+  return sentences(text)[0] || text.trim();
+}
+
 /**
- * Generates a complete AI Clinical Audio Summary from recorded/dictated speech transcript.
+ * Splits an utterance into sentences.
+ *
+ * The note is assembled sentence by sentence, not line by line: "Take rest and
+ * drink plenty of fluids. Come back after 7 days." is one breath and two
+ * different parts of the note, and classifying the whole line sent the advice
+ * into the follow-up field and left "Advice given" reading "not stated".
  */
-export function generateAudioClinicalSummary(
-  rawTranscript: string,
-  durationSeconds = 0
-): AudioClinicalSummary {
-  const langDetect = detectLanguage(rawTranscript);
-  const normalized = normalizeMedicalSpeech(rawTranscript);
-  const diarized = diarizeDoctorAndPatient(normalized);
+function sentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+}
 
-  const mins = Math.floor(durationSeconds / 60);
-  const secs = durationSeconds % 60;
-  const audioDurationFormatted = durationSeconds > 0 ? `${mins}m ${secs}s` : "Live Dictation";
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values.map(v => v.trim()).filter(Boolean)));
+}
 
-  const split = diarized.split;
+function formatDuration(seconds: number): string {
+  if (seconds <= 0) return "not timed";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
 
-  const chiefComplaint = diarized.patientStream.length > 0
-    ? diarized.patientStream.slice(0, 2).join("; ")
-    : "Reported symptoms discussed in consultation";
+/**
+ * Summarises the consultation into a clinical note.
+ *
+ * The patient's turns become the subjective half (complaint and history), the
+ * doctor's declarative turns become the objective/assessment half, and the
+ * doctor's instructional turns become the plan. Nothing becomes a medicine or a
+ * test -- the plan section says where those come from instead.
+ */
+export function summariseConsultation(
+  turns: TranscriptTurn[],
+  options: { durationSeconds?: number; patientName?: string } = {}
+): ConsultationNoteSummary {
+  const durationSeconds = Math.max(0, Math.round(options.durationSeconds || 0));
+  const fullText = turns.map(t => t.text).join("\n");
+  const language = detectLanguage(fullText);
 
-  const patientHistory = diarized.patientStream.join(" ");
+  const patientTurns = turns.filter(t => t.speaker === "patient");
+  const doctorTurns = turns.filter(t => t.speaker === "doctor");
+  const patientText = patientTurns.map(t => t.text);
+  const doctorText = doctorTurns.map(t => t.text);
 
-  const doctorImpression = split.diagnosis || "Acute consultation evaluation & clinical management plan";
+  // Symptoms, in the patient's own words, with the onset they gave.
+  const symptoms: RecognisedSymptom[] = [];
+  for (const entry of SYMPTOM_LEXICON) {
+    const source = patientText.find(line => entry.pattern.test(line)) || "";
+    if (!source) continue;
+    symptoms.push({
+      term: entry.term,
+      saidAs: firstSentence(source),
+      onset: (source.match(ONSET_RE)?.[0] || "").trim(),
+    });
+  }
 
-  const advice = split.advice || "Follow medication schedule, maintain fluid intake, and review if symptoms persist.";
+  const complaintLine = patientText.find(line => SYMPTOM_LEXICON.some(s => s.pattern.test(line)));
+  const chiefComplaint = symptoms.length
+    ? symptoms
+        .slice(0, 3)
+        .map(s => (s.onset ? `${s.term} (${s.onset})` : s.term))
+        .join(", ")
+    : complaintLine
+      ? firstSentence(complaintLine)
+      : patientText.length
+        ? firstSentence(patientText[0])
+        : "";
 
-  const medsListStr = split.medications.length > 0
-    ? split.medications.map(m => `${m.name} (${m.frequency || "OD"} x ${m.duration || "3 days"})`).join(", ")
-    : "No oral medications required";
+  const historyOfPresentIllness = patientText.length
+    ? patientText.join(" ").replace(/\s+/g, " ").trim()
+    : "";
 
-  const labsListStr = split.labTests.length > 0
-    ? split.labTests.map(l => `${l.name} [${l.category}]`).join(", ")
-    : "No diagnostic lab tests ordered";
+  // Every declarative sentence the doctor spoke, as sentences rather than lines.
+  const statements = doctorText.flatMap(sentences).filter(part => !/\?\s*$/.test(part));
 
-  const soapSubjective = diarized.patientStream.length > 0
-    ? `Patient said: "${diarized.patientStream.join(". ")}"`
-    : `Patient reported: ${chiefComplaint}`;
+  // Assigned in order of specificity, each section claiming its sentences before
+  // the next one looks, so a sentence lands in exactly one part of the note:
+  // "this looks like a viral infection" is an impression, never a finding, and
+  // "come back after 7 days" is follow-up, not advice.
+  const claimed = new Set<string>();
 
-  const soapObjective = `Consultation notes from voice recording (${langDetect.primaryLanguage}).`;
+  const assessmentSentence = statements.find(part => ASSESSMENT_RE.test(part) && !EXAM_RE.test(part));
+  const assessment = assessmentSentence || "";
+  if (assessmentSentence) claimed.add(assessmentSentence);
 
-  const soapAssessment = `Diagnosis: ${doctorImpression}`;
+  const followUpSentence = statements.find(part => FOLLOWUP_RE.test(part));
+  const followUp = followUpSentence || "";
+  if (followUpSentence) claimed.add(followUpSentence);
 
-  const soapPlan = `Medicines: ${medsListStr}. Tests: ${labsListStr}. Advice: ${advice}`;
+  const doctorObservations = unique(
+    statements.filter(part => !claimed.has(part) && (EXAM_RE.test(part) || EXAM_INSTRUCTION_RE.test(part)))
+  );
+  doctorObservations.forEach(part => claimed.add(part));
 
-  const summaryParagraph = `Voice Consultation (${langDetect.primaryLanguage}, ${audioDurationFormatted}). Patient reported: "${chiefComplaint}". Doctor diagnosis: "${doctorImpression}". Advice: "${advice}". Prescribed Medicines: ${medsListStr}. Diagnostic Tests Ordered: ${labsListStr}.`;
+  const advice = unique(statements.filter(part => !claimed.has(part) && ADVICE_RE.test(part)));
+
+  const who = options.patientName ? options.patientName : "The patient";
+  const uncertainTurns = turns.filter(t => t.basis !== "manual" && t.basis !== "label" && t.confidence < 0.5).length;
+
+  const subjective = historyOfPresentIllness
+    ? `${who} reports ${chiefComplaint || "the symptoms below"}. ${historyOfPresentIllness}`
+    : chiefComplaint
+      ? `${who} reports ${chiefComplaint}.`
+      : "Nothing recorded from the patient in this conversation.";
+
+  const objective = doctorObservations.length
+    ? doctorObservations.join(" ")
+    : "No examination findings were spoken during the recording. Vitals are on the patient card.";
+
+  const assessmentText = assessment || "Clinical impression not stated aloud — confirm on the prescription sheet.";
+
+  const planParts = [
+    advice.length ? `Advice: ${advice.join(" ")}` : "",
+    followUp ? `Follow-up: ${followUp}` : "",
+    "Medicines and investigations are taken from the prescription sheet, not from this recording.",
+  ].filter(Boolean);
+
+  const narrative = [
+    `Voice consultation${durationSeconds ? ` (${formatDuration(durationSeconds)}` : " ("}${
+      durationSeconds ? ", " : ""
+    }${language.primaryLanguage}), ${turns.length} exchange${turns.length === 1 ? "" : "s"}.`,
+    chiefComplaint ? `${who} reports ${chiefComplaint}.` : "",
+    doctorObservations.length ? `On examination: ${doctorObservations.join(" ")}` : "",
+    assessment ? `Impression: ${assessment}` : "",
+    advice.length ? `Advice given: ${advice.join(" ")}` : "",
+    followUp ? followUp : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   return {
-    detectedLanguage: langDetect.primaryLanguage,
-    languageCode: langDetect.languageCode,
-    isMultiLingual: langDetect.isMultiLingual,
-    audioDurationFormatted,
+    language: language.primaryLanguage,
+    languageCode: language.languageCode,
+    isMultiLingual: language.isMultiLingual,
+    durationSeconds,
+    durationFormatted: formatDuration(durationSeconds),
+
+    turnCount: turns.length,
+    doctorTurns: doctorTurns.length,
+    patientTurns: patientTurns.length,
+    uncertainTurns,
+    patientShare: turns.length ? patientTurns.length / turns.length : 0,
+
     chiefComplaint,
-    patientHistory,
-    doctorImpression,
-    diagnosis: split.diagnosis || doctorImpression,
+    historyOfPresentIllness,
+    symptoms,
+    patientReported: unique(patientText.map(firstSentence)),
+    doctorObservations,
+    assessment,
     advice,
-    summaryParagraph,
-    extractedMedications: split.medications,
-    extractedLabTests: split.labTests,
-    fullTranscript: normalized,
-    doctorStream: diarized.doctorStream,
-    patientStream: diarized.patientStream,
-    soapSubjective,
-    soapObjective,
-    soapAssessment,
-    soapPlan,
+    followUp,
+
+    soap: {
+      subjective,
+      objective,
+      assessment: assessmentText,
+      plan: planParts.join(" "),
+    },
+    narrative,
+    coverage: {
+      symptoms: symptoms.length > 0 || patientTurns.length > 0,
+      onset: symptoms.some(s => !!s.onset) || ONSET_RE.test(historyOfPresentIllness),
+      examination: doctorObservations.length > 0,
+      advice: advice.length > 0,
+      followUp: !!followUp,
+    },
   };
 }

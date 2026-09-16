@@ -121,7 +121,7 @@ export default function Surgery() {
     try {
       const existing = deptCharges.find(d => d.patientId === c.patientId && d.department === "Surgery");
       if (!existing) {
-        BillingDatabase.addDepartmentCharge({
+        BillingDatabase.createDepartmentCharge({
           patientId: c.patientId,
           mrn: c.patientId.replace(/\D/g, "") || "100412",
           patientName: c.patient.split(",")[0].trim(),

@@ -1,16 +1,24 @@
-// Points at the ER/Bed Management backend started via `python backend/app.py`
-// (see backend/README section of the integration report) -- same
-// hardcoded-localhost:8000 convention already used by SmartOCR.tsx/
-// SymptomAI.tsx/ClinicalSummaries.tsx elsewhere in this app.
+// The hospital backend gateway, reached through this app's own origin.
 //
-// VITE_API_BASE overrides this at build time (see .env.production, used for
-// the Cloudflare Pages deploy, where the backend isn't reachable at
-// localhost -- it's a Cloudflare Tunnel URL instead). Local dev is
-// unaffected: no .env.production is loaded in dev mode, so this still
-// defaults to localhost.
+// `/hms-api` is a reverse proxy onto the gateway on port 8010 (see the `proxy`
+// block in vite.config.ts, which strips the prefix before forwarding). It is a
+// same-origin *path*, deliberately, not `http://localhost:8010`:
+//
+//  - An absolute localhost URL only resolves when the browser is on the same
+//    machine as the backend. Open the app through a tunnel, a forwarded port or
+//    from another device and `localhost:8010` is the *viewer's* machine, where
+//    nothing is listening -- every call fails as "Failed to fetch".
+//  - The gateway's CORS allowlist admits localhost origins only, so even a
+//    reachable backend rejects a request from a tunnel hostname.
+//  - The session cookie is `SameSite=Lax`, so it would be withheld from
+//    cross-site POSTs anyway.
+//
+// Same-origin settles all three. VITE_API_BASE still overrides it at build time
+// (see .env.production, for the Cloudflare Pages deploy, where the backend is a
+// Cloudflare Tunnel URL rather than something this server can proxy).
 const API_BASE_OVERRIDE = import.meta.env.VITE_API_BASE as string | undefined;
-export const API_BASE = API_BASE_OVERRIDE || "http://localhost:8010";
-export const SYMPTOM_API_BASE = API_BASE_OVERRIDE || "http://localhost:8010";
+export const API_BASE = API_BASE_OVERRIDE || "/hms-api";
+export const SYMPTOM_API_BASE = API_BASE_OVERRIDE || "/hms-api";
 
 export const SUPPORTED_DOCUMENT_EXTENSIONS = [
   "pdf",

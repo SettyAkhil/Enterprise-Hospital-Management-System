@@ -1,3 +1,4 @@
+import { ACTIVE_DOCTORS, ACTIVE_SPECIALTIES } from "./doctorMaster";
 /**
  * Doctor Portal store.
  *
@@ -15,6 +16,7 @@
  */
 
 import { db, DBOPEncounter, DBPatient } from "./db";
+import type { ConsultationNoteSummary, TranscriptTurn } from "../lib/medicalVoiceAI";
 
 // ── Doctor roster ────────────────────────────────────────────────────────────
 // Mirrors the names OP registration's AI triage assigns encounters to, since the
@@ -30,17 +32,24 @@ export interface DoctorAccount {
   qualification: string;
 }
 
-export const DOCTOR_ROSTER: DoctorAccount[] = [
-  { id: "doc-8", username: "doctor", name: "Dr. Sarah Jenkins", specialty: "Cardiology", room: "Room 102", staffId: "DOC-402", qualification: "MD, DM (Cardiology)" },
-  { id: "doc-1", username: "doctor.mehta", name: "Dr. Arjun Mehta", specialty: "Cardiology", room: "Room 107", staffId: "DOC-411", qualification: "MD, DNB (Cardiology)" },
-  { id: "doc-4", username: "doctor.sharma", name: "Dr. Rajesh Sharma", specialty: "Cardiology", room: "Room 104", staffId: "DOC-418", qualification: "MBBS, MD" },
-  { id: "doc-6", username: "doctor.patel", name: "Dr. Priya Patel", specialty: "Cardiology", room: "Room 105", staffId: "DOC-423", qualification: "MD (Internal Medicine)" },
-  { id: "doc-5", username: "doctor.anderson", name: "Dr. David Anderson", specialty: "Orthopedics", room: "Room 112", staffId: "DOC-430", qualification: "MS (Ortho)" },
-  { id: "doc-2", username: "doctor.kapoor", name: "Dr. Sanjay Kapoor", specialty: "Orthopedics", room: "Room 116", staffId: "DOC-437", qualification: "MS, DNB (Ortho)" },
-  { id: "doc-3", username: "doctor.malhotra", name: "Dr. Vikram Malhotra", specialty: "General Medicine", room: "Room 111", staffId: "DOC-441", qualification: "MBBS, MD" },
-  { id: "doc-7", username: "doctor.desai", name: "Dr. Anita Desai", specialty: "General Medicine", room: "Room 101", staffId: "DOC-448", qualification: "MBBS, DNB" },
-  { id: "doc-9", username: "doctor.kumar", name: "Dr. Ramesh Kumar", specialty: "General Medicine", room: "Room 103", staffId: "DOC-455", qualification: "MBBS, MD" },
-];
+/**
+ * Every doctor who can sign in and hold a workspace.
+ *
+ * Derived from the Imperial Hospitals doctor master rather than listed here, so
+ * the roster, the login credentials, symptom triage and appointment booking
+ * cannot drift apart -- they were previously nine hardcoded names repeated
+ * across ten files. Only doctors whose name and specialty are legible on the OP
+ * card appear; see `doctorMaster.ts` for why the rest are held back.
+ */
+export const DOCTOR_ROSTER: DoctorAccount[] = ACTIVE_DOCTORS.map(d => ({
+  id: d.id,
+  username: d.username as string,
+  name: d.name,
+  specialty: d.specialty as string,
+  room: d.room,
+  staffId: d.staffId,
+  qualification: d.qualification,
+}));
 
 export function getDoctorById(doctorId?: string | null): DoctorAccount {
   return DOCTOR_ROSTER.find(d => d.id === doctorId) || DOCTOR_ROSTER[0];
@@ -87,6 +96,9 @@ export interface DoctorNotification {
   vitals: DBOPEncounter["vitals"];
   status: DBOPEncounter["status"];
   arrivedAt: string;
+  /** Who took the baseline vitals at the OP nurse station, and when. */
+  vitalsBy?: string;
+  vitalsAt?: string;
   read: boolean;
 }
 
@@ -139,7 +151,23 @@ export interface ConsultationRecord {
   /** A photographed/scanned prescription the doctor uploaded instead of writing one. */
   uploadedPrescription?: ConsultationAttachment;
 
-  /** The single sheet, as text, before it was split. */
+  /**
+   * The spoken consultation: separated doctor/patient turns and the clinical
+   * note summarised from them.
+   *
+   * This is the history-and-advice record, never a source of orders -- a doctor
+   * does not dictate a prescription at the patient, so nothing in here reaches
+   * the pharmacy or the lab. The audio itself is not persisted (same quota
+   * reasoning as `video`); the transcript is the clinical artefact worth keeping.
+   */
+  voice?: {
+    turns: TranscriptTurn[];
+    summary: ConsultationNoteSummary;
+    durationSeconds: number;
+    recordedAt: string;
+  };
+
+  /** The single prescription sheet, as text, before it was split. */
   rawText: string;
   /** Which engine produced the split: the LLM, keyword fallback, or the doctor by hand. */
   aiEngine: string;
@@ -289,9 +317,94 @@ export class DoctorPortalDatabase {
         vitals: e.vitals,
         status: e.status,
         arrivedAt: e.timestamps?.arrival || e.registrationTime,
+        vitalsBy: e.timestamps?.vitalsBy,
+        vitalsAt: e.timestamps?.vitalsRecorded,
         read: readIds.has(`NOTIF-${e.id}`),
       }))
       .sort((a, b) => new Date(b.arrivedAt).getTime() - new Date(a.arrivedAt).getTime());
+  }
+
+  /**
+   * Patients waiting in this doctor's own department who have **no doctor
+   * assigned yet**, newest arrival first.
+   *
+   * Registration deliberately does not pick a doctor -- `createNewPatientEncounter`
+   * and `createRevisitEncounter` both write `assignedDoctor: ""` and leave the
+   * choice to triage. The inbox matches on `assignedDoctor === doctor.name`, so
+   * until someone assigns them these patients are visible on the hospital-wide
+   * board and in nobody's portal. This is the queue they sit in, and
+   * `claimEncounter` is how a doctor takes one.
+   */
+  static getUnassigned(doctorId: string): DoctorNotification[] {
+    const doctor = getDoctorById(doctorId);
+    const encounters = db.getEncounters();
+    const readIds = new Set(this.getReadIds());
+
+    return encounters
+      .filter(e => !e.assignedDoctor?.trim())
+      .filter(e => OPEN_STATUSES.includes(e.status))
+      // Same specialty, not yet triaged into one -- or in a department that has
+      // no bookable consultant at all, which would otherwise leave the patient
+      // visible to nobody. Cardiology and Orthopedics are in that position on
+      // the current Imperial master: every doctor printed under them has a name
+      // the OP card did not render legibly, so those visits need whoever is free.
+      .filter(e => {
+        const dept = (e.dept || "").trim();
+        if (!dept || dept === "Awaiting Triage" || dept === doctor.specialty) return true;
+        return !ACTIVE_SPECIALTIES.includes(dept);
+      })
+      .map<DoctorNotification>(e => ({
+        id: `NOTIF-${e.id}`,
+        doctorId: doctor.id,
+        encounterId: e.id,
+        umr: e.umr,
+        patientName: e.patientName,
+        age: e.age,
+        sex: e.sex,
+        phone: e.phone,
+        opNumber: e.opNumber,
+        dept: e.dept,
+        room: e.room || doctor.room,
+        token: e.queueToken,
+        queuePosition: e.queuePosition,
+        isNewPatient: isFirstVisit(e, encounters),
+        chiefComplaint: e.chiefComplaint,
+        symptoms: e.symptoms || [],
+        aiConfidence: e.aiConfidence,
+        aiReasoning: e.aiReasoning,
+        vitals: e.vitals,
+        status: e.status,
+        arrivedAt: e.timestamps?.arrival || e.registrationTime,
+        vitalsBy: e.timestamps?.vitalsBy,
+        vitalsAt: e.timestamps?.vitalsRecorded,
+        read: readIds.has(`NOTIF-${e.id}`),
+      }))
+      .sort((a, b) => new Date(b.arrivedAt).getTime() - new Date(a.arrivedAt).getTime());
+  }
+
+  /**
+   * Take an unassigned patient. Refuses one already assigned to someone else,
+   * so two doctors claiming at once cannot silently steal the patient from
+   * whoever got there first.
+   */
+  static claimEncounter(doctorId: string, encounterId: string): { ok: boolean; message: string } {
+    const doctor = getDoctorById(doctorId);
+    const encounter = db.getEncounters().find(e => e.id === encounterId);
+    if (!encounter) return { ok: false, message: "That visit no longer exists." };
+
+    const current = encounter.assignedDoctor?.trim();
+    if (current && current !== doctor.name) {
+      return { ok: false, message: `${encounter.patientName} was just taken by ${current}.` };
+    }
+
+    db.updateEncounter(encounterId, {
+      assignedDoctor: doctor.name,
+      dept: encounter.dept && encounter.dept !== "Awaiting Triage" ? encounter.dept : doctor.specialty,
+      room: encounter.room || doctor.room,
+      status: encounter.status === "Under Consultation" ? encounter.status : "In Queue",
+    });
+    notify();
+    return { ok: true, message: `${encounter.patientName} added to your queue.` };
   }
 
   static getUnreadCount(doctorId: string): number {
@@ -442,6 +555,38 @@ export class DoctorPortalDatabase {
  * A 12MP phone photo of a prescription is ~4MB of base64 -- past the whole quota
  * on its own -- while 1400px wide at JPEG q0.72 is legible and ~200KB.
  */
+/**
+ * Reads a prescription the doctor picked off disk into something the portal can
+ * both show and send for OCR.
+ *
+ * Images are downscaled -- a modern phone photo is several megabytes and the
+ * whole consultation record lives in localStorage. A PDF cannot go through a
+ * canvas at all, so it is read as-is and flagged, and the caller shows a file
+ * card rather than an `<img>` that would silently render nothing. Anything that
+ * fails to decode as an image is treated the same way rather than thrown away:
+ * the server-side OCR may still read it, and a doctor who attached a sheet
+ * should never be left looking at a screen that quietly dropped it.
+ */
+export async function readPrescriptionFile(
+  file: File
+): Promise<{ dataUrl: string; kind: "image" | "document" }> {
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  if (!isPdf) {
+    try {
+      return { dataUrl: await compressImageFile(file), kind: "image" };
+    } catch {
+      // Fall through: keep the bytes, let the OCR service have a go at them.
+    }
+  }
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+  return { dataUrl, kind: "document" };
+}
+
 export function compressImageFile(file: File, maxWidth = 1400, quality = 0.72): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

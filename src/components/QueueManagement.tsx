@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { ACTIVE_DOCTORS } from "../services/doctorMaster";
 import { Icon } from './icons';
 import { db, DBOPEncounter, DBPatient } from '../services/db';
 
@@ -20,41 +21,19 @@ const DEPARTMENTS = [
   "Emergency / Casualty"
 ];
 
-const DOCTOR_MAP: Record<string, { name: string; room: string }[]> = {
-  "Cardiology": [
-    { name: "Dr. Arjun Mehta", room: "Room 107" },
-    { name: "Dr. Rajesh Sharma", room: "Room 104" },
-    { name: "Dr. Priya Patel", room: "Room 105" },
-    { name: "Dr. Sarah Jenkins", room: "Room 102" }
-  ],
-  "Orthopedics": [
-    { name: "Dr. David Anderson", room: "Room 112" },
-    { name: "Dr. Sanjay Kapoor", room: "Room 116" }
-  ],
-  "General Medicine": [
-    { name: "Dr. Vikram Malhotra", room: "Room 111" },
-    { name: "Dr. Anita Desai", room: "Room 101" },
-    { name: "Dr. Ramesh Kumar", room: "Room 103" }
-  ],
-  "Pediatrics": [
-    { name: "Dr. Maya Lin", room: "Room 120" },
-    { name: "Dr. Robert Chen", room: "Room 121" }
-  ],
-  "Neurology": [
-    { name: "Dr. Gregory House", room: "Room 130" },
-    { name: "Dr. Lisa Cuddy", room: "Room 131" }
-  ],
-  "Dermatology": [
-    { name: "Dr. Elena Rostova", room: "Room 140" }
-  ],
-  "ENT": [
-    { name: "Dr. Marcus Vance", room: "Room 150" }
-  ],
-  "Emergency / Casualty": [
-    { name: "Dr. John Carter", room: "Trauma Bay 1" },
-    { name: "Dr. Kerry Weaver", room: "Trauma Bay 2" }
-  ]
-};
+// Specialty -> bookable consultants, built from the Imperial Hospitals doctor
+// master instead of a hardcoded list that had to be kept in step with the
+// login roster, symptom triage and the doctor portal by hand. Only doctors the
+// OP card names legibly appear here, so a token can never be issued against a
+// doctor whose identity is still unverified. See `doctorMaster.ts`.
+const DOCTOR_MAP: Record<string, { name: string; room: string }[]> = ACTIVE_DOCTORS.reduce(
+  (acc, d) => {
+    const key = d.specialty as string;
+    (acc[key] ||= []).push({ name: d.name, room: d.room });
+    return acc;
+  },
+  {} as Record<string, { name: string; room: string }[]>,
+);
 
 // Play audio chime using Web Audio API
 function playChime() {
@@ -572,7 +551,9 @@ export default function QueueManagement({
         <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B] mr-1 flex items-center gap-1 flex-shrink-0">
           <span>🏥</span> Dept:
         </span>
-        {DEPARTMENTS.map((dept) => {
+        {DEPARTMENTS.filter(dept =>
+          dept === "All Departments" || dept === selectedDept || (departmentCounts[dept] || 0) > 0
+        ).map((dept) => {
           const isSelected = selectedDept === dept;
           const count = departmentCounts[dept] || 0;
           return (
@@ -738,7 +719,7 @@ export default function QueueManagement({
                       <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Room</th>
                       <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Reg Time</th>
                       <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Status</th>
-                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
+                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider text-right whitespace-nowrap sticky right-0 bg-[#FAFAFA] shadow-[-6px_0_6px_-6px_rgba(15,22,36,0.18)]">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#F1F5F9] text-[12px]">
@@ -765,7 +746,7 @@ export default function QueueManagement({
                           </td>
 
                           {/* Patient Info */}
-                          <td className="px-3 py-2.5 min-w-[170px]">
+                          <td className="px-3 py-2.5 min-w-[170px] max-w-[260px]">
                             <div className="font-bold text-gray-900">{enc.patientName}</div>
                             <div className="text-[10.5px] text-[#64748B] flex items-center gap-1 mt-0.5">
                               <span>{enc.age} yrs, {enc.sex}</span>
@@ -802,8 +783,9 @@ export default function QueueManagement({
                             {getStatusBadge(enc.status)}
                           </td>
 
-                          {/* Action Buttons */}
-                          <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          {/* Action Buttons -- pinned so they stay reachable
+                              however wide the patient/doctor columns get. */}
+                          <td className="px-3 py-2.5 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-inherit shadow-[-6px_0_6px_-6px_rgba(15,22,36,0.18)]">
                             <div className="flex items-center justify-end gap-1">
                               {!isCompleted && !isInConsult && (
                                 <button

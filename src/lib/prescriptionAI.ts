@@ -91,6 +91,37 @@ async function postSplit(body: BodyInit, headers: Record<string, string>): Promi
   }
 }
 
+/**
+ * Whether the AI splitter can actually be used right now.
+ *
+ * A raw fetch on purpose: `apiFetch` answers `/api/auth/session` from its own
+ * offline mock with `authenticated: true`, which is the right behaviour for a
+ * UI that must work without a backend but useless for deciding whether a
+ * *server-side* OCR call will succeed. A typed sheet degrades to the browser
+ * splitter, but an uploaded photograph cannot -- there is no OCR in the browser
+ * -- so the prescription step needs to say so before the doctor uploads, rather
+ * than after.
+ */
+export async function checkPrescriptionAiStatus(): Promise<{ online: boolean; reason?: string }> {
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/session`, {
+      credentials: "include",
+      headers: withAuthHeaders({}, "GET"),
+      cache: "no-store",
+    });
+    if (response.status === 401) {
+      return { online: false, reason: "not signed in to the clinical services" };
+    }
+    if (!response.ok) return { online: false, reason: `service returned ${response.status}` };
+    const payload = await response.json().catch(() => ({}));
+    return payload?.authenticated === false
+      ? { online: false, reason: "not signed in to the clinical services" }
+      : { online: true };
+  } catch {
+    return { online: false, reason: "the clinical services are unreachable" };
+  }
+}
+
 /** Splits a prescription sheet supplied as plain text. */
 export async function splitPrescriptionText(text: string): Promise<PrescriptionSplit> {
   try {
@@ -142,34 +173,61 @@ async function trySmartOcr(file: Blob, filename: string): Promise<string | null>
   return null;
 }
 
-/** Splits a photographed/scanned/drawn sheet -- OCR happens server-side via AI / Smart OCR. */
+/**
+ * Splits a photographed, scanned or drawn sheet. OCR happens server-side.
+ *
+ * Three attempts, each weaker than the last, because an uploaded prescription is
+ * the doctor's actual order and "nothing happened" is the one outcome that must
+ * not occur silently:
+ *
+ *  1. The prescription endpoint, which OCRs and splits in one pass.
+ *  2. The Smart OCR pipeline, whose text is then split in the browser.
+ *  3. Neither reachable -- the sheet stays attached and the doctor is told, in
+ *     so many words, that they must type the lines in themselves. It is never
+ *     reported as an empty-but-successful split, which would read as "this
+ *     prescription has no medicines on it".
+ */
 export async function splitPrescriptionFile(file: Blob, filename = "prescription.png"): Promise<PrescriptionSplit> {
   const form = new FormData();
   form.append("file", file, filename);
   form.append("language", "en");
 
-  // Primary: Prescription AI endpoint
+  let primaryError: unknown;
   try {
     const payload = await postSplit(form, {});
-    return normalizeServerSplit(payload, "");
-  } catch (err) {
-    // Secondary: Smart OCR Engine pipeline
-    const smartOcrText = await trySmartOcr(file, filename);
-    if (smartOcrText && smartOcrText.trim()) {
-      const split = localSplit(smartOcrText);
+    const split = normalizeServerSplit(payload, "");
+    // A model that read the page but found nothing on it is still worth saying
+    // out loud, so the doctor checks the photo rather than the empty table.
+    if (!split.medications.length && !split.labTests.length && !split.ocrText.trim()) {
       return {
         ...split,
-        engine: "smart_ocr",
-        ocrText: smartOcrText,
+        degradedReason: "Nothing could be read off that image. Check it is in focus and the whole sheet is in frame, or type the lines below.",
       };
     }
+    return split;
+  } catch (err) {
+    primaryError = err;
+  }
 
-    // Fallback: Local offline mode
+  const smartOcrText = await trySmartOcr(file, filename);
+  if (smartOcrText && smartOcrText.trim()) {
+    const split = localSplit(smartOcrText);
     return {
-      ...localSplit(""),
-      degradedReason: "Image attached successfully. Speak or type notes to extract medicines & lab tests.",
+      ...split,
+      engine: "smart_ocr",
+      ocrText: smartOcrText,
+      degradedReason: split.medications.length || split.labTests.length
+        ? undefined
+        : "The sheet was read but no medicine or investigation line could be recognised on it. Add them by hand below.",
     };
   }
+
+  return {
+    ...localSplit(""),
+    engine: "unavailable",
+    ocrText: "",
+    degradedReason: `The prescription could not be digitised (${describe(primaryError)}). The sheet is attached to this visit -- type the medicines and investigations below so pharmacy and the lab receive them.`,
+  };
 }
 
 function describe(err: unknown): string {

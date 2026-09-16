@@ -1,3 +1,4 @@
+import { getDoctorMaster, DOCTOR_LOCAL_PASSWORD } from "./doctorMaster";
 export interface AppRole {
   id: string;
   name: string;
@@ -14,11 +15,8 @@ export interface AppUser {
   status?: "Active" | "Inactive";
 }
 
-// Bumped to v3 when the doctor portal and lab-billing modules were added: the
-// role list is cached in localStorage, so an existing browser would otherwise
-// keep a role definition that grants neither.
-const ROLES_STORAGE_KEY = "hospai_rbac_roles_v3";
-const USERS_STORAGE_KEY = "hospai_rbac_users_v1";
+const ROLES_STORAGE_KEY = "hospai_rbac_roles_v8";
+const USERS_STORAGE_KEY = "hospai_rbac_users_v2";
 
 export const ALL_SYSTEM_MODULES = [
   "dashboard", "patients", "appointments", "emergency",
@@ -26,11 +24,13 @@ export const ALL_SYSTEM_MODULES = [
   "radiology", "pharmacy", "pharmacy_dispensing", "pharmacy_rx", "pharmacy_ocr", "pharmacy_returns",
   "pharmacy_medicine", "pharmacy_category", "pharmacy_suppliers", "pharmacy_po",
   "pharmacy_grn", "pharmacy_ledger", "pharmacy_transfers", "pharmacy_expiry", "pharmacy_analytics",
+  "pharmacy_notifications", "pharmacy_users", "pharmacy_audit", "pharmacy_settings",
   "surgery", "billing",
   "icu", "discharge", "triage", "insurance", "analytics",
   "reports", "admin", "chart", "register",
-  "outpatient", "queue", "op_management", "op_registration", "op_workflow",
+  "outpatient", "queue", "op_management", "op_registration", "op_workflow", "op_nurse",
   "doctor_workflow", "doctor_portal", "scheduling", "admissions", "readmission",
+  "lab_billing",
   "payments", "revenue_reports", "hrms", "employees", "patient_exp",
   "intelligence", "ocr", "dpi_ocr", "symptom_ai", "clinical_rag", "clinical_summaries", "bulk_ai", "nl_filtering",
   "beds"
@@ -45,7 +45,7 @@ const INITIAL_ROLES: AppRole[] = [
     name: "Attending Physician / Doctor",
     allowedModules: [
       "dashboard", "doctor_portal", "patients", "appointments", "clinical", "chart", "emergency", "triage",
-      "icu", "inpatient", "pharmacy", "pharmacy_dispensing", "pharmacy_rx", "pharmacy_ocr",
+      "icu", "inpatient", "op_nurse", "op_management", "pharmacy", "pharmacy_dispensing", "pharmacy_rx", "pharmacy_ocr",
       "pharmacy_medicine", "pharmacy_ledger", "pharmacy_expiry",
       "laboratory", "radiology", "intelligence", "dpi_ocr", "discharge"
     ]
@@ -55,7 +55,8 @@ const INITIAL_ROLES: AppRole[] = [
     name: "Receptionist / Front Desk",
     allowedModules: [
       "dashboard", "patients", "register", "appointments", "outpatient", "queue", "op_management",
-      "op_registration", "billing", "payments", "laboratory"
+      // No op_nurse: vitals are the OP department's job, not the front desk's.
+      "op_registration", "billing", "payments", "lab_billing", "laboratory"
     ]
   },
   {
@@ -65,6 +66,7 @@ const INITIAL_ROLES: AppRole[] = [
       "dashboard", "pharmacy", "pharmacy_dispensing", "pharmacy_rx", "pharmacy_ocr", "pharmacy_returns",
       "pharmacy_medicine", "pharmacy_category", "pharmacy_suppliers", "pharmacy_po",
       "pharmacy_grn", "pharmacy_ledger", "pharmacy_transfers", "pharmacy_expiry", "pharmacy_analytics",
+      "pharmacy_notifications", "pharmacy_settings",
       "dpi_ocr", "patients", "chart", "billing"
     ]
   },
@@ -76,7 +78,7 @@ const INITIAL_ROLES: AppRole[] = [
   {
     id: "ROLE_NURSE",
     name: "Registered Nurse",
-    allowedModules: ["dashboard", "inpatient", "nursing", "icu", "beds", "chart", "emergency", "triage"]
+    allowedModules: ["dashboard", "inpatient", "nursing", "icu", "beds", "chart", "emergency", "triage", "op_nurse", "op_management", "queue", "outpatient"]
   },
   {
     id: "ROLE_PHARMACY_MANAGER",
@@ -85,7 +87,8 @@ const INITIAL_ROLES: AppRole[] = [
       "dashboard", "reports", "inventory",
       "pharmacy", "pharmacy_dispensing", "pharmacy_rx", "pharmacy_ocr", "pharmacy_returns",
       "pharmacy_medicine", "pharmacy_category", "pharmacy_suppliers", "pharmacy_po",
-      "pharmacy_grn", "pharmacy_ledger", "pharmacy_transfers", "pharmacy_expiry", "pharmacy_analytics"
+      "pharmacy_grn", "pharmacy_ledger", "pharmacy_transfers", "pharmacy_expiry", "pharmacy_analytics",
+      "pharmacy_notifications", "pharmacy_users", "pharmacy_audit", "pharmacy_settings"
     ]
   },
   {
@@ -108,15 +111,31 @@ const INITIAL_ROLES: AppRole[] = [
   }
 ];
 
-const INITIAL_USERS: AppUser[] = [
-  { id: "U_SUPERADMIN", username: "superadmin", password: "password123", roleId: "ROLE_SUPERADMIN", name: "Dr. Alexander Vance", staffId: "SUP-001" },
-  { id: "U_ADMIN", username: "admin", password: "password123", roleId: "ROLE_ADMIN", name: "System Administrator", staffId: "ADM-001" },
-  { id: "U_DOCTOR", username: "doctor", password: "password123", roleId: "ROLE_DOCTOR", name: "Dr. Sarah Jenkins", staffId: "DOC-402" },
-  { id: "U_RECEPTION", username: "reception", password: "password123", roleId: "ROLE_RECEPTION", name: "Elena Torres", staffId: "REC-102" },
-  { id: "U_PHARMACY", username: "pharmacy", password: "password123", roleId: "ROLE_PHARMACY", name: "Robert Williams, RPh", staffId: "PHM-844" },
-  { id: "U_LAB", username: "lab", password: "password123", roleId: "ROLE_LAB", name: "Michael Chang, CLS", staffId: "LAB-512" },
-  { id: "U_NURSE", username: "nurse", password: "password123", roleId: "ROLE_NURSE", name: "Jessica Carter, RN", staffId: "RN-8821" },
-];
+export function getInitialUsers(): AppUser[] {
+  const baseUsers: AppUser[] = [
+    { id: "U_SUPERADMIN", username: "superadmin", password: "password123", roleId: "ROLE_SUPERADMIN", name: "Dr. Alexander Vance", staffId: "SUP-001", status: "Active" },
+    { id: "U_ADMIN", username: "admin", password: "password123", roleId: "ROLE_ADMIN", name: "System Administrator", staffId: "ADM-001", status: "Active" },
+    { id: "U_DOCTOR", username: "doctor", password: "password123", roleId: "ROLE_DOCTOR", name: "Dr. Sarah Jenkins", staffId: "DOC-402", status: "Active" },
+    { id: "U_RECEPTION", username: "reception", password: "password123", roleId: "ROLE_RECEPTION", name: "Elena Torres", staffId: "REC-102", status: "Active" },
+    { id: "U_PHARMACY", username: "pharmacy", password: "password123", roleId: "ROLE_PHARMACY", name: "Robert Williams, RPh", staffId: "PHM-844", status: "Active" },
+    { id: "U_LAB", username: "lab", password: "password123", roleId: "ROLE_LAB", name: "Michael Chang, CLS", staffId: "LAB-512", status: "Active" },
+    { id: "U_NURSE", username: "nurse", password: "password123", roleId: "ROLE_NURSE", name: "Jessica Carter, RN", staffId: "RN-8821", status: "Active" },
+  ];
+
+  const doctorUsers: AppUser[] = getDoctorMaster()
+    .filter(d => d.verified && d.username)
+    .map(d => ({
+      id: `U_${d.id}`,
+      username: d.username as string,
+      password: DOCTOR_LOCAL_PASSWORD,
+      roleId: "ROLE_DOCTOR",
+      name: d.name,
+      staffId: d.staffId,
+      status: "Active",
+    }));
+
+  return [...baseUsers, ...doctorUsers];
+}
 
 export class RoleDatabase {
   static getRoles(): AppRole[] {
@@ -143,16 +162,17 @@ export class RoleDatabase {
   }
 
   static getUsers(): AppUser[] {
-    if (typeof window === "undefined") return INITIAL_USERS;
+    const initial = getInitialUsers();
+    if (typeof window === "undefined") return initial;
     try {
       const stored = window.localStorage.getItem(USERS_STORAGE_KEY);
       if (!stored) {
-        window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(INITIAL_USERS));
-        return INITIAL_USERS;
+        window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(initial));
+        return initial;
       }
       return JSON.parse(stored);
     } catch {
-      return INITIAL_USERS;
+      return initial;
     }
   }
 
@@ -160,14 +180,36 @@ export class RoleDatabase {
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+      window.dispatchEvent(new Event("rbac_users_updated"));
     } catch (e) {
       console.error("Failed to save users", e);
     }
   }
 
+  static upsertUser(user: AppUser): AppUser[] {
+    const current = this.getUsers();
+    const idx = current.findIndex(u => u.id === user.id || u.username.toLowerCase() === user.username.toLowerCase());
+    let updated: AppUser[];
+    if (idx >= 0) {
+      updated = [...current];
+      updated[idx] = { ...updated[idx], ...user };
+    } else {
+      updated = [...current, user];
+    }
+    this.saveUsers(updated);
+    return updated;
+  }
+
+  static deleteUser(id: string): AppUser[] {
+    const current = this.getUsers();
+    const updated = current.filter(u => u.id !== id);
+    this.saveUsers(updated);
+    return updated;
+  }
+
   static authenticate(username: string, password?: string): { user: AppUser, role: AppRole } | null {
     const users = this.getUsers();
-    const user = users.find(u => u.username === username && u.password === password);
+    const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password && u.status !== "Inactive");
     if (!user) return null;
 
     const roles = this.getRoles();

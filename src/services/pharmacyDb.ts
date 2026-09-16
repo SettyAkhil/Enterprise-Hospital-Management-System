@@ -1,3 +1,38 @@
+
+export interface AppUser {
+  id: string;
+  name: string;
+  role: string;
+  department: string;
+  email: string;
+  phone: string;
+  status: "Active" | "Inactive";
+  lastLogin: string;
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: "alert" | "info" | "success" | "warning";
+  timestamp: string;
+  read: boolean;
+}
+
+export interface AppAuditLog {
+  id: string;
+  timestamp: string;
+  user: string;
+  action: string;
+  module: string;
+  record: string;
+  details: string;
+  // Origin address, when something upstream recorded one. Entries written by
+  // `logAudit` in the browser have no way to know it, so this stays unset and
+  // the log renders it as unknown -- an audit trail must not invent an origin.
+  ip?: string;
+}
+
 export interface AppCategory {
   id: string;
   categoryName: string;
@@ -10,6 +45,8 @@ export interface AppSupplier {
   id: string;
   supplierName: string;
   contactInformation: string;
+  phone?: string;
+  email?: string;
   address: string;
   gstInformation: string;
   licenseDetails: string;
@@ -23,6 +60,7 @@ export interface AppMedicine {
   medicineName: string;
   genericName: string;
   brandName: string;
+  hsnCode?: string;
   categoryId: string;
   manufacturer: string;
   dosageForm: string;
@@ -45,12 +83,20 @@ export interface AppBatch {
   batchNumber: string;
   expiryDate: string;
   manufacturingDate: string;
-  initialQuantity: number;
   availableQuantity: number; // For FEFO
   purchasePrice: number;
-  sellingPrice: number;
-  supplierId: string;
-  invoiceNumber: string;
+  // Quantity received and the retail price, as `addBatch` actually stores them.
+  // The GRN path (PharmacyOld) additionally fills in the procurement fields
+  // below; batches created by `addBatch` leave them unset, so everything the
+  // lean path omits is optional rather than a lie about what is on disk.
+  quantity: number;
+  mrp: number;
+  grnId?: string;
+  status?: string;
+  initialQuantity?: number;
+  sellingPrice?: number;
+  supplierId?: string;
+  invoiceNumber?: string;
   location?: string; // Phase 4 - Transfer capability
   createdAt: string;
 }
@@ -121,6 +167,26 @@ export interface AppStockTransaction {
 
 export type PrescriptionSource = "DIGITAL" | "UPLOADED_IMAGE" | "OCR";
 export type PrescriptionStatus = "Draft" | "Sent To Pharmacy" | "Received" | "OCR Processing" | "Verification Pending" | "Verified" | "Approved" | "Preparing" | "Ready For Dispensing" | "Dispensed" | "Cancelled" | "Rejected";
+
+/**
+ * Statuses that mean a prescription is still waiting on the pharmacist.
+ *
+ * Shared rather than re-listed per screen: the dashboard's "awaiting
+ * verification" tile used its own shorter list and omitted "Sent To Pharmacy",
+ * which is exactly the status the doctor portal dispatches with -- so a
+ * prescription sat in the verification queue while the pharmacist's landing
+ * screen told them there was nothing to do.
+ */
+export const AWAITING_VERIFICATION_STATUSES: PrescriptionStatus[] = [
+  "Sent To Pharmacy",
+  "Received",
+  "OCR Processing",
+  "Verification Pending",
+];
+
+export function isAwaitingVerification(status: PrescriptionStatus): boolean {
+  return AWAITING_VERIFICATION_STATUSES.includes(status);
+}
 export type DispensingStatus = "Waiting" | "Preparing" | "Ready" | "Dispensed" | "Cancelled";
 export type PrescriptionPriority = "Normal" | "Urgent" | "Emergency";
 
@@ -196,22 +262,18 @@ export interface AppPharmacyBillItem {
   expiryDate: string;
   quantity: number;
   unitPrice: number;
+  grossAmount: number;
   discount: number;
+  taxableAmount: number;
+  cgstAmount: number;
+  sgstAmount: number;
   tax: number;
   totalPrice: number;
+  hsnCode?: string;
+  mfgShortCode?: string;
 }
 
-export interface AppPharmacyBillItem {
-  medicineId: string;
-  medicineName: string;
-  batchNumber: string;
-  expiryDate: string;
-  quantity: number;
-  unitPrice: number;
-  discount: number;
-  tax: number;
-  totalPrice: number;
-}
+// Removed duplicate interface AppPharmacyBillItem
 
 export interface AppPharmacyBill {
   id: string;
@@ -232,6 +294,9 @@ export interface AppPharmacyBill {
   subTotal: number;
   discount: number;
   tax: number;
+  taxableTotal: number;
+  cgstTotal: number;
+  sgstTotal: number;
   totalAmount: number;
   
   createdBy: string;
@@ -298,23 +363,79 @@ export interface AppStockAdjustment {
   createdAt: string;
 }
 
-const CATEGORIES_KEY = "hospai_pharm_categories_v1";
-const SUPPLIERS_KEY = "hospai_pharm_suppliers_v1";
-const MEDICINES_KEY = "hospai_pharm_medicines_v1";
-const BATCHES_KEY = "hospai_pharm_batches_v1";
-const POS_KEY = "hospai_pharm_pos_v1";
-const GRNS_KEY = "hospai_pharm_grns_v1";
-const STOCK_TXS_KEY = "hospai_pharm_stock_txs_v1";
-const PRESCRIPTIONS_KEY = "hospai_pharm_rx_v1";
-const BILLS_KEY = "hospai_pharm_bills_v1";
-const RETURNS_KEY = "hospai_pharm_returns_v1";
-const TRANSFERS_KEY = "hospai_pharm_transfers_v1";
-const SUPPLIER_RETURNS_KEY = "hospai_pharm_supp_returns_v1";
-const ADJUSTMENTS_KEY = "hospai_pharm_adjustments_v1";
-const CLARIFICATIONS_KEY = "hospai_pharm_clarifications_v1";
+
+const USERS_KEY = "hospai_pharm_users_v2";
+const NOTIFICATIONS_KEY = "hospai_pharm_notifications_v2";
+const AUDIT_LOGS_KEY = "hospai_pharm_audit_logs_v2";
+
+const CATEGORIES_KEY = "hospai_pharm_categories_v2";
+const SUPPLIERS_KEY = "hospai_pharm_suppliers_v2";
+const MEDICINES_KEY = "hospai_pharm_medicines_v2";
+const BATCHES_KEY = "hospai_pharm_batches_v2";
+const POS_KEY = "hospai_pharm_pos_v2";
+const GRNS_KEY = "hospai_pharm_grns_v2";
+const STOCK_TXS_KEY = "hospai_pharm_stock_txs_v2";
+const PRESCRIPTIONS_KEY = "hospai_pharm_rx_v2";
+const BILLS_KEY = "hospai_pharm_bills_v2";
+const RETURNS_KEY = "hospai_pharm_returns_v2";
+const TRANSFERS_KEY = "hospai_pharm_transfers_v2";
+const SUPPLIER_RETURNS_KEY = "hospai_pharm_supp_returns_v2";
+const ADJUSTMENTS_KEY = "hospai_pharm_adjustments_v2";
+const CLARIFICATIONS_KEY = "hospai_pharm_clarifications_v2";
 
 export class PharmacyDatabase {
   // Categories
+
+  static getUsers(): AppUser[] {
+    if (typeof window === "undefined") return [];
+    try { const stored = window.localStorage.getItem(USERS_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
+  }
+  static saveUsers(users: AppUser[]) {
+    if (typeof window !== "undefined") window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  }
+  static addUser(user: AppUser) {
+    const users = this.getUsers();
+    users.push(user);
+    this.saveUsers(users);
+  }
+  static updateUser(id: string, updates: Partial<AppUser>) {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === id);
+    if (idx > -1) {
+      users[idx] = { ...users[idx], ...updates };
+      this.saveUsers(users);
+    }
+  }
+
+  static getNotifications(): AppNotification[] {
+    if (typeof window === "undefined") return [];
+    try { const stored = window.localStorage.getItem(NOTIFICATIONS_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
+  }
+  static saveNotifications(notifications: AppNotification[]) {
+    if (typeof window !== "undefined") window.localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+  }
+  static updateNotification(id: string, updates: Partial<AppNotification>) {
+    const notifs = this.getNotifications();
+    const idx = notifs.findIndex(n => n.id === id);
+    if (idx > -1) {
+      notifs[idx] = { ...notifs[idx], ...updates };
+      this.saveNotifications(notifs);
+    }
+  }
+  static deleteNotification(id: string) {
+    let notifs = this.getNotifications();
+    notifs = notifs.filter(n => n.id !== id);
+    this.saveNotifications(notifs);
+  }
+
+  static getAuditLogs(): AppAuditLog[] {
+    if (typeof window === "undefined") return [];
+    try { const stored = window.localStorage.getItem(AUDIT_LOGS_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
+  }
+  static saveAuditLogs(logs: AppAuditLog[]) {
+    if (typeof window !== "undefined") window.localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(logs));
+  }
+
   static getCategories(): AppCategory[] {
     if (typeof window === "undefined") return [];
     try {
@@ -324,6 +445,25 @@ export class PharmacyDatabase {
   }
   static saveCategories(categories: AppCategory[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+  }
+
+  static addCategory(cat: AppCategory) {
+    const cats = this.getCategories();
+    cats.push(cat);
+    this.saveCategories(cats);
+  }
+
+  static updateCategory(id: string, updates: Partial<AppCategory>) {
+    const cats = this.getCategories();
+    const idx = cats.findIndex(c => c.id === id);
+    if (idx !== -1) {
+      cats[idx] = { ...cats[idx], ...updates };
+      this.saveCategories(cats);
+    }
+  }
+
+  static deleteCategory(id: string) {
+    this.saveCategories(this.getCategories().filter(c => c.id !== id));
   }
 
   // Suppliers
@@ -338,6 +478,25 @@ export class PharmacyDatabase {
     if (typeof window !== "undefined") window.localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(suppliers));
   }
 
+  static addSupplier(sup: AppSupplier) {
+    const sups = this.getSuppliers();
+    sups.push(sup);
+    this.saveSuppliers(sups);
+  }
+
+  static updateSupplier(id: string, updates: Partial<AppSupplier>) {
+    const sups = this.getSuppliers();
+    const idx = sups.findIndex(s => s.id === id);
+    if (idx !== -1) {
+      sups[idx] = { ...sups[idx], ...updates };
+      this.saveSuppliers(sups);
+    }
+  }
+
+  static deleteSupplier(id: string) {
+    this.saveSuppliers(this.getSuppliers().filter(s => s.id !== id));
+  }
+
   // Medicines
   static getMedicines(): AppMedicine[] {
     if (typeof window === "undefined") return [];
@@ -348,6 +507,26 @@ export class PharmacyDatabase {
   }
   static saveMedicines(medicines: AppMedicine[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(MEDICINES_KEY, JSON.stringify(medicines));
+  }
+
+  static addMedicine(med: AppMedicine) {
+    const meds = this.getMedicines();
+    meds.push(med);
+    this.saveMedicines(meds);
+  }
+
+  static updateMedicine(id: string, updates: any) {
+    const meds = this.getMedicines();
+    const idx = meds.findIndex(m => m.id === id);
+    if (idx !== -1) {
+      meds[idx] = { ...meds[idx], ...updates, medicineName: updates.name || meds[idx].medicineName };
+      this.saveMedicines(meds);
+    }
+  }
+
+  static deleteMedicine(id: string) {
+    const meds = this.getMedicines();
+    this.saveMedicines(meds.filter(m => m.id !== id));
   }
 
   // Batches
@@ -362,6 +541,35 @@ export class PharmacyDatabase {
     if (typeof window !== "undefined") window.localStorage.setItem(BATCHES_KEY, JSON.stringify(batches));
   }
 
+  static updateBatch(id: string, updates: Partial<AppBatch>) {
+    const batches = this.getBatches();
+    const idx = batches.findIndex(b => b.id === id);
+    if (idx !== -1) {
+      batches[idx] = { ...batches[idx], ...updates };
+      this.saveBatches(batches);
+    }
+  }
+
+  static addBatch(batch: any) {
+    const batches = this.getBatches();
+    batches.push({
+      id: "B" + Date.now() + Math.floor(Math.random()*100),
+      medicineId: batch.medicineId,
+      batchNumber: batch.batchNumber,
+      expiryDate: batch.expiryDate,
+      manufacturingDate: batch.mfg || "2024-01-01",
+      quantity: batch.quantity,
+      availableQuantity: batch.availableQuantity ?? batch.quantity,
+      purchasePrice: batch.purchasePrice,
+      mrp: batch.mrp,
+      grnId: batch.grnId || "GRN-SYS",
+      location: batch.location || "Main Pharmacy",
+      status: "Available",
+      createdAt: new Date().toISOString()
+    });
+    this.saveBatches(batches);
+  }
+
   // Purchase Orders
   static getPurchaseOrders(): AppPurchaseOrder[] {
     if (typeof window === "undefined") return [];
@@ -372,6 +580,21 @@ export class PharmacyDatabase {
   }
   static savePurchaseOrders(pos: AppPurchaseOrder[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(POS_KEY, JSON.stringify(pos));
+  }
+
+  static addPurchaseOrder(po: AppPurchaseOrder) {
+    const pos = this.getPurchaseOrders();
+    pos.push(po);
+    this.savePurchaseOrders(pos);
+  }
+
+  static updatePurchaseOrder(id: string, updates: Partial<AppPurchaseOrder>) {
+    const pos = this.getPurchaseOrders();
+    const idx = pos.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      pos[idx] = { ...pos[idx], ...updates };
+      this.savePurchaseOrders(pos);
+    }
   }
 
   // GRNs
@@ -386,6 +609,12 @@ export class PharmacyDatabase {
     if (typeof window !== "undefined") window.localStorage.setItem(GRNS_KEY, JSON.stringify(grns));
   }
 
+  static addGRN(grn: AppGRN) {
+    const grns = this.getGRNs();
+    grns.push(grn);
+    this.saveGRNs(grns);
+  }
+
   // Stock Transactions
   static getStockTransactions(): AppStockTransaction[] {
     if (typeof window === "undefined") return [];
@@ -396,6 +625,12 @@ export class PharmacyDatabase {
   }
   static saveStockTransactions(txs: AppStockTransaction[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(STOCK_TXS_KEY, JSON.stringify(txs));
+  }
+
+  static addTransaction(tx: AppStockTransaction) {
+    const txs = this.getStockTransactions();
+    txs.push(tx);
+    this.saveStockTransactions(txs);
   }
 
   // Prescriptions
@@ -424,6 +659,12 @@ export class PharmacyDatabase {
   }
   static saveBills(bills: AppPharmacyBill[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(BILLS_KEY, JSON.stringify(bills));
+  }
+
+  static addPharmacyBill(bill: AppPharmacyBill) {
+    const bills = this.getBills();
+    bills.unshift(bill);
+    this.saveBills(bills);
   }
 
   // Returns
@@ -484,6 +725,26 @@ export class PharmacyDatabase {
   }
   static saveClarifications(clarifications: AppPrescriptionClarification[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(CLARIFICATIONS_KEY, JSON.stringify(clarifications));
+  }
+
+
+  static updatePrescription(id: string, updates: Partial<AppPrescription>) {
+    const rxs = this.getPrescriptions();
+    const idx = rxs.findIndex(r => r.id === id);
+    if (idx > -1) {
+      rxs[idx] = { ...rxs[idx], ...updates };
+      this.savePrescriptions(rxs);
+    }
+  }
+
+  static logAudit(user: string, action: string, module: string, record: string, details: string) {
+    const logs = this.getAuditLogs();
+    logs.unshift({
+      id: "LOG" + Date.now(),
+      timestamp: new Date().toISOString(),
+      user, action, module, record, details
+    });
+    this.saveAuditLogs(logs);
   }
 
   // FEFO Helper Engine

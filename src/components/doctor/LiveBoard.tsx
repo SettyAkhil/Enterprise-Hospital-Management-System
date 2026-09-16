@@ -31,6 +31,7 @@ const SEVERITY_STYLES: Record<LiveAlert["severity"], { border: string; bg: strin
 
 const KIND_ICONS: Record<LiveAlert["kind"], string> = {
   "new-patient": "🔔",
+  "vitals-ready": "🩹",
   "waiting-long": "⏳",
   "in-consultation": "🩺",
   "lab-awaiting-payment": "🧾",

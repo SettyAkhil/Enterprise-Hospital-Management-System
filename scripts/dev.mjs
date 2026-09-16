@@ -84,7 +84,7 @@ const shutdown = (code = 0) => {
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
-function run(name, cmd, args, cwd, shell = false) {
+function run(name, cmd, args, cwd, shell = isWin) {
   const child = spawn(cmd, args, { cwd, stdio: ["ignore", "pipe", "pipe"], env: process.env, shell });
   owned.push(child);
   const pipe = (stream, out) => {
@@ -129,7 +129,8 @@ if (await portInUse(OCR_PORT)) {
   if (!existsSync(path.join(OCR_DIR, "node_modules"))) {
     // React 18 tree here vs React 19 in the host app, so npm ci fails on peers.
     log("keppler-ocr", "node_modules missing -- installing (one-time, a few minutes)...");
-    await exec("keppler-ocr:install", "npm", ["install", "--legacy-peer-deps"], OCR_DIR);
+    const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+    await exec("keppler-ocr:install", npm, ["install", "--legacy-peer-deps"], OCR_DIR);
   }
   const ocrBin = viteBin(OCR_DIR);
   if (isWin) {

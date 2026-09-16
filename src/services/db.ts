@@ -72,9 +72,11 @@ export interface DBOPEncounter {
     registration?: string;
     symptoms?: string;
     doctorAssigned?: string;
+    /** When the OP nurse took baseline observations, and who took them. */
+    vitalsRecorded?: string;
+    vitalsBy?: string;
     consultationStart?: string;
     consultationEnd?: string;
-    vitalsRecorded?: string;
     billingCompleted?: string;
     visitCompleted?: string;
   };
@@ -175,7 +177,7 @@ const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
     aiDoctor: "Dr. Arjun Mehta",
     aiConfidence: 98,
     doctorGenderPref: "Any",
-    assignedDoctor: "Dr. Arjun Mehta",
+    assignedDoctor: "",
     doctorStatus: "Available",
     queueToken: "C-OP123",
     queuePosition: 1,
@@ -213,7 +215,7 @@ const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
     aiDoctor: "Dr. Rajesh Sharma",
     aiConfidence: 98,
     doctorGenderPref: "Any",
-    assignedDoctor: "Dr. Rajesh Sharma",
+    assignedDoctor: "",
     doctorStatus: "Busy",
     queueToken: "C-OP025",
     queuePosition: 1,
@@ -251,7 +253,7 @@ const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
     aiDoctor: "Dr. Sarah Jenkins",
     aiConfidence: 94,
     doctorGenderPref: "Female",
-    assignedDoctor: "Dr. Sarah Jenkins",
+    assignedDoctor: "",
     doctorStatus: "Available",
     queueToken: "C-OP003",
     queuePosition: 2,
@@ -286,7 +288,7 @@ const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
     aiDoctor: "Dr. David Anderson",
     aiConfidence: 97,
     doctorGenderPref: "Any",
-    assignedDoctor: "Dr. David Anderson",
+    assignedDoctor: "",
     doctorStatus: "Available",
     queueToken: "O-OP001",
     queuePosition: 1,
@@ -321,7 +323,7 @@ const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
     aiDoctor: "Dr. Sanjay Kapoor",
     aiConfidence: 96,
     doctorGenderPref: "Any",
-    assignedDoctor: "Dr. Sanjay Kapoor",
+    assignedDoctor: "",
     doctorStatus: "Available",
     queueToken: "O-OP094",
     queuePosition: 1,
@@ -356,7 +358,7 @@ const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
     aiDoctor: "Dr. Vikram Malhotra",
     aiConfidence: 95,
     doctorGenderPref: "Any",
-    assignedDoctor: "Dr. Vikram Malhotra",
+    assignedDoctor: "Dr. D. Krishnarao",
     doctorStatus: "Available",
     queueToken: "G-OP055",
     queuePosition: 1,
@@ -391,7 +393,7 @@ const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
     aiDoctor: "Dr. Ramesh Kumar",
     aiConfidence: 94,
     doctorGenderPref: "Any",
-    assignedDoctor: "Dr. Ramesh Kumar",
+    assignedDoctor: "Dr. U. Nagaraju",
     doctorStatus: "Available",
     queueToken: "G-OP001",
     queuePosition: 1,
@@ -408,6 +410,8 @@ const INITIAL_SEED_ENCOUNTERS: DBOPEncounter[] = [
     timestamps: { arrival: "09:00 AM", registration: "09:15 AM", visitCompleted: "10:00 AM" }
   }
 ];
+
+const CROSS_TAB_CHANNEL = "hospai_db_v1";
 
 const STORAGE_KEYS = {
   PATIENTS: "hospai_db_patients_v1",
@@ -472,11 +476,52 @@ class HospitalDatabase {
 
   public subscribe(listener: () => void) {
     this.listeners.add(listener);
+    this.ensureCrossTab();
     return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Fan a local write out to the other tabs.
+   *
+   * Reception, the OP nurse station and the doctor's workspace are different
+   * people at different desks, so they are different tabs -- and often different
+   * machines pointed at the same browser profile. Without this, booking an
+   * appointment notified only the tab that made the write: the nurse's open
+   * station and the doctor's board went on showing stale queues until someone
+   * happened to reload. The rest of this frontend already fans out this way.
+   */
+  private crossTabReady = false;
+  private channel: BroadcastChannel | null = null;
+
+  private ensureCrossTab() {
+    if (this.crossTabReady || typeof window === "undefined") return;
+    this.crossTabReady = true;
+
+    try {
+      this.channel = new BroadcastChannel(CROSS_TAB_CHANNEL);
+      this.channel.onmessage = () => this.listeners.forEach(fn => fn());
+    } catch {
+      // BroadcastChannel unavailable -- the storage event below still covers it.
+    }
+
+    // Fires in *other* tabs when localStorage changes, which covers browsers
+    // without BroadcastChannel and writes made outside this class.
+    window.addEventListener("storage", e => {
+      if (!e.key) return;
+      if (e.key === STORAGE_KEYS.ENCOUNTERS || e.key === STORAGE_KEYS.PATIENTS) {
+        this.listeners.forEach(fn => fn());
+      }
+    });
   }
 
   private notify() {
     this.listeners.forEach(fn => fn());
+    this.ensureCrossTab();
+    try {
+      this.channel?.postMessage(Date.now());
+    } catch {
+      /* a closed channel must never break the write that triggered it */
+    }
   }
 
   // ── Patients CRUD ────────────────────────────────────────────────────────
@@ -703,6 +748,30 @@ class HospitalDatabase {
   /**
    * 3. Update Encounter (e.g. Consult, Vitals, Billing):
    */
+  /**
+   * The OP nurse station recording a patient's baseline observations.
+   *
+   * This is the gate between reception and the doctor. Booking an appointment
+   * assigns the doctor and leaves the visit at "Doctor Assigned"; the patient is
+   * only handed to the consulting room once the nurse has taken vitals, which
+   * moves it to "In Queue". Without that step the doctor's queue filled with
+   * patients nobody had seen yet, and the vitals panel on the admit card was
+   * permanently blank.
+   */
+  public recordVitals(
+    id: string,
+    vitals: DBOPEncounter["vitals"],
+    nurseName: string,
+  ): DBOPEncounter {
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const existing = this.getEncounters().find(e => e.id === id);
+    return this.updateEncounter(id, {
+      vitals,
+      status: "In Queue",
+      timestamps: { ...(existing?.timestamps ?? { arrival: now }), vitalsRecorded: now, vitalsBy: nurseName },
+    });
+  }
+
   public updateEncounter(id: string, updates: Partial<DBOPEncounter>): DBOPEncounter {
     const encounters = this.getEncounters();
     let updated: DBOPEncounter | null = null;
