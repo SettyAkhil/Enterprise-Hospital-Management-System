@@ -1,5 +1,6 @@
 import "./index.css";
 import { useState, useEffect } from "react";
+import { Toaster, toast } from "react-hot-toast";
 import Layout from "./components/Layout";
 import GlobalSearch from "./components/GlobalSearch";
 import Dashboard from "./pages/Dashboard";
@@ -10,16 +11,14 @@ import MedicineMaster from "./pages/MedicineMaster";
 import CategoryMaster from "./pages/CategoryMaster";
 import Suppliers from "./pages/Suppliers";
 import PurchaseOrders from "./pages/PurchaseOrders";
-import GRN from "./pages/GRN";
+import InvoiceOCR from "./pages/InvoiceOCR";
 import InventoryLedger from "./pages/InventoryLedger";
 import StockTransfers from "./pages/StockTransfers";
 import ExpiryLowStock from "./pages/ExpiryLowStock";
 import SalesReturns from "./pages/SalesReturns";
 import Reports from "./pages/Reports";
 import Notifications from "./pages/Notifications";
-import UserManagement from "./pages/UserManagement";
 import AuditLog from "./pages/AuditLog";
-import Settings from "./pages/Settings";
 
 const pages: Record<string, React.ComponentType<{ onNavigate: (page: string) => void }>> = {
   dashboard: Dashboard,
@@ -30,16 +29,14 @@ const pages: Record<string, React.ComponentType<{ onNavigate: (page: string) => 
   categories: CategoryMaster,
   suppliers: Suppliers,
   "purchase-orders": PurchaseOrders,
-  grn: GRN,
+  grn: InvoiceOCR,
   "inventory-ledger": InventoryLedger,
   "stock-transfers": StockTransfers,
   "expiry-low-stock": ExpiryLowStock,
   "sales-returns": SalesReturns,
   reports: Reports,
   notifications: Notifications,
-  users: UserManagement,
   "audit-log": AuditLog,
-  settings: Settings,
 };
 
 interface PharmacyAppProps {
@@ -66,7 +63,23 @@ export default function PharmacyApp({ page, onNavigate }: PharmacyAppProps) {
       }
     };
     document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
+
+    const handleToast = (e: any) => {
+      const notif = e.detail;
+      if (notif.type === 'critical') {
+        toast.error(notif.message, { duration: 5000, style: { minWidth: '300px' } });
+      } else if (notif.type === 'warning') {
+        toast(notif.message, { icon: '⚠️', duration: 4000 });
+      } else {
+        toast.success(notif.message, { duration: 3000 });
+      }
+    };
+    window.addEventListener("hospai_pharmacy_toast", handleToast);
+
+    return () => {
+      document.removeEventListener("keydown", handler);
+      window.removeEventListener("hospai_pharmacy_toast", handleToast);
+    };
   }, []);
 
   const PageComponent = pages[page] ?? Dashboard;
@@ -82,6 +95,7 @@ export default function PharmacyApp({ page, onNavigate }: PharmacyAppProps) {
           onNavigate={next => { onNavigate(next); setShowSearch(false); }}
         />
       )}
+      <Toaster position="top-right" />
     </>
   );
 }

@@ -391,7 +391,7 @@ export class PharmacyDatabase {
     try { const stored = window.localStorage.getItem(USERS_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
   }
   static saveUsers(users: AppUser[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    if (typeof window !== "undefined") { window.localStorage.setItem(USERS_KEY, JSON.stringify(users)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
   static addUser(user: AppUser) {
     const users = this.getUsers();
@@ -412,7 +412,7 @@ export class PharmacyDatabase {
     try { const stored = window.localStorage.getItem(NOTIFICATIONS_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
   }
   static saveNotifications(notifications: AppNotification[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+    if (typeof window !== "undefined") { window.localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
   static updateNotification(id: string, updates: Partial<AppNotification>) {
     const notifs = this.getNotifications();
@@ -428,12 +428,29 @@ export class PharmacyDatabase {
     this.saveNotifications(notifs);
   }
 
+  static addNotification(title: string, message: string, type: AppNotification["type"]) {
+    const notifs = this.getNotifications();
+    const newNotif: AppNotification = {
+      id: "NOTIF" + Date.now() + Math.floor(Math.random() * 1000),
+      title,
+      message,
+      type,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      read: false
+    };
+    notifs.unshift(newNotif);
+    this.saveNotifications(notifs);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: newNotif }));
+    }
+  }
+
   static getAuditLogs(): AppAuditLog[] {
     if (typeof window === "undefined") return [];
     try { const stored = window.localStorage.getItem(AUDIT_LOGS_KEY); return stored ? JSON.parse(stored) : []; } catch { return []; }
   }
   static saveAuditLogs(logs: AppAuditLog[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(logs));
+    if (typeof window !== "undefined") { window.localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(logs)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   static getCategories(): AppCategory[] {
@@ -444,7 +461,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveCategories(categories: AppCategory[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+    if (typeof window !== "undefined") { window.localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   static addCategory(cat: AppCategory) {
@@ -475,7 +492,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveSuppliers(suppliers: AppSupplier[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(suppliers));
+    if (typeof window !== "undefined") { window.localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(suppliers)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   static addSupplier(sup: AppSupplier) {
@@ -506,7 +523,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveMedicines(medicines: AppMedicine[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(MEDICINES_KEY, JSON.stringify(medicines));
+    if (typeof window !== "undefined") { window.localStorage.setItem(MEDICINES_KEY, JSON.stringify(medicines)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   static addMedicine(med: AppMedicine) {
@@ -538,7 +555,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveBatches(batches: AppBatch[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(BATCHES_KEY, JSON.stringify(batches));
+    if (typeof window !== "undefined") { window.localStorage.setItem(BATCHES_KEY, JSON.stringify(batches)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   static updateBatch(id: string, updates: Partial<AppBatch>) {
@@ -579,7 +596,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static savePurchaseOrders(pos: AppPurchaseOrder[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(POS_KEY, JSON.stringify(pos));
+    if (typeof window !== "undefined") { window.localStorage.setItem(POS_KEY, JSON.stringify(pos)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   static addPurchaseOrder(po: AppPurchaseOrder) {
@@ -606,7 +623,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveGRNs(grns: AppGRN[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(GRNS_KEY, JSON.stringify(grns));
+    if (typeof window !== "undefined") { window.localStorage.setItem(GRNS_KEY, JSON.stringify(grns)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   static addGRN(grn: AppGRN) {
@@ -624,7 +641,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveStockTransactions(txs: AppStockTransaction[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(STOCK_TXS_KEY, JSON.stringify(txs));
+    if (typeof window !== "undefined") { window.localStorage.setItem(STOCK_TXS_KEY, JSON.stringify(txs)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   static addTransaction(tx: AppStockTransaction) {
@@ -658,7 +675,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveBills(bills: AppPharmacyBill[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(BILLS_KEY, JSON.stringify(bills));
+    if (typeof window !== "undefined") { window.localStorage.setItem(BILLS_KEY, JSON.stringify(bills)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   static addPharmacyBill(bill: AppPharmacyBill) {
@@ -676,7 +693,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveReturns(returns: AppPharmacyReturn[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(RETURNS_KEY, JSON.stringify(returns));
+    if (typeof window !== "undefined") { window.localStorage.setItem(RETURNS_KEY, JSON.stringify(returns)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   // Transfers
@@ -688,7 +705,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveTransfers(transfers: AppStockTransfer[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(TRANSFERS_KEY, JSON.stringify(transfers));
+    if (typeof window !== "undefined") { window.localStorage.setItem(TRANSFERS_KEY, JSON.stringify(transfers)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   // Supplier Returns
@@ -700,7 +717,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveSupplierReturns(returns: AppSupplierReturn[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(SUPPLIER_RETURNS_KEY, JSON.stringify(returns));
+    if (typeof window !== "undefined") { window.localStorage.setItem(SUPPLIER_RETURNS_KEY, JSON.stringify(returns)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   // Adjustments
@@ -712,7 +729,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveAdjustments(adjustments: AppStockAdjustment[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(ADJUSTMENTS_KEY, JSON.stringify(adjustments));
+    if (typeof window !== "undefined") { window.localStorage.setItem(ADJUSTMENTS_KEY, JSON.stringify(adjustments)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
   // Clarifications
@@ -724,7 +741,7 @@ export class PharmacyDatabase {
     } catch { return []; }
   }
   static saveClarifications(clarifications: AppPrescriptionClarification[]) {
-    if (typeof window !== "undefined") window.localStorage.setItem(CLARIFICATIONS_KEY, JSON.stringify(clarifications));
+    if (typeof window !== "undefined") { window.localStorage.setItem(CLARIFICATIONS_KEY, JSON.stringify(clarifications)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
 
 

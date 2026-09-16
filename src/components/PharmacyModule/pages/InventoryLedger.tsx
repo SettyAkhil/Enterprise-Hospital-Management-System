@@ -19,8 +19,8 @@ export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
   const { stockTransactions, medicines, batches, bills } = usePharmacyData();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
-
-  
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const ledgerData: any[] = [];
   const handledBatches = new Set<string>();
   const handledBills = new Set<string>();
@@ -92,8 +92,28 @@ export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
   const filtered = ledgerData.filter(r => {
     const matchSearch = !search || r.medicine.toLowerCase().includes(search.toLowerCase()) || r.ref.includes(search);
     const matchType = typeFilter === "All" || r.type === typeFilter;
-    return matchSearch && matchType;
+    
+    const rDate = new Date(r.date);
+    const matchFrom = !fromDate || rDate >= new Date(fromDate);
+    const matchTo = !toDate || rDate <= new Date(toDate + "T23:59:59");
+    
+    return matchSearch && matchType && matchFrom && matchTo;
   });
+
+  const handleExport = () => {
+    if (filtered.length === 0) return alert("No data to export.");
+    const headers = ["Date & Time", "Reference", "Medicine", "Batch", "Type", "IN", "OUT", "User"];
+    const rows = [headers.join(",")];
+    filtered.forEach(r => {
+      rows.push(`"${r.date}","${r.ref}","${r.medicine}","${r.batch}","${r.type}",${r.in},${r.out},"${r.user}"`);
+    });
+    const blob = new Blob([rows.join("\\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `inventory_ledger_${Date.now()}.csv`;
+    a.click();
+  };
 
   const totalIn = ledgerData.filter(r => r.type === "Purchase").reduce((sum, r) => sum + r.in, 0);
   const totalOut = ledgerData.filter(r => r.type === "Sale").reduce((sum, r) => sum + r.out, 0);
@@ -105,7 +125,7 @@ export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
         title="Inventory Ledger"
         description="Complete transaction history for all stock movements"
         actions={
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors">
+          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors">
             <Download size={13} /> Export
           </button>
         }
@@ -137,6 +157,11 @@ export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
             onChange={e => setSearch(e.target.value)}
             className="pl-9 pr-4 py-2 w-64 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none transition-colors"
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="px-3 py-2 rounded border border-[#DDE2EC] text-[13px] text-[#64748B] focus:border-[#1B4FD8] focus:outline-none" />
+          <span className="text-[#94A3B8]">-</span>
+          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="px-3 py-2 rounded border border-[#DDE2EC] text-[13px] text-[#64748B] focus:border-[#1B4FD8] focus:outline-none" />
         </div>
         <div className="flex bg-white rounded border border-[#DDE2EC] p-1">
           {types.map(t => (
