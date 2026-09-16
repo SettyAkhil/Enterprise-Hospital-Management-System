@@ -4,7 +4,7 @@ interface Breadcrumb { label: string; page?: string }
 
 interface PageHeaderProps {
   breadcrumbs: Breadcrumb[];
-  title: string;
+  title: React.ReactNode;
   description?: string;
   actions?: React.ReactNode;
   onNavigate?: (page: string) => void;

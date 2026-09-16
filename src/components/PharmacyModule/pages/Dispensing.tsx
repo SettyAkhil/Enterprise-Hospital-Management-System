@@ -183,23 +183,32 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
     const exists = cart.find(i => i.medicine === med.name);
     if (exists) { updateQty(exists.id, 1); return; }
     
-    // Quick add doesn't have batch selection yet, just grab first batch for mock manual add
-    const batches = PharmacyDatabase.getBatches().filter(b => b.medicineId === med.id && b.availableQuantity > 0);
-    const b = batches[0];
+    // Use FEFO (First Expiry First Out) to pick the oldest batch
+    const allBatches = PharmacyDatabase.getBatches().filter(b => b.medicineId === med.id && b.availableQuantity > 0);
+    const sortedBatches = allBatches.sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+    
+    const b = sortedBatches[0];
+    if (!b) {
+      alert("No stock available for this medicine!");
+      return;
+    }
+    
+    const taxPct = med.gst || 12;
+    const itemMrp = b.mrp || med.mrp || 0;
     
     const newItem = {
       id: Date.now() + Math.random(),
       medicineId: med.id,
-      batchId: b ? b.id : "MANUAL-001",
+      batchId: b.id,
       medicine: med.name,
-      batch: b ? b.batchNumber : "B2026",
-      expiry: b ? b.expiryDate : "2026-12-31",
+      batch: b.batchNumber,
+      expiry: b.expiryDate,
       qty: 1,
-      mrp: med.mrp,
+      mrp: itemMrp,
       discount: 0,
-      tax: med.gst || 12,
-      hsnCode: med.sku,
-      total: med.mrp * (1 + (med.gst||12)/100),
+      tax: taxPct,
+      hsnCode: med.sku || "300490",
+      total: itemMrp * (1 + (taxPct/100)),
     };
     setCart(prev => [...prev, newItem]);
     setSearchQuery("");

@@ -14,21 +14,17 @@ const typeConfig = {
 import { PharmacyDatabase } from "../../../services/pharmacyDb";
 
 export default function Notifications({ onNavigate }: NotificationsProps) {
-  const {  notifications: initialNotifs } = usePharmacyData();
-  const [notifs, setNotifs] = useState(initialNotifs);
+  const { notifications: notifs } = usePharmacyData();
   const [activeFilter, setActiveFilter] = useState("All");
 
   const markAll = () => {
     notifs.forEach(n => PharmacyDatabase.updateNotification(n.id, { read: true }));
-    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
   };
   const markOne = (id: string) => {
     PharmacyDatabase.updateNotification(id, { read: true });
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
   const remove = (id: string) => {
     PharmacyDatabase.deleteNotification(id);
-    setNotifs(prev => prev.filter(n => n.id !== id));
   };
 
   const filtered = notifs.filter(n => {
@@ -45,7 +41,15 @@ export default function Notifications({ onNavigate }: NotificationsProps) {
     <div className="p-6 space-y-5">
       <PageHeader
         breadcrumbs={[{ label: "Pharmacy" }, { label: "Notifications" }]}
-        title="Notification Center"
+        title={
+          <div className="flex items-center gap-2">
+            Notification Center
+            <span className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+              Live
+            </span>
+          </div>
+        }
         description={`${unread} unread · ${notifs.length} total notifications`}
         actions={
           <button onClick={markAll} className="flex items-center gap-1.5 px-4 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors">
@@ -113,7 +117,6 @@ export default function Notifications({ onNavigate }: NotificationsProps) {
                     {!n.read && (
                       <button onClick={() => markOne(n.id)} className="text-[12px] font-medium" style={{ color: "#1B4FD8" }}>Mark as read</button>
                     )}
-                    <button className="text-[12px] font-medium text-[#64748B] hover:text-[#0F1624] transition-colors">View details</button>
                     <button onClick={() => remove(n.id)} className="ml-auto p-1 rounded hover:bg-[#FEE2E2] text-[#94A3B8] hover:text-[#dc2626] transition-colors">
                       <X size={12} />
                     </button>

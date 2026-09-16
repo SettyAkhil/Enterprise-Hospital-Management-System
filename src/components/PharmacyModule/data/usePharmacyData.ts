@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PharmacyDatabase, isAwaitingVerification } from "../../../services/pharmacyDb";
 import type { AppNotification, AppPrescription, AppStockTransfer } from "../../../services/pharmacyDb";
 
@@ -159,6 +159,12 @@ export function usePharmacyData() {
     setStockTransactions(PharmacyDatabase.getStockTransactions());
     setGrns(PharmacyDatabase.getGRNs());
   };
+
+  useEffect(() => {
+    const handleUpdate = () => refresh();
+    window.addEventListener("hospai_pharmacy_updated", handleUpdate);
+    return () => window.removeEventListener("hospai_pharmacy_updated", handleUpdate);
+  }, []);
 
   return {
     medicines: mappedMedicines,

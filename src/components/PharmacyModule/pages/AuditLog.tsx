@@ -1,6 +1,6 @@
 import { usePharmacyData } from "../data/usePharmacyData";
-import { Fragment, useState } from "react";
-import { Search, Download, ChevronDown, Shield } from "lucide-react";
+import { Fragment, useState, useEffect } from "react";
+import { Search, Download, ChevronDown, Shield, ChevronLeft, ChevronRight } from "lucide-react";
 
 import PageHeader from "../components/PageHeader";
 
@@ -23,6 +23,9 @@ export default function AuditLog({ onNavigate }: AuditLogProps) {
   const [search, setSearch] = useState("");
   const [moduleFilter, setModuleFilter] = useState("All");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
   const modules = ["All", "Prescription", "Inventory", "Billing", "Purchase", "Medicine", "User"];
   const filtered = auditLogs.filter(log => {
     const matchSearch = !search || log.user.toLowerCase().includes(search.toLowerCase()) || log.record.includes(search) || log.action.toLowerCase().includes(search.toLowerCase());
@@ -30,14 +33,60 @@ export default function AuditLog({ onNavigate }: AuditLogProps) {
     return matchSearch && matchModule;
   });
 
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginatedLogs = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, moduleFilter, auditLogs.length]);
+
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      alert("No logs to export.");
+      return;
+    }
+    const headers = ["Timestamp", "User", "Module", "Action", "Record", "IP/Device", "Details"];
+    const csvRows = [headers.join(",")];
+    
+    for (const log of filtered) {
+      const row = [
+        `"${log.timestamp}"`,
+        `"${log.user}"`,
+        `"${log.module}"`,
+        `"${log.action}"`,
+        `"${log.record}"`,
+        `"${log.ip ?? ""}"`,
+        `"${log.details.replace(/"/g, '""')}"`
+      ];
+      csvRows.push(row.join(","));
+    }
+    
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `audit_log_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-6 space-y-5">
       <PageHeader
         breadcrumbs={[{ label: "Pharmacy" }, { label: "Administration" }, { label: "Audit Log" }]}
-        title="Audit Log"
+        title={
+          <div className="flex items-center gap-2">
+            Audit Log
+            <span className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+              Live
+            </span>
+          </div>
+        }
         description="Complete trail of all system actions and changes"
         actions={
-          <button onClick={() => alert("Audit Log exported to CSV successfully.")} className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors">
+          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors">
             <Download size={13} /> Export
           </button>
         }
@@ -57,11 +106,7 @@ export default function AuditLog({ onNavigate }: AuditLogProps) {
             </button>
           ))}
         </div>
-        <div className="ml-auto">
-          <input type="date" defaultValue="2026-09-12" className="px-3 py-2 rounded border border-[#DDE2EC] text-[13px] bg-white focus:border-[#1B4FD8] focus:outline-none" />
-        </div>
       </div>
-
       {/* Log Table */}
       <div className="bg-white rounded border border-[#DDE2EC] overflow-hidden">
         <table>
@@ -69,7 +114,7 @@ export default function AuditLog({ onNavigate }: AuditLogProps) {
             <th>Timestamp</th><th>User</th><th>Module</th><th>Action</th><th>Record</th><th>IP / Device</th><th>Details</th>
           </tr></thead>
           <tbody>
-            {filtered.map((log, i) => (
+            {paginatedLogs.map((log, i) => (
               <Fragment key={log.id}>
                 <tr onClick={() => setExpanded(expanded === i ? null : i)} className="cursor-pointer">
                   <td className="font-mono text-[11px] text-[#64748B] whitespace-nowrap">{log.timestamp}</td>
@@ -112,6 +157,29 @@ export default function AuditLog({ onNavigate }: AuditLogProps) {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-[13px] text-[#64748B]">
+          <span>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries</span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="p-1 rounded border border-[#DDE2EC] hover:bg-[#F5F7FA] disabled:opacity-50"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="px-3 py-1 font-medium text-[#0F1624]">Page {currentPage} of {totalPages}</span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="p-1 rounded border border-[#DDE2EC] hover:bg-[#F5F7FA] disabled:opacity-50"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
