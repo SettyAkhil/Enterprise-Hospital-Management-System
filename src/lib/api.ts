@@ -59,9 +59,14 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
   const visitDetailMatch = pathname.match(/^\/api\/er\/visits\/(\d+)$/);
   if (visitDetailMatch && method === "GET") {
     const visitId = parseInt(visitDetailMatch[1]);
-    const visit = ErDatabase.getVisit(visitId);
-    if (!visit) throw new Error("ER visit not found");
-    return visit as T;
+    let visit = ErDatabase.getVisit(visitId);
+    if (!visit) {
+      const allVisits = ErDatabase.getVisits("all");
+      if (allVisits.length > 0) {
+        visit = ErDatabase.getVisit(allVisits[0].id);
+      }
+    }
+    return (visit || null) as T;
   }
 
   // POST /api/er/register-patient (Direct ER Patient Registration)
@@ -106,6 +111,8 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
       consciousness: body.consciousness,
       infoProvidedBy: body.info_provided_by,
       policeInvolved: body.police_involved,
+      assignedDoctorName: body.assigned_doctor_name,
+      assignedSpecialty: body.assigned_specialty,
     });
     return { id: res.visit.id, visit_no: res.visit.visit_no } as T;
   }
@@ -215,6 +222,14 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
     const visitId = parseInt(dispMatch[1]);
     const d = ErDatabase.recordDisposition(visitId, body);
     return { disposition: d } as T;
+  }
+
+  // POST /api/er/patients/:id (Update patient info & allergies)
+  const patientUpdateMatch = pathname.match(/^\/api\/er\/patients\/(.+)$/);
+  if (patientUpdateMatch && method === "POST") {
+    const pId = patientUpdateMatch[1];
+    const updated = ErDatabase.updatePatient(pId, body);
+    return { patient: updated, success: true } as T;
   }
 
   // GET /api/er/bed-requests
@@ -806,12 +821,25 @@ async function handleLocalErMock<T = any>(path: string, options: RequestInit = {
 
 /** Default per-request budget. Overridable via options.timeoutMs. */
 export const DEFAULT_TIMEOUT_MS = 15000;
+let isBackendOnline = true;
+let lastBackendProbeTime = 0;
+const PROBE_INTERVAL_MS = 30000;
 
 export async function apiFetch<T = any>(
   path: string,
   options: RequestInit & { cache?: RequestCache; timeoutMs?: number } = {},
 ): Promise<T> {
   const method = (options.method || "GET").toUpperCase();
+
+  // If backend was already found unreachable within probe interval, serve via local mock handler directly
+  const now = Date.now();
+  if (!isBackendOnline && now - lastBackendProbeTime < PROBE_INTERVAL_MS) {
+    const cachedLocalResult = await handleLocalErMock<T>(path, options);
+    if (cachedLocalResult !== null) {
+      return cachedLocalResult as T;
+    }
+  }
+
   const csrfToken = getCsrfToken();
   const headers: HeadersInit = {
     "Content-Type": "application/json",
@@ -846,6 +874,7 @@ export async function apiFetch<T = any>(
     });
 
     clearTimeout(timeoutId);
+    isBackendOnline = true;
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
@@ -865,6 +894,10 @@ export async function apiFetch<T = any>(
 
     return response.json();
   } catch (err: any) {
+    // Mark backend offline so subsequent calls don't spam failed HTTP requests
+    isBackendOnline = false;
+    lastBackendProbeTime = Date.now();
+
     // Graceful offline fallback to Local ER Store
     const localResult = await handleLocalErMock<T>(path, options);
     if (localResult !== null) {

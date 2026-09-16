@@ -30,7 +30,7 @@ export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
     if (tx.billId) handledBills.add(tx.billId);
     
     const med = medicines.find(m => m.id === tx.medicineId);
-    let typeName = tx.transactionType;
+    let typeName: string = tx.transactionType;
     if (typeName === "PURCHASE_RECEIVED") typeName = "Purchase";
     if (typeName === "DISPENSED") typeName = "Sale";
     if (typeName === "RETURNED") typeName = "Return";

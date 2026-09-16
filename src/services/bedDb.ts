@@ -487,7 +487,7 @@ const INITIAL_DISCHARGED: DischargedPatientRecord[] = [
 
 export class BedDatabase {
   static load(): BedRecord[] {
-    if (typeof window === "undefined") return INITIAL_BEDS;
+    if (typeof window === "undefined" || !window.localStorage) return INITIAL_BEDS;
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (!stored) {
@@ -501,7 +501,7 @@ export class BedDatabase {
   }
 
   private static save(beds: BedRecord[]): void {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !window.localStorage) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(beds));
     } catch (e) {
@@ -510,7 +510,7 @@ export class BedDatabase {
   }
 
   static getDischargedPatients(): DischargedPatientRecord[] {
-    if (typeof window === "undefined") return INITIAL_DISCHARGED;
+    if (typeof window === "undefined" || !window.localStorage) return INITIAL_DISCHARGED;
     try {
       const stored = window.localStorage.getItem(DISCHARGED_STORAGE_KEY);
       if (!stored) {
@@ -524,7 +524,7 @@ export class BedDatabase {
   }
 
   private static saveDischarged(list: DischargedPatientRecord[]): void {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !window.localStorage) return;
     try {
       window.localStorage.setItem(DISCHARGED_STORAGE_KEY, JSON.stringify(list));
     } catch (e) {

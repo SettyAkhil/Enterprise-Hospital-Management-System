@@ -29,7 +29,7 @@ const STATIC_NAVIGATION: CommandItem[] = [
   { id: "nav-rad", label: "Radiology & Imaging", subLabel: "X-Ray, CT, MRI scans", key: "radiology", icon: "🩻", type: "navigation" },
   { id: "nav-icu", label: "Intensive Care Unit (ICU)", subLabel: "Ventilators & vital monitoring", key: "icu", icon: "❤️‍🩹", type: "navigation" },
   { id: "nav-ot", label: "Surgery & OT", subLabel: "Operating theater schedule", key: "surgery", icon: "⚕️", type: "navigation" },
-  { id: "nav-pos", label: "Payment Collection (POS)", subLabel: "Cash, UPI, Card receipts", key: "payments", icon: "💵", type: "navigation" },
+  { id: "nav-pos", label: "Payment History & Collections", subLabel: "Cashier receipts & payment ledger", key: "payments", icon: "💵", type: "navigation" },
   { id: "nav-ocr", label: "Keppler OCR Document AI", subLabel: "Medical intelligence vault", key: "dpi_ocr", icon: "📄", type: "navigation" },
 ];
 
