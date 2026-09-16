@@ -6,6 +6,7 @@ import {
   InvoiceItem,
   PaymentRecord,
 } from "../services/billingDb";
+import HospitalReceiptModal from "./HospitalReceiptModal";
 
 const DEPARTMENTS: { label: string; value: DepartmentType | "All" }[] = [
   { label: "All Departments", value: "All" },
@@ -20,7 +21,7 @@ const DEPARTMENTS: { label: string; value: DepartmentType | "All" }[] = [
 
 export default function Billing() {
   // ── Tab Navigation ──────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<"pos_counter" | "revenue_dashboard" | "payment_history">("pos_counter");
+  const [activeTab, setActiveTab] = useState<"pos_counter" | "revenue_dashboard">("pos_counter");
 
   // ── Live Data Collections ───────────────────────────────────────────────────
   const [claims, setClaims] = useState<ClaimRecord[]>([]);
@@ -61,6 +62,13 @@ export default function Billing() {
     payment: PaymentRecord;
   } | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+
+  // ── Payment Confirmation & Post-Payment Clearance Modals ────────────────────
+  const [showConfirmPayModal, setShowConfirmPayModal] = useState(false);
+  const [postPayClearanceModal, setPostPayClearanceModal] = useState<{
+    claim: ClaimRecord;
+    payment: PaymentRecord;
+  } | null>(null);
 
   // ── Quick Walk-In Invoice Modal ─────────────────────────────────────────────
   const [showQuickBillModal, setShowQuickBillModal] = useState(false);
@@ -114,16 +122,45 @@ export default function Billing() {
     return () => unsub();
   }, []);
 
-  // Set default selected claim if none selected
+  // Set default selected claim if none selected or if preselected from ER
   useEffect(() => {
-    if (claims.length > 0 && !selectedClaimId) {
-      const unpaid = claims.find((c) => (c.balanceDue || 0) > 0);
-      if (unpaid) {
-        setSelectedClaimId(unpaid.id);
-        setPayAmount(unpaid.balanceDue || 0);
-      } else {
-        setSelectedClaimId(claims[0].id);
-        setPayAmount(claims[0].balanceDue || 0);
+    if (claims.length > 0) {
+      const preselected = BillingDatabase.getPreselectedClaimForBilling();
+      if (preselected) {
+        const found = claims.find(
+          (c) =>
+            c.id === preselected ||
+            c.invoiceNo === preselected ||
+            c.encounterId === preselected ||
+            c.patientId === preselected ||
+            c.patientName === preselected
+        );
+        if (found) {
+          setSelectedClaimId(found.id);
+          const bal = found.balanceDue || 0;
+          setPayAmount(bal);
+          setTenderedCash(bal);
+          setIsSplitPay(false);
+          setSplitCashAmount(Math.floor(bal / 2));
+          setSplitDigitalAmount(Math.ceil(bal / 2));
+          setTransactionRef(`TXN-${Date.now().toString().slice(-6)}`);
+          if (found.department) {
+            setDeptFilter("All");
+          }
+          setStatusFilter("unpaid");
+          return;
+        }
+      }
+
+      if (!selectedClaimId) {
+        const unpaid = claims.find((c) => (c.balanceDue || 0) > 0);
+        if (unpaid) {
+          setSelectedClaimId(unpaid.id);
+          setPayAmount(unpaid.balanceDue || 0);
+        } else {
+          setSelectedClaimId(claims[0].id);
+          setPayAmount(claims[0].balanceDue || 0);
+        }
       }
     }
   }, [claims, selectedClaimId]);
@@ -533,8 +570,8 @@ export default function Billing() {
     ];
   }, [metrics.totalBilled, metrics.totalCollected, claims.length]);
 
-  // ── Payment Processing Handler ──────────────────────────────────────────────
-  const handleProcessPayment = (e: React.FormEvent) => {
+  // ── Payment Processing Handlers ────────────────────────────────────────────
+  const handleInitiatePayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClaim) return;
 
@@ -542,6 +579,11 @@ export default function Billing() {
       showToast("Please enter a valid payment amount greater than ₹0", "error");
       return;
     }
+    setShowConfirmPayModal(true);
+  };
+
+  const executeConfirmedPayment = () => {
+    if (!selectedClaim) return;
 
     try {
       let finalMethod = payMode;
@@ -560,15 +602,25 @@ export default function Billing() {
         notes,
       });
 
-      setReceiptData({ claim, payment });
-      setShowReceiptModal(true);
-      const isDiag = selectedClaim.department === "Laboratory" || selectedClaim.department === "Radiology" || selectedClaim.items.some((i) => i.category === "Laboratory" || i.category === "Radiology / Imaging");
-      showToast(
-        isDiag
-          ? `✓ Payment of ₹${payAmount.toLocaleString("en-IN")} recorded! Receipt ${payment.receiptNo} issued. Please transmit clearance to Lab / Radiology below.`
-          : `✓ Payment of ₹${payAmount.toLocaleString("en-IN")} recorded successfully! Receipt ${payment.receiptNo} generated.`,
-        "success"
-      );
+      setShowConfirmPayModal(false);
+
+      const clearanceStatus = BillingDatabase.getDepartmentClearanceStatus(claim.patientName, claim);
+      const hasDiag = clearanceStatus.hasLabOrders || clearanceStatus.hasRadStudies;
+
+      if (hasDiag) {
+        setPostPayClearanceModal({ claim, payment });
+        showToast(
+          `✓ Payment of ₹${payAmount.toLocaleString("en-IN")} confirmed! Receipt ${payment.receiptNo} generated. Transmit diagnostic orders to Lab / Radiology below.`,
+          "success"
+        );
+      } else {
+        setReceiptData({ claim, payment });
+        setShowReceiptModal(true);
+        showToast(
+          `✓ Payment of ₹${payAmount.toLocaleString("en-IN")} recorded successfully! Receipt ${payment.receiptNo} generated.`,
+          "success"
+        );
+      }
 
       // Reset form
       setCashierNotes("");
@@ -959,21 +1011,6 @@ export default function Billing() {
           >
             <span>📊</span> Revenue &amp; Dues Analytics
           </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("payment_history")}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-              activeTab === "payment_history"
-                ? "bg-white text-indigo-700 shadow-xs border border-indigo-200/60"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <span>📜</span> Payment History &amp; Receipts
-            <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded-full text-[10px]">
-              {paymentsList.length || claims.length}
-            </span>
-          </button>
         </div>
 
         {/* Live Counter Cashier Tag */}
@@ -1261,7 +1298,7 @@ export default function Billing() {
 
                   {/* Cashier Payment Form */}
                   {(selectedClaim.balanceDue || 0) > 0 ? (
-                    <form onSubmit={handleProcessPayment} className="p-5 space-y-4">
+                    <form onSubmit={handleInitiatePayment} className="p-5 space-y-4">
                       <div>
                         <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-2">
                           1. Select Payment Method
@@ -1453,9 +1490,9 @@ export default function Billing() {
                       <div className="pt-2">
                         <button
                           type="submit"
-                          className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-sm rounded-xl cursor-pointer shadow-md transition-all flex items-center justify-center gap-2"
+                          className="w-full py-2.5 sm:py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-sm rounded-xl cursor-pointer shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
                         >
-                          <span>⚡</span> Settle Payment ₹{payAmount.toLocaleString("en-IN")} &amp; Generate Instant Receipt
+                          <span>⚡</span> Pay ₹{payAmount.toLocaleString("en-IN")}
                         </button>
                       </div>
                     </form>
@@ -2153,430 +2190,319 @@ export default function Billing() {
             </div>
           </div>
         )}
-
-        {/* =========================================================================
-            TAB 3: PAYMENT HISTORY & RECEIPTS LEDGER
-           ========================================================================= */}
-        {activeTab === "payment_history" && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden space-y-4">
-            <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-900">
-                  Transaction History &amp; Payment Receipts
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Searchable ledger of all cashier collections, receipts, and settlements.
-                </p>
-              </div>
-
-              <div className="text-xs text-slate-600 font-bold">
-                Total Transactions: <span className="font-mono text-blue-700">{paymentsList.length || claims.length}</span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 uppercase text-[10px] font-bold bg-slate-50/30">
-                    <th className="p-3">Receipt No</th>
-                    <th className="p-3">Date &amp; Time</th>
-                    <th className="p-3">Patient Name &amp; UMR</th>
-                    <th className="p-3">Department</th>
-                    <th className="p-3">Payment Mode</th>
-                    <th className="p-3 text-right">Amount Collected (₹)</th>
-                    <th className="p-3">Txn Reference</th>
-                    <th className="p-3 text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {paymentsList.length === 0 ? (
-                    claims.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-mono font-bold text-blue-700">RCPT-2026-5501</td>
-                        <td className="p-3 text-slate-500">{c.dateOfService || "2026-09-12"}</td>
-                        <td className="p-3">
-                          <div className="font-bold text-slate-900">{c.patientName}</div>
-                          <div className="text-[10px] font-mono text-slate-400">{c.patientId}</div>
-                        </td>
-                        <td className="p-3">
-                          <span className="px-2 py-0.5 rounded bg-slate-100 font-bold text-[10px]">
-                            {c.department}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-[10px]">
-                            UPI / Digital
-                          </span>
-                        </td>
-                        <td className="p-3 text-right font-mono font-extrabold text-emerald-700">
-                          ₹{(c.amountPaid || c.totalAmount).toLocaleString("en-IN")}
-                        </td>
-                        <td className="p-3 font-mono text-slate-400">TXN-892182</td>
-                        <td className="p-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReceiptData({
-                                claim: c,
-                                payment: {
-                                  id: `PAY-${c.id}`,
-                                  invoiceId: c.id,
-                                  receiptNo: `RCPT-2026-${Math.floor(5000 + Math.random() * 900)}`,
-                                  amount: c.amountPaid || c.totalAmount,
-                                  paymentDate: new Date().toISOString(),
-                                  paymentMethod: "UPI / Digital",
-                                  collectedBy: "Central Cashier Desk",
-                                  transactionRef: "TXN-892182",
-                                },
-                              });
-                              setShowReceiptModal(true);
-                            }}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 font-bold rounded-md text-[11px] cursor-pointer"
-                          >
-                            🖨️ View Receipt
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    paymentsList.map((p) => {
-                      const relatedClaim = claims.find((c) => c.id === p.invoiceId) || claims[0];
-                      return (
-                        <tr key={p.id} className="hover:bg-slate-50">
-                          <td className="p-3 font-mono font-bold text-blue-700">{p.receiptNo}</td>
-                          <td className="p-3 text-slate-500">
-                            {p.paymentDate ? new Date(p.paymentDate).toLocaleString() : "Today"}
-                          </td>
-                          <td className="p-3">
-                            <div className="font-bold text-slate-900">{p.patientName}</div>
-                            <div className="text-[10px] font-mono text-slate-400">{p.patientId}</div>
-                          </td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded bg-slate-100 font-bold text-[10px]">
-                              {p.department}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <span
-                              className={`px-2 py-0.5 rounded font-bold text-[10px] ${
-                                p.paymentMethod === "Cash"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : p.paymentMethod === "UPI / Digital"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-purple-100 text-purple-800"
-                              }`}
-                            >
-                              {p.paymentMethod}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right font-mono font-extrabold text-emerald-700">
-                            ₹{p.amount.toLocaleString("en-IN")}
-                          </td>
-                          <td className="p-3 font-mono text-slate-400">{p.transactionRef || "N/A"}</td>
-                          <td className="p-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReceiptData({
-                                  claim: relatedClaim,
-                                  payment: p,
-                                });
-                                setShowReceiptModal(true);
-                              }}
-                              className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 font-bold rounded-md text-[11px] cursor-pointer"
-                            >
-                              🖨️ View Receipt
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </main>
 
       {/* =========================================================================
-          MODAL: OFFICIAL PAYMENT RECEIPT / TAX INVOICE SLIP (Single-Page Fitting)
+          MODAL: OFFICIAL PAYMENT RECEIPT / TAX INVOICE SLIP (Standardized Reference)
          ========================================================================= */}
       {showReceiptModal && receiptData && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-3 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[700px] my-auto overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-150 flex flex-col">
-            {/* Modal Header Bar */}
-            <div className="bg-slate-900 text-white px-4 py-2 flex items-center justify-between shrink-0">
+        <HospitalReceiptModal
+          claim={receiptData.claim}
+          payment={receiptData.payment}
+          onClose={() => setShowReceiptModal(false)}
+        />
+      )}
+
+      {/* =========================================================================
+          MODAL: PAYMENT CONFIRMATION DIALOG
+         ========================================================================= */}
+      {showConfirmPayModal && selectedClaim && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="bg-gradient-to-r from-emerald-700 to-teal-800 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold flex items-center justify-center">✓</span>
-                <span className="font-bold text-xs tracking-wider uppercase">Official Hospital Payment Receipt</span>
+                <span className="text-xl">💳</span>
+                <h3 className="font-extrabold text-sm">Confirm Payment Collection</h3>
               </div>
               <button
                 type="button"
-                onClick={() => setShowReceiptModal(false)}
-                className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold text-xs cursor-pointer transition-colors"
-                title="Close"
+                onClick={() => setShowConfirmPayModal(false)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold text-xs cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {/* Non-Scrollable Single Page Receipt Card */}
-            <div className="p-2.5 sm:p-3 bg-slate-50/60">
-              <div
-                id="printable-receipt"
-                className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs space-y-1.5 text-slate-800 font-sans max-w-[650px] mx-auto"
-              >
-                {/* Hospital Header Banner */}
-                <div className="text-center space-y-0.5">
-                  {/* Hospital Building SVG Logo */}
-                  <div className="flex justify-center mb-0.5">
-                    <svg width="56" height="42" viewBox="0 0 100 75" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-2xs">
-                      {/* Left Wing */}
-                      <rect x="12" y="32" width="24" height="34" rx="2" fill="#B4D3F2" />
-                      <rect x="32" y="32" width="4" height="34" fill="#93BDE6" />
-                      <rect x="17" y="37" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="25" y="37" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="17" y="47" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="25" y="47" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="17" y="57" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="25" y="57" width="5" height="6" rx="1" fill="#1C3D66" />
-
-                      {/* Right Wing */}
-                      <rect x="64" y="32" width="24" height="34" rx="2" fill="#B4D3F2" />
-                      <rect x="64" y="32" width="4" height="34" fill="#93BDE6" />
-                      <rect x="70" y="37" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="78" y="37" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="70" y="47" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="78" y="47" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="70" y="57" width="5" height="6" rx="1" fill="#1C3D66" />
-                      <rect x="78" y="57" width="5" height="6" rx="1" fill="#1C3D66" />
-
-                      {/* Center Tower */}
-                      <rect x="32" y="16" width="36" height="50" rx="3" fill="#2B5B8E" />
-                      <path d="M 30 18 L 50 8 L 70 18 Z" fill="#1C3D66" />
-                      <rect x="42" y="20" width="16" height="16" rx="2" fill="#FFFFFF" />
-                      <rect x="48" y="23" width="4" height="10" rx="0.5" fill="#E02424" />
-                      <rect x="45" y="26" width="10" height="4" rx="0.5" fill="#E02424" />
-
-                      {/* Center Windows */}
-                      <rect x="38" y="40" width="6" height="6" rx="1" fill="#B4D3F2" />
-                      <rect x="47" y="40" width="6" height="6" rx="1" fill="#B4D3F2" />
-                      <rect x="56" y="40" width="6" height="6" rx="1" fill="#B4D3F2" />
-
-                      {/* Entrance Arch */}
-                      <path d="M 45 66 V 52 Q 50 48 55 52 V 66 Z" fill="#FFFFFF" />
-                      <path d="M 47 66 V 54 Q 50 51 53 54 V 66 Z" fill="#1C3D66" />
-
-                      {/* Ground Foundation Line */}
-                      <rect x="8" y="66" width="84" height="3" rx="1.5" fill="#0F2552" />
-                    </svg>
-                  </div>
-
-                  <h2 className="font-black text-sm sm:text-base text-[#0F2552] tracking-tight uppercase leading-snug">
-                    City Central Hospital &amp; Medical Institute
-                  </h2>
-                  <p className="text-[10.5px] text-slate-600 font-medium">
-                    Plot 14, Healthcare Avenue, Phase II, Bengaluru · Phone: +91 80 2345 6789
-                  </p>
-                  <div className="text-[10px] text-slate-600 font-medium">
-                    <span>GSTIN: 36AAAAA0000A1Z5</span>
-                    <span className="mx-1.5 font-bold">•</span>
-                    <span className="text-[#15803D] font-bold">NABH Accredited</span>
-                  </div>
-
-                  {/* Navy Blue Divider */}
-                  <div className="h-0.5 bg-[#1a4a82] w-full my-1.5" />
+            <div className="p-5 space-y-4 text-xs">
+              {/* Patient & Invoice Info Card */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Patient:</span>
+                  <span className="font-bold text-slate-900 text-sm">{selectedClaim.patientName}</span>
                 </div>
-
-                {/* Official Payment Receipt Banner */}
-                <div className="bg-[#E8F1FD] rounded-lg py-1 px-3 text-center">
-                  <h3 className="font-black text-xs sm:text-[13px] text-[#0B244D] tracking-wider uppercase">
-                    Official Payment Receipt
-                  </h3>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">MRN / UMR:</span>
+                  <span className="font-mono font-bold text-slate-700">{selectedClaim.mrn || selectedClaim.patientId}</span>
                 </div>
-
-                {/* Receipt & Patient Metadata Box */}
-                <div className="border border-slate-200 rounded-lg overflow-hidden bg-white text-[11px]">
-                  {/* Top Row: Receipt No & Date */}
-                  <div className="py-1 px-2.5 grid grid-cols-2 gap-3 items-center bg-white">
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-medium">Receipt No.</span>
-                      <span className="font-mono font-bold text-[#1D4ED8] text-xs sm:text-[13px]">
-                        {receiptData.payment.receiptNo}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-medium">Payment Date &amp; Time</span>
-                      <span className="font-bold text-slate-900 text-[11px] sm:text-xs">
-                        {formatReceiptDate(receiptData.payment.paymentDate)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Horizontal Divider */}
-                  <div className="border-t border-slate-200" />
-
-                  {/* Bottom Row: Patient Name, UMR / MRN, Department, Payment Mode */}
-                  <div className="py-1 px-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white">
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-medium">Patient Name</span>
-                      <span className="font-bold text-slate-900 text-[11.5px] truncate block">
-                        {receiptData.claim.patientName}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-medium">UMR / MRN</span>
-                      <span className="font-mono font-bold text-slate-900 text-[11.5px] block">
-                        {receiptData.claim.patientId}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-medium">Department</span>
-                      <span className="font-medium text-slate-800 text-[11.5px] block">
-                        {receiptData.claim.department}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-medium mb-0.5">Payment Mode</span>
-                      <span className="inline-block px-2 py-0.5 bg-[#EAFBF1] border border-emerald-200 text-emerald-800 font-semibold text-[10.5px] rounded">
-                        {receiptData.payment.paymentMethod}
-                      </span>
-                    </div>
-                  </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Invoice No:</span>
+                  <span className="font-mono font-bold text-blue-700">{selectedClaim.invoiceNo}</span>
                 </div>
-
-                {/* Table: Billed Services & Tariff Breakdown */}
-                <div>
-                  <h4 className="text-[10.5px] sm:text-[11px] font-black uppercase tracking-wider text-[#0F2757] mb-1">
-                    Billed Services &amp; Tariff Breakdown
-                  </h4>
-                  <div className="border border-slate-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-left text-[11px]">
-                      <thead>
-                        <tr className="bg-[#F4F7FB] text-slate-700 font-bold border-b border-slate-200">
-                          <th className="py-1.5 px-2 w-8 text-center border-r border-slate-200">#</th>
-                          <th className="py-1.5 px-2.5 border-r border-slate-200">Service Description</th>
-                          <th className="py-1.5 px-2 w-12 text-center border-r border-slate-200">Qty</th>
-                          <th className="py-1.5 px-2.5 w-24 text-right">Amount (₹)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 text-slate-800">
-                        {receiptData.claim.items.map((it, i) => (
-                          <tr key={i} className="hover:bg-slate-50/60">
-                            <td className="py-1 px-2 text-center text-slate-600 font-medium border-r border-slate-200">
-                              {i + 1}
-                            </td>
-                            <td className="py-1 px-2.5 font-medium leading-tight border-r border-slate-200">
-                              {it.description}
-                            </td>
-                            <td className="py-1 px-2 text-center text-slate-700 font-medium border-r border-slate-200">
-                              {it.quantity}
-                            </td>
-                            <td className="py-1 px-2.5 text-right font-mono font-semibold text-slate-900">
-                              ₹{it.total.toLocaleString("en-IN")}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Financial Totals Section */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2 pt-0.5">
-                  <div className="text-slate-400 text-[10px] hidden sm:block">
-                    {/* Spacer */}
-                  </div>
-                  <div className="w-full sm:w-72 space-y-0.5 text-[11px] ml-auto">
-                    <div className="flex justify-between items-center text-slate-700 font-medium py-0.2">
-                      <span>Gross Invoice Total:</span>
-                      <span className="font-mono text-slate-900 font-semibold">
-                        ₹{receiptData.claim.totalAmount.toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    {receiptData.claim.insurancePortion > 0 && (
-                      <div className="flex justify-between items-center text-[#1D4ED8] font-medium py-0.2">
-                        <span>Insurance / TPA Coverage:</span>
-                        <span className="font-mono font-semibold">
-                          - ₹{receiptData.claim.insurancePortion.toLocaleString("en-IN")}
-                        </span>
-                      </div>
-                    )}
-                    {receiptData.claim.discount > 0 && (
-                      <div className="flex justify-between items-center text-amber-700 font-medium py-0.2">
-                        <span>Hospital Concession / Discount:</span>
-                        <span className="font-mono font-semibold">
-                          - ₹{receiptData.claim.discount.toLocaleString("en-IN")}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Mint Green Highlight Box for Amount Paid */}
-                    <div className="p-1.5 px-3 bg-[#EAFBF1] border border-emerald-200 rounded-lg flex items-center justify-between my-1 shadow-2xs">
-                      <span className="text-[10.5px] font-black text-[#065F46] uppercase tracking-wide">
-                        AMOUNT PAID (THIS RECEIPT):
-                      </span>
-                      <span className="font-mono text-base sm:text-lg font-black text-[#064E3B]">
-                        ₹{receiptData.payment.amount.toLocaleString("en-IN")}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-slate-700 font-medium py-0.2">
-                      <span>Remaining Balance Due:</span>
-                      <span className="font-mono font-bold text-[#15803D]">
-                        ₹{(receiptData.claim.balanceDue || 0).toLocaleString("en-IN")} (SETTLED)
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Full-Width Settlement Banner */}
-                <div className="bg-[#E6FAEE] border border-emerald-200 text-[#065F46] font-bold text-[10.5px] sm:text-[11px] py-1 px-3 rounded-lg text-center flex items-center justify-center gap-1.5 tracking-wider uppercase">
-                  <span className="font-bold">✓</span>
-                  <span>PAID IN FULL · SETTLED</span>
-                </div>
-
-                {/* Footer / Reference & Signature */}
-                <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-2 text-[10.5px]">
-                  <div className="space-y-0.2 text-slate-600">
-                    <div className="font-medium">
-                      Ref: {receiptData.payment.transactionRef || "TXN-927532"}
-                    </div>
-                    <div className="font-medium text-slate-600">
-                      Central Cashier Counter #01
-                    </div>
-                  </div>
-                  <div className="text-left sm:text-right w-full sm:w-auto">
-                    <div className="border-t border-slate-400 w-36 sm:ml-auto mb-0.5" />
-                    <div className="font-bold text-slate-800 text-[10.5px]">Authorized Signature</div>
-                    <div className="text-[9.5px] text-slate-500">System Generated E-Receipt</div>
-                  </div>
-                </div>
-
-                {/* Integrated Diagnostic Financial Clearance Routing Card */}
-                <div className="pt-1">
-                  {renderClearanceDispatchWidget(receiptData.claim, receiptData.payment.receiptNo)}
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Department:</span>
+                  <span className="font-semibold text-slate-700">{selectedClaim.department}</span>
                 </div>
               </div>
+
+              {/* Payment Details */}
+              <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-emerald-900 font-bold">Payment Amount:</span>
+                  <span className="font-mono font-black text-emerald-800 text-base">₹{payAmount.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-medium">Payment Mode:</span>
+                  <span className="font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                    {isSplitPay ? "Split (Cash + Digital)" : payMode}
+                  </span>
+                </div>
+                {payMode === "Cash" && !isSplitPay && (
+                  <div className="flex justify-between items-center text-[11px] pt-1 border-t border-emerald-100">
+                    <span className="text-slate-500">Tendered: ₹{tenderedCash.toLocaleString("en-IN")}</span>
+                    <span className="text-emerald-700 font-bold">
+                      Change Due: ₹{Math.max(0, tenderedCash - payAmount).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Diagnostic Orders Alert if applicable */}
+              {(() => {
+                const cs = BillingDatabase.getDepartmentClearanceStatus(selectedClaim.patientName, selectedClaim);
+                if (cs.hasLabOrders || cs.hasRadStudies) {
+                  return (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-start gap-2">
+                      <span className="text-base text-amber-600">🔬</span>
+                      <div>
+                        <div className="font-bold text-amber-950 text-xs">Diagnostic Clearance Included</div>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          {cs.hasLabOrders && `• ${cs.labTestNames.length} Lab Test(s) `}
+                          {cs.hasRadStudies && `• ${cs.radStudyNames.length} Radiology Study `}
+                          will be unlocked. You will be prompted to send the cleared orders to departments upon confirming.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              <div className="pt-2 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPayModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={executeConfirmedPayment}
+                  className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold rounded-xl text-xs cursor-pointer shadow-md transition-all flex items-center gap-1.5"
+                >
+                  <span>✓</span> Confirm &amp; Pay ₹{payAmount.toLocaleString("en-IN")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: POST-PAYMENT DIAGNOSTIC CLEARANCE TRANSMISSION
+         ========================================================================= */}
+      {postPayClearanceModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-emerald-400 text-slate-900 flex items-center justify-center font-bold text-xs">✓</span>
+                <div>
+                  <h3 className="font-extrabold text-sm">Payment Confirmed — Send to Diagnostic Depts</h3>
+                  <p className="text-[10px] text-blue-200">Receipt #{postPayClearanceModal.payment.receiptNo} Issued</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setReceiptData({ claim: postPayClearanceModal.claim, payment: postPayClearanceModal.payment });
+                  setPostPayClearanceModal(null);
+                  setShowReceiptModal(true);
+                }}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold text-xs cursor-pointer"
+                title="Close & View Receipt"
+              >
+                ✕
+              </button>
             </div>
 
-            {/* Action Buttons Footer */}
-            <div className="p-2 sm:px-4 bg-white border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowReceiptModal(false)}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs cursor-pointer transition-colors"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-lg text-xs cursor-pointer shadow-sm flex items-center gap-1.5 transition-all"
-              >
-                <span>🖨️</span> Print Receipt Slip
-              </button>
+            <div className="p-5 space-y-4 text-xs">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-500 font-medium">Patient:</span>{" "}
+                  <strong className="text-slate-900 text-sm">{postPayClearanceModal.claim.patientName}</strong>{" "}
+                  <span className="text-slate-500 font-mono">({postPayClearanceModal.claim.mrn || postPayClearanceModal.claim.patientId})</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-emerald-800 font-black font-mono text-sm">
+                    ₹{postPayClearanceModal.payment.amount.toLocaleString("en-IN")} PAID
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-slate-600 font-medium">
+                The invoice has been financially cleared. Send the advised investigations to Laboratory and Radiology so they can begin specimen processing and imaging:
+              </div>
+
+              {/* Department Clearance Cards */}
+              <div className="space-y-2.5">
+                {(() => {
+                  const cs = BillingDatabase.getDepartmentClearanceStatus(
+                    postPayClearanceModal.claim.patientName,
+                    postPayClearanceModal.claim
+                  );
+                  const isLabSent = dispatchedClearances[`${postPayClearanceModal.claim.patientName}_Laboratory`] || cs.labPendingCount === 0;
+                  const isRadSent = dispatchedClearances[`${postPayClearanceModal.claim.patientName}_Radiology`] || cs.radPendingCount === 0;
+
+                  return (
+                    <>
+                      {cs.hasLabOrders && (
+                        <div className="p-3 bg-white border border-teal-200 rounded-xl flex items-center justify-between gap-3 shadow-xs">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center shrink-0 text-teal-700 font-bold text-base">
+                              🧪
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-extrabold text-slate-900 text-xs">Laboratory Department</div>
+                              <div className="text-[11px] text-teal-800 font-semibold truncate">
+                                Tests: {cs.labTestNames.join(", ")}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            {isLabSent ? (
+                              <span className="px-3 py-1.5 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs flex items-center gap-1">
+                                ✓ Sent to Lab
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDispatchClearance(
+                                    postPayClearanceModal.claim.patientName,
+                                    "Laboratory",
+                                    postPayClearanceModal.payment.receiptNo,
+                                    cs.labTestNames[0]
+                                  )
+                                }
+                                className="px-4 py-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-extrabold text-xs rounded-lg shadow-xs cursor-pointer flex items-center gap-1.5 transition-all"
+                              >
+                                <span>📤</span> Send to Laboratory
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {cs.hasRadStudies && (
+                        <div className="p-3 bg-white border border-indigo-200 rounded-xl flex items-center justify-between gap-3 shadow-xs">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center shrink-0 text-indigo-700 font-bold text-base">
+                              🩻
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-extrabold text-slate-900 text-xs">Radiology &amp; Imaging</div>
+                              <div className="text-[11px] text-indigo-800 font-semibold truncate">
+                                Studies: {cs.radStudyNames.join(", ")}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            {isRadSent ? (
+                              <span className="px-3 py-1.5 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs flex items-center gap-1">
+                                ✓ Sent to Radiology
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDispatchClearance(
+                                    postPayClearanceModal.claim.patientName,
+                                    "Radiology",
+                                    postPayClearanceModal.payment.receiptNo,
+                                    cs.radStudyNames[0]
+                                  )
+                                }
+                                className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs rounded-lg shadow-xs cursor-pointer flex items-center gap-1.5 transition-all"
+                              >
+                                <span>📤</span> Send to Radiology
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cs = BillingDatabase.getDepartmentClearanceStatus(
+                      postPayClearanceModal.claim.patientName,
+                      postPayClearanceModal.claim
+                    );
+                    if (cs.hasLabOrders) {
+                      handleDispatchClearance(
+                        postPayClearanceModal.claim.patientName,
+                        "Laboratory",
+                        postPayClearanceModal.payment.receiptNo,
+                        cs.labTestNames[0]
+                      );
+                    }
+                    if (cs.hasRadStudies) {
+                      handleDispatchClearance(
+                        postPayClearanceModal.claim.patientName,
+                        "Radiology",
+                        postPayClearanceModal.payment.receiptNo,
+                        cs.radStudyNames[0]
+                      );
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-xl text-xs cursor-pointer border border-blue-200 flex items-center gap-1"
+                >
+                  <span>⚡</span> Send All to Both Departments
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReceiptData({
+                        claim: postPayClearanceModal.claim,
+                        payment: postPayClearanceModal.payment,
+                      });
+                      setPostPayClearanceModal(null);
+                      setShowReceiptModal(true);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs flex items-center gap-1"
+                  >
+                    <span>🖨️</span> View Official Receipt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPostPayClearanceModal(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

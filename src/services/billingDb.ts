@@ -210,25 +210,60 @@ export interface ArAgingItem {
 }
 
 // ── Diagnostic Order Interfaces with Pre-Payment Clearance ──────────────────
+export interface LabResultItem {
+  component: string;
+  value: string;
+  unit: string;
+  ref: string;
+  flag: "H" | "L" | "HH" | "LL" | "Critical" | "";
+}
+
 export interface LabOrderRecord {
   id: string;
   patient: string;
   mrn: string;
+  umr?: string;
+  invoiceNo?: string;
+  department?: string;
+  diagnosis?: string;
+  orderedItems?: Array<{ description: string; cptCode?: string; price: number; quantity: number }>;
   test: string;
+  category?: string;
   priority: "STAT" | "Routine";
-  collected: string;
+  sampleType?: string;
+  accessionNo?: string;
+  collected?: string;
+  collectedAt?: string;
+  collectedBy?: string;
+  analyzer?: string;
   status: "Pending" | "Collected" | "Processing" | "Completed" | "Critical";
   provider: string;
   price: number;
   paymentStatus: "Paid" | "Payment Pending";
   paidReceiptNo?: string;
   paidAt?: string;
+  results?: LabResultItem[];
+  verifiedBy?: string;
+  verifiedAt?: string;
+  comments?: string;
+  criticalNotified?: {
+    notified: boolean;
+    notifiedTo?: string;
+    notifiedAt?: string;
+    channel?: string;
+    readBackVerified?: boolean;
+  };
 }
 
 export interface RadiologyStudyRecord {
   id: string;
   patient: string;
   mrn: string;
+  umr?: string;
+  invoiceNo?: string;
+  department?: string;
+  diagnosis?: string;
+  orderedItems?: Array<{ description: string; cptCode?: string; price: number; quantity: number }>;
   study: string;
   modality: "XR" | "CT" | "MR" | "US" | "NM";
   priority: "STAT" | "Routine" | "Elective";
@@ -240,6 +275,18 @@ export interface RadiologyStudyRecord {
   paymentStatus: "Paid" | "Payment Pending";
   paidReceiptNo?: string;
   paidAt?: string;
+  accessionNo?: string;
+  technician?: string;
+  indication?: string;
+  technique?: string;
+  findings?: string[];
+  impression?: string[];
+  comparison?: string;
+  radiologist?: string;
+  reportStatus?: "Draft" | "Final";
+  signedAt?: string;
+  addendum?: string;
+  dicomImages?: string[];
 }
 
 const STORAGE_KEY_CLAIMS = "hosp_billing_claims_inr_v11";
@@ -249,24 +296,371 @@ const STORAGE_KEY_RAD_STUDIES = "hosp_rad_studies_v1";
 const BILLING_UPDATE_EVENT = "hospital_billing_updated";
 
 export const INITIAL_LAB_ORDERS: LabOrderRecord[] = [
-  { id: "LAB-101", patient: "Thomas Reed", mrn: "100301", test: "Troponin I", priority: "STAT", collected: "09:28", status: "Processing", provider: "Dr. Shah", price: 150, paymentStatus: "Paid", paidReceiptNo: "RCPT-2026-5501" },
-  { id: "LAB-102", patient: "John Smith", mrn: "100245", test: "BMP (Basic Metabolic Panel)", priority: "Routine", collected: "08:42", status: "Completed", provider: "Dr. Anderson", price: 100, paymentStatus: "Paid", paidReceiptNo: "RCPT-2026-5502" },
-  { id: "LAB-103", patient: "Mary Jones", mrn: "100246", test: "CBC w/ Diff", priority: "Routine", collected: "09:10", status: "Collected", provider: "Dr. Lee", price: 80, paymentStatus: "Paid", paidReceiptNo: "RCPT-2026-5503" },
-  { id: "LAB-104", patient: "Ann Martinez", mrn: "100088", test: "Lactic Acid", priority: "STAT", collected: "10:02", status: "Processing", provider: "Dr. Chen", price: 120, paymentStatus: "Paid", paidReceiptNo: "RCPT-2026-5504" },
-  { id: "LAB-105", patient: "Patricia Okonkwo", mrn: "100149", test: "X-Match T&S", priority: "STAT", collected: "—", status: "Pending", provider: "Dr. Williams", price: 140, paymentStatus: "Payment Pending" },
-  { id: "LAB-106", patient: "Elena Vasquez", mrn: "100198", test: "UA w/ Culture", priority: "Routine", collected: "—", status: "Pending", provider: "Dr. Chen", price: 90, paymentStatus: "Payment Pending" },
-  { id: "LAB-107", patient: "Marcus Kim", mrn: "100377", test: "TSH (Thyroid)", priority: "Routine", collected: "—", status: "Pending", provider: "Dr. Park", price: 110, paymentStatus: "Payment Pending" },
+  {
+    id: "LAB-101",
+    patient: "Thomas Reed",
+    mrn: "100301",
+    test: "Troponin I (High Sensitivity)",
+    category: "Cardiac",
+    priority: "STAT",
+    sampleType: "Serum (Gold Top SST)",
+    accessionNo: "ACC-2026-9041",
+    collected: "09:28",
+    collectedAt: "09:28 AM",
+    collectedBy: "Nurse Brenda (ER)",
+    analyzer: "Roche Cobas e411 Immunoassay",
+    status: "Processing",
+    provider: "Dr. Shah",
+    price: 150,
+    paymentStatus: "Paid",
+    paidReceiptNo: "RCPT-2026-5501",
+    results: [
+      { component: "High-Sensitivity Troponin I", value: "1.80", unit: "ng/mL", ref: "< 0.04", flag: "Critical" },
+      { component: "CK-MB Mass", value: "18.4", unit: "ng/mL", ref: "0.0–5.0", flag: "H" },
+      { component: "Myoglobin", value: "112", unit: "ng/mL", ref: "28–72", flag: "H" },
+    ],
+    comments: "Marked elevation in high-sensitivity Troponin I consistent with acute myocardial necrosis. STAT provider verbal alert logged.",
+  },
+  {
+    id: "LAB-102",
+    patient: "John Smith",
+    mrn: "100245",
+    test: "BMP (Basic Metabolic Panel)",
+    category: "Biochemistry",
+    priority: "Routine",
+    sampleType: "Serum (Gold Top SST)",
+    accessionNo: "ACC-2026-9042",
+    collected: "08:42",
+    collectedAt: "08:42 AM",
+    collectedBy: "Phlebotomist Roy",
+    analyzer: "Beckman Coulter AU680",
+    status: "Completed",
+    provider: "Dr. Anderson",
+    price: 100,
+    paymentStatus: "Paid",
+    paidReceiptNo: "RCPT-2026-5502",
+    verifiedBy: "Dr. K. Srinivasan, MD (Pathologist)",
+    verifiedAt: "09:15 AM",
+    results: [
+      { component: "Sodium", value: "140", unit: "mmol/L", ref: "135–145", flag: "" },
+      { component: "Potassium", value: "4.2", unit: "mmol/L", ref: "3.5–5.1", flag: "" },
+      { component: "Chloride", value: "102", unit: "mmol/L", ref: "98–107", flag: "" },
+      { component: "Carbon Dioxide (CO2)", value: "24", unit: "mmol/L", ref: "22–29", flag: "" },
+      { component: "Blood Urea Nitrogen (BUN)", value: "14", unit: "mg/dL", ref: "7–20", flag: "" },
+      { component: "Serum Creatinine", value: "0.92", unit: "mg/dL", ref: "0.7–1.3", flag: "" },
+      { component: "Fasting Blood Glucose", value: "98", unit: "mg/dL", ref: "70–99", flag: "" },
+      { component: "Calcium", value: "9.4", unit: "mg/dL", ref: "8.6–10.2", flag: "" },
+    ],
+    comments: "Electrolytes and renal function parameters within normal biological reference intervals.",
+  },
+  {
+    id: "LAB-103",
+    patient: "Mary Jones",
+    mrn: "100246",
+    test: "CBC w/ Differential (Complete Blood Count)",
+    category: "Hematology",
+    priority: "Routine",
+    sampleType: "Whole Blood (Lavender EDTA)",
+    accessionNo: "ACC-2026-9043",
+    collected: "09:10",
+    collectedAt: "09:10 AM",
+    collectedBy: "Phlebotomist Roy",
+    analyzer: "Sysmex XN-1000 Hematology",
+    status: "Collected",
+    provider: "Dr. Lee",
+    price: 80,
+    paymentStatus: "Paid",
+    paidReceiptNo: "RCPT-2026-5503",
+    results: [
+      { component: "WBC Count", value: "14.2", unit: "10^3/μL", ref: "4.5–11.0", flag: "H" },
+      { component: "RBC Count", value: "4.81", unit: "10^6/μL", ref: "4.5–5.9", flag: "" },
+      { component: "Hemoglobin", value: "13.4", unit: "g/dL", ref: "13.5–17.5", flag: "L" },
+      { component: "Hematocrit", value: "40.2", unit: "%", ref: "41.0–53.0", flag: "L" },
+      { component: "MCV", value: "83.6", unit: "fL", ref: "80.0–100.0", flag: "" },
+      { component: "Platelet Count", value: "218", unit: "10^3/μL", ref: "150–400", flag: "" },
+      { component: "Neutrophils %", value: "78.4", unit: "%", ref: "50.0–70.0", flag: "H" },
+      { component: "Lymphocytes %", value: "14.2", unit: "%", ref: "20.0–40.0", flag: "L" },
+    ],
+  },
+  {
+    id: "LAB-104",
+    patient: "Ann Martinez",
+    mrn: "100088",
+    test: "Lactic Acid (Plasma Lactate)",
+    category: "Biochemistry",
+    priority: "STAT",
+    sampleType: "Plasma (Gray Top Fluoride/Oxalate on Ice)",
+    accessionNo: "ACC-2026-9044",
+    collected: "10:02",
+    collectedAt: "10:02 AM",
+    collectedBy: "Nurse David (ER)",
+    analyzer: "Radiometer ABL90 FLEX",
+    status: "Processing",
+    provider: "Dr. Chen",
+    price: 120,
+    paymentStatus: "Paid",
+    paidReceiptNo: "RCPT-2026-5504",
+    results: [
+      { component: "Plasma Lactate", value: "4.2", unit: "mmol/L", ref: "0.5–2.0", flag: "Critical" },
+    ],
+    comments: "Marked hyperlactatemia (> 4.0 mmol/L). High suspicion for tissue hypoperfusion / sepsis. Sepsis protocol initiated in ER.",
+  },
+  {
+    id: "LAB-105",
+    patient: "Patricia Okonkwo",
+    mrn: "100149",
+    test: "Type & Screen (Blood Group & Crossmatch)",
+    category: "Immunohematology",
+    priority: "STAT",
+    sampleType: "Whole Blood (Pink Top EDTA)",
+    accessionNo: "ACC-2026-9045",
+    collected: "—",
+    status: "Pending",
+    provider: "Dr. Williams",
+    price: 140,
+    paymentStatus: "Payment Pending",
+  },
+  {
+    id: "LAB-106",
+    patient: "Elena Vasquez",
+    mrn: "100198",
+    test: "Urinalysis Complete w/ Microscopic",
+    category: "Urinalysis",
+    priority: "Routine",
+    sampleType: "Mid-Stream Clean Catch Urine",
+    accessionNo: "ACC-2026-9046",
+    collected: "—",
+    status: "Pending",
+    provider: "Dr. Chen",
+    price: 90,
+    paymentStatus: "Payment Pending",
+  },
+  {
+    id: "LAB-107",
+    patient: "Marcus Kim",
+    mrn: "100377",
+    test: "Thyroid Profile (TSH, Free T3, Free T4)",
+    category: "Immunology",
+    priority: "Routine",
+    sampleType: "Serum (Gold Top SST)",
+    accessionNo: "ACC-2026-9047",
+    collected: "—",
+    status: "Pending",
+    provider: "Dr. Park",
+    price: 110,
+    paymentStatus: "Payment Pending",
+  },
 ];
 
 export const INITIAL_RAD_STUDIES: RadiologyStudyRecord[] = [
-  { id: "RAD-201", patient: "John Smith", mrn: "100245", study: "Chest X-Ray PA/Lateral", modality: "XR", ordered: "09:50", priority: "Routine", provider: "Dr. Patel", status: "Images Ready", room: "XR-2", price: 120, paymentStatus: "Paid", paidReceiptNo: "RCPT-2026-5502" },
-  { id: "RAD-202", patient: "Thomas Reed", mrn: "100301", study: "CT Head w/o Contrast", modality: "CT", ordered: "10:02", priority: "STAT", provider: "Dr. Shah", status: "In Progress", room: "CT-1", price: 350, paymentStatus: "Paid", paidReceiptNo: "RCPT-2026-5501" },
-  { id: "RAD-203", patient: "Mary Jones", mrn: "100246", study: "CT Abdomen/Pelvis", modality: "CT", ordered: "08:30", priority: "Routine", provider: "Dr. Lee", status: "Final", room: "CT-2", price: 400, paymentStatus: "Paid", paidReceiptNo: "RCPT-2026-5503" },
-  { id: "RAD-204", patient: "Patricia Okonkwo", mrn: "100149", study: "X-Ray R Hip AP/Lat", modality: "XR", ordered: "10:15", priority: "STAT", provider: "Dr. Williams", status: "Orders", room: "XR-1", price: 130, paymentStatus: "Payment Pending" },
-  { id: "RAD-205", patient: "Ann Martinez", mrn: "100088", study: "Ultrasound Abdomen", modality: "US", ordered: "09:28", priority: "Routine", provider: "Dr. Chen", status: "Reporting", room: "US-1", price: 200, paymentStatus: "Paid", paidReceiptNo: "RCPT-2026-5504" },
-  { id: "RAD-206", patient: "Sandra Brown", mrn: "100331", study: "MRI Brain w/ & w/o", modality: "MR", ordered: "08:15", priority: "Routine", provider: "Dr. Williams", status: "Final", room: "MR-1", price: 600, paymentStatus: "Paid", paidReceiptNo: "RCPT-2026-5505" },
-  { id: "RAD-207", patient: "Marcus Kim", mrn: "100377", study: "Echocardiogram", modality: "US", ordered: "11:00", priority: "Routine", provider: "Dr. Park", status: "Orders", room: "Echo-1", price: 250, paymentStatus: "Payment Pending" },
-  { id: "RAD-208", patient: "Diane Walsh", mrn: "100142", study: "Bone Density (DEXA)", modality: "XR", ordered: "Yesterday", priority: "Elective", provider: "Dr. Anderson", status: "Orders", room: "—", price: 150, paymentStatus: "Payment Pending" },
+  {
+    id: "RAD-201",
+    patient: "John Smith",
+    mrn: "100245",
+    study: "Chest X-Ray PA/Lateral",
+    modality: "XR",
+    ordered: "09:50",
+    priority: "Routine",
+    provider: "Dr. Patel",
+    status: "Images Ready",
+    room: "XR-2",
+    price: 120,
+    paymentStatus: "Paid",
+    paidReceiptNo: "RCPT-2026-5502",
+    accessionNo: "RAD-ACC-8801",
+    technician: "Alex Rivera, RT(R)",
+    indication: "Hypertensive urgency, shortness of breath. Rule out acute pulmonary edema or cardiomegaly.",
+    technique: "Standard PA and lateral digital chest radiography in standing position.",
+    findings: [
+      "Heart size: Normal cardiac silhouette. Cardiothoracic ratio 0.48.",
+      "Lungs: Lungs are clear bilaterally. No focal consolidation, pleural effusion, or pneumothorax identified.",
+      "Mediastinum: Normal mediastinal contour. No widening or lymphadenopathy.",
+      "Bony structures: No acute osseous abnormality. Mild degenerative changes of the thoracic spine.",
+      "Soft tissues: Unremarkable without subcutaneous emphysema.",
+    ],
+    impression: [
+      "1. No acute cardiopulmonary process identified.",
+      "2. Mild thoracic spondylosis, chronic and age-indeterminate.",
+    ],
+    comparison: "Chest X-Ray dated 03/14/2025 — No significant interval change.",
+    radiologist: "Dr. Laura Kim, MD · Senior Consultant Radiologist",
+    reportStatus: "Draft",
+  },
+  {
+    id: "RAD-202",
+    patient: "Thomas Reed",
+    mrn: "100301",
+    study: "CT Head w/o IV Contrast",
+    modality: "CT",
+    ordered: "10:02",
+    priority: "STAT",
+    provider: "Dr. Shah",
+    status: "In Progress",
+    room: "CT-1",
+    price: 350,
+    paymentStatus: "Paid",
+    paidReceiptNo: "RCPT-2026-5501",
+    accessionNo: "RAD-ACC-8802",
+    technician: "Sarah Connor, RT(CT)",
+    indication: "Acute onset neurological deficit, right-sided hemiparesis, sudden headache. Rule out intracranial hemorrhage / acute infarct.",
+    technique: "Non-contrast helical CT scan of the brain from skull base to vertex with 1.25mm thin reconstructions.",
+    findings: [
+      "Ventricles & Cisterns: Normal caliber and configuration for age. No midline shift.",
+      "Brain Parenchyma: No acute intra-axial or extra-axial hemorrhage. No territorial acute ischemic edema.",
+      "Calvarium: Calvarium and skull base are intact without fracture.",
+      "Paranasal Sinuses: Clear paranasal sinuses and mastoid air cells.",
+    ],
+    impression: [
+      "1. No acute intracranial hemorrhage or territorial vascular infarct.",
+      "2. MRI Brain with DWI protocol recommended if symptoms persist to evaluate early hyperacute ischemic changes.",
+    ],
+    radiologist: "Dr. Laura Kim, MD · Senior Consultant Radiologist",
+    reportStatus: "Draft",
+  },
+  {
+    id: "RAD-203",
+    patient: "Mary Jones",
+    mrn: "100246",
+    study: "CT Abdomen & Pelvis with IV Contrast",
+    modality: "CT",
+    ordered: "08:30",
+    priority: "Routine",
+    provider: "Dr. Lee",
+    status: "Final",
+    room: "CT-2",
+    price: 400,
+    paymentStatus: "Paid",
+    paidReceiptNo: "RCPT-2026-5503",
+    accessionNo: "RAD-ACC-8803",
+    technician: "Sarah Connor, RT(CT)",
+    indication: "Right lower quadrant abdominal pain, low-grade fever, elevated WBC count. Rule out appendicitis.",
+    technique: "Axial multidetector CT of the abdomen and pelvis obtained following administration of 85mL Omnipaque 350 IV contrast in portal venous phase.",
+    findings: [
+      "Appendix: Blind-ending tubular structure in the right iliac fossa measuring 8.5mm in diameter with mural thickening and periappendiceal fat stranding.",
+      "Liver, Gallbladder, Spleen, Pancreas, Adrenals, and Kidneys: Unremarkable without focal lesions.",
+      "Bowel: No small or large bowel obstruction. Normal caliber of bowel loops.",
+      "Peritoneum: No free intraperitoneal air. Small volume reactive fluid in the right iliac fossa.",
+      "Pelvis: Urinary bladder is normal in outline.",
+    ],
+    impression: [
+      "1. Findings highly consistent with acute uncomplicated appendicitis.",
+      "2. No evidence of appendiceal perforation, abscess formation, or secondary peritonitis.",
+    ],
+    radiologist: "Dr. Laura Kim, MD · Senior Consultant Radiologist",
+    reportStatus: "Final",
+    signedAt: "09:45 AM",
+  },
+  {
+    id: "RAD-204",
+    patient: "Patricia Okonkwo",
+    mrn: "100149",
+    study: "X-Ray Right Hip AP & Frog-Leg Lateral",
+    modality: "XR",
+    ordered: "10:15",
+    priority: "STAT",
+    provider: "Dr. Williams",
+    status: "Orders",
+    room: "XR-1",
+    price: 130,
+    paymentStatus: "Payment Pending",
+    accessionNo: "RAD-ACC-8804",
+    indication: "Mechanical fall from standing height, right hip pain and inability to bear weight. Rule out femoral neck fracture.",
+  },
+  {
+    id: "RAD-205",
+    patient: "Ann Martinez",
+    mrn: "100088",
+    study: "Ultrasound Whole Abdomen & Pelvis",
+    modality: "US",
+    ordered: "09:28",
+    priority: "Routine",
+    provider: "Dr. Chen",
+    status: "Reporting",
+    room: "US-1",
+    price: 200,
+    paymentStatus: "Paid",
+    paidReceiptNo: "RCPT-2026-5504",
+    accessionNo: "RAD-ACC-8805",
+    technician: "Dr. Sanjay Gupta, MD (Sonologist)",
+    indication: "Epigastric and right upper quadrant post-prandial colic. Rule out cholelithiasis.",
+    findings: [
+      "Gallbladder: Distended with multiple mobile acoustic shadowing calculi, largest measuring 12mm. No gallbladder wall thickening (2.2mm). Sonographic Murphy sign is negative.",
+      "Liver: Normal size and parenchymal echotexture. No focal mass or biliary ductal dilatation.",
+      "Common Bile Duct: Normal caliber measuring 3.8mm without intraluminal calculus.",
+      "Pancreas & Spleen: Normal sonographic appearance.",
+      "Kidneys: Bilateral normal cortical thickness without hydronephrosis or calculus.",
+    ],
+    impression: [
+      "1. Multiple mobile gallbladder calculi (Cholelithiasis) without sonographic evidence of acute acute cholecystitis.",
+      "2. Otherwise normal whole abdomen sonogram.",
+    ],
+    radiologist: "Dr. Sanjay Gupta, MD · Consultant Sonologist",
+    reportStatus: "Draft",
+  },
+  {
+    id: "RAD-206",
+    patient: "Sandra Brown",
+    mrn: "100331",
+    study: "MRI Brain with & without Gadolinium Contrast",
+    modality: "MR",
+    ordered: "08:15",
+    priority: "Routine",
+    provider: "Dr. Williams",
+    status: "Final",
+    room: "MR-1",
+    price: 600,
+    paymentStatus: "Paid",
+    paidReceiptNo: "RCPT-2026-5505",
+    accessionNo: "RAD-ACC-8806",
+    technician: "Michael Chang, RT(MR)",
+    indication: "Chronic tension headache and vertigo. Screening for intracranial lesion.",
+    technique: "Multiplanar multisequence MRI of the brain including T1W, T2W, FLAIR, DWI/ADC, and Post-Contrast 3D T1 sequences on 3.0T Siemens Magnetom.",
+    findings: [
+      "Parenchyma: Scatted punctate T2/FLAIR hyperintensities in the subcortical white matter bilaterally, consistent with mild microvascular ischemic disease.",
+      "Diffusion: No areas of restricted diffusion on DWI to indicate acute infarction.",
+      "Contrast: No abnormal leptomeningeal or parenchymal enhancement.",
+      "Vascular: Major intracranial flow voids are preserved.",
+    ],
+    impression: [
+      "1. Mild chronic microvascular ischemic changes, typical for age. No acute infarct.",
+      "2. No space-occupying lesion or abnormal intracranial contrast enhancement.",
+    ],
+    radiologist: "Dr. Laura Kim, MD · Senior Consultant Radiologist",
+    reportStatus: "Final",
+    signedAt: "09:30 AM",
+  },
+  {
+    id: "RAD-207",
+    patient: "Marcus Kim",
+    mrn: "100377",
+    study: "Transthoracic 2D Echocardiogram with Color Doppler",
+    modality: "US",
+    ordered: "11:00",
+    priority: "Routine",
+    provider: "Dr. Park",
+    status: "Orders",
+    room: "Echo-1",
+    price: 250,
+    paymentStatus: "Payment Pending",
+    accessionNo: "RAD-ACC-8807",
+    indication: "Hypertension, evaluate LV function and hypertrophy.",
+  },
+  {
+    id: "RAD-208",
+    patient: "Diane Walsh",
+    mrn: "100142",
+    study: "Bone Mineral Densitometry (DEXA Scan)",
+    modality: "XR",
+    ordered: "Yesterday",
+    priority: "Elective",
+    provider: "Dr. Anderson",
+    status: "Orders",
+    room: "XR-1",
+    price: 150,
+    paymentStatus: "Payment Pending",
+    accessionNo: "RAD-ACC-8808",
+    indication: "Postmenopausal osteoporosis screening.",
+  },
 ];
 
 // ── Department Tariff & Service Catalogs (Streamlined Small Amounts) ──────────
@@ -1174,10 +1568,18 @@ export class BillingDatabase {
     }
   }
 
-  private static dispatchUpdate(): void {
+  static dispatchUpdate(): void {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(BILLING_UPDATE_EVENT));
     }
+  }
+
+  static emitUpdate(): void {
+    this.dispatchUpdate();
+  }
+
+  static addDepartmentCharge(charge: any): ClaimRecord {
+    return this.createClaim(charge);
   }
 
   static onUpdate(callback: () => void): () => void {
@@ -1203,6 +1605,7 @@ export class BillingDatabase {
     umr?: string;
   }): ClaimRecord[] {
     let claims = this.load<ClaimRecord[]>(STORAGE_KEY_CLAIMS, INITIAL_HOSPITAL_CLAIMS);
+
 
     if (filter) {
       if (filter.status && filter.status !== "All") {
@@ -1413,6 +1816,62 @@ export class BillingDatabase {
     });
 
     return updated;
+  }
+
+  static resetClaimToUnpaid(query: string): boolean {
+    const claims = this.load<ClaimRecord[]>(STORAGE_KEY_CLAIMS, INITIAL_HOSPITAL_CLAIMS);
+    const q = (query || "").toLowerCase().trim();
+    let modified = false;
+
+    const updated = claims.map((c) => {
+      const match =
+        (c.encounterId && c.encounterId.toLowerCase().includes(q)) ||
+        (c.patientId && c.patientId.toLowerCase().includes(q)) ||
+        (c.patientName && c.patientName.toLowerCase().includes(q)) ||
+        (c.invoiceNo && c.invoiceNo.toLowerCase().includes(q)) ||
+        (c.id && c.id.toLowerCase().includes(q));
+
+      if (match) {
+        modified = true;
+        const total = c.patientPortion || c.totalAmount || 4000;
+        return {
+          ...c,
+          status: "Accepted" as const,
+          amountPaid: 0,
+          balanceDue: total,
+          patientPortion: total,
+          payments: [],
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return c;
+    });
+
+    if (modified) {
+      this.save(STORAGE_KEY_CLAIMS, updated);
+      return true;
+    }
+    return false;
+  }
+
+  static resetClaimToUnbilled(query: string): boolean {
+    const claims = this.load<ClaimRecord[]>(STORAGE_KEY_CLAIMS, INITIAL_HOSPITAL_CLAIMS);
+    const q = (query || "").toLowerCase().trim();
+    const filtered = claims.filter((c) => {
+      const match =
+        (c.encounterId && c.encounterId.toLowerCase().includes(q)) ||
+        (c.patientId && c.patientId.toLowerCase().includes(q)) ||
+        (c.patientName && c.patientName.toLowerCase().includes(q)) ||
+        (c.invoiceNo && c.invoiceNo.toLowerCase().includes(q)) ||
+        (c.id && c.id.toLowerCase().includes(q));
+      return !match;
+    });
+
+    if (filtered.length !== claims.length) {
+      this.save(STORAGE_KEY_CLAIMS, filtered);
+      return true;
+    }
+    return false;
   }
 
   static bulkSubmitClaims(ids: string[]): number {
@@ -1763,7 +2222,185 @@ export class BillingDatabase {
 
   // ── DIAGNOSTIC PRE-PAYMENT CLEARANCE ACCESS METHODS ────────────────────────
   static getLabOrders(): LabOrderRecord[] {
-    return this.load<LabOrderRecord[]>(STORAGE_KEY_LAB_ORDERS, INITIAL_LAB_ORDERS);
+    const orders = this.load<LabOrderRecord[]>(STORAGE_KEY_LAB_ORDERS, INITIAL_LAB_ORDERS);
+    const claims = this.getClaims();
+    const syncedOrders = [...orders];
+
+    claims.forEach((claim) => {
+      const labItems = claim.items.filter(
+        (it) =>
+          it.category === "Laboratory" ||
+          it.description.toLowerCase().includes("blood") ||
+          it.description.toLowerCase().includes("cbc") ||
+          it.description.toLowerCase().includes("lft") ||
+          it.description.toLowerCase().includes("bmp") ||
+          it.description.toLowerCase().includes("profile") ||
+          it.description.toLowerCase().includes("troponin") ||
+          it.description.toLowerCase().includes("urine") ||
+          it.description.toLowerCase().includes("glucose") ||
+          it.description.toLowerCase().includes("lactate") ||
+          it.description.toLowerCase().includes("culture") ||
+          it.description.toLowerCase().includes("hba1c") ||
+          it.description.toLowerCase().includes("coagulation")
+      );
+
+      if (labItems.length > 0) {
+        const isPaid = claim.status === "Paid" || claim.balanceDue === 0;
+        const receiptNo =
+          claim.payments?.[0]?.receiptNo ||
+          (isPaid ? `RCPT-2026-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || "5501"}` : undefined);
+        const targetName = (claim.patientName || "").toLowerCase().trim();
+        const targetMrn = (claim.mrn || claim.patientId || "").toLowerCase().trim();
+
+        const existingIdx = syncedOrders.findIndex((o) => {
+          const oName = (o.patient || "").toLowerCase().trim();
+          const oMrn = (o.mrn || "").toLowerCase().trim();
+          const oInv = o.invoiceNo?.toLowerCase().trim();
+          return (
+            (oInv && oInv === claim.invoiceNo.toLowerCase().trim()) ||
+            (oName === targetName && o.test.toLowerCase().includes(labItems[0].description.toLowerCase())) ||
+            (targetMrn && oMrn === targetMrn && o.test.toLowerCase().includes(labItems[0].description.toLowerCase()))
+          );
+        });
+
+        if (existingIdx >= 0) {
+          const current = syncedOrders[existingIdx];
+          syncedOrders[existingIdx] = {
+            ...current,
+            paymentStatus: isPaid ? "Paid" : current.paymentStatus,
+            paidReceiptNo: isPaid ? (current.paidReceiptNo || receiptNo) : current.paidReceiptNo,
+            paidAt: isPaid ? (current.paidAt || new Date().toISOString()) : current.paidAt,
+            invoiceNo: claim.invoiceNo,
+            umr: claim.patientId,
+            department: claim.department,
+            diagnosis: claim.diagnosisCodes?.join(", "),
+            orderedItems: labItems.map((it) => ({
+              description: it.description,
+              cptCode: it.cptCode,
+              price: it.unitPrice || it.total,
+              quantity: it.quantity || 1,
+            })),
+          };
+        } else {
+          const testSummary = labItems.map((it) => it.description).join(" + ");
+          const totalLabPrice = labItems.reduce(
+            (sum, it) => sum + (it.total || (it.unitPrice || 0) * (it.quantity || 1)),
+            0
+          );
+
+          syncedOrders.push({
+            id: `LAB-INV-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || Math.floor(100 + Math.random() * 900)}`,
+            patient: claim.patientName,
+            mrn: claim.mrn || claim.patientId.replace(/\D/g, "") || "10001",
+            umr: claim.patientId,
+            invoiceNo: claim.invoiceNo,
+            test: testSummary,
+            category: "Clinical Laboratory",
+            priority: claim.department === "Emergency" ? "STAT" : "Routine",
+            sampleType: "Blood / Plasma Specimen",
+            accessionNo: `ACC-2026-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || Math.floor(1000 + Math.random() * 9000)}`,
+            collected: "—",
+            status: "Pending",
+            provider: claim.attendingDoctor || "Attending Physician",
+            price: totalLabPrice || 150,
+            paymentStatus: isPaid ? "Paid" : "Payment Pending",
+            paidReceiptNo: receiptNo,
+            paidAt: isPaid ? new Date().toISOString() : undefined,
+            department: claim.department,
+            diagnosis: claim.diagnosisCodes?.join(", "),
+            orderedItems: labItems.map((it) => ({
+              description: it.description,
+              cptCode: it.cptCode,
+              price: it.unitPrice || it.total,
+              quantity: it.quantity || 1,
+            })),
+          });
+        }
+      }
+    });
+
+    const deptCharges = this.getDepartmentCharges();
+    deptCharges.forEach((dept) => {
+      const labItems = (dept.items || []).filter(
+        (it) =>
+          it.category === "Laboratory" ||
+          it.description.toLowerCase().includes("blood") ||
+          it.description.toLowerCase().includes("cbc") ||
+          it.description.toLowerCase().includes("lft") ||
+          it.description.toLowerCase().includes("bmp") ||
+          it.description.toLowerCase().includes("profile") ||
+          it.description.toLowerCase().includes("troponin") ||
+          it.description.toLowerCase().includes("urine") ||
+          it.description.toLowerCase().includes("glucose") ||
+          it.description.toLowerCase().includes("lactate") ||
+          it.description.toLowerCase().includes("culture") ||
+          it.description.toLowerCase().includes("hba1c") ||
+          it.description.toLowerCase().includes("coagulation")
+      );
+      if (labItems.length > 0) {
+        const targetName = (dept.patientName || "").toLowerCase().trim();
+        const targetMrn = (dept.mrn || dept.patientId || "").toLowerCase().trim();
+        const existingIdx = syncedOrders.findIndex((o) => {
+          const oName = (o.patient || "").toLowerCase().trim();
+          const oMrn = (o.mrn || "").toLowerCase().trim();
+          return (
+            (dept.invoiceId && o.invoiceNo?.toLowerCase().trim() === dept.invoiceId.toLowerCase().trim()) ||
+            (oName === targetName && o.test.toLowerCase().includes(labItems[0].description.toLowerCase())) ||
+            (targetMrn && oMrn === targetMrn && o.test.toLowerCase().includes(labItems[0].description.toLowerCase()))
+          );
+        });
+        if (existingIdx < 0) {
+          const testSummary = labItems.map((it) => it.description).join(" + ");
+          const totalLabPrice = labItems.reduce(
+            (sum, it) => sum + (it.total || (it.unitPrice || 0) * (it.quantity || 1)),
+            0
+          );
+          syncedOrders.push({
+            id: `LAB-DCHG-${(dept.id || "").replace(/\D/g, "").slice(-4) || Math.floor(100 + Math.random() * 900)}`,
+            patient: dept.patientName,
+            mrn: dept.mrn || dept.patientId.replace(/\D/g, "") || "10001",
+            umr: dept.patientId,
+            invoiceNo: dept.invoiceId || dept.id,
+            test: testSummary,
+            category: "Clinical Laboratory",
+            priority: dept.department === "Emergency" ? "STAT" : "Routine",
+            sampleType: "Blood / Plasma Specimen",
+            accessionNo: `ACC-2026-${(dept.id || "").replace(/\D/g, "").slice(-4) || Math.floor(1000 + Math.random() * 9000)}`,
+            collected: "—",
+            status: "Pending",
+            provider: dept.attendingDoctor || "Attending Physician",
+            price: totalLabPrice || 150,
+            paymentStatus: "Payment Pending",
+            department: dept.department,
+            diagnosis: dept.diagnosisCodes?.join(", ") || dept.notes,
+            orderedItems: labItems.map((it) => ({
+              description: it.description,
+              cptCode: it.cptCode,
+              price: it.unitPrice || it.total,
+              quantity: it.quantity || 1,
+            })),
+          });
+        }
+      }
+    });
+
+    return syncedOrders;
+  }
+
+  static createLabOrder(orderData: Omit<LabOrderRecord, "id"> & { id?: string }): LabOrderRecord {
+    const orders = this.getLabOrders();
+    const id = orderData.id || `LAB-${Math.floor(100 + Math.random() * 900)}`;
+    const newOrder: LabOrderRecord = {
+      ...orderData,
+      id,
+      accessionNo: orderData.accessionNo || `ACC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      collected: orderData.collected || "—",
+      status: orderData.status || "Pending",
+    };
+    const updated = [newOrder, ...orders.filter((o) => o.id !== id)];
+    this.save(STORAGE_KEY_LAB_ORDERS, updated);
+    this.emitUpdate();
+    return newOrder;
   }
 
   static updateLabOrder(id: string, updates: Partial<LabOrderRecord>): LabOrderRecord {
@@ -1773,11 +2410,207 @@ export class BillingDatabase {
     const updated = { ...orders[idx], ...updates };
     orders[idx] = updated;
     this.save(STORAGE_KEY_LAB_ORDERS, orders);
+    this.emitUpdate();
     return updated;
   }
 
+  static deleteLabOrder(id: string): void {
+    const orders = this.getLabOrders().filter((o) => o.id !== id);
+    this.save(STORAGE_KEY_LAB_ORDERS, orders);
+    this.emitUpdate();
+  }
+
   static getRadiologyStudies(): RadiologyStudyRecord[] {
-    return this.load<RadiologyStudyRecord[]>(STORAGE_KEY_RAD_STUDIES, INITIAL_RAD_STUDIES);
+    const studies = this.load<RadiologyStudyRecord[]>(STORAGE_KEY_RAD_STUDIES, INITIAL_RAD_STUDIES);
+    const claims = this.getClaims();
+    const syncedStudies = [...studies];
+
+    claims.forEach((claim) => {
+      const radItems = claim.items.filter(
+        (it) =>
+          it.category === "Radiology / Imaging" ||
+          it.description.toLowerCase().includes("x-ray") ||
+          it.description.toLowerCase().includes("xray") ||
+          it.description.toLowerCase().includes("ct") ||
+          it.description.toLowerCase().includes("mri") ||
+          it.description.toLowerCase().includes("ultrasound") ||
+          it.description.toLowerCase().includes("usg") ||
+          it.description.toLowerCase().includes("echo") ||
+          it.description.toLowerCase().includes("dexa") ||
+          it.description.toLowerCase().includes("scan")
+      );
+
+      if (radItems.length > 0) {
+        const isPaid = claim.status === "Paid" || claim.balanceDue === 0;
+        const receiptNo =
+          claim.payments?.[0]?.receiptNo ||
+          (isPaid ? `RCPT-2026-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || "5501"}` : undefined);
+        const targetName = (claim.patientName || "").toLowerCase().trim();
+        const targetMrn = (claim.mrn || claim.patientId || "").toLowerCase().trim();
+
+        const existingIdx = syncedStudies.findIndex((s) => {
+          const sName = (s.patient || "").toLowerCase().trim();
+          const sMrn = (s.mrn || "").toLowerCase().trim();
+          const sInv = s.invoiceNo?.toLowerCase().trim();
+          return (
+            (sInv && sInv === claim.invoiceNo.toLowerCase().trim()) ||
+            (sName === targetName && s.study.toLowerCase().includes(radItems[0].description.toLowerCase())) ||
+            (targetMrn && sMrn === targetMrn && s.study.toLowerCase().includes(radItems[0].description.toLowerCase()))
+          );
+        });
+
+        if (existingIdx >= 0) {
+          const current = syncedStudies[existingIdx];
+          syncedStudies[existingIdx] = {
+            ...current,
+            paymentStatus: isPaid ? "Paid" : current.paymentStatus,
+            paidReceiptNo: isPaid ? (current.paidReceiptNo || receiptNo) : current.paidReceiptNo,
+            paidAt: isPaid ? (current.paidAt || new Date().toISOString()) : current.paidAt,
+            invoiceNo: claim.invoiceNo,
+            umr: claim.patientId,
+            department: claim.department,
+            indication: current.indication || claim.carePathway || claim.diagnosisCodes?.join(", "),
+            orderedItems: radItems.map((it) => ({
+              description: it.description,
+              cptCode: it.cptCode,
+              price: it.unitPrice || it.total,
+              quantity: it.quantity || 1,
+            })),
+          };
+        } else {
+          const studySummary = radItems.map((it) => it.description).join(" + ");
+          const totalRadPrice = radItems.reduce(
+            (sum, it) => sum + (it.total || (it.unitPrice || 0) * (it.quantity || 1)),
+            0
+          );
+          const modality = studySummary.toLowerCase().includes("ct")
+            ? "CT"
+            : studySummary.toLowerCase().includes("mri") || studySummary.toLowerCase().includes("mr ")
+            ? "MR"
+            : studySummary.toLowerCase().includes("ultra") || studySummary.toLowerCase().includes("echo")
+            ? "US"
+            : "XR";
+          const room = modality === "CT" ? "CT-1" : modality === "MR" ? "MR-1" : modality === "US" ? "US-1" : "XR-1";
+
+          syncedStudies.push({
+            id: `RAD-INV-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || Math.floor(200 + Math.random() * 800)}`,
+            patient: claim.patientName,
+            mrn: claim.mrn || claim.patientId.replace(/\D/g, "") || "10001",
+            umr: claim.patientId,
+            invoiceNo: claim.invoiceNo,
+            study: studySummary,
+            modality: modality as any,
+            priority: claim.department === "Emergency" ? "STAT" : "Routine",
+            ordered: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            provider: claim.attendingDoctor || "Referring Specialist",
+            status: "Orders",
+            room,
+            price: totalRadPrice || 250,
+            paymentStatus: isPaid ? "Paid" : "Payment Pending",
+            paidReceiptNo: receiptNo,
+            paidAt: isPaid ? new Date().toISOString() : undefined,
+            accessionNo: `RAD-ACC-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || Math.floor(1000 + Math.random() * 9000)}`,
+            department: claim.department,
+            indication: claim.carePathway || `Clinical Evaluation (${claim.diagnosisCodes?.join(", ") || "General Diagnostics"})`,
+            orderedItems: radItems.map((it) => ({
+              description: it.description,
+              cptCode: it.cptCode,
+              price: it.unitPrice || it.total,
+              quantity: it.quantity || 1,
+            })),
+          });
+        }
+      }
+    });
+
+    const deptChargesRad = this.getDepartmentCharges();
+    deptChargesRad.forEach((dept) => {
+      const radItems = (dept.items || []).filter(
+        (it) =>
+          it.category === "Radiology / Imaging" ||
+          it.description.toLowerCase().includes("x-ray") ||
+          it.description.toLowerCase().includes("xray") ||
+          it.description.toLowerCase().includes("ct") ||
+          it.description.toLowerCase().includes("mri") ||
+          it.description.toLowerCase().includes("ultrasound") ||
+          it.description.toLowerCase().includes("usg") ||
+          it.description.toLowerCase().includes("echo") ||
+          it.description.toLowerCase().includes("dexa") ||
+          it.description.toLowerCase().includes("scan")
+      );
+      if (radItems.length > 0) {
+        const targetName = (dept.patientName || "").toLowerCase().trim();
+        const targetMrn = (dept.mrn || dept.patientId || "").toLowerCase().trim();
+        const existingIdx = syncedStudies.findIndex((s) => {
+          const sName = (s.patient || "").toLowerCase().trim();
+          const sMrn = (s.mrn || "").toLowerCase().trim();
+          return (
+            (dept.invoiceId && s.invoiceNo?.toLowerCase().trim() === dept.invoiceId.toLowerCase().trim()) ||
+            (sName === targetName && s.study.toLowerCase().includes(radItems[0].description.toLowerCase())) ||
+            (targetMrn && sMrn === targetMrn && s.study.toLowerCase().includes(radItems[0].description.toLowerCase()))
+          );
+        });
+        if (existingIdx < 0) {
+          const studySummary = radItems.map((it) => it.description).join(" + ");
+          const totalRadPrice = radItems.reduce(
+            (sum, it) => sum + (it.total || (it.unitPrice || 0) * (it.quantity || 1)),
+            0
+          );
+          const modality = studySummary.toLowerCase().includes("ct")
+            ? "CT"
+            : studySummary.toLowerCase().includes("mri") || studySummary.toLowerCase().includes("mr ")
+            ? "MR"
+            : studySummary.toLowerCase().includes("ultra") || studySummary.toLowerCase().includes("echo")
+            ? "US"
+            : "XR";
+          const room = modality === "CT" ? "CT-1" : modality === "MR" ? "MR-1" : modality === "US" ? "US-1" : "XR-1";
+
+          syncedStudies.push({
+            id: `RAD-DCHG-${(dept.id || "").replace(/\D/g, "").slice(-4) || Math.floor(200 + Math.random() * 800)}`,
+            patient: dept.patientName,
+            mrn: dept.mrn || dept.patientId.replace(/\D/g, "") || "10001",
+            umr: dept.patientId,
+            invoiceNo: dept.invoiceId || dept.id,
+            study: studySummary,
+            modality: modality as any,
+            priority: dept.department === "Emergency" ? "STAT" : "Routine",
+            ordered: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            provider: dept.attendingDoctor || "Referring Specialist",
+            status: "Orders",
+            room,
+            price: totalRadPrice || 250,
+            paymentStatus: "Payment Pending",
+            accessionNo: `RAD-ACC-${(dept.id || "").replace(/\D/g, "").slice(-4) || Math.floor(1000 + Math.random() * 9000)}`,
+            department: dept.department,
+            indication: dept.carePathway || dept.notes || `Clinical Evaluation (${dept.diagnosisCodes?.join(", ") || "General Diagnostics"})`,
+            orderedItems: radItems.map((it) => ({
+              description: it.description,
+              cptCode: it.cptCode,
+              price: it.unitPrice || it.total,
+              quantity: it.quantity || 1,
+            })),
+          });
+        }
+      }
+    });
+
+    return syncedStudies;
+  }
+
+  static createRadiologyStudy(studyData: Omit<RadiologyStudyRecord, "id"> & { id?: string }): RadiologyStudyRecord {
+    const studies = this.getRadiologyStudies();
+    const id = studyData.id || `RAD-${Math.floor(200 + Math.random() * 800)}`;
+    const newStudy: RadiologyStudyRecord = {
+      ...studyData,
+      id,
+      accessionNo: studyData.accessionNo || `RAD-ACC-${Math.floor(1000 + Math.random() * 9000)}`,
+      ordered: studyData.ordered || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: studyData.status || "Orders",
+    };
+    const updated = [newStudy, ...studies.filter((s) => s.id !== id)];
+    this.save(STORAGE_KEY_RAD_STUDIES, updated);
+    this.emitUpdate();
+    return newStudy;
   }
 
   static updateRadiologyStudy(id: string, updates: Partial<RadiologyStudyRecord>): RadiologyStudyRecord {
@@ -1787,19 +2620,30 @@ export class BillingDatabase {
     const updated = { ...studies[idx], ...updates };
     studies[idx] = updated;
     this.save(STORAGE_KEY_RAD_STUDIES, studies);
+    this.emitUpdate();
     return updated;
+  }
+
+  static deleteRadiologyStudy(id: string): void {
+    const studies = this.getRadiologyStudies().filter((s) => s.id !== id);
+    this.save(STORAGE_KEY_RAD_STUDIES, studies);
+    this.emitUpdate();
   }
 
   // ── EMERGENCY DEPARTMENT DISCHARGE / BED TRANSFER FINANCIAL CLEARANCE ──────
   static getErFinancialClearance(visitNoOrPatientId: string, optionalPatientName?: string): {
     isCleared: boolean;
+    status: "paid" | "due" | "unbilled";
+    hasActiveBill: boolean;
     balanceDue: number;
     totalAmount: number;
+    unbilledAmount: number;
     receiptNo?: string;
     invoiceNo?: string;
     claimId?: string;
     patientName?: string;
     hasPendingCharges?: boolean;
+    pendingInvoices?: { invoiceNo: string; dueAmount: number; department: string }[];
   } {
     const claims = this.getClaims();
     const deptCharges = this.getDepartmentCharges();
@@ -1808,59 +2652,294 @@ export class BillingDatabase {
     const mrnClean = query.replace("umr", "").trim();
 
     const matchingClaims = claims.filter((c) => {
+      if (c.status === "Voided") return false;
       const pId = (c.patientId || "").toLowerCase().trim();
-      const pMrn = (c.mrn || "").toLowerCase().trim();
       const encId = (c.encounterId || "").toLowerCase().trim();
       const invNo = (c.invoiceNo || "").toLowerCase().trim();
       const cId = (c.id || "").toLowerCase().trim();
       const cName = (c.patientName || "").toLowerCase().trim();
+      const cMrn = (c.mrn || "").toLowerCase().trim();
+      const isErClaim = c.department === "Emergency";
 
-      return (
-        (query && (pId === query || pMrn === mrnClean || encId === query || invNo === query || cId === query)) ||
-        (query.length >= 4 && (pId.includes(query) || encId.includes(query) || pMrn.includes(mrnClean))) ||
-        (nameQuery.length >= 3 && (cName.includes(nameQuery) || nameQuery.includes(cName)))
-      );
+      // 1. Exact encounter match
+      if (query && encId && encId === query) return true;
+      if (query && (invNo === query || cId === query)) return true;
+
+      // 2. ER department claims matching patient ID, MRN, or name
+      if (isErClaim) {
+        if (query && (pId === query || cMrn === query || (mrnClean && (cMrn === mrnClean || pId.replace("umr", "") === mrnClean)))) {
+          return true;
+        }
+        if (nameQuery && nameQuery.length >= 3 && (cName === nameQuery || cName.includes(nameQuery) || nameQuery.includes(cName))) {
+          return true;
+        }
+      }
+
+      return false;
     });
 
     const matchingDeptCharges = deptCharges.filter((d) => {
       const pId = (d.patientId || "").toLowerCase().trim();
-      const pMrn = (d.mrn || "").toLowerCase().trim();
       const encId = (d.encounterId || "").toLowerCase().trim();
       const dName = (d.patientName || "").toLowerCase().trim();
 
       return (
         d.department === "Emergency" &&
-        ((query && (pId === query || pMrn === mrnClean || encId === query)) ||
-         (query.length >= 4 && (pId.includes(query) || encId.includes(query))) ||
-         (nameQuery.length >= 3 && (dName.includes(nameQuery) || nameQuery.includes(dName))))
+        ((query && (encId === query || pId === query)) ||
+         (nameQuery.length >= 3 && (dName === nameQuery || dName.includes(nameQuery) || nameQuery.includes(dName))))
       );
     });
 
-    if (matchingClaims.length === 0 && matchingDeptCharges.length === 0) {
-      return { isCleared: true, balanceDue: 0, totalAmount: 0 };
-    }
-
-    const claimBalanceDue = matchingClaims.reduce((sum, c) => sum + (c.balanceDue || 0), 0);
-    const claimTotal = matchingClaims.reduce((sum, c) => sum + (c.totalAmount || 0), 0);
-    
     const unInvoicedCharges = matchingDeptCharges.filter(d => d.status !== "Invoiced in Central Billing");
     const deptChargesDue = unInvoicedCharges.reduce((sum, d) => sum + (d.totalAmount || 0), 0);
 
-    const totalBalanceDue = claimBalanceDue + (matchingClaims.length === 0 ? deptChargesDue : 0);
-    const totalAmount = claimTotal || deptChargesDue;
-    const latestClaim = matchingClaims[0];
-    const latestPayment = latestClaim?.payments && latestClaim.payments.length > 0 ? latestClaim.payments[latestClaim.payments.length - 1] : undefined;
+    if (matchingClaims.length === 0 && matchingDeptCharges.length === 0) {
+      return {
+        isCleared: true,
+        status: "unbilled",
+        hasActiveBill: false,
+        balanceDue: 0,
+        totalAmount: 0,
+        unbilledAmount: 0,
+        pendingInvoices: [],
+      };
+    }
 
+    if (matchingClaims.length > 0) {
+      const claimBalanceDue = matchingClaims.reduce((sum, c) => sum + (c.balanceDue || 0), 0);
+      const claimTotal = matchingClaims.reduce((sum, c) => sum + (c.totalAmount || 0), 0);
+      const latestClaim = matchingClaims[0];
+      const latestPayment = latestClaim?.payments && latestClaim.payments.length > 0 ? latestClaim.payments[latestClaim.payments.length - 1] : undefined;
+
+      const isDue = claimBalanceDue > 0;
+      const isPaid = !isDue && (claimTotal > 0 || !!latestPayment);
+      const status: "paid" | "due" | "unbilled" = isDue ? "due" : isPaid ? "paid" : "unbilled";
+
+      const pendingInvoices = matchingClaims
+        .filter((c) => (c.balanceDue || 0) > 0)
+        .map((c) => ({
+          invoiceNo: c.invoiceNo,
+          dueAmount: c.balanceDue || 0,
+          department: c.department,
+        }));
+
+      return {
+        isCleared: !isDue,
+        status,
+        hasActiveBill: true,
+        balanceDue: claimBalanceDue,
+        totalAmount: claimTotal,
+        unbilledAmount: deptChargesDue,
+        receiptNo: latestPayment?.receiptNo || (isPaid ? "RCPT-2026-5501" : undefined),
+        invoiceNo: latestClaim?.invoiceNo,
+        claimId: latestClaim?.id,
+        patientName: latestClaim?.patientName,
+        hasPendingCharges: deptChargesDue > 0,
+        pendingInvoices,
+      };
+    }
+
+    // No formal invoice dispatched to Central Billing yet - all charges remain staged unbilled
     return {
-      isCleared: totalBalanceDue === 0,
-      balanceDue: totalBalanceDue,
-      totalAmount,
-      receiptNo: latestPayment?.receiptNo || (totalBalanceDue === 0 ? "RCPT-2026-5501" : undefined),
-      invoiceNo: latestClaim?.invoiceNo || (unInvoicedCharges[0]?.id),
-      claimId: latestClaim?.id || (unInvoicedCharges[0]?.id),
-      patientName: latestClaim?.patientName || unInvoicedCharges[0]?.patientName,
-      hasPendingCharges: unInvoicedCharges.length > 0,
+      isCleared: deptChargesDue === 0,
+      status: "unbilled",
+      hasActiveBill: false,
+      balanceDue: 0,
+      totalAmount: deptChargesDue,
+      unbilledAmount: deptChargesDue,
+      invoiceNo: unInvoicedCharges[0]?.id,
+      claimId: unInvoicedCharges[0]?.id,
+      patientName: unInvoicedCharges[0]?.patientName,
+      hasPendingCharges: deptChargesDue > 0,
+      pendingInvoices: [],
     };
+  }
+
+  /**
+   * Set preselected claim ID or invoice number to automatically focus on in Central Billing POS
+   */
+  static setPreselectedClaimForBilling(idOrInvoiceNo: string): void {
+    try {
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        window.sessionStorage.setItem("hospai_billing_preselected_claim", idOrInvoiceNo);
+      }
+    } catch {
+      // Ignore in non-browser environment
+    }
+  }
+
+  /**
+   * Get and clear preselected claim ID for Central Billing POS
+   */
+  static getPreselectedClaimForBilling(): string | null {
+    try {
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        const item = window.sessionStorage.getItem("hospai_billing_preselected_claim");
+        if (item) {
+          window.sessionStorage.removeItem("hospai_billing_preselected_claim");
+          return item;
+        }
+      }
+    } catch {
+      // Ignore in non-browser environment
+    }
+    return null;
+  }
+
+  /**
+   * Add a real-time clinical charge (Medication, Investigation, or Intervention) to ER encounter
+   * If a formal bill has already been dispatched to Central Billing, updates that claim.
+   * If not yet dispatched, stages the charge as unbilled in Department Charges without premature "Pending" balance at Central Billing.
+   */
+  static addErClinicalCharge(
+    encounterIdOrVisitNo: string,
+    patientInfo: {
+      patientId: string;
+      patientName: string;
+      mrn?: string;
+      age?: number;
+      gender?: string;
+      phone?: string;
+      assignedDoctor?: string;
+    },
+    item: {
+      description: string;
+      category: InvoiceItem["category"];
+      unitPrice: number;
+      quantity?: number;
+      cptCode?: string;
+    }
+  ): { totalAdded: number; newBalance: number; description: string } {
+    const claims = this.load<ClaimRecord[]>(STORAGE_KEY_CLAIMS, INITIAL_HOSPITAL_CLAIMS);
+    const deptCharges = this.load<DepartmentChargeRecord[]>(STORAGE_KEY_DEPT_CHARGES, INITIAL_DEPARTMENT_CHARGES);
+    const query = (encounterIdOrVisitNo || "").toLowerCase().trim();
+    const pIdQuery = (patientInfo.patientId || "").toLowerCase().trim();
+    const pNameQuery = (patientInfo.patientName || "").toLowerCase().trim();
+    const nowIso = new Date().toISOString();
+
+    const qty = item.quantity || 1;
+    const total = item.unitPrice * qty;
+    const newItem: InvoiceItem = {
+      id: `ITEM-ER-${Date.now()}-${Math.floor(100 + Math.random() * 899)}`,
+      description: item.description,
+      category: item.category,
+      cptCode: item.cptCode || "99285",
+      quantity: qty,
+      unitPrice: item.unitPrice,
+      total,
+      insuranceCovered: 0,
+      patientPayable: total,
+    };
+
+    // Check if an existing active dispatched Claim exists for this ER encounter
+    const claimIdx = claims.findIndex((c) => {
+      if (c.status === "Voided") return false;
+      const pId = (c.patientId || "").toLowerCase().trim();
+      const encId = (c.encounterId || "").toLowerCase().trim();
+      const invNo = (c.invoiceNo || "").toLowerCase().trim();
+      const cId = (c.id || "").toLowerCase().trim();
+      const cName = (c.patientName || "").toLowerCase().trim();
+
+      if (query && (encId === query || invNo === query || cId === query)) return true;
+      if (c.department === "Emergency") {
+        if (pIdQuery && pId === pIdQuery) return true;
+        if (pNameQuery && pNameQuery.length >= 3 && (cName === pNameQuery || cName.includes(pNameQuery) || pNameQuery.includes(cName))) return true;
+      }
+      return false;
+    });
+
+    if (claimIdx >= 0) {
+      const current = claims[claimIdx];
+      const updatedItems = [...current.items, newItem];
+      const subtotal = updatedItems.reduce((sum, it) => sum + Number(it.total || 0), 0);
+      const totalAmount = Math.max(0, subtotal - (current.discount || 0) + (current.tax || 0));
+      const patientPortion = totalAmount;
+      const balanceDue = Math.max(0, patientPortion - (current.amountPaid || 0));
+
+      const updatedClaim: ClaimRecord = {
+        ...current,
+        items: updatedItems,
+        subtotal,
+        totalAmount,
+        patientPortion,
+        balanceDue,
+        status: balanceDue > 0 ? "Accepted" : "Paid",
+        updatedAt: nowIso,
+      };
+
+      claims[claimIdx] = updatedClaim;
+      this.save(STORAGE_KEY_CLAIMS, claims);
+
+      BillingRbacManager.logEvent({
+        action: "CHARGE_ADDED",
+        patientId: updatedClaim.patientId,
+        patientName: updatedClaim.patientName,
+        mrn: updatedClaim.mrn,
+        invoiceNo: updatedClaim.invoiceNo,
+        claimId: updatedClaim.id,
+        financialAmount: total,
+        department: "Emergency",
+        reason: `ER Clinical Charge attached to active invoice: "${item.description}" (+₹${total.toLocaleString("en-IN")}). Total Due: ₹${balanceDue.toLocaleString("en-IN")}.`,
+      });
+
+      return { totalAdded: total, newBalance: balanceDue, description: item.description };
+    }
+
+    // If no active claim has been dispatched yet, stage charge in DepartmentChargeRecord as "Accumulating Charges"
+    const deptIdx = deptCharges.findIndex((d) => {
+      const encId = (d.encounterId || "").toLowerCase().trim();
+      const pId = (d.patientId || "").toLowerCase().trim();
+      const dName = (d.patientName || "").toLowerCase().trim();
+      return (
+        d.department === "Emergency" &&
+        ((query && (encId === query || pId === query)) ||
+         (pNameQuery.length >= 3 && (dName === pNameQuery || dName.includes(pNameQuery) || pNameQuery.includes(dName))))
+      );
+    });
+
+    if (deptIdx >= 0) {
+      const existing = deptCharges[deptIdx];
+      const updatedItems = [...existing.items, newItem];
+      const subtotal = updatedItems.reduce((sum, it) => sum + Number(it.total || 0), 0);
+      const updatedDept: DepartmentChargeRecord = {
+        ...existing,
+        items: updatedItems,
+        subtotal,
+        totalAmount: subtotal,
+        status: existing.status === "Invoiced in Central Billing" ? "Accumulating Charges" : existing.status,
+      };
+      deptCharges[deptIdx] = updatedDept;
+      this.save(STORAGE_KEY_DEPT_CHARGES, deptCharges);
+      return { totalAdded: total, newBalance: subtotal, description: item.description };
+    }
+
+    const newDeptCharge: DepartmentChargeRecord = {
+      id: `DCHG-${Date.now().toString().slice(-6)}`,
+      patientId: patientInfo.patientId || `UMR${Math.floor(100000 + Math.random() * 900000)}`,
+      mrn: patientInfo.mrn || "100245",
+      patientName: patientInfo.patientName || "Emergency Patient",
+      age: Number(patientInfo.age) || 30,
+      gender: (patientInfo.gender as any) || "Other",
+      phone: patientInfo.phone || "+91 98765 43210",
+      department: "Emergency",
+      encounterId: encounterIdOrVisitNo,
+      carePathway: "ER Emergency Clinical Care",
+      dateOfService: nowIso.split("T")[0],
+      insuranceProvider: "Self-Pay",
+      policyNumber: "N/A - Self Pay",
+      attendingDoctor: patientInfo.assignedDoctor || "Emergency Attending",
+      diagnosisCodes: ["R07.9"],
+      items: [newItem],
+      subtotal: total,
+      totalAmount: total,
+      status: "Accumulating Charges",
+      createdAt: nowIso,
+    };
+
+    deptCharges.unshift(newDeptCharge);
+    this.save(STORAGE_KEY_DEPT_CHARGES, deptCharges);
+
+    return { totalAdded: total, newBalance: total, description: item.description };
   }
 
   // ── INPATIENT WARD / ICU DISCHARGE FINANCIAL CLEARANCE ──────────────────────
@@ -2045,72 +3124,15 @@ export class BillingDatabase {
     // Deduplicate charges by encounterId (keep the latest record if duplicates exist)
     const seenEncounters = new Set<string>();
     const deduplicated: DepartmentChargeRecord[] = [];
-    let hasDuplicates = false;
 
     for (const c of charges) {
       const key = c.encounterId ? `${c.patientId || ""}-${c.encounterId}` : c.id;
       if (!seenEncounters.has(key)) {
         seenEncounters.add(key);
-        // Normalize any old inflated item rates
-        let itemsChanged = false;
-        const normalizedItems = (c.items || []).map((it) => {
-          let uPrice = it.unitPrice;
-          const desc = (it.description || "").toLowerCase();
-          if (it.category === "Consultation" || desc.includes("consultation")) {
-            if (uPrice > 150) {
-              uPrice = 100;
-              itemsChanged = true;
-            }
-          } else if (it.category === "Laboratory" || desc.includes("blood") || desc.includes("cbc") || desc.includes("lab")) {
-            if (uPrice > 120) {
-              uPrice = 50;
-              itemsChanged = true;
-            }
-          } else if (it.category === "Radiology / Imaging" || desc.includes("x-ray") || desc.includes("ultrasound") || desc.includes("ecg")) {
-            if (uPrice > 200) {
-              uPrice = desc.includes("mri") ? 350 : desc.includes("ultra") ? 100 : 60;
-              itemsChanged = true;
-            }
-          } else if (it.category === "Procedure / Surgery" || it.category === "Nursing" || it.category === "Consumables") {
-            if (uPrice > 250) {
-              uPrice = 40;
-              itemsChanged = true;
-            }
-          }
-          if (itemsChanged) {
-            const total = uPrice * (it.quantity || 1);
-            return {
-              ...it,
-              unitPrice: uPrice,
-              total,
-              insuranceCovered: Math.round(total * 0.8),
-              patientPayable: Math.round(total * 0.2),
-            };
-          }
-          return it;
-        });
-
-        if (itemsChanged || c.totalAmount > 2000) {
-          const subtotal = normalizedItems.reduce((sum, it) => sum + Number(it.total || 0), 0);
-          deduplicated.push({
-            ...c,
-            items: normalizedItems,
-            subtotal,
-            totalAmount: subtotal,
-          });
-          hasDuplicates = true;
-        } else {
-          deduplicated.push(c);
-        }
-      } else {
-        hasDuplicates = true;
+        deduplicated.push(c);
       }
     }
-
-    if (hasDuplicates) {
-      charges = deduplicated;
-      this.save(STORAGE_KEY_DEPT_CHARGES, charges);
-    }
+    charges = deduplicated;
 
     if (filter) {
       if (filter.department && filter.department !== "All") {
@@ -2862,3 +3884,76 @@ export class BillingDatabase {
     return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   }
 }
+
+export interface ErPricedItem {
+  name: string;
+  category: InvoiceItem["category"];
+  unitPrice: number;
+  cptCode: string;
+}
+
+/**
+ * Standardized ER Emergency Item Rate Card Resolution (INR ₹)
+ * Maps clinical medicine/investigation/procedure names to standard hospital tariffs and CPT codes.
+ */
+export function resolveErItemPrice(
+  itemName: string,
+  itemType: "medication" | "investigation" | "intervention" | "procedure"
+): ErPricedItem {
+  const norm = (itemName || "").toLowerCase().trim();
+
+  if (itemType === "medication") {
+    if (norm.includes("aspirin") || norm.includes("ecosprin") || norm.includes("asa")) return { name: itemName, category: "Consumables", unitPrice: 150, cptCode: "J0120" };
+    if (norm.includes("clopidogrel") || norm.includes("plavix") || norm.includes("ticagrelor") || norm.includes("brilinta")) return { name: itemName, category: "Consumables", unitPrice: 250, cptCode: "J0121" };
+    if (norm.includes("atorvastatin") || norm.includes("statin") || norm.includes("rosuvastatin")) return { name: itemName, category: "Consumables", unitPrice: 180, cptCode: "J0122" };
+    if (norm.includes("paracetamol") || norm.includes("pcm") || norm.includes("dolo") || norm.includes("calpol")) return { name: itemName, category: "Consumables", unitPrice: 200, cptCode: "J0123" };
+    if (norm.includes("ceftriaxone") || norm.includes("monocef") || norm.includes("antibiotic") || norm.includes("augmentin") || norm.includes("pipzo")) return { name: itemName, category: "Consumables", unitPrice: 650, cptCode: "J0696" };
+    if (norm.includes("pantoprazole") || norm.includes("pantocid") || norm.includes("pan 40") || norm.includes("rabeprazole")) return { name: itemName, category: "Consumables", unitPrice: 220, cptCode: "J2440" };
+    if (norm.includes("ondansetron") || norm.includes("emset") || norm.includes("zofran")) return { name: itemName, category: "Consumables", unitPrice: 180, cptCode: "J2405" };
+    if (norm.includes("morphine") || norm.includes("tramadol") || norm.includes("fentanyl") || norm.includes("pethidine")) return { name: itemName, category: "Consumables", unitPrice: 450, cptCode: "J2270" };
+    if (norm.includes("furosemide") || norm.includes("lasix")) return { name: itemName, category: "Consumables", unitPrice: 150, cptCode: "J1940" };
+    if (norm.includes("hydrocortisone") || norm.includes("dexamethasone") || norm.includes("steroid") || norm.includes("prednisolone")) return { name: itemName, category: "Consumables", unitPrice: 220, cptCode: "J1720" };
+    if (norm.includes("salbutamol") || norm.includes("budecort") || norm.includes("nebuliz") || norm.includes("duolin")) return { name: itemName, category: "Consumables", unitPrice: 300, cptCode: "J7611" };
+    if (norm.includes("nitroglycerin") || norm.includes("ntg") || norm.includes("sorbitrate") || norm.includes("angispan")) return { name: itemName, category: "Consumables", unitPrice: 850, cptCode: "J3490" };
+    if (norm.includes("heparin") || norm.includes("enoxaparin") || norm.includes("clexane") || norm.includes("fondaparinux")) return { name: itemName, category: "Consumables", unitPrice: 950, cptCode: "J1644" };
+    if (norm.includes("tenecteplase") || norm.includes("streptokinase") || norm.includes("thromboly") || norm.includes("alteplase")) return { name: itemName, category: "Consumables", unitPrice: 24500, cptCode: "J3101" };
+    if (norm.includes("saline") || norm.includes("rl") || norm.includes("dns") || norm.includes("ringer") || norm.includes("fluid")) return { name: itemName, category: "Consumables", unitPrice: 250, cptCode: "J7030" };
+    if (norm.includes("adrenaline") || norm.includes("epinephrine") || norm.includes("atropine") || norm.includes("noradren")) return { name: itemName, category: "Consumables", unitPrice: 350, cptCode: "J0171" };
+    return { name: itemName, category: "Consumables", unitPrice: 250, cptCode: "99070" };
+  }
+
+  if (itemType === "investigation") {
+    if (norm.includes("ecg") || norm.includes("electrocardiogram")) return { name: itemName, category: "Laboratory", unitPrice: 450, cptCode: "93000" };
+    if (norm.includes("troponin")) return { name: itemName, category: "Laboratory", unitPrice: 1200, cptCode: "84484" };
+    if (norm.includes("x-ray") || norm.includes("xray") || norm.includes("chest") || norm.includes("radiograph")) return { name: itemName, category: "Radiology / Imaging", unitPrice: 600, cptCode: "71045" };
+    if (norm.includes("ultrasound") || norm.includes("fast") || norm.includes("usg") || norm.includes("sonograph")) return { name: itemName, category: "Radiology / Imaging", unitPrice: 1500, cptCode: "76705" };
+    if (norm.includes("cbc") || norm.includes("blood count") || norm.includes("grbs") || norm.includes("glucose") || norm.includes("sugar")) return { name: itemName, category: "Laboratory", unitPrice: 450, cptCode: "85025" };
+    if (norm.includes("abg") || norm.includes("arterial blood gas")) return { name: itemName, category: "Laboratory", unitPrice: 950, cptCode: "82803" };
+    if (norm.includes("ct") || norm.includes("computed tomography")) return { name: itemName, category: "Radiology / Imaging", unitPrice: 3200, cptCode: "70450" };
+    if (norm.includes("mri") || norm.includes("magnetic resonance")) return { name: itemName, category: "Radiology / Imaging", unitPrice: 6500, cptCode: "70551" };
+    if (norm.includes("renal") || norm.includes("kft") || norm.includes("rft") || norm.includes("electrolyte") || norm.includes("creatinine") || norm.includes("urea")) return { name: itemName, category: "Laboratory", unitPrice: 850, cptCode: "80069" };
+    if (norm.includes("culture") || norm.includes("blood culture") || norm.includes("urine culture")) return { name: itemName, category: "Laboratory", unitPrice: 1200, cptCode: "87040" };
+    if (norm.includes("d-dimer") || norm.includes("dimer")) return { name: itemName, category: "Laboratory", unitPrice: 1400, cptCode: "85379" };
+    if (norm.includes("lft") || norm.includes("liver") || norm.includes("bilirubin")) return { name: itemName, category: "Laboratory", unitPrice: 850, cptCode: "80076" };
+    if (norm.includes("pt/inr") || norm.includes("inr") || norm.includes("coagulation")) return { name: itemName, category: "Laboratory", unitPrice: 650, cptCode: "85610" };
+    return { name: itemName, category: "Laboratory", unitPrice: 500, cptCode: "80050" };
+  }
+
+  // Interventions / Procedures
+  if (norm.includes("cannula") || norm.includes("iv line") || norm.includes("peripheral") || norm.includes("iv access")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 350, cptCode: "36000" };
+  if (norm.includes("oxygen") || norm.includes("o2") || norm.includes("mask") || norm.includes("prongs") || norm.includes("nrbm")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 500, cptCode: "94640" };
+  if (norm.includes("defibrillat") || norm.includes("cardioversion") || norm.includes("shock")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 2500, cptCode: "92960" };
+  if (norm.includes("cpr") || norm.includes("resuscitat") || norm.includes("acls") || norm.includes("cardiopulmonary")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 4500, cptCode: "92950" };
+  if (norm.includes("intubat") || norm.includes("ventilator") || norm.includes("airway") || norm.includes("ett")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 3500, cptCode: "31500" };
+  if (norm.includes("wound") || norm.includes("dress") || norm.includes("suture") || norm.includes("bandage") || norm.includes("hemorrhage")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 850, cptCode: "12001" };
+  if (norm.includes("catheter") || norm.includes("foley") || norm.includes("urinary")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 450, cptCode: "51702" };
+  if (norm.includes("ryle") || norm.includes("nasogastric") || norm.includes("ng tube") || norm.includes("lavage")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 450, cptCode: "43752" };
+  if (norm.includes("nebuliz") || norm.includes("inhalation")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 300, cptCode: "94640" };
+  if (norm.includes("pocus") || norm.includes("bedside echo") || norm.includes("echo")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 1800, cptCode: "93308" };
+  if (norm.includes("lumbar puncture") || norm.includes("lp") || norm.includes("spinal tap")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 2200, cptCode: "62270" };
+  if (norm.includes("chest tube") || norm.includes("icd") || norm.includes("drainage") || norm.includes("thoracentesis")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 4500, cptCode: "32551" };
+  if (norm.includes("blood transfusion") || norm.includes("prbc") || norm.includes("ffp")) return { name: itemName, category: "Procedure / Surgery", unitPrice: 1800, cptCode: "36430" };
+
+  return { name: itemName, category: "Procedure / Surgery", unitPrice: 500, cptCode: "99285" };
+}
+

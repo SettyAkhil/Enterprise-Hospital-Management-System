@@ -4,6 +4,7 @@ import { apiFetch, reportError } from "../lib/api";
 import type { Notice } from "../types";
 import {
   VisitDetailPanel,
+  ErErrorBoundary,
   type ErVisitDetail,
   type TriageCategory,
   type ErVisit,
@@ -36,17 +37,17 @@ export default function Triage({
         apiFetch<{ visits: ErVisit[] }>("/api/er/visits?active_only=true"),
         apiFetch<{ categories: TriageCategory[] }>("/api/er/triage-config"),
       ]);
-      const list = visitsRes.visits || [];
+      const list = visitsRes?.visits || [];
       setVisits(list);
-      setCategories(catsRes.categories || []);
+      setCategories(catsRes?.categories || []);
 
       if (initialVisitId && list.some((v) => v.id === initialVisitId)) {
         setSelectedVisitId(initialVisitId);
       } else if (!selectedVisitId && list.length > 0) {
         setSelectedVisitId(list[0].id);
       }
-    } catch (error: any) {
-      if (setNotice) reportError(setNotice, error, "Failed to load ER triage visits.");
+    } catch {
+      // Standalone mode / offline fallback already handled
     }
   };
 
@@ -54,9 +55,9 @@ export default function Triage({
     setDetailLoading(true);
     try {
       const data = await apiFetch<ErVisitDetail>(`/api/er/visits/${visitId}`);
-      setDetail(data);
-    } catch (error: any) {
-      if (setNotice) reportError(setNotice, error, "Failed to load patient triage details.");
+      setDetail(data || null);
+    } catch {
+      setDetail(null);
     } finally {
       setDetailLoading(false);
     }
@@ -113,26 +114,29 @@ export default function Triage({
     <div className="flex-1 bg-[#F0F2F5] p-5 sm:p-6 min-h-full space-y-3">
       {/* Patient Clinical Chart / Visit Detail Panel */}
       {detail ? (
-        <VisitDetailPanel
-          detail={detail}
-          loading={detailLoading}
-          categories={categories}
-          setNotice={setNotice || (() => {})}
-          onNavigate={onNavigate}
-          onBack={() => onNavigate?.("emergency")}
-          onRefresh={refreshAfterAction}
-          onOrderMedication={() =>
-            setPrescriptionTarget({
-              id: detail.patient_id || "",
-              name: detail.patient_id
-                ? detail.patient_id
-                : detail.unknown_patient_label || detail.visit_no,
-              doctorName: detail.assigned_doctor_name || undefined,
-            })
-          }
-          visits={visits}
-          onSelectVisit={(id) => setSelectedVisitId(id)}
-        />
+        <ErErrorBoundary onReset={refreshAfterAction}>
+          <VisitDetailPanel
+            key={detail.id}
+            detail={detail}
+            loading={detailLoading}
+            categories={categories}
+            setNotice={setNotice || (() => {})}
+            onNavigate={onNavigate}
+            onBack={() => onNavigate?.("emergency")}
+            onRefresh={refreshAfterAction}
+            onOrderMedication={() =>
+              setPrescriptionTarget({
+                id: detail.patient_id || "",
+                name: detail.patient_id
+                  ? detail.patient_id
+                  : detail.unknown_patient_label || detail.visit_no,
+                doctorName: detail.assigned_doctor_name || undefined,
+              })
+            }
+            visits={visits}
+            onSelectVisit={(id) => setSelectedVisitId(id)}
+          />
+        </ErErrorBoundary>
       ) : (
         <div className="bg-white border border-[#DDE2EC] rounded p-12 text-center text-[#64748B]">
           <p className="text-[13px]">Loading patient chart...</p>

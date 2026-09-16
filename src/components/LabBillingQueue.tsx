@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Btn, StatusBadge } from "./shared";
 import { LabOrder, LabOrderDatabase } from "../services/labOrdersDb";
 import { AuditDatabase } from "../services/auditDb";
+import { ClaimRecord } from "../services/billingDb";
+import HospitalReceiptModal from "./HospitalReceiptModal";
 
 /**
  * Reception's side of the doctor -> lab hand-off.
@@ -21,6 +23,7 @@ export default function LabBillingQueue({ collectedBy = "Reception" }: { collect
   const [discount, setDiscount] = useState(0);
   const [view, setView] = useState<"pending" | "settled">("pending");
   const [receipt, setReceipt] = useState<LabOrder | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   useEffect(() => LabOrderDatabase.subscribe(() => setTick(t => t + 1)), []);
 
@@ -239,6 +242,13 @@ export default function LabBillingQueue({ collectedBy = "Reception" }: { collect
                       <span>At</span>
                       <span>{selected.billing.paidAt ? new Date(selected.billing.paidAt).toLocaleString() : "--"}</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowReceiptModal(true)}
+                      className="w-full mt-2 py-1.5 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white font-bold rounded text-xs cursor-pointer shadow-2xs transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <span>🖨️</span> View &amp; Print Official Receipt
+                    </button>
                   </div>
                 ) : (
                   <>
@@ -309,6 +319,89 @@ export default function LabBillingQueue({ collectedBy = "Reception" }: { collect
           )}
         </div>
       </div>
+
+      {showReceiptModal && selected && (
+        <HospitalReceiptModal
+          claim={{
+            id: `CLM-${selected.id}`,
+            invoiceNo: selected.billing.invoiceNo || `INV-LAB-${selected.id.slice(-6)}`,
+            patientId: selected.umr,
+            patientName: selected.patientName,
+            mrn: selected.umr,
+            age: selected.age,
+            gender: (selected.sex === "Female" ? "Female" : "Male"),
+            phone: selected.phone || "",
+            department: "Laboratory",
+            dateOfService: selected.createdAt ? selected.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
+            encounterId: selected.opNumber || selected.id,
+            insuranceProvider: "Self-Pay",
+            policyNumber: "N/A",
+            status: "Paid",
+            items: selected.tests.map((t, idx) => ({
+              id: `ITEM-${t.id || idx}`,
+              description: t.name,
+              category: "Laboratory",
+              cptCode: `LAB0${10 + idx}`,
+              quantity: 1,
+              unitPrice: t.price,
+              total: t.price,
+              insuranceCovered: 0,
+              patientPayable: t.price,
+            })),
+            subtotal: selected.billing.subtotal,
+            discount: selected.billing.discount || 0,
+            tax: 0,
+            totalAmount: selected.billing.total,
+            insurancePortion: 0,
+            patientPortion: selected.billing.total,
+            amountPaid: selected.billing.total,
+            balanceDue: 0,
+            payments: selected.billing.receiptNo
+              ? [
+                  {
+                    id: `PAY-${selected.id}`,
+                    invoiceId: selected.billing.invoiceNo || selected.id,
+                    receiptNo: selected.billing.receiptNo,
+                    amount: selected.billing.total,
+                    paymentDate: selected.billing.paidAt || new Date().toISOString(),
+                    paymentMethod:
+                      selected.billing.mode === "Cash"
+                        ? "Cash"
+                        : selected.billing.mode === "UPI"
+                        ? "UPI / Digital"
+                        : "Credit Card",
+                    collectedBy: selected.billing.collectedBy || collectedBy,
+                    notes: "Laboratory Investigation Charges",
+                  },
+                ]
+              : [],
+            diagnosisCodes: ["Z01.89"],
+            attendingDoctor: selected.doctorName,
+            createdAt: selected.createdAt || new Date().toISOString(),
+            updatedAt: selected.billing.paidAt || new Date().toISOString(),
+          }}
+          payment={
+            selected.billing.receiptNo
+              ? {
+                  id: `PAY-${selected.id}`,
+                  invoiceId: selected.billing.invoiceNo || selected.id,
+                  receiptNo: selected.billing.receiptNo,
+                  amount: selected.billing.total,
+                  paymentDate: selected.billing.paidAt || new Date().toISOString(),
+                  paymentMethod:
+                    selected.billing.mode === "Cash"
+                      ? "Cash"
+                      : selected.billing.mode === "UPI"
+                      ? "UPI / Digital"
+                      : "Credit Card",
+                  collectedBy: selected.billing.collectedBy || collectedBy,
+                  notes: "Laboratory Investigation Charges",
+                }
+              : null
+          }
+          onClose={() => setShowReceiptModal(false)}
+        />
+      )}
     </div>
   );
 }

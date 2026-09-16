@@ -54,7 +54,7 @@ const INITIAL_ROLES: AppRole[] = [
     id: "ROLE_RECEPTION",
     name: "Receptionist / Front Desk",
     allowedModules: [
-      "dashboard", "patients", "register", "appointments", "outpatient", "queue",
+      "dashboard", "patients", "register", "appointments", "outpatient", "queue", "op_management",
       // No op_nurse: vitals are the OP department's job, not the front desk's.
       "op_registration", "billing", "payments", "lab_billing", "laboratory"
     ]
@@ -73,7 +73,7 @@ const INITIAL_ROLES: AppRole[] = [
   {
     id: "ROLE_LAB",
     name: "Laboratory & Radiology Tech",
-    allowedModules: ["dashboard", "laboratory", "radiology", "patients", "chart", "reports", "lab_billing"]
+    allowedModules: ["dashboard", "laboratory", "radiology", "patients", "chart", "reports"]
   },
   {
     id: "ROLE_NURSE",

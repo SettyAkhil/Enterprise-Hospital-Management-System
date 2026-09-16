@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import React, { Component, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode, ErrorInfo } from "react";
 import {
   FiArrowLeft,
   FiPlus,
@@ -28,6 +28,10 @@ import {
   FiXCircle,
   FiChevronDown,
   FiX,
+  FiSend,
+  FiDollarSign,
+  FiLogOut,
+  FiLayers,
 } from "react-icons/fi";
 import {
   Button,
@@ -44,13 +48,14 @@ import {
   Textarea,
 } from "../components/ui";
 import PrescriptionUploadModal from "../components/PrescriptionUploadModal";
+import HospitalReceiptModal from "../components/HospitalReceiptModal";
 import { apiFetch, reportError, getHospitalCode } from "../lib/api";
 import { API_BASE } from "../lib/constants";
 import { formatDateTimeIST } from "../lib/format";
 import type { Notice, Patient } from "../types";
 import { ErDatabase, type ErInvestigationItem, type ErTimelineEventItem, type ErTimelineEventType } from "../services/erDb";
 import { BedDatabase } from "../services/bedDb";
-import { BillingDatabase } from "../services/billingDb";
+import { BillingDatabase, resolveErItemPrice, type ClaimRecord, type PaymentRecord } from "../services/billingDb";
 
 // apiFetch always sends Content-Type: application/json, which breaks a
 // multipart file upload -- this is the one place in the ER module that needs
@@ -67,6 +72,110 @@ async function uploadConsentDocument(consentId: number, file: File): Promise<voi
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     throw new Error(payload.error || "Failed to upload the signed document.");
+  }
+}
+
+// ── On-Duty Emergency Physicians & Specialists Roster ────────────────────────
+export const ER_ON_DUTY_PHYSICIANS: { name: string; specialty: string; department: string }[] = [
+  { name: "Dr. Anita Roy", specialty: "Emergency & Critical Care", department: "Emergency Medicine" },
+  { name: "Dr. Vikram Seth", specialty: "Cardiology / Critical Care", department: "Cardiology" },
+  { name: "Dr. Sanjay Gupta", specialty: "Orthopedics & Trauma Surgery", department: "Orthopedics" },
+  { name: "Dr. Meenakshi Rao", specialty: "Neurology & Acute Stroke", department: "Neurology" },
+  { name: "Dr. Priya Deshmukh", specialty: "General & Trauma Surgery", department: "General Surgery" },
+  { name: "Dr. Rajesh Sharma", specialty: "Internal & General Medicine", department: "General Medicine" },
+  { name: "Dr. Sarah Jenkins", specialty: "Emergency & Resuscitation", department: "Emergency Medicine" },
+  { name: "Dr. Arjun Mehta", specialty: "Cardiology & Interventional Care", department: "Cardiology" },
+  { name: "Dr. David Anderson", specialty: "Trauma Orthopedics", department: "Orthopedics" },
+];
+
+export function getSuggestedDoctorForPatient(detail?: {
+  complaints?: { complaint: string }[];
+  condition_at_arrival?: string | null;
+  triage_category?: string | null;
+  assigned_specialty?: string | null;
+  assigned_doctor_name?: string | null;
+}): string {
+  if (detail?.assigned_doctor_name) return detail.assigned_doctor_name;
+  if (!detail) return "Dr. Anita Roy";
+  const complaintStr = [
+    ...(detail.complaints || []).map((c) => c.complaint),
+    detail.condition_at_arrival || "",
+    detail.assigned_specialty || "",
+  ].join(" ").toLowerCase();
+
+  if (complaintStr.includes("heart") || complaintStr.includes("cardiac") || complaintStr.includes("chest") || complaintStr.includes("stemi") || complaintStr.includes("ecg") || complaintStr.includes("angina")) {
+    return "Dr. Vikram Seth";
+  }
+  if (complaintStr.includes("trauma") || complaintStr.includes("fracture") || complaintStr.includes("accident") || complaintStr.includes("rta") || complaintStr.includes("fall") || complaintStr.includes("bone")) {
+    return "Dr. Sanjay Gupta";
+  }
+  if (complaintStr.includes("stroke") || complaintStr.includes("headache") || complaintStr.includes("seizure") || complaintStr.includes("weakness") || complaintStr.includes("paralysis") || complaintStr.includes("neuro")) {
+    return "Dr. Meenakshi Rao";
+  }
+  if (complaintStr.includes("abdomen") || complaintStr.includes("appendix") || complaintStr.includes("vomiting") || complaintStr.includes("peritonitis") || complaintStr.includes("laceration") || complaintStr.includes("surgery")) {
+    return "Dr. Priya Deshmukh";
+  }
+  if (complaintStr.includes("fever") || complaintStr.includes("cough") || complaintStr.includes("infection") || complaintStr.includes("sugar") || complaintStr.includes("diabetes") || complaintStr.includes("poisoning") || complaintStr.includes("general")) {
+    return "Dr. Rajesh Sharma";
+  }
+  return "Dr. Anita Roy";
+}
+
+export function getSuggestedSpecialtyForPatient(detail?: {
+  complaints?: { complaint: string }[];
+  condition_at_arrival?: string | null;
+  triage_category?: string | null;
+  assigned_specialty?: string | null;
+  assigned_doctor_name?: string | null;
+}): string {
+  const doc = getSuggestedDoctorForPatient(detail);
+  const found = ER_ON_DUTY_PHYSICIANS.find((d) => d.name === doc);
+  return found ? found.specialty : "Emergency Medicine";
+}
+
+export class ErErrorBoundary extends Component<
+  { children: ReactNode; onReset?: () => void },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: ReactNode; onReset?: () => void }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("ErErrorBoundary caught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 bg-red-50 border border-red-200 rounded-lg text-red-900 space-y-3 m-4">
+          <div className="flex items-center gap-2 text-red-700 font-bold text-lg">
+            <span>⚠️</span>
+            <span>Emergency Module Error Encountered</span>
+          </div>
+          <p className="text-sm text-red-800">
+            {this.state.error?.message || "An unexpected error occurred while rendering the clinical view."}
+          </p>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                this.props.onReset?.();
+              }}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded text-xs transition cursor-pointer"
+            >
+              Retry / Reload View
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
   }
 }
 
@@ -515,6 +624,38 @@ function renderStatusPill(status: string) {
   );
 }
 
+function renderBillingPill(v: ErVisit) {
+  const clearance = BillingDatabase.getErFinancialClearance(v.visit_no || v.patient_id || String(v.id), v.patient_name || undefined);
+  if (clearance.status === "paid") {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-[#DCFCE7] text-[#15803D] border border-emerald-300 whitespace-nowrap"
+        title={`Receipt: ${clearance.receiptNo || "Paid & Cleared"}`}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-[#15803D]"></span> Paid
+      </span>
+    );
+  }
+  if (clearance.status === "due") {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-300 whitespace-nowrap"
+        title={`Pending at Billing Dept: ₹${clearance.balanceDue.toLocaleString("en-IN")}`}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-[#B45309] animate-pulse"></span> Pending
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#F1F5F9] text-[#475569] border border-slate-200 whitespace-nowrap"
+      title="Active ER treatment. Bill not yet sent to Billing Department."
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-[#94A3B8]"></span> In Treatment
+    </span>
+  );
+}
+
 function renderDestinationPill(dest: string | null | undefined) {
   if (!dest) return <span className="text-gray-400 font-bold">—</span>;
   const isIcu = dest.includes("ICU");
@@ -854,9 +995,9 @@ export default function ErPage({ setNotice, onNavigate, onOpenTriage, prefillPat
     try {
       const qs = queueFilter === "active" ? "?active_only=true" : queueFilter === "closed" ? "?status=closed" : "";
       const data = await apiFetch<{ visits: ErVisit[] }>(`/api/er/visits${qs}`);
-      setVisits(data.visits);
-    } catch (error: any) {
-      reportError(setNotice, error, "Failed to load ER visits.");
+      setVisits(data?.visits || []);
+    } catch {
+      // Standalone mode / offline fallback already handled
     } finally {
       setLoading(false);
     }
@@ -867,9 +1008,9 @@ export default function ErPage({ setNotice, onNavigate, onOpenTriage, prefillPat
       const data = await apiFetch<{ categories: TriageCategory[] }>(
         "/api/er/triage-config",
       );
-      setCategories(data.categories);
-    } catch (error: any) {
-      reportError(setNotice, error, "Failed to load triage categories.");
+      setCategories(data?.categories || []);
+    } catch {
+      // Standalone mode fallback
     }
   };
 
@@ -877,13 +1018,24 @@ export default function ErPage({ setNotice, onNavigate, onOpenTriage, prefillPat
     setDetailLoading(true);
     try {
       const data = await apiFetch<ErVisitDetail>(`/api/er/visits/${visitId}`);
-      setDetail(data);
-    } catch (error: any) {
-      reportError(setNotice, error, "Failed to load this ER visit.");
+      if (data) {
+        setDetail(data);
+      } else {
+        setDetail(null);
+      }
+    } catch {
+      setDetail(null);
     } finally {
       setDetailLoading(false);
     }
   };
+
+  const [billingVersion, setBillingVersion] = useState(0);
+  useEffect(() => {
+    return BillingDatabase.onUpdate(() => {
+      setBillingVersion((v) => v + 1);
+    });
+  }, []);
 
   useEffect(() => {
     loadVisits();
@@ -973,33 +1125,36 @@ export default function ErPage({ setNotice, onNavigate, onOpenTriage, prefillPat
   if (selectedVisitId && detail) {
     return (
       <div className="flex-1 bg-[#F0F2F5] p-5 sm:p-6 min-h-full">
-        <VisitDetailPanel
-          detail={detail}
-          loading={detailLoading}
-          categories={categories}
-          setNotice={setNotice}
-          onNavigate={onNavigate}
-          onBack={() => {
-            setSelectedVisitId(null);
-            setDetail(null);
-            loadVisits();
-          }}
-          onRefresh={refreshAfterAction}
-          onOrderMedication={() =>
-            setPrescriptionTarget({
-              id: detail.patient_id || "",
-              name: detail.patient_id
-                ? detail.patient_id
-                : detail.unknown_patient_label || detail.visit_no,
-              doctorName: detail.assigned_doctor_name || undefined,
-            })
-          }
-          visits={visits}
-          onSelectVisit={(id) => {
-            setSelectedVisitId(id);
-            loadDetail(id);
-          }}
-        />
+        <ErErrorBoundary onReset={refreshAfterAction}>
+          <VisitDetailPanel
+            key={detail.id}
+            detail={detail}
+            loading={detailLoading}
+            categories={categories}
+            setNotice={setNotice}
+            onNavigate={onNavigate}
+            onBack={() => {
+              setSelectedVisitId(null);
+              setDetail(null);
+              loadVisits();
+            }}
+            onRefresh={refreshAfterAction}
+            onOrderMedication={() =>
+              setPrescriptionTarget({
+                id: detail.patient_id || "",
+                name: detail.patient_id
+                  ? detail.patient_id
+                  : detail.unknown_patient_label || detail.visit_no,
+                doctorName: detail.assigned_doctor_name || undefined,
+              })
+            }
+            visits={visits}
+            onSelectVisit={(id) => {
+              setSelectedVisitId(id);
+              loadDetail(id);
+            }}
+          />
+        </ErErrorBoundary>
         {/* Order Medication (on VisitDetailPanel, above) sets prescriptionTarget,
             but this component early-returns just VisitDetailPanel while a visit is
             open -- without rendering the modal here too, that button could never
@@ -1318,6 +1473,7 @@ export default function ErPage({ setNotice, onNavigate, onOpenTriage, prefillPat
                     <th className="px-4 py-3.5">PATIENT</th>
                     <th className="px-4 py-3.5">ARRIVED</th>
                     <th className="px-4 py-3.5">STATUS</th>
+                    <th className="px-4 py-3.5">BILLING</th>
                     <th className="px-4 py-3.5">DOCTOR</th>
                     <th className="px-4 py-3.5">DESTINATION</th>
                     <th className="px-4 py-3.5">BED</th>
@@ -1384,6 +1540,11 @@ export default function ErPage({ setNotice, onNavigate, onOpenTriage, prefillPat
                         {/* 5. STATUS */}
                         <td className="px-4 py-3.5 whitespace-nowrap">
                           {renderStatusPill(v.status)}
+                        </td>
+
+                        {/* 6. BILLING */}
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          {renderBillingPill(v)}
                         </td>
 
                         {/* 6. DOCTOR */}
@@ -2431,6 +2592,8 @@ function UnidentifiedPatientIntakePanel({
   const [caseCategory, setCaseCategory] = useState("Road Traffic Accident (RTA)");
   const [triageCategory, setTriageCategory] = useState("B1");
   const [triageBedLabel, setTriageBedLabel] = useState("ER Bed 01 (Red Zone - Resuscitation)");
+  const [assignedDoctorName, setAssignedDoctorName] = useState("");
+  const [assignedSpecialty, setAssignedSpecialty] = useState("");
   const [newMlc, setNewMlc] = useState<"No" | "Yes">("Yes");
   const [saving, setSaving] = useState(false);
 
@@ -2452,6 +2615,22 @@ function UnidentifiedPatientIntakePanel({
         apparentGender ? `Sex: ${apparentGender}` : "",
       ].filter(Boolean).join(" | ");
 
+      const complaintText = complaint.trim() + (fullDescription ? ` [Features: ${fullDescription}]` : "");
+
+      let finalDoctor = assignedDoctorName;
+      let finalSpecialty = assignedSpecialty;
+      if (!finalDoctor) {
+        finalDoctor = getSuggestedDoctorForPatient({
+          complaints: [{ complaint: complaintText }],
+          condition_at_arrival: conditionAtArrival,
+          triage_category: triageCategory,
+        });
+        finalSpecialty = getSuggestedSpecialtyForPatient({
+          complaints: [{ complaint: complaintText }],
+          condition_at_arrival: conditionAtArrival,
+        });
+      }
+
       const payload: Record<string, unknown> = {
         arrival_date: arrivalDate,
         arrival_time: arrivalTime,
@@ -2465,6 +2644,8 @@ function UnidentifiedPatientIntakePanel({
         police_involved: newMlc === "Yes",
         is_unknown_patient: true,
         unknown_patient_label: unknownLabel.trim(),
+        assigned_doctor_name: finalDoctor,
+        assigned_specialty: finalSpecialty,
       };
 
       const visitRes = await apiFetch<{ id: number; visit_no: string }>(
@@ -2474,7 +2655,6 @@ function UnidentifiedPatientIntakePanel({
       const visitId = visitRes.id;
       const visitNo = visitRes.visit_no;
 
-      const complaintText = complaint.trim() + (fullDescription ? ` [Features: ${fullDescription}]` : "");
       await apiFetch(`/api/er/visits/${visitId}/complaints`, {
         method: "POST",
         body: JSON.stringify({
@@ -2496,9 +2676,24 @@ function UnidentifiedPatientIntakePanel({
         });
       }
 
+      // Assign Doctor
+      if (finalDoctor) {
+        try {
+          await apiFetch(`/api/er/visits/${visitId}/assign-doctor`, {
+            method: "POST",
+            body: JSON.stringify({
+              doctor_name: finalDoctor,
+              specialty: finalSpecialty,
+            }),
+          });
+        } catch (dErr) {
+          console.warn("Doctor assign:", dErr);
+        }
+      }
+
       setNotice({
         type: "success",
-        message: `Emergency Encounter created for ${unknownLabel} (${visitNo}).`,
+        message: `Emergency Encounter created for ${unknownLabel} (${visitNo}) — Assigned ${finalDoctor}.`,
       });
 
       onCreated(visitId);
@@ -2894,11 +3089,62 @@ function UnidentifiedPatientIntakePanel({
         </div>
       </div>
 
-      {/* 5. MEDICO-LEGAL */}
+      {/* 5. ATTENDING EMERGENCY PHYSICIAN / SPECIALIST */}
+      <div>
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200 mb-3">
+          <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase flex items-center gap-1.5">
+            <span>👨‍⚕️</span> 5. ATTENDING EMERGENCY DOCTOR / SPECIALIST
+          </span>
+          <span className="text-[11px] text-slate-500 font-medium">Assign specific on-duty physician</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Select Attending Doctor
+            </label>
+            <select
+              value={assignedDoctorName}
+              onChange={(e) => {
+                const doc = ER_ON_DUTY_PHYSICIANS.find((d) => d.name === e.target.value);
+                setAssignedDoctorName(e.target.value);
+                if (doc) setAssignedSpecialty(doc.specialty);
+              }}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-red-600 focus:ring-1 focus:ring-red-600 focus:outline-none cursor-pointer"
+            >
+              <option value="">⚡ Auto-Assign (Smart Clinical Triage Match)</option>
+              {ER_ON_DUTY_PHYSICIANS.map((d) => (
+                <option key={d.name} value={d.name}>
+                  {d.name} — {d.specialty} ({d.department})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Clinical Specialty
+            </label>
+            <input
+              type="text"
+              value={
+                assignedSpecialty ||
+                (assignedDoctorName
+                  ? ER_ON_DUTY_PHYSICIANS.find((d) => d.name === assignedDoctorName)?.specialty || "Emergency Medicine"
+                  : "Auto-matched by symptom triage")
+              }
+              readOnly
+              className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 6. MEDICO-LEGAL */}
       <div>
         <div className="flex items-center gap-2 pb-2 border-b border-slate-200 mb-3">
           <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase">
-            5. MEDICO-LEGAL &amp; POLICE NOTIFICATION
+            6. MEDICO-LEGAL &amp; POLICE NOTIFICATION
           </span>
         </div>
 
@@ -2987,6 +3233,8 @@ function ExistingPatientIntakePanel({
   // Emergency Triage & Bed Color Allocation
   const [triageCategory, setTriageCategory] = useState("B2");
   const [triageBedLabel, setTriageBedLabel] = useState("ER Bed 03 (Yellow Zone - High Care)");
+  const [assignedDoctorName, setAssignedDoctorName] = useState("");
+  const [assignedSpecialty, setAssignedSpecialty] = useState("");
 
   const [newMlc, setNewMlc] = useState<"No" | "Yes">("No");
   const [saving, setSaving] = useState(false);
@@ -3026,6 +3274,20 @@ function ExistingPatientIntakePanel({
 
     setSaving(true);
     try {
+      let finalDoctor = assignedDoctorName;
+      let finalSpecialty = assignedSpecialty;
+      if (!finalDoctor) {
+        finalDoctor = getSuggestedDoctorForPatient({
+          complaints: [{ complaint }],
+          condition_at_arrival: conditionAtArrival,
+          triage_category: triageCategory,
+        });
+        finalSpecialty = getSuggestedSpecialtyForPatient({
+          complaints: [{ complaint }],
+          condition_at_arrival: conditionAtArrival,
+        });
+      }
+
       const payload: Record<string, unknown> = {
         patient_id: selectedPatient.patient_id,
         arrival_date: arrivalDate,
@@ -3038,6 +3300,8 @@ function ExistingPatientIntakePanel({
         consciousness: consciousnessLevel,
         info_provided_by: infoProvidedBy,
         police_involved: newMlc === "Yes",
+        assigned_doctor_name: finalDoctor,
+        assigned_specialty: finalSpecialty,
       };
 
       const visitRes = await apiFetch<{ id: number; visit_no: string }>(
@@ -3070,9 +3334,24 @@ function ExistingPatientIntakePanel({
         console.warn("Triage save:", tErr);
       }
 
+      // Assign Doctor
+      if (finalDoctor) {
+        try {
+          await apiFetch(`/api/er/visits/${visitId}/assign-doctor`, {
+            method: "POST",
+            body: JSON.stringify({
+              doctor_name: finalDoctor,
+              specialty: finalSpecialty,
+            }),
+          });
+        } catch (dErr) {
+          console.warn("Doctor assign:", dErr);
+        }
+      }
+
       setNotice({
         type: "success",
-        message: `Emergency Encounter created for ${selectedPatient.name} ${selectedPatient.last_name || ""} (${visitNo}).`,
+        message: `Emergency Encounter created for ${selectedPatient.name} ${selectedPatient.last_name || ""} (${visitNo}) — Assigned ${finalDoctor}.`,
       });
 
       onCreated(visitId);
@@ -3490,11 +3769,62 @@ function ExistingPatientIntakePanel({
         </div>
       </div>
 
-      {/* 5. MEDICO-LEGAL */}
+      {/* 5. ATTENDING EMERGENCY PHYSICIAN / SPECIALIST */}
+      <div>
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200 mb-3">
+          <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase flex items-center gap-1.5">
+            <span>👨‍⚕️</span> 5. ATTENDING EMERGENCY DOCTOR / SPECIALIST
+          </span>
+          <span className="text-[11px] text-slate-500 font-medium">Assign specific on-duty physician</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Select Attending Doctor
+            </label>
+            <select
+              value={assignedDoctorName}
+              onChange={(e) => {
+                const doc = ER_ON_DUTY_PHYSICIANS.find((d) => d.name === e.target.value);
+                setAssignedDoctorName(e.target.value);
+                if (doc) setAssignedSpecialty(doc.specialty);
+              }}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none cursor-pointer"
+            >
+              <option value="">⚡ Auto-Assign (Smart Clinical Triage Match)</option>
+              {ER_ON_DUTY_PHYSICIANS.map((d) => (
+                <option key={d.name} value={d.name}>
+                  {d.name} — {d.specialty} ({d.department})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Clinical Specialty
+            </label>
+            <input
+              type="text"
+              value={
+                assignedSpecialty ||
+                (assignedDoctorName
+                  ? ER_ON_DUTY_PHYSICIANS.find((d) => d.name === assignedDoctorName)?.specialty || "Emergency Medicine"
+                  : "Auto-matched by symptom triage")
+              }
+              readOnly
+              className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 6. MEDICO-LEGAL */}
       <div>
         <div className="flex items-center gap-2 pb-2 border-b border-slate-200 mb-3">
           <span className="text-[12px] font-bold text-slate-900 tracking-wider uppercase">
-            5. MEDICO-LEGAL WORKFLOW
+            6. MEDICO-LEGAL WORKFLOW
           </span>
         </div>
 
@@ -3728,6 +4058,15 @@ const TIMELINE_EVENT_DEFINITIONS: Record<
     dotColor: "bg-emerald-500",
     description: "STAT or scheduled medication administered to patient",
   },
+  investigation_ordered: {
+    label: "Diagnostic Test Ordered",
+    category: "Medications & Procedures",
+    icon: "🔬",
+    badgeBg: "#FEF3C7",
+    badgeText: "#92400E",
+    dotColor: "bg-amber-500",
+    description: "STAT laboratory investigation or diagnostic imaging order",
+  },
   intervention_given: {
     label: "Intervention / Treatment Given",
     category: "Medications & Procedures",
@@ -3816,6 +4155,8 @@ function formatTimelineEventSummary(ev: ErTimelineEventItem): string {
     }
   } else if (ev.event_type === "medication_given" && ev.medication_data) {
     return `${ev.medication_data.drug_name} ${ev.medication_data.dosage || ""} via ${ev.medication_data.route || "IV"} • Response: ${ev.medication_data.response || "Tolerated"}`;
+  } else if (ev.event_type === "investigation_ordered" && ev.investigation_data) {
+    return `Diagnostic Test: ${ev.investigation_data.test_name} (${ev.investigation_data.priority || "STAT"})${ev.investigation_data.notes ? ` • ${ev.investigation_data.notes}` : ""}`;
   } else if (ev.event_type === "intervention_given" && ev.intervention_data) {
     const details = ev.intervention_data.details ? ` • ${ev.intervention_data.details}` : "";
     const resp = ev.intervention_data.patient_response ? ` • (Response: ${ev.intervention_data.patient_response})` : "";
@@ -3909,7 +4250,36 @@ function getSynthesizedTimeline(detail: ErVisitDetail): ErTimelineEventItem[] {
     }
   });
 
-  // 4. Automatically ensure ER Bed assignment is represented if triage bed exists
+  // 4. Automatically ensure investigations on the visit are represented
+  (detail.investigations || []).forEach((inv, idx) => {
+    const hasThisInv = events.some(
+      (e) => e.event_type === "investigation_ordered" &&
+             ((e.investigation_data?.test_name === inv.test_name) ||
+              (Math.abs(new Date(e.timestamp).getTime() - new Date(inv.ordered_at).getTime()) < 3000))
+    );
+    if (!hasThisInv) {
+      events.push({
+        id: 9040 + idx,
+        event_type: "investigation_ordered",
+        event_name: `Diagnostic Test: ${inv.test_name}`,
+        timestamp: inv.ordered_at,
+        logged_by: inv.ordered_by || "Attending Physician",
+        visit_id: detail.id,
+        visit_no: detail.visit_no,
+        patient_id: detail.patient_id,
+        location: detail.triage_bed_label || "ER Diagnostics",
+        bed: detail.triage_bed_label,
+        investigation_data: {
+          test_name: inv.test_name,
+          priority: inv.priority,
+          category: inv.category,
+          notes: inv.status ? `Status: ${inv.status} • Result: ${inv.result || "In Progress"}` : undefined,
+        },
+      });
+    }
+  });
+
+  // 5. Automatically ensure ER Bed assignment is represented if triage bed exists
   const hasBedEvent = events.some((e) => e.event_type === "bed_assigned");
   if (!hasBedEvent && detail.triage_bed_label) {
     events.push({
@@ -3927,8 +4297,12 @@ function getSynthesizedTimeline(detail: ErVisitDetail): ErTimelineEventItem[] {
     });
   }
 
-  // 5. Return sorted chronologically by newest event on top
-  return events.slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  // 6. Return sorted chronologically by newest event on top
+  return events.slice().sort((a, b) => {
+    const timeA = a.timestamp ? new Date(a.timestamp).getTime() || 0 : 0;
+    const timeB = b.timestamp ? new Date(b.timestamp).getTime() || 0 : 0;
+    return timeB - timeA;
+  });
 }
 
 function AddTimelineEventModal({
@@ -3944,7 +4318,7 @@ function AddTimelineEventModal({
   onSaved: () => void;
   setNotice: (notice: Notice | null) => void;
 }) {
-  const [selectedType, setSelectedType] = useState<ErTimelineEventType>(initialEventType);
+  const [selectedType, setSelectedType] = useState<ErTimelineEventType>(initialEventType || "initial_vitals");
   const [saving, setSaving] = useState(false);
 
   // Auto-captured metadata
@@ -3991,6 +4365,13 @@ function AddTimelineEventModal({
     notes: "STAT loading dose per emergency chest pain protocol",
   });
 
+  // 2b. Diagnostic Investigation form state
+  const [investigationForm, setInvestigationForm] = useState({
+    testName: "12-Lead ECG",
+    priority: "STAT",
+    notes: "STAT emergency diagnostic workup",
+  });
+
   // 3. Intervention form state
   const [interventionForm, setInterventionForm] = useState({
     type: "18G IV Cannulation (Left Forearm)",
@@ -4006,23 +4387,26 @@ function AddTimelineEventModal({
   });
 
   // 5. Doctor Assigned form state
+  const suggestedDoc = getSuggestedDoctorForPatient(detail);
+  const suggestedSpec = getSuggestedSpecialtyForPatient(detail);
+
   const [doctorAssignedForm, setDoctorAssignedForm] = useState({
-    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
-    specialty: detail.assigned_specialty || "Cardiology",
+    doctorName: detail.assigned_doctor_name || suggestedDoc,
+    specialty: detail.assigned_specialty || suggestedSpec,
     method: "AI Recommended & Nurse Confirmed" as "Manual by Nurse" | "AI Recommended & Nurse Confirmed",
     notes: "Assigned per acute triage symptom match.",
   });
 
   // 6. Doctor Arrived form state
   const [doctorArrivedForm, setDoctorArrivedForm] = useState({
-    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    doctorName: detail.assigned_doctor_name || suggestedDoc,
     acuteCondition: "Conscious, diaphoretic, acute substernal pain 7/10",
     notes: "Attending doctor arrived at bedside for physical examination.",
   });
 
   // 7. Doctor Assessment form state
   const [doctorAssessmentForm, setDoctorAssessmentForm] = useState({
-    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    doctorName: detail.assigned_doctor_name || suggestedDoc,
     impression: "Acute Anterior Wall STEMI / Coronary Syndrome",
     plan: "Initiate dual antiplatelets, STAT coronary angiography & Cath Lab activation",
   });
@@ -4031,9 +4415,19 @@ function AddTimelineEventModal({
   const [destinationForm, setDestinationForm] = useState({
     destination: "ICU" as "Ward" | "ICU" | "HDU" | "Specialty Ward" | "Observation" | "Operating Theatre" | "Discharge",
     reason: "Requires continuous 24/7 telemetry monitoring and post-angioplasty care",
-    doctorName: detail.assigned_doctor_name || "Dr. Vikram Seth",
+    doctorName: detail.assigned_doctor_name || suggestedDoc,
     aiNotes: "AI Recommendation: Intensive Care Unit (CCU / Cardiac ICU)",
   });
+
+  // Synchronize doctor forms when detail changes
+  useEffect(() => {
+    const doc = detail.assigned_doctor_name || getSuggestedDoctorForPatient(detail);
+    const spec = detail.assigned_specialty || getSuggestedSpecialtyForPatient(detail);
+    setDoctorAssignedForm((prev) => ({ ...prev, doctorName: doc, specialty: spec }));
+    setDoctorArrivedForm((prev) => ({ ...prev, doctorName: doc }));
+    setDoctorAssessmentForm((prev) => ({ ...prev, doctorName: doc }));
+    setDestinationForm((prev) => ({ ...prev, doctorName: doc }));
+  }, [detail.id, detail.assigned_doctor_name, detail.assigned_specialty]);
 
   // 9. Destination Bed Assigned form state
   const [destinationBedForm, setDestinationBedForm] = useState({
@@ -4073,7 +4467,7 @@ function AddTimelineEventModal({
 
     setSaving(true);
     try {
-      const def = TIMELINE_EVENT_DEFINITIONS[selectedType];
+      const def = TIMELINE_EVENT_DEFINITIONS[selectedType] || TIMELINE_EVENT_DEFINITIONS.initial_vitals;
       const eventPayload: Partial<ErTimelineEventItem> = {
         event_type: selectedType,
         event_name: def.label,
@@ -4086,6 +4480,8 @@ function AddTimelineEventModal({
         bed: currentBed,
         notes: genericNotes || undefined,
       };
+
+      let chargeNotice = "";
 
       if (selectedType === "patient_arrived") {
         eventPayload.location = "ER Reception / Triage";
@@ -4115,6 +4511,56 @@ function AddTimelineEventModal({
           response: medForm.response,
           notes: medForm.notes,
         };
+        const priced = resolveErItemPrice(medForm.drugName, "medication");
+        const chargeRes = BillingDatabase.addErClinicalCharge(
+          detail.visit_no || detail.patient_id || String(detail.id),
+          {
+            patientId: detail.patient_id || detail.patient?.patient_id || "",
+            patientName: [detail.patient_name, detail.patient_last_name].filter(Boolean).join(" ") || detail.patient?.name || "Emergency Patient",
+            mrn: detail.patient_id?.replace(/\D/g, "") || "100245",
+            age: Number(detail.patient_age || detail.patient?.age) || 30,
+            gender: detail.patient_gender || detail.patient?.gender || "Other",
+            phone: detail.patient_phone || detail.patient?.phone,
+          },
+          {
+            description: `Medication: ${medForm.drugName} ${medForm.dosage} (${medForm.route})`,
+            category: priced.category,
+            unitPrice: priced.unitPrice,
+            cptCode: priced.cptCode,
+            quantity: 1,
+          }
+        );
+        chargeNotice = ` • ₹${priced.unitPrice.toLocaleString("en-IN")} added to ER Billing (Total Due: ₹${chargeRes.newBalance.toLocaleString("en-IN")})`;
+      } else if (selectedType === "investigation_ordered") {
+        eventPayload.investigation_data = {
+          test_name: investigationForm.testName,
+          priority: investigationForm.priority,
+          notes: investigationForm.notes,
+        };
+        ErDatabase.addInvestigation(detail.id, {
+          name: investigationForm.testName,
+          priority: investigationForm.priority,
+        });
+        const priced = resolveErItemPrice(investigationForm.testName, "investigation");
+        const chargeRes = BillingDatabase.addErClinicalCharge(
+          detail.visit_no || detail.patient_id || String(detail.id),
+          {
+            patientId: detail.patient_id || detail.patient?.patient_id || "",
+            patientName: [detail.patient_name, detail.patient_last_name].filter(Boolean).join(" ") || detail.patient?.name || "Emergency Patient",
+            mrn: detail.patient_id?.replace(/\D/g, "") || "100245",
+            age: Number(detail.patient_age || detail.patient?.age) || 30,
+            gender: detail.patient_gender || detail.patient?.gender || "Other",
+            phone: detail.patient_phone || detail.patient?.phone,
+          },
+          {
+            description: `Diagnostic Test: ${investigationForm.testName} (${investigationForm.priority})`,
+            category: priced.category,
+            unitPrice: priced.unitPrice,
+            cptCode: priced.cptCode,
+            quantity: 1,
+          }
+        );
+        chargeNotice = ` • ₹${priced.unitPrice.toLocaleString("en-IN")} added to ER Billing (Total Due: ₹${chargeRes.newBalance.toLocaleString("en-IN")})`;
       } else if (selectedType === "intervention_given") {
         eventPayload.intervention_data = {
           intervention_type: interventionForm.type,
@@ -4122,6 +4568,26 @@ function AddTimelineEventModal({
           patient_response: interventionForm.response,
           notes: interventionForm.notes,
         };
+        const priced = resolveErItemPrice(interventionForm.type, "intervention");
+        const chargeRes = BillingDatabase.addErClinicalCharge(
+          detail.visit_no || detail.patient_id || String(detail.id),
+          {
+            patientId: detail.patient_id || detail.patient?.patient_id || "",
+            patientName: [detail.patient_name, detail.patient_last_name].filter(Boolean).join(" ") || detail.patient?.name || "Emergency Patient",
+            mrn: detail.patient_id?.replace(/\D/g, "") || "100245",
+            age: Number(detail.patient_age || detail.patient?.age) || 30,
+            gender: detail.patient_gender || detail.patient?.gender || "Other",
+            phone: detail.patient_phone || detail.patient?.phone,
+          },
+          {
+            description: `Procedure: ${interventionForm.type}`,
+            category: priced.category,
+            unitPrice: priced.unitPrice,
+            cptCode: priced.cptCode,
+            quantity: 1,
+          }
+        );
+        chargeNotice = ` • ₹${priced.unitPrice.toLocaleString("en-IN")} added to ER Billing (Total Due: ₹${chargeRes.newBalance.toLocaleString("en-IN")})`;
       } else if (selectedType === "patient_stabilized") {
         eventPayload.stabilization_data = {
           status: stabilizationForm.status,
@@ -4174,7 +4640,7 @@ function AddTimelineEventModal({
 
       setNotice({
         type: "success",
-        message: `Timeline Event recorded: "${def.label}" by ${loggedBy}.`,
+        message: `Timeline Event recorded: "${def.label}" by ${loggedBy}${chargeNotice}.`,
       });
 
       onSaved();
@@ -4186,7 +4652,7 @@ function AddTimelineEventModal({
     }
   };
 
-  const currentDef = TIMELINE_EVENT_DEFINITIONS[selectedType];
+  const currentDef = TIMELINE_EVENT_DEFINITIONS[selectedType] || TIMELINE_EVENT_DEFINITIONS.initial_vitals;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in overflow-y-auto">
@@ -4198,7 +4664,7 @@ function AddTimelineEventModal({
             <div>
               <h3 className="font-bold text-gray-900 text-base">Record Patient Journey Event</h3>
               <p className="text-[11.5px] text-[#64748B]">
-                Nurse-managed clinical encounter timeline • Automatically captures time &amp; staff signature
+                Nurse-managed clinical encounter timeline • Automatically captures time, staff signature &amp; billing charges
               </p>
             </div>
           </div>
@@ -4245,8 +4711,9 @@ function AddTimelineEventModal({
               <option value="initial_vitals">🫀 Initial Vitals Checked</option>
               <option value="followup_vitals">📈 Follow-up Vitals Checked</option>
             </optgroup>
-            <optgroup label="── Medications &amp; Interventions ──">
+            <optgroup label="── Medications &amp; Diagnostics ──">
               <option value="medication_given">💊 Medication Given</option>
+              <option value="investigation_ordered">🔬 Diagnostic Test Ordered</option>
               <option value="intervention_given">💉 Intervention / Treatment Given</option>
               <option value="patient_stabilized">✨ Patient Stabilized</option>
             </optgroup>
@@ -4491,12 +4958,17 @@ function AddTimelineEventModal({
           {/* 2. Medication Given Form */}
           {selectedType === "medication_given" && (
             <div className="bg-[#F0FDF4] border border-green-200 rounded p-3.5 space-y-3">
-              <span className="text-[11px] font-bold text-[#15803D] uppercase tracking-wider block">
-                Administered Medication Details
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#15803D] uppercase tracking-wider block">
+                  Administered Medication Details
+                </span>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded text-[11px] font-bold">
+                  Tariff: ₹{resolveErItemPrice(medForm.drugName, "medication").unitPrice.toLocaleString("en-IN")}
+                </span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Drug / Medication Name</label>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Drug / Medication Name *</label>
                   <input
                     type="text"
                     placeholder="e.g. Aspirin / Morphine / IV Ceftriaxone"
@@ -4554,17 +5026,89 @@ function AddTimelineEventModal({
                   className="w-full border border-slate-300 rounded p-2 text-[12px]"
                 />
               </div>
+
+              <div className="p-2 bg-emerald-50 border border-emerald-200 rounded text-[11.5px] text-emerald-900 flex items-center justify-between">
+                <span>💳 Auto-accrues <strong>₹{resolveErItemPrice(medForm.drugName, "medication").unitPrice.toLocaleString("en-IN")}</strong> to Central Billing Clearance.</span>
+              </div>
+            </div>
+          )}
+
+          {/* 2b. Diagnostic Test Ordered Form */}
+          {selectedType === "investigation_ordered" && (
+            <div className="bg-[#FFFBEB] border border-amber-200 rounded p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#B45309] uppercase tracking-wider block">
+                  Diagnostic / Laboratory Investigation Order
+                </span>
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[11px] font-bold">
+                  Tariff: ₹{resolveErItemPrice(investigationForm.testName, "investigation").unitPrice.toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Diagnostic Test *</label>
+                  <select
+                    value={investigationForm.testName}
+                    onChange={(e) => setInvestigationForm({ ...investigationForm, testName: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 bg-white font-semibold text-gray-900"
+                  >
+                    <option value="12-Lead ECG">12-Lead ECG (STAT)</option>
+                    <option value="Cardiac Troponin-I / T">Cardiac Troponin-I / T (STAT)</option>
+                    <option value="Emergency Chest X-Ray (AP View)">Emergency Chest X-Ray (AP View)</option>
+                    <option value="FAST Ultrasound (Abdomen/Pelvis)">FAST Ultrasound (Abdomen/Pelvis)</option>
+                    <option value="Complete Blood Count (CBC) & GRBS">Complete Blood Count (CBC) & GRBS</option>
+                    <option value="Arterial Blood Gas (ABG) Analysis">Arterial Blood Gas (ABG) Analysis</option>
+                    <option value="Non-Contrast CT Brain">Non-Contrast CT Brain</option>
+                    <option value="Renal Function & Electrolytes">Renal Function & Electrolytes (STAT)</option>
+                    <option value="Blood & Urine Cultures">Blood & Urine Cultures</option>
+                    <option value="D-Dimer (Quantitative)">D-Dimer (Quantitative)</option>
+                    <option value="Liver Function Test (LFT)">Liver Function Test (LFT)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Order Urgency</label>
+                  <select
+                    value={investigationForm.priority}
+                    onChange={(e) => setInvestigationForm({ ...investigationForm, priority: e.target.value })}
+                    className="w-full border border-slate-300 rounded p-1.5 bg-white font-medium"
+                  >
+                    <option value="STAT">STAT / Immediate (&lt; 15 mins)</option>
+                    <option value="Urgent">Urgent (&lt; 45 mins)</option>
+                    <option value="Routine">Routine Emergency</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Clinical Indication &amp; Instructions</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Chest pain with ST changes, rule out acute coronary syndrome"
+                  value={investigationForm.notes}
+                  onChange={(e) => setInvestigationForm({ ...investigationForm, notes: e.target.value })}
+                  className="w-full border border-slate-300 rounded p-2 text-[12px]"
+                />
+              </div>
+
+              <div className="p-2 bg-blue-50 border border-blue-200 rounded text-[11.5px] text-blue-900 flex items-center justify-between">
+                <span>💳 Auto-accrues <strong>₹{resolveErItemPrice(investigationForm.testName, "investigation").unitPrice.toLocaleString("en-IN")}</strong> ({resolveErItemPrice(investigationForm.testName, "investigation").category}) to Central Billing Clearance.</span>
+              </div>
             </div>
           )}
 
           {/* 3. Intervention / Treatment Form */}
           {selectedType === "intervention_given" && (
             <div className="bg-[#F0FDFA] border border-teal-200 rounded p-3.5 space-y-3">
-              <span className="text-[11px] font-bold text-[#0F766E] uppercase tracking-wider block">
-                Emergency Procedure &amp; Treatment Details
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#0F766E] uppercase tracking-wider block">
+                  Emergency Procedure &amp; Treatment Details
+                </span>
+                <span className="px-2 py-0.5 bg-teal-100 text-teal-900 border border-teal-300 rounded text-[11px] font-bold">
+                  Tariff: ₹{resolveErItemPrice(interventionForm.type, "intervention").unitPrice.toLocaleString("en-IN")}
+                </span>
+              </div>
               <div>
-                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Intervention / Procedure</label>
+                <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Intervention / Procedure *</label>
                 <input
                   type="text"
                   placeholder="e.g. 18G IV Cannulation / High Flow O2 6L/min / Wound Dressing / Splinting"
@@ -4594,6 +5138,10 @@ function AddTimelineEventModal({
                   onChange={(e) => setInterventionForm({ ...interventionForm, response: e.target.value })}
                   className="w-full border border-slate-300 rounded p-2 text-[12px]"
                 />
+              </div>
+
+              <div className="p-2 bg-teal-50 border border-teal-200 rounded text-[11.5px] text-teal-900 flex items-center justify-between">
+                <span>💳 Auto-accrues <strong>₹{resolveErItemPrice(interventionForm.type, "intervention").unitPrice.toLocaleString("en-IN")}</strong> to Central Billing Clearance.</span>
               </div>
             </div>
           )}
@@ -4636,18 +5184,36 @@ function AddTimelineEventModal({
           {/* 5. Doctor Assigned Form */}
           {selectedType === "doctor_assigned" && (
             <div className="bg-[#EFF6FF] border border-blue-200 rounded p-3.5 space-y-3">
-              <span className="text-[11px] font-bold text-[#1D4ED8] uppercase tracking-wider block">
-                Doctor / Specialist Assignment
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#1D4ED8] uppercase tracking-wider block">
+                  Doctor / Specialist Assignment
+                </span>
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-900 border border-blue-300 rounded text-[11px] font-bold">
+                  On-Duty Emergency Staff
+                </span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Attending Physician Name</label>
-                  <input
-                    type="text"
+                  <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Attending Physician Name *</label>
+                  <select
                     value={doctorAssignedForm.doctorName}
-                    onChange={(e) => setDoctorAssignedForm({ ...doctorAssignedForm, doctorName: e.target.value })}
-                    className="w-full border border-slate-300 rounded p-2 font-semibold"
-                  />
+                    onChange={(e) => {
+                      const selectedName = e.target.value;
+                      const matched = ER_ON_DUTY_PHYSICIANS.find((d) => d.name === selectedName);
+                      setDoctorAssignedForm({
+                        ...doctorAssignedForm,
+                        doctorName: selectedName,
+                        specialty: matched ? matched.specialty : doctorAssignedForm.specialty,
+                      });
+                    }}
+                    className="w-full border border-slate-300 rounded p-2 font-semibold bg-white text-gray-900"
+                  >
+                    {ER_ON_DUTY_PHYSICIANS.map((d) => (
+                      <option key={d.name} value={d.name}>
+                        {d.name} ({d.specialty})
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Medical Specialty</label>
@@ -4655,7 +5221,7 @@ function AddTimelineEventModal({
                     type="text"
                     value={doctorAssignedForm.specialty}
                     onChange={(e) => setDoctorAssignedForm({ ...doctorAssignedForm, specialty: e.target.value })}
-                    className="w-full border border-slate-300 rounded p-2 font-semibold"
+                    className="w-full border border-slate-300 rounded p-2 font-semibold bg-slate-50"
                   />
                 </div>
               </div>
@@ -4693,12 +5259,17 @@ function AddTimelineEventModal({
               </span>
               <div>
                 <label className="block text-[11px] font-bold text-gray-700 mb-0.5">Attending Doctor</label>
-                <input
-                  type="text"
+                <select
                   value={doctorArrivedForm.doctorName}
                   onChange={(e) => setDoctorArrivedForm({ ...doctorArrivedForm, doctorName: e.target.value })}
-                  className="w-full border border-slate-300 rounded p-2 font-semibold"
-                />
+                  className="w-full border border-slate-300 rounded p-2 font-semibold bg-white text-gray-900"
+                >
+                  {ER_ON_DUTY_PHYSICIANS.map((d) => (
+                    <option key={d.name} value={d.name}>
+                      {d.name} ({d.specialty})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -4959,6 +5530,418 @@ function AddTimelineEventModal({
   );
 }
 
+// ==================== ErDischargeModal ====================
+
+function ErDischargeModal({
+  detail,
+  erClearance,
+  doctorName = "Attending ER Physician",
+  onClose,
+  onConfirm,
+  saving = false,
+}: {
+  detail: ErVisitDetail;
+  erClearance: any;
+  doctorName?: string;
+  onClose: () => void;
+  onConfirm: (data: { condition: string; instructions: string }) => void;
+  saving?: boolean;
+}) {
+  const [condition, setCondition] = useState("Clinically Stable / Improved");
+  const [instructions, setInstructions] = useState(
+    "Take prescribed discharge medications as advised. Maintain adequate hydration. Return to Emergency Room immediately if severe chest pain, shortness of breath, high fever, or dizziness recurs."
+  );
+  const [override, setOverride] = useState(false);
+  const isAllowed = erClearance.isCleared || override;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+            <span>🚪</span> Finalize Patient Discharge &amp; Issue Gate Pass
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">✕</button>
+        </div>
+
+        <div className="space-y-3.5 text-xs text-slate-800">
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 grid grid-cols-2 gap-2 text-[11.5px]">
+            <div>
+              <span className="text-slate-500 block">Patient Name</span>
+              <strong className="text-slate-900">{detail.patient_name || detail.patient?.name || "Patient"} ({detail.visit_no})</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Attending Doctor</span>
+              <strong className="text-slate-900">{doctorName}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Arrival Time</span>
+              <span>{formatDateTimeIST(detail.arrival_at)}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Discharge Time</span>
+              <span className="font-bold text-emerald-700">{formatDateTimeIST(new Date().toISOString())}</span>
+            </div>
+          </div>
+
+          {/* Financial Clearance Check */}
+          {erClearance.isCleared ? (
+            <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg text-emerald-900 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span>✅</span>
+                <span><strong>Central Billing Status:</strong> Account Cleared (Receipt: {erClearance.receiptNo || "Paid"}).</span>
+              </div>
+              <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase">Ready</span>
+            </div>
+          ) : (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-950 space-y-2 text-xs">
+              <div className="flex items-center gap-2 font-bold text-amber-900">
+                <span>🔒</span>
+                <span>Central Billing Dues Outstanding: ₹{erClearance.balanceDue.toLocaleString("en-IN")}</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Hospital policy requires payment clearance at Central Billing before physical discharge. Attendant should pay at the Cashier counter.
+              </p>
+              <div className="pt-1.5 border-t border-amber-200">
+                <label className="flex items-center gap-2 text-[11.5px] font-semibold text-amber-950 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={override}
+                    onChange={(e) => setOverride(e.target.checked)}
+                    className="rounded border-amber-400 text-[#1B4FD8]"
+                  />
+                  <span>Clinical Emergency / Social Work Override (Authorize discharge without financial gate)</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">Patient Condition at Discharge *</label>
+            <select
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
+              className="w-full border border-slate-300 rounded-md p-2 bg-white font-medium"
+            >
+              <option value="Clinically Stable / Improved">Clinically Stable / Improved</option>
+              <option value="Symptoms Resolved / Cured">Symptoms Resolved / Cured</option>
+              <option value="Discharged against Medical Advice (LAMA)">Discharged against Medical Advice (LAMA)</option>
+              <option value="Transferred to Outpatient Care">Transferred to Outpatient Daycare / OP Care</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">Discharge Instructions &amp; Follow-up Advice</label>
+            <textarea
+              rows={3}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="w-full border border-slate-300 rounded-md p-2"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="text-xs text-[#1B4FD8] font-bold hover:underline cursor-pointer flex items-center gap-1"
+          >
+            <span>🖨️</span> Print Discharge Summary &amp; Gate Pass
+          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => onConfirm({ condition, instructions })}
+              disabled={saving || !isAllowed}
+              className={`px-5 py-2 text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-xs ${
+                isAllowed ? "bg-[#16A34A] hover:bg-[#15803D] cursor-pointer" : "bg-slate-400 cursor-not-allowed opacity-70"
+              }`}
+            >
+              <span>🚪</span> {saving ? "Discharging..." : "Complete Discharge & Close Visit"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== ErWardBedModal ====================
+
+function ErWardBedModal({
+  detail,
+  erClearance,
+  onClose,
+  onConfirm,
+  saving = false,
+}: {
+  detail: ErVisitDetail;
+  erClearance: any;
+  onClose: () => void;
+  onConfirm: (selectedBedId: number, notes: string) => void;
+  saving?: boolean;
+}) {
+  const availableBeds = useMemo(() => {
+    return BedDatabase.load().filter((b) => b.bed_type !== "ICU" && b.status === "Available");
+  }, []);
+
+  const [selectedBedId, setSelectedBedId] = useState<number>(availableBeds[0]?.id || 101);
+  const [transferNotes, setTransferNotes] = useState(
+    "Patient stabilized in ER. Transferred with peripheral IV line and chart. Receiving nurse handover given."
+  );
+  const [override, setOverride] = useState(false);
+  const isAllowed = erClearance.isCleared || override;
+
+  const selectedBed = availableBeds.find((b) => b.id === selectedBedId) || availableBeds[0];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+            <span>🛏️</span> Allocate Inpatient Ward Bed &amp; Complete Transfer
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">✕</button>
+        </div>
+
+        <div className="space-y-3.5 text-xs text-slate-800">
+          <div className="p-3 bg-blue-50/70 rounded-lg border border-blue-200 grid grid-cols-2 gap-2 text-[11.5px] text-blue-950">
+            <div>
+              <span className="text-slate-500 block">Patient</span>
+              <strong className="text-slate-900">{detail.patient_name || detail.patient?.name || "Patient"} ({detail.visit_no})</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Target Specialty</span>
+              <strong className="text-slate-900">{detail.disposition?.required_specialty || "General Medicine Inpatient"}</strong>
+            </div>
+          </div>
+
+          {/* Financial Clearance Check */}
+          {erClearance.isCleared ? (
+            <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg text-emerald-900 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span>✅</span>
+                <span><strong>Central Billing Status:</strong> Account Cleared (Receipt: {erClearance.receiptNo || "Paid"}).</span>
+              </div>
+              <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase">Cleared</span>
+            </div>
+          ) : (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-950 space-y-2 text-xs">
+              <div className="flex items-center gap-2 font-bold text-amber-900">
+                <span>🔒</span>
+                <span>Central Billing Dues Outstanding: ₹{erClearance.balanceDue.toLocaleString("en-IN")}</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Hospital policy requires clearing ER charges before physical ward bed allocation. Attendant should pay at Central Cashier counter.
+              </p>
+              <div className="pt-1.5 border-t border-amber-200">
+                <label className="flex items-center gap-2 text-[11.5px] font-semibold text-amber-950 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={override}
+                    onChange={(e) => setOverride(e.target.checked)}
+                    className="rounded border-amber-400 text-[#1B4FD8]"
+                  />
+                  <span>Clinical STAT Emergency Override (Proceed with urgent ward admission)</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">Select Available Inpatient Ward Bed *</label>
+            {availableBeds.length > 0 ? (
+              <select
+                value={selectedBedId}
+                onChange={(e) => setSelectedBedId(Number(e.target.value))}
+                className="w-full border border-slate-300 rounded-md p-2 bg-white font-bold text-blue-900"
+              >
+                {availableBeds.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.ward} — Room {b.room_no} / Bed {b.bed_no} ({b.bed_type}) [₹{b.daily_rate}/day]
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-900 text-xs">
+                No general ward beds currently marked available. System will assign overflow/admit bed.
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">Ward Nurse Handover &amp; Clinical Notes</label>
+            <textarea
+              rows={3}
+              value={transferNotes}
+              onChange={(e) => setTransferNotes(e.target.value)}
+              className="w-full border border-slate-300 rounded-md p-2"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(selectedBedId, transferNotes)}
+            disabled={saving || !isAllowed}
+            className={`px-5 py-2 text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-xs ${
+              isAllowed ? "bg-[#1B4FD8] hover:bg-[#1E40AF] cursor-pointer" : "bg-slate-400 cursor-not-allowed opacity-70"
+            }`}
+          >
+            <span>🛏️</span> {saving ? "Allocating..." : "Allocate Ward Bed & Transfer Patient"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== ErIcuBedModal ====================
+
+function ErIcuBedModal({
+  detail,
+  erClearance,
+  onClose,
+  onConfirm,
+  saving = false,
+}: {
+  detail: ErVisitDetail;
+  erClearance: any;
+  onClose: () => void;
+  onConfirm: (selectedBedId: number, notes: string) => void;
+  saving?: boolean;
+}) {
+  const availableBeds = useMemo(() => {
+    return BedDatabase.load().filter((b) => b.bed_type === "ICU");
+  }, []);
+
+  const [selectedBedId, setSelectedBedId] = useState<number>(availableBeds[0]?.id || 201);
+  const [transferNotes, setTransferNotes] = useState(
+    "STAT Intensive Care Unit transfer. Monitored airway & IV inotropes. Daily ICU Flowsheet charted."
+  );
+  const [override, setOverride] = useState(false);
+  const isAllowed = erClearance.isCleared || override;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+            <span>🚨</span> Allocate Intensive Care Unit (ICU) Bed &amp; STAT Transfer
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">✕</button>
+        </div>
+
+        <div className="space-y-3.5 text-xs text-slate-800">
+          <div className="p-3 bg-purple-50/70 rounded-lg border border-purple-200 grid grid-cols-2 gap-2 text-[11.5px] text-purple-950">
+            <div>
+              <span className="text-slate-500 block">Patient</span>
+              <strong className="text-slate-900">{detail.patient_name || detail.patient?.name || "Patient"} ({detail.visit_no})</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Critical Indication</span>
+              <strong className="text-slate-900">{detail.disposition?.clinical_reason || "Acute Coronary / Critical Monitoring"}</strong>
+            </div>
+          </div>
+
+          {/* Financial Clearance Check */}
+          {erClearance.isCleared ? (
+            <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg text-emerald-900 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span>✅</span>
+                <span><strong>Central Billing Status:</strong> Account Cleared (Receipt: {erClearance.receiptNo || "Paid"}).</span>
+              </div>
+              <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase">Cleared</span>
+            </div>
+          ) : (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-950 space-y-2 text-xs">
+              <div className="flex items-center gap-2 font-bold text-amber-900">
+                <span>🔒</span>
+                <span>Central Billing Dues Outstanding: ₹{erClearance.balanceDue.toLocaleString("en-IN")}</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Central Billing payment clearance is recommended before relocation. For life-saving emergency ICU transfers, check the STAT Override below.
+              </p>
+              <div className="pt-1.5 border-t border-amber-200">
+                <label className="flex items-center gap-2 text-[11.5px] font-semibold text-amber-950 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={override}
+                    onChange={(e) => setOverride(e.target.checked)}
+                    className="rounded border-amber-400 text-purple-700"
+                  />
+                  <span>STAT Life-Saving ICU Override (Authorize immediate critical ICU transfer)</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">Select Available ICU Bed *</label>
+            <select
+              value={selectedBedId}
+              onChange={(e) => setSelectedBedId(Number(e.target.value))}
+              className="w-full border border-slate-300 rounded-md p-2 bg-white font-bold text-purple-900"
+            >
+              {availableBeds.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.ward} — Bed #{b.bed_no} (Floor 2 - Critical Care) [₹{b.daily_rate}/day]
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">ICU Intensivist Handover &amp; Flowsheet Instructions</label>
+            <textarea
+              rows={3}
+              value={transferNotes}
+              onChange={(e) => setTransferNotes(e.target.value)}
+              className="w-full border border-slate-300 rounded-md p-2"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(selectedBedId, transferNotes)}
+            disabled={saving || !isAllowed}
+            className={`px-5 py-2 text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-xs ${
+              isAllowed ? "bg-[#7C3AED] hover:bg-[#6D28D9] cursor-pointer" : "bg-slate-400 cursor-not-allowed opacity-70"
+            }`}
+          >
+            <span>🚨</span> {saving ? "Transferring..." : "Allocate ICU Bed & Transfer to ICU"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function VisitDetailPanel({
   detail,
   loading,
@@ -5063,6 +6046,14 @@ export function VisitDetailPanel({
   const [billingVersion, setBillingVersion] = useState(0);
   const [transferOverride, setTransferOverride] = useState(false);
 
+  // ER Action & Receipt Modal States
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [receiptClaim, setReceiptClaim] = useState<ClaimRecord | null>(null);
+  const [receiptPayment, setReceiptPayment] = useState<PaymentRecord | null>(null);
+  const [showDischargeModal, setShowDischargeModal] = useState(false);
+  const [showWardBedModal, setShowWardBedModal] = useState(false);
+  const [showIcuBedModal, setShowIcuBedModal] = useState(false);
+
   // Subscribe to Central Billing updates in real-time
   useEffect(() => {
     return BillingDatabase.onUpdate(() => {
@@ -5070,45 +6061,375 @@ export function VisitDetailPanel({
     });
   }, []);
 
+  const curVisitNo = detail.visit_no || detail.patient_id || String(detail.id);
+  const curPatientId = detail.patient_id || detail.patient?.patient_id || "";
+  const curPatientName = detail.patient?.name || detail.patient_name || "";
+  const curPatientLastName = detail.patient?.last_name || detail.patient_last_name || "";
+  const curGender = detail.patient?.gender || detail.patient_gender || "Male";
+  const curAge = String(detail.patient?.age || detail.patient_age || 30);
+  const curDob = detail.patient?.dob || "";
+  const curPhone = detail.patient?.phone || detail.patient_phone || "";
+  const curEmergency = detail.patient?.emergency_contact || detail.patient_emergency_contact || "";
+  const curGuardian = detail.patient?.guardian_name || "";
+  const curAddress = detail.patient?.address || "";
+  const curAllergies = detail.patient?.allergies || "No Known Allergies";
+  const curBloodGroup = detail.patient?.blood_group || "O+";
+
+  // Derive chief complaint & onset
+  const primaryComplaint = detail.complaints && detail.complaints.length > 0 ? detail.complaints[0] : null;
+  const chiefComplaint = primaryComplaint?.complaint || "Acute Emergency Presentation";
+  const onsetText = primaryComplaint?.duration
+    ? `${primaryComplaint.duration} before arrival`
+    : `${formatTimeStr(detail.arrival_at)} (at arrival)`;
+
+  // Derive attending doctor
+  const doctorName = detail.assigned_doctor_name ? detail.assigned_doctor_name.replace(/\s*\(.*\)/, "") : "Awaiting Doctor";
+  const doctorSpecialty = detail.assigned_specialty || (detail.assigned_doctor_name?.match(/\((.*)\)/)?.[1]) || "Emergency Medicine";
+
+  // Derive triage info
+  const triageCatCode = detail.triage_category || detail.triage?.category || "B2";
+  const triageCatObj = categories.find((c) => c.category_code === triageCatCode);
+  const triageCatLabel = triageCatObj ? triageCatObj.category_label : "Emergent Priority";
+
+  // Derive bed / location
+  const location = detail.triage?.triage_bed_label || detail.triage_bed_label || "ER Triage Bay";
+
+  // Derive destination
+  const destination = getDestination(detail) || (detail.disposition ? `• ${formatOutcomeLabel(detail.disposition.outcome)}` : "• Under Assessment");
+
+  // Form state for Doctor Disposition
+  const [dispositionForm, setDispositionForm] = useState({
+    outcome: "admit_icu",
+    specialty: doctorSpecialty || "Cardiology",
+    reason: `Patient presenting with ${chiefComplaint}. Emergency stabilization completed in ER. Recommended for intensive monitoring and inpatient care.`,
+    priority: "High Priority",
+  });
+
   // Compute ER Financial Clearance Status
   const erClearance = useMemo(() => {
     return BillingDatabase.getErFinancialClearance(
-      detail.visit_no || detail.patient_id || String(detail.id),
-      detail.patient_name || detail.patient?.name
+      curVisitNo,
+      curPatientName
     );
-  }, [detail, billingVersion]);
+  }, [curVisitNo, curPatientName, billingVersion]);
 
   // Form state for editing Patient Demographics & Allergies
   const [editPatientForm, setEditPatientForm] = useState({
-    name: detail.patient?.name || detail.patient_name || "",
-    last_name: detail.patient?.last_name || detail.patient_last_name || "",
-    gender: detail.patient?.gender || detail.patient_gender || "Male",
-    age: String(detail.patient?.age || detail.patient_age || 30),
-    dob: detail.patient?.dob || "",
-    phone: detail.patient?.phone || detail.patient_phone || "",
-    emergency_contact: detail.patient?.emergency_contact || detail.patient_emergency_contact || "",
-    guardian_name: detail.patient?.guardian_name || "",
-    address: detail.patient?.address || "",
-    allergies: detail.patient?.allergies || "No Known Allergies",
-    blood_group: detail.patient?.blood_group || "O+",
+    name: curPatientName,
+    last_name: curPatientLastName,
+    gender: curGender,
+    age: curAge,
+    dob: curDob,
+    phone: curPhone,
+    emergency_contact: curEmergency,
+    guardian_name: curGuardian,
+    address: curAddress,
+    allergies: curAllergies,
+    blood_group: curBloodGroup,
   });
 
-  // Sync editPatientForm when detail changes
-  useEffect(() => {
-    setEditPatientForm({
-      name: detail.patient?.name || detail.patient_name || "",
-      last_name: detail.patient?.last_name || detail.patient_last_name || "",
-      gender: detail.patient?.gender || detail.patient_gender || "Male",
-      age: String(detail.patient?.age || detail.patient_age || 30),
-      dob: detail.patient?.dob || "",
-      phone: detail.patient?.phone || detail.patient_phone || "",
-      emergency_contact: detail.patient?.emergency_contact || detail.patient_emergency_contact || "",
-      guardian_name: detail.patient?.guardian_name || "",
-      address: detail.patient?.address || "",
-      allergies: detail.patient?.allergies || "No Known Allergies",
-      blood_group: detail.patient?.blood_group || "O+",
-    });
-  }, [detail]);
+  // Open Standard Hospital Receipt Modal
+  const handleOpenReceipt = () => {
+    const claims = BillingDatabase.getClaims();
+    const matched = claims.find(
+      (c) =>
+        c.encounterId === detail.visit_no ||
+        (erClearance.invoiceNo && c.invoiceNo === erClearance.invoiceNo) ||
+        (erClearance.claimId && c.id === erClearance.claimId) ||
+        c.patientName === displayName
+    );
+    if (matched) {
+      setReceiptClaim(matched);
+      const payments = BillingDatabase.getAllPayments();
+      const matchPayment = payments.find(
+        (p: PaymentRecord) => p.invoiceId === matched.invoiceNo || p.invoiceId === matched.id || (erClearance.receiptNo && p.receiptNo === erClearance.receiptNo)
+      );
+      setReceiptPayment(matchPayment || null);
+      setShowReceiptModal(true);
+    } else {
+      setNotice({ type: "warning", message: "No official billing receipt generated yet." });
+    }
+  };
+
+  // Step 7: Mark Patient Clinically Stabilized
+  const handleMarkPatientStable = () => {
+    try {
+      ErDatabase.addTimelineEvent(detail.id, {
+        event_type: "patient_stabilized",
+        event_name: "Patient Vitals Stabilized",
+        notes: "Patient vital signs and acute presentation successfully stabilized under emergency resuscitation protocol.",
+        logged_by: "Staff RN",
+      });
+      setNotice({ type: "success", message: "Patient marked as clinically stabilized." });
+      onRefresh();
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Failed to log stabilization." });
+    }
+  };
+
+  // Step 15A: Execute Discharge Home
+  const handleExecuteDischarge = (data: { condition: string; instructions: string }) => {
+    try {
+      ErDatabase.addTimelineEvent(detail.id, {
+        event_type: "destination_assigned",
+        event_name: "Patient Discharged Home",
+        notes: `Condition: ${data.condition}. Advice: ${data.instructions || "Standard discharge instructions."}`,
+        logged_by: "Staff RN",
+      });
+      ErDatabase.updateVisit(detail.id, { status: "closed", closed_at: new Date().toISOString() });
+      setNotice({ type: "success", message: `Patient ${displayName} discharged successfully (${data.condition}).` });
+      setShowDischargeModal(false);
+      onRefresh();
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Failed to discharge patient." });
+    }
+  };
+
+  // Step 15B: Execute Inpatient Ward Bed Allocation & Transfer
+  const handleExecuteWardTransfer = (selectedBedId: number, notes: string) => {
+    try {
+      const bed = BedDatabase.load().find((b) => b.id === selectedBedId);
+      const wardName = bed ? bed.ward : "General Inpatient Ward";
+      const bedLabel = bed ? `${bed.ward} (Room ${bed.room_no} / Bed ${bed.bed_no})` : `Ward Bed #${selectedBedId}`;
+
+      BedDatabase.assignBed(
+        selectedBedId,
+        {
+          patient_id: detail.patient_id || `P-${detail.id}`,
+          name: detail.patient_name || displayName,
+          last_name: detail.patient_last_name || "",
+          age: detail.patient_age ?? undefined,
+          gender: detail.patient_gender || "Other",
+          phone: detail.patient_phone || undefined,
+        },
+        `Transferred from ER (${detail.visit_no}) to ${wardName}. Handover: ${notes}`,
+        7
+      );
+      ErDatabase.addTimelineEvent(detail.id, {
+        event_type: "patient_transferred",
+        event_name: `Transferred to ${wardName} (${bedLabel})`,
+        notes: `Handover notes: ${notes}`,
+        logged_by: "Staff RN",
+      });
+      ErDatabase.updateVisit(detail.id, { status: "closed", closed_at: new Date().toISOString() });
+      setNotice({ type: "success", message: `Patient ${displayName} transferred to ${wardName} (${bedLabel}) successfully.` });
+      setShowWardBedModal(false);
+      onRefresh();
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Failed to transfer to ward." });
+    }
+  };
+
+  // Step 15C: Execute ICU Critical Care Bed Allocation & Transfer
+  const handleExecuteIcuTransfer = (selectedBedId: number, notes: string) => {
+    try {
+      const bed = BedDatabase.load().find((b) => b.id === selectedBedId);
+      const icuUnit = bed ? bed.ward : "Trauma & Surgical ICU";
+      const bedLabel = bed ? `${bed.ward} (Room ${bed.room_no} / Bed ${bed.bed_no})` : `ICU Bed #${selectedBedId}`;
+
+      BedDatabase.assignBed(
+        selectedBedId,
+        {
+          patient_id: detail.patient_id || `P-${detail.id}`,
+          name: detail.patient_name || displayName,
+          last_name: detail.patient_last_name || "",
+          age: detail.patient_age ?? undefined,
+          gender: detail.patient_gender || "Other",
+          phone: detail.patient_phone || undefined,
+        },
+        `Emergency ICU transfer from ER (${detail.visit_no}). Critical care handover: ${notes}`,
+        10
+      );
+      ErDatabase.addTimelineEvent(detail.id, {
+        event_type: "patient_transferred",
+        event_name: `Critical Care Transfer to ${icuUnit} (${bedLabel})`,
+        notes: `Critical care handover notes: ${notes}`,
+        logged_by: "Staff RN",
+      });
+      ErDatabase.updateVisit(detail.id, { status: "closed", closed_at: new Date().toISOString() });
+      setNotice({ type: "success", message: `Patient ${displayName} transferred to ${icuUnit} (${bedLabel}) successfully.` });
+      setShowIcuBedModal(false);
+      onRefresh();
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Failed to transfer to ICU." });
+    }
+  };
+
+  const handleGenerateErBill = () => {
+    try {
+      // 1. Gather all staged unbilled department charges for this encounter
+      const stagedDeptCharges = BillingDatabase.getDepartmentCharges().filter(
+        (d) =>
+          d.department === "Emergency" &&
+          ((detail.visit_no && d.encounterId === detail.visit_no) ||
+           (curPatientId && d.patientId === curPatientId))
+      );
+
+      const billItems: any[] = [];
+
+      // Add items from staged department charges first
+      stagedDeptCharges.forEach((dept) => {
+        (dept.items || []).forEach((it) => {
+          billItems.push({ ...it });
+        });
+      });
+
+      // 2. Charted treatments / medications not already in billItems
+      if (detail.treatments && detail.treatments.length > 0) {
+        detail.treatments.forEach((t, idx) => {
+          const medName = t.description || t.intervention_type || "Emergency Treatment";
+          const tariff = resolveErItemPrice(medName, "medication");
+          const alreadyExists = billItems.some((b) => b.description.toLowerCase().includes(medName.toLowerCase()));
+          if (!alreadyExists) {
+            billItems.push({
+              id: `ITEM-MED-${Date.now()}-${idx}`,
+              description: `Treatment: ${medName}`,
+              category: tariff.category,
+              cptCode: tariff.cptCode,
+              quantity: 1,
+              unitPrice: tariff.unitPrice,
+              total: tariff.unitPrice,
+              insuranceCovered: 0,
+              patientPayable: tariff.unitPrice,
+            });
+          }
+        });
+      }
+
+      // 3. Charted diagnostic investigations not already in billItems
+      if (detail.investigations && detail.investigations.length > 0) {
+        detail.investigations.forEach((inv, idx) => {
+          const testName = inv.test_name || "Diagnostic Investigation";
+          const tariff = resolveErItemPrice(testName, "investigation");
+          const alreadyExists = billItems.some((b) => b.description.toLowerCase().includes(testName.toLowerCase()));
+          if (!alreadyExists) {
+            billItems.push({
+              id: `ITEM-INV-${Date.now()}-${idx}`,
+              description: `Diagnostic: ${testName} (${inv.priority || "STAT"})`,
+              category: tariff.category,
+              cptCode: tariff.cptCode,
+              quantity: 1,
+              unitPrice: tariff.unitPrice,
+              total: tariff.unitPrice,
+              insuranceCovered: 0,
+              patientPayable: tariff.unitPrice,
+            });
+          }
+        });
+      }
+
+      // 4. Charted timeline interventions / procedures not already in billItems
+      if (detail.timeline_events && detail.timeline_events.length > 0) {
+        detail.timeline_events.forEach((ev, idx) => {
+          if (ev.event_type === "intervention_given" || ev.event_type === "medication_given") {
+            const intvName = ev.event_name || ev.notes || "Emergency Procedure";
+            const tariff = resolveErItemPrice(intvName, "intervention");
+            const alreadyExists = billItems.some((b) => b.description.toLowerCase().includes(intvName.toLowerCase()));
+            if (!alreadyExists) {
+              billItems.push({
+                id: `ITEM-INTV-${Date.now()}-${idx}`,
+                description: `Procedure: ${intvName}`,
+                category: "Procedure / Surgery",
+                cptCode: tariff.cptCode,
+                quantity: 1,
+                unitPrice: tariff.unitPrice,
+                total: tariff.unitPrice,
+                insuranceCovered: 0,
+                patientPayable: tariff.unitPrice,
+              });
+            }
+          }
+        });
+      }
+
+      // 5. If no items were charted yet, provide standard base triage & bedside monitoring
+      if (billItems.length === 0) {
+        billItems.push(
+          {
+            id: `ITEM-${Date.now()}-1`,
+            description: `ER Emergency Resuscitation & Clinical Triage (${triageCatCode})`,
+            category: "Consultation",
+            cptCode: "99285",
+            quantity: 1,
+            unitPrice: 250,
+            total: 250,
+            insuranceCovered: 0,
+            patientPayable: 250,
+          },
+          {
+            id: `ITEM-${Date.now()}-2`,
+            description: "ER Bedside Monitoring & Immediate Nursing Care",
+            category: "Nursing",
+            cptCode: "99505",
+            quantity: 1,
+            unitPrice: 50,
+            total: 50,
+            insuranceCovered: 0,
+            patientPayable: 50,
+          }
+        );
+      }
+
+      let activeClaim = BillingDatabase.getClaims().find(
+        (c) =>
+          c.status !== "Voided" &&
+          (c.encounterId === detail.visit_no ||
+           (erClearance.invoiceNo && c.invoiceNo === erClearance.invoiceNo) ||
+           (erClearance.claimId && c.id === erClearance.claimId) ||
+           c.patientName === displayName)
+      );
+
+      if (!activeClaim) {
+        activeClaim = BillingDatabase.createClaim({
+          patientId: curPatientId || `UMR${Math.floor(100000 + Math.random() * 900000)}`,
+          patientName: displayName,
+          mrn: detail.patient_id?.replace("UMR", "") || "100245",
+          age: Number(curAge) || 40,
+          gender: curGender as any,
+          phone: curPhone || "+91 98765 43210",
+          department: "Emergency",
+          carePathway: `ER Emergency Stabilization (${triageCatCode})`,
+          encounterId: detail.visit_no,
+          dateOfService: new Date().toISOString().split("T")[0],
+          insuranceProvider: "Self-Pay",
+          status: "Accepted",
+          items: billItems,
+        });
+      } else {
+        activeClaim = BillingDatabase.updateClaim(activeClaim.id, {
+          items: billItems,
+          status: "Accepted",
+        });
+      }
+
+      // Mark all matching staged department charges as "Invoiced in Central Billing"
+      stagedDeptCharges.forEach((d) => {
+        BillingDatabase.createDepartmentCharge({
+          ...d,
+          status: "Invoiced in Central Billing",
+          invoiceId: activeClaim?.invoiceNo || activeClaim?.id,
+        });
+      });
+
+      // Log dispatch to timeline
+      ErDatabase.addTimelineEvent(detail.id, {
+        event_type: "intervention_given",
+        event_name: "Bill Dispatched to Central Billing",
+        notes: `ER clinical bill of ₹${activeClaim.patientPortion.toLocaleString("en-IN")} dispatched to Central Billing Desk (Invoice: ${activeClaim.invoiceNo}). Clearance pending.`,
+        logged_by: "Staff RN",
+      });
+
+      BillingDatabase.setPreselectedClaimForBilling(activeClaim.id || activeClaim.invoiceNo);
+
+      setNotice({
+        type: "success",
+        message: `📄 ER Bill Generated: Invoice ${activeClaim.invoiceNo} (₹${activeClaim.patientPortion.toLocaleString("en-IN")}) sent to Central Billing Department.`,
+      });
+      setBillingVersion((v) => v + 1);
+    } catch (e: any) {
+      setNotice({ type: "error", message: e.message || "Failed to generate bill." });
+    }
+  };
 
   const handleSavePatientDemographics = async () => {
     const patientId = detail.patient_id || detail.patient?.patient_id;
@@ -5143,36 +6464,6 @@ export function VisitDetailPanel({
       setActionSaving(false);
     }
   };
-
-  // Derive chief complaint & onset
-  const primaryComplaint = detail.complaints && detail.complaints.length > 0 ? detail.complaints[0] : null;
-  const chiefComplaint = primaryComplaint?.complaint || "Acute Emergency Presentation";
-  const onsetText = primaryComplaint?.duration
-    ? `${primaryComplaint.duration} before arrival`
-    : `${formatTimeStr(detail.arrival_at)} (at arrival)`;
-
-  // Derive attending doctor
-  const doctorName = detail.assigned_doctor_name ? detail.assigned_doctor_name.replace(/\s*\(.*\)/, "") : "Awaiting Doctor";
-  const doctorSpecialty = detail.assigned_specialty || (detail.assigned_doctor_name?.match(/\((.*)\)/)?.[1]) || "Emergency Medicine";
-
-  // Form state for Doctor Disposition
-  const [dispositionForm, setDispositionForm] = useState({
-    outcome: "admit_icu",
-    specialty: doctorSpecialty || "Cardiology",
-    reason: `Patient presenting with ${chiefComplaint}. Emergency stabilization completed in ER. Recommended for intensive monitoring and inpatient care.`,
-    priority: "High Priority",
-  });
-
-  // Derive triage info
-  const triageCatCode = detail.triage_category || detail.triage?.category || "B2";
-  const triageCatObj = categories.find((c) => c.category_code === triageCatCode);
-  const triageCatLabel = triageCatObj ? triageCatObj.category_label : "Emergent Priority";
-
-  // Derive bed / location
-  const location = detail.triage?.triage_bed_label || detail.triage_bed_label || "ER Triage Bay";
-
-  // Derive destination
-  const destination = getDestination(detail) || (detail.disposition ? `• ${formatOutcomeLabel(detail.disposition.outcome)}` : "• Under Assessment");
 
   // Nurse-maintained patient journey timeline events
   const activeTimelineEvents = useMemo(() => {
@@ -5248,8 +6539,10 @@ export function VisitDetailPanel({
       const symptomsText = `Complaints: ${chiefComplaint}. Onset: ${onsetText}. Vitals: BP ${latestVitals?.bp_systolic || 120}/${latestVitals?.bp_diastolic || 80}, HR ${latestVitals?.heart_rate || 80}, SpO2 ${latestVitals?.spo2 || 98}%.`;
       const aiEval = await ErDatabase.evaluateClinicalTriage(symptomsText, latestVitals || {});
       
-      const docName = aiEval.suggestedDoctor || (chiefComplaint.toLowerCase().includes("heart") || chiefComplaint.toLowerCase().includes("cardiac") || chiefComplaint.toLowerCase().includes("chest") ? "Dr. Vikram Seth (Cardiology / Critical Care)" : "Dr. Anita Roy (Emergency & Critical Care)");
-      const spec = aiEval.suggestedDepartment || (chiefComplaint.toLowerCase().includes("heart") ? "Cardiology" : "Emergency Medicine");
+      const fallbackDoc = getSuggestedDoctorForPatient(detail);
+      const fallbackSpec = getSuggestedSpecialtyForPatient(detail);
+      const docName = aiEval.suggestedDoctor || fallbackDoc;
+      const spec = aiEval.suggestedDepartment || fallbackSpec;
 
       ErDatabase.assignDoctor(detail.id, {
         doctor_name: docName,
@@ -5262,13 +6555,15 @@ export function VisitDetailPanel({
       });
       onRefresh();
     } catch {
+      const fallbackDoc = getSuggestedDoctorForPatient(detail);
+      const fallbackSpec = getSuggestedSpecialtyForPatient(detail);
       ErDatabase.assignDoctor(detail.id, {
-        doctor_name: "Dr. Vikram Seth (Cardiology / Critical Care)",
-        specialty: "Cardiology",
+        doctor_name: fallbackDoc,
+        specialty: fallbackSpec,
       });
       setNotice({
         type: "success",
-        message: "🤖 AI Clinical Engine: Assigned Dr. Vikram Seth (Cardiology) based on clinical presentation.",
+        message: `🤖 AI Clinical Engine: Assigned ${fallbackDoc} (${fallbackSpec}) based on clinical presentation.`,
       });
       onRefresh();
     } finally {
@@ -5416,7 +6711,31 @@ export function VisitDetailPanel({
         logged_by: quickMedication.administeredBy || "Staff RN",
       });
 
-      setNotice({ type: "success", message: `Medication ${medName} ${dose} administered successfully.` });
+      // Accrue charge automatically to Central Billing
+      const priced = resolveErItemPrice(medName, "medication");
+      const chargeRes = BillingDatabase.addErClinicalCharge(
+        detail.visit_no || detail.patient_id || String(detail.id),
+        {
+          patientId: detail.patient_id || detail.patient?.patient_id || "",
+          patientName: [detail.patient_name, detail.patient_last_name].filter(Boolean).join(" ") || detail.patient?.name || displayName || "Emergency Patient",
+          mrn: detail.patient_id?.replace(/\D/g, "") || "100245",
+          age: Number(detail.patient_age || detail.patient?.age || curAge) || 30,
+          gender: detail.patient_gender || detail.patient?.gender || (curGender as any) || "Other",
+          phone: detail.patient_phone || detail.patient?.phone || curPhone,
+        },
+        {
+          description: `Medication: ${medName} ${dose} (${route})`,
+          category: priced.category,
+          unitPrice: priced.unitPrice,
+          cptCode: priced.cptCode,
+          quantity: 1,
+        }
+      );
+
+      setNotice({
+        type: "success",
+        message: `💊 Medication ${medName} ${dose} administered • ₹${priced.unitPrice.toLocaleString("en-IN")} accrued to Central Billing (Total Due: ₹${chargeRes.newBalance.toLocaleString("en-IN")}).`,
+      });
       setQuickMedication({
         name: "",
         dose: "",
@@ -5439,11 +6758,46 @@ export function VisitDetailPanel({
     if (!quickIntervention.type.trim()) return;
     setActionSaving(true);
     try {
+      const typeStr = quickIntervention.type.trim();
+      const descStr = quickIntervention.description.trim();
       ErDatabase.addTreatment(detail.id, {
-        intervention_type: quickIntervention.type.trim(),
-        description: quickIntervention.description.trim() || undefined,
+        intervention_type: typeStr,
+        description: descStr || undefined,
       });
-      setNotice({ type: "success", message: "Emergency intervention logged." });
+
+      // Also add to patient journey timeline
+      ErDatabase.addTimelineEvent(detail.id, {
+        event_type: "intervention_given",
+        event_name: `Procedure: ${typeStr}`,
+        notes: descStr || undefined,
+        logged_by: "Staff RN",
+      });
+
+      // Accrue charge automatically to Central Billing
+      const priced = resolveErItemPrice(typeStr, "intervention");
+      const chargeRes = BillingDatabase.addErClinicalCharge(
+        detail.visit_no || detail.patient_id || String(detail.id),
+        {
+          patientId: detail.patient_id || detail.patient?.patient_id || "",
+          patientName: [detail.patient_name, detail.patient_last_name].filter(Boolean).join(" ") || detail.patient?.name || displayName || "Emergency Patient",
+          mrn: detail.patient_id?.replace(/\D/g, "") || "100245",
+          age: Number(detail.patient_age || detail.patient?.age || curAge) || 30,
+          gender: detail.patient_gender || detail.patient?.gender || (curGender as any) || "Other",
+          phone: detail.patient_phone || detail.patient?.phone || curPhone,
+        },
+        {
+          description: `Procedure: ${typeStr}`,
+          category: priced.category,
+          unitPrice: priced.unitPrice,
+          cptCode: priced.cptCode,
+          quantity: 1,
+        }
+      );
+
+      setNotice({
+        type: "success",
+        message: `➕ Procedure ${typeStr} logged • ₹${priced.unitPrice.toLocaleString("en-IN")} accrued to Central Billing (Total Due: ₹${chargeRes.newBalance.toLocaleString("en-IN")}).`,
+      });
       setQuickIntervention({ type: "", description: "" });
       setShowAddInterventionModal(false);
       onRefresh();
@@ -5463,7 +6817,40 @@ export function VisitDetailPanel({
         name: quickInvestigation.name,
         priority: quickInvestigation.priority,
       });
-      setNotice({ type: "success", message: `Diagnostic order dispatched: ${quickInvestigation.name}` });
+
+      // Also add to patient journey timeline
+      ErDatabase.addTimelineEvent(detail.id, {
+        event_type: "investigation_ordered",
+        event_name: `Diagnostic Test: ${quickInvestigation.name}`,
+        notes: `Priority: ${quickInvestigation.priority}. Specimen collected and dispatched to emergency lab.`,
+        logged_by: "Staff RN",
+      });
+
+      // Accrue charge automatically to Central Billing
+      const priced = resolveErItemPrice(quickInvestigation.name, "investigation");
+      const chargeRes = BillingDatabase.addErClinicalCharge(
+        detail.visit_no || detail.patient_id || String(detail.id),
+        {
+          patientId: detail.patient_id || detail.patient?.patient_id || "",
+          patientName: [detail.patient_name, detail.patient_last_name].filter(Boolean).join(" ") || detail.patient?.name || displayName || "Emergency Patient",
+          mrn: detail.patient_id?.replace(/\D/g, "") || "100245",
+          age: Number(detail.patient_age || detail.patient?.age || curAge) || 30,
+          gender: detail.patient_gender || detail.patient?.gender || (curGender as any) || "Other",
+          phone: detail.patient_phone || detail.patient?.phone || curPhone,
+        },
+        {
+          description: `Diagnostic Test: ${quickInvestigation.name} (${quickInvestigation.priority})`,
+          category: priced.category,
+          unitPrice: priced.unitPrice,
+          cptCode: priced.cptCode,
+          quantity: 1,
+        }
+      );
+
+      setNotice({
+        type: "success",
+        message: `🔬 Diagnostic order dispatched: ${quickInvestigation.name} • ₹${priced.unitPrice.toLocaleString("en-IN")} accrued to Central Billing (Total Due: ₹${chargeRes.newBalance.toLocaleString("en-IN")}).`,
+      });
       setShowInvestigationModal(false);
       onRefresh();
     } catch {
@@ -5753,17 +7140,46 @@ export function VisitDetailPanel({
             </div>
 
             <div className="border-t sm:border-t-0 sm:border-l border-[#DDE2EC] pt-3 sm:pt-0 sm:pl-6 shrink-0 w-full sm:w-auto">
-              <span className="text-[#64748B] block text-[11px] font-medium mb-1.5">Billing Clearance</span>
-              {erClearance.isCleared ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-bold bg-[#DCFCE7] text-[#15803D] border border-emerald-300 whitespace-nowrap" title={`Receipt: ${erClearance.receiptNo || "Paid & Cleared"}`}>
-                  <span className="w-2 h-2 rounded-full bg-[#15803D]"></span>
-                  ✅ Bill Cleared ({erClearance.receiptNo || "Paid"})
-                </span>
+              <span className="text-[#64748B] block text-[11.5px] font-medium mb-1.5">Billing Clearance</span>
+              {erClearance.status === "paid" ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-bold bg-[#DCFCE7] text-[#15803D] border border-emerald-300 whitespace-nowrap" title={`Receipt: ${erClearance.receiptNo || "Paid & Cleared"}`}>
+                    <span className="w-2 h-2 rounded-full bg-[#15803D]"></span>
+                    <span>✅ Cleared</span>
+                    {erClearance.receiptNo && (
+                      <span className="text-[11px] font-normal text-emerald-800">({erClearance.receiptNo})</span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleOpenReceipt}
+                    className="px-2 py-0.5 bg-white hover:bg-emerald-50 text-emerald-800 rounded border border-emerald-300 text-[11px] font-bold cursor-pointer shadow-2xs transition-colors"
+                  >
+                    🧾 Receipt
+                  </button>
+                </div>
+              ) : erClearance.status === "due" ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FCD34D] whitespace-nowrap shadow-2xs" title="Bill dispatched to Central Billing. Payment pending.">
+                    <span className="w-2 h-2 rounded-full bg-[#B45309]"></span>
+                    <span>⏳ Pending: ₹{erClearance.balanceDue.toLocaleString("en-IN")}</span>
+                  </span>
+                </div>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-bold bg-[#FEF2F2] text-[#B91C1C] border border-red-300 whitespace-nowrap" title="Unsettled ER bill. Payment required at Central Billing prior to discharge/transfer.">
-                  <span className="w-2 h-2 rounded-full bg-[#B91C1C] animate-pulse"></span>
-                  🔒 Due: ₹{erClearance.balanceDue.toLocaleString("en-IN")}
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-medium bg-[#F1F5F9] text-[#475569] border border-slate-300 whitespace-nowrap" title="Active clinical care. Staged unbilled charges in ER.">
+                    <span className="w-2 h-2 rounded-full bg-[#94A3B8]"></span>
+                    <span>Unbilled: ₹{(erClearance.unbilledAmount || 0).toLocaleString("en-IN")}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleGenerateErBill}
+                    className="px-2.5 py-1 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white rounded text-[11.5px] font-bold cursor-pointer shadow-2xs flex items-center gap-1 transition-colors"
+                    title="Generate ER bill and send to Central Billing Department"
+                  >
+                    <span>📤 Send to Billing</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -7192,6 +8608,19 @@ export function VisitDetailPanel({
               </div>
             </div>
 
+            {quickMedication.name.trim() && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded p-2.5 text-[11.5px] flex items-center justify-between text-emerald-950 animate-in fade-in">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <span>💳</span>
+                  <span>Central Billing Accrual:</span>
+                  <span className="font-bold">₹{resolveErItemPrice(quickMedication.name, "medication").unitPrice.toLocaleString("en-IN")}</span>
+                </span>
+                <span className="text-[10.5px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold border border-emerald-300">
+                  {resolveErItemPrice(quickMedication.name, "medication").cptCode || "CPT 99070"}
+                </span>
+              </div>
+            )}
+
             <div className="flex items-center justify-between pt-3 border-t border-slate-200">
               <button
                 type="button"
@@ -7318,6 +8747,19 @@ export function VisitDetailPanel({
               </div>
             </div>
 
+            {quickIntervention.type.trim() && (
+              <div className="bg-teal-50 border border-teal-200 rounded p-2.5 text-[11.5px] flex items-center justify-between text-teal-950 animate-in fade-in">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <span>💳</span>
+                  <span>Central Billing Accrual:</span>
+                  <span className="font-bold">₹{resolveErItemPrice(quickIntervention.type, "intervention").unitPrice.toLocaleString("en-IN")}</span>
+                </span>
+                <span className="text-[10.5px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded font-bold border border-teal-300">
+                  {resolveErItemPrice(quickIntervention.type, "intervention").cptCode || "CPT 99285"}
+                </span>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
               <button
                 onClick={() => setShowAddInterventionModal(false)}
@@ -7381,6 +8823,19 @@ export function VisitDetailPanel({
                 </select>
               </div>
             </div>
+
+            {quickInvestigation.name && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-2.5 text-[11.5px] flex items-center justify-between text-amber-950 animate-in fade-in">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <span>💳</span>
+                  <span>Central Billing Accrual:</span>
+                  <span className="font-bold">₹{resolveErItemPrice(quickInvestigation.name, "investigation").unitPrice.toLocaleString("en-IN")}</span>
+                </span>
+                <span className="text-[10.5px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold border border-amber-300">
+                  {resolveErItemPrice(quickInvestigation.name, "investigation").category} ({resolveErItemPrice(quickInvestigation.name, "investigation").cptCode || "CPT 80053"})
+                </span>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
               <button
@@ -7612,15 +9067,17 @@ export function VisitDetailPanel({
                 </div>
                 <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase">Cleared</span>
               </div>
-            ) : (
+            ) : erClearance.status === "due" ? (
               <div className="p-3 bg-amber-50 border border-amber-300 rounded text-[12px] space-y-2">
-                <div className="flex items-start gap-2">
-                  <span className="text-base">🔒</span>
-                  <div>
-                    <strong className="text-amber-900 block font-bold">Central Billing Clearance Required Prior to Transfer / Discharge</strong>
-                    <p className="text-amber-800 text-[11.5px] mt-0.5">
-                      Patient has an outstanding ER balance of <strong className="text-red-700 font-mono">₹{erClearance.balanceDue.toLocaleString("en-IN")}</strong>. Please direct patient or attendant to the Central Billing Cashier desk to settle charges before physical relocation.
-                    </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-base">🔒</span>
+                    <div>
+                      <strong className="text-amber-900 block font-bold">Central Billing Clearance Required Prior to Transfer / Discharge</strong>
+                      <p className="text-amber-800 text-[11.5px] mt-0.5">
+                        Patient has an outstanding ER balance of <strong className="text-red-700 font-mono">₹{erClearance.balanceDue.toLocaleString("en-IN")}</strong>. Pending payment at Central Billing. Please clear payment at the Central Billing Department before physical relocation.
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <div className="pt-1.5 border-t border-amber-200">
@@ -7630,6 +9087,41 @@ export function VisitDetailPanel({
                       checked={transferOverride}
                       onChange={(e) => setTransferOverride(e.target.checked)}
                       className="rounded border-amber-400 text-[#1B4FD8]"
+                    />
+                    <span>Emergency STAT Clinical Override (Immediate life-saving ICU/OT transfer without financial gate)</span>
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-50 border border-slate-300 rounded text-[12px] space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-base">⚪</span>
+                    <div>
+                      <strong className="text-slate-900 block font-bold">In Treatment (Unbilled ER Encounter)</strong>
+                      <p className="text-slate-700 text-[11.5px] mt-0.5">
+                        Patient charges have not been dispatched to Central Billing yet. Generate the bill and send to Central Billing prior to discharge/handover.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTransferModal(false);
+                      handleGenerateErBill();
+                    }}
+                    className="px-2.5 py-1 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white font-bold rounded text-[11px] shrink-0 cursor-pointer shadow-2xs flex items-center gap-1"
+                  >
+                    📄 Send to Billing Dept →
+                  </button>
+                </div>
+                <div className="pt-1.5 border-t border-slate-200">
+                  <label className="flex items-center gap-2 text-[11.5px] font-semibold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={transferOverride}
+                      onChange={(e) => setTransferOverride(e.target.checked)}
+                      className="rounded border-slate-400 text-[#1B4FD8]"
                     />
                     <span>Emergency STAT Clinical Override (Immediate life-saving ICU/OT transfer without financial gate)</span>
                   </label>
@@ -7873,6 +9365,47 @@ export function VisitDetailPanel({
             </div>
           </div>
         </div>
+      )}
+
+
+      {/* 8. Discharge Final Action Modal */}
+      {showDischargeModal && (
+        <ErDischargeModal
+          detail={detail}
+          erClearance={erClearance}
+          doctorName={doctorName}
+          onClose={() => setShowDischargeModal(false)}
+          onConfirm={handleExecuteDischarge}
+        />
+      )}
+
+      {/* 9. Inpatient Ward Bed Allocation & Transfer Modal */}
+      {showWardBedModal && (
+        <ErWardBedModal
+          detail={detail}
+          erClearance={erClearance}
+          onClose={() => setShowWardBedModal(false)}
+          onConfirm={handleExecuteWardTransfer}
+        />
+      )}
+
+      {/* 10. ICU Critical Care Bed Allocation & Transfer Modal */}
+      {showIcuBedModal && (
+        <ErIcuBedModal
+          detail={detail}
+          erClearance={erClearance}
+          onClose={() => setShowIcuBedModal(false)}
+          onConfirm={handleExecuteIcuTransfer}
+        />
+      )}
+
+      {/* 11. Standard Hospital Receipt Modal */}
+      {showReceiptModal && receiptClaim && (
+        <HospitalReceiptModal
+          claim={receiptClaim}
+          payment={receiptPayment || undefined}
+          onClose={() => setShowReceiptModal(false)}
+        />
       )}
     </div>
   );
@@ -8371,7 +9904,7 @@ function ErHandoverModal({
           </strong>
           <div><strong>Clinical Decision:</strong> {detail.disposition?.outcome?.toUpperCase() || "In Assessment"}</div>
           <div><strong>Clinical Reason:</strong> {detail.disposition?.clinical_reason || "—"}</div>
-          <div><strong>Assigned Doctor:</strong> {detail.assigned_doctor_name ? `Dr. ${detail.assigned_doctor_name} (${detail.assigned_specialty})` : "ER Covering Staff"}</div>
+          <div><strong>Assigned Doctor:</strong> {detail.assigned_doctor_name ? `${detail.assigned_doctor_name.startsWith("Dr.") ? detail.assigned_doctor_name : `Dr. ${detail.assigned_doctor_name}`}${detail.assigned_specialty ? ` (${detail.assigned_specialty})` : ""}` : "ER Covering Staff"}</div>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
@@ -9202,12 +10735,54 @@ function AddTreatmentForm({
     }
     setSaving(true);
     try {
-      await apiFetch(`/api/er/visits/${visitId}/treatments`, {
-        method: "POST",
-        body: JSON.stringify({
-          intervention_type: interventionType,
-          description: description || undefined,
-        }),
+      const label = INTERVENTION_LABELS[interventionType] || interventionType;
+      const priced = resolveErItemPrice(label, "intervention");
+
+      ErDatabase.addTreatment(visitId, {
+        intervention_type: label,
+        description: description || undefined,
+      });
+
+      ErDatabase.addTimelineEvent(visitId, {
+        event_type: "intervention_given",
+        event_name: `Procedure: ${label}`,
+        notes: description || undefined,
+        logged_by: "Staff RN",
+      });
+
+      const chargeRes = BillingDatabase.addErClinicalCharge(
+        String(visitId),
+        {
+          patientId: `P-${visitId}`,
+          patientName: "Emergency Patient",
+          mrn: String(visitId),
+          age: 30,
+          gender: "Other",
+        },
+        {
+          description: `Procedure: ${label}`,
+          category: priced.category,
+          unitPrice: priced.unitPrice,
+          cptCode: priced.cptCode,
+          quantity: 1,
+        }
+      );
+
+      try {
+        await apiFetch(`/api/er/visits/${visitId}/treatments`, {
+          method: "POST",
+          body: JSON.stringify({
+            intervention_type: interventionType,
+            description: description || undefined,
+          }),
+        });
+      } catch {
+        // Standalone offline store already saved above
+      }
+
+      setNotice({
+        type: "success",
+        message: `Procedure ${label} recorded • ₹${priced.unitPrice.toLocaleString("en-IN")} accrued to Central Billing (Total Due: ₹${chargeRes.newBalance.toLocaleString("en-IN")}).`,
       });
       setInterventionType("");
       setDescription("");
@@ -9252,6 +10827,12 @@ function AddTreatmentForm({
           {saving ? "Logging..." : "Log Intervention"}
         </Button>
       </div>
+      {interventionType && (
+        <div style={{ marginTop: "0.4rem", fontSize: "0.78rem", color: "#065f46", fontWeight: 600, background: "#ecfdf5", padding: "0.35rem 0.65rem", borderRadius: "6px", display: "inline-flex", alignItems: "center", gap: "0.35rem", border: "1px solid #a7f3d0" }}>
+          <span>💳</span>
+          <span>Auto-accrues ₹{resolveErItemPrice(INTERVENTION_LABELS[interventionType] || interventionType, "intervention").unitPrice.toLocaleString("en-IN")} to Central Billing ({resolveErItemPrice(INTERVENTION_LABELS[interventionType] || interventionType, "intervention").cptCode})</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -9651,7 +11232,7 @@ function ErLamaModal({
   const [signedBy, setSignedBy] = useState(detail.patient?.guardian_name || patientFullName);
   const [relation, setRelation] = useState(detail.patient?.guardian_name ? "Guardian / Relative" : "Self (Patient)");
   const [phone, setPhone] = useState(detail.patient?.emergency_contact || detail.patient?.phone || "");
-  const [witnessDoctor, setWitnessDoctor] = useState(detail.assigned_doctor_name || "Dr. G. Suryanarayana");
+  const [witnessDoctor, setWitnessDoctor] = useState(detail.assigned_doctor_name || getSuggestedDoctorForPatient(detail));
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -9836,7 +11417,7 @@ function ErConsentModal({
   const [signedBy, setSignedBy] = useState(detail.patient?.guardian_name || patientFullName);
   const [relation, setRelation] = useState(detail.patient?.guardian_name ? "Guardian / Relative" : "Self (Patient)");
   const [phone, setPhone] = useState(detail.patient?.emergency_contact || detail.patient?.phone || "");
-  const [witnessDoctor, setWitnessDoctor] = useState(detail.assigned_doctor_name || "Dr. G. Suryanarayana");
+  const [witnessDoctor, setWitnessDoctor] = useState(detail.assigned_doctor_name || getSuggestedDoctorForPatient(detail));
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Real-world consents are often paper-first -- staff may tick this
