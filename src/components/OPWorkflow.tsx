@@ -79,36 +79,13 @@ export interface DoctorProfileInfo {
   nextSlot: string;
 }
 
-const INITIAL_DOCTORS: DoctorProfileInfo[] = [
-  // General Medicine
-  { id: "D2", name: "Dr. Vikram Malhotra", specialty: "General Medicine", gender: "Male", status: "Available", room: "Room 111", workload: 1, qualifications: "MBBS, MD (Internal Med)", timing: "09:00 AM - 02:00 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D1", name: "Dr. Ramesh Kumar", specialty: "General Medicine", gender: "Male", status: "In Consultation", room: "Room 103", workload: 3, qualifications: "MBBS, MD (General Med)", timing: "09:30 AM - 03:00 PM", nextSlot: "11:20 AM (~15m wait)" },
-  { id: "D4", name: "Dr. Sunita Rao", specialty: "General Medicine", gender: "Female", status: "Available", room: "Room 115", workload: 1, qualifications: "MBBS, DNB (Medicine)", timing: "08:30 AM - 01:30 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D3", name: "Dr. Anita Desai", specialty: "General Medicine", gender: "Female", status: "In Consultation", room: "Room 101", workload: 2, qualifications: "MBBS, MD, FICP", timing: "10:00 AM - 04:00 PM", nextSlot: "11:30 AM (~10m wait)" },
-  
-  // Orthopedics
-  { id: "D6", name: "Dr. Sanjay Kapoor", specialty: "Orthopedics", gender: "Male", status: "Available", room: "Room 116", workload: 1, qualifications: "MBBS, MS (Ortho), DNB", timing: "09:00 AM - 02:00 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D5", name: "Dr. David Anderson", specialty: "Orthopedics", gender: "Male", status: "In Consultation", room: "Room 112", workload: 3, qualifications: "MD, FRCS (Ortho)", timing: "10:00 AM - 03:30 PM", nextSlot: "11:45 AM (~20m wait)" },
-  { id: "D8", name: "Dr. Pooja Menon", specialty: "Orthopedics", gender: "Female", status: "Available", room: "Room 118", workload: 1, qualifications: "MBBS, MS (Ortho)", timing: "09:00 AM - 01:00 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D7", name: "Dr. Elena Vance", specialty: "Orthopedics", gender: "Female", status: "In Consultation", room: "Room 114", workload: 2, qualifications: "MD (Ortho), Fellowship Spine", timing: "09:30 AM - 02:30 PM", nextSlot: "11:15 AM (~10m wait)" },
-
-  // Cardiology
-  { id: "D10", name: "Dr. Arjun Mehta", specialty: "Cardiology", gender: "Male", status: "Available", room: "Room 107", workload: 1, qualifications: "MBBS, MD, DM (Cardiology)", timing: "08:30 AM - 01:30 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D9", name: "Dr. Rajesh Sharma", specialty: "Cardiology", gender: "Male", status: "In Consultation", room: "Room 104", workload: 2, qualifications: "MD, DM, FACC", timing: "09:00 AM - 02:30 PM", nextSlot: "11:10 AM (~10m wait)" },
-  { id: "D12", name: "Dr. Ananya Roy", specialty: "Cardiology", gender: "Female", status: "Available", room: "Room 110", workload: 1, qualifications: "MBBS, MD, DNB (Cardiology)", timing: "09:00 AM - 01:00 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D11", name: "Dr. Sarah Jenkins", specialty: "Cardiology", gender: "Female", status: "In Consultation", room: "Room 102", workload: 2, qualifications: "MD, DM (Interventional Cardio)", timing: "10:00 AM - 04:00 PM", nextSlot: "11:25 AM (~12m wait)" },
-
-  // Pulmonology
-  { id: "D14", name: "Dr. Rohan Joshi", specialty: "Pulmonology", gender: "Male", status: "Available", room: "Room 120", workload: 1, qualifications: "MBBS, MD (Pulmonary Med)", timing: "09:00 AM - 02:00 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D13", name: "Dr. Michael Chen", specialty: "Pulmonology", gender: "Male", status: "In Consultation", room: "Room 108", workload: 3, qualifications: "MD, FCCP (Pulmonology)", timing: "09:30 AM - 03:00 PM", nextSlot: "11:35 AM (~18m wait)" },
-  { id: "D16", name: "Dr. Neha Gupta", specialty: "Pulmonology", gender: "Female", status: "Available", room: "Room 122", workload: 1, qualifications: "MBBS, DNB (Respiratory)", timing: "08:30 AM - 01:30 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D15", name: "Dr. Maya Lin", specialty: "Pulmonology", gender: "Female", status: "In Consultation", room: "Room 109", workload: 2, qualifications: "MD, Fellowship Critical Care & Pulmo", timing: "10:00 AM - 03:30 PM", nextSlot: "11:15 AM (~10m wait)" },
-
-  // Pediatrics
-  { id: "D18", name: "Dr. Siddharth Sen", specialty: "Pediatrics", gender: "Male", status: "Available", room: "Room 124", workload: 1, qualifications: "MBBS, MD (Pediatrics), DCH", timing: "09:00 AM - 02:00 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D17", name: "Dr. Amit Verma", specialty: "Pediatrics", gender: "Male", status: "In Consultation", room: "Room 106", workload: 2, qualifications: "MBBS, DNB (Pediatrics)", timing: "09:30 AM - 02:30 PM", nextSlot: "11:20 AM (~12m wait)" },
-  { id: "D20", name: "Dr. Kavita Reddy", specialty: "Pediatrics", gender: "Female", status: "Available", room: "Room 126", workload: 1, qualifications: "MBBS, MD (Pediatrics), FIAP", timing: "08:30 AM - 01:30 PM", nextSlot: "Immediate (~5m wait)" },
-  { id: "D19", name: "Dr. Priya Patel", specialty: "Pediatrics", gender: "Female", status: "In Consultation", room: "Room 105", workload: 2, qualifications: "MD (Pediatrics), Fellowship Neonatology", timing: "10:00 AM - 04:00 PM", nextSlot: "11:15 AM (~10m wait)" },
+const INITIAL_DOCTORS: any[] = [
+  { id: "D1", name: "Dr. Sarah Jenkins", specialty: "Cardiology", gender: "Female", status: "Available", room: "Room 102", workload: 3 },
+  { id: "D2", name: "Dr. Rajesh Sharma", specialty: "Cardiology", gender: "Male", status: "Busy", room: "Room 104", workload: 6 },
+  { id: "D3", name: "Dr. Michael Chen", specialty: "Pulmonology", gender: "Male", status: "Available", room: "Room 108", workload: 2 },
+  { id: "D4", name: "Dr. Anita Desai", specialty: "General Medicine", gender: "Female", status: "Available", room: "Room 101", workload: 4 },
+  { id: "D5", name: "Dr. David Anderson", specialty: "Orthopedics", gender: "Male", status: "Busy", room: "Room 112", workload: 5 },
+  { id: "D6", name: "Dr. Priya Patel", specialty: "Pediatrics", gender: "Female", status: "Available", room: "Room 105", workload: 1 },
 ];
 
 const DOCTOR_WAITING_QUEUES: Record<string, { name: string; age: number; sex: string; umr: string; token: string; complaint: string; status: string }[]> = {

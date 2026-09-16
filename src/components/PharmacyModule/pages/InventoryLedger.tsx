@@ -1,4 +1,4 @@
-﻿import { usePharmacyData } from "../data/usePharmacyData";
+import { usePharmacyData } from "../data/usePharmacyData";
 import { useState } from "react";
 import { Search, Filter, Download, ChevronDown } from "lucide-react";
 import PageHeader from "../components/PageHeader";
@@ -16,44 +16,73 @@ const typeColors: Record<string, { color: string; bg: string }> = {
 interface InventoryLedgerProps { onNavigate: (page: string) => void }
 
 export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
-  const { batches, bills, medicines } = usePharmacyData();
+  const { stockTransactions, medicines, batches, bills } = usePharmacyData();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
 
-  // Synthesize ledger data from batches (Purchases) and bills (Sales)
-  const ledgerData: any[] = [];
   
-  batches.forEach(b => {
-    const med = medicines.find(m => m.id === b.medicineId);
+  const ledgerData: any[] = [];
+  const handledBatches = new Set<string>();
+  const handledBills = new Set<string>();
+  
+  stockTransactions.forEach(tx => {
+    handledBatches.add(tx.batchId);
+    if (tx.billId) handledBills.add(tx.billId);
+    
+    const med = medicines.find(m => m.id === tx.medicineId);
+    let typeName = tx.transactionType;
+    if (typeName === "PURCHASE_RECEIVED") typeName = "Purchase";
+    if (typeName === "DISPENSED") typeName = "Sale";
+    if (typeName === "RETURNED") typeName = "Return";
+    
+    const isIn = ["PURCHASE_RECEIVED", "RETURNED", "TRANSFER_IN", "ADJUSTMENT"].includes(tx.transactionType) && (tx.transactionType !== "ADJUSTMENT" || tx.quantity > 0);
+    const isOut = ["DISPENSED", "EXPIRED", "DAMAGED", "TRANSFER_OUT"].includes(tx.transactionType) || (tx.transactionType === "ADJUSTMENT" && tx.quantity < 0);
+    
     ledgerData.push({
-      date: new Date(b.createdAt || new Date()).toLocaleString(),
-      ref: b.grnId || "SYS",
+      date: new Date(tx.date).toLocaleString(),
+      ref: tx.billId || tx.reason?.split(":")[1]?.trim() || tx.id.substring(0, 8),
       medicine: med ? med.name : "Unknown",
-      batch: b.batchNumber,
-      type: "Purchase",
-      opening: 0,
-      in: b.quantity,
-      out: 0,
-      balance: b.quantity,
-      user: "SYS"
+      batch: tx.batchId,
+      type: typeName,
+      in: isIn ? Math.abs(tx.quantity) : 0,
+      out: isOut ? Math.abs(tx.quantity) : 0,
+      user: tx.userId
     });
   });
 
-  bills.forEach(bill => {
-    bill.items.forEach(item => {
+  // Synthesize legacy data for batches that have no transaction
+  batches.forEach(b => {
+    if (!handledBatches.has(b.id)) {
+      const med = medicines.find(m => m.id === b.medicineId);
       ledgerData.push({
-        date: new Date(bill.billDate).toLocaleString(),
-        ref: bill.id,
-        medicine: item.medicineName,
-        batch: item.batchNumber,
-        type: "Sale",
-        opening: 0,
-        in: 0,
-        out: item.quantity,
-        balance: 0,
-        user: bill.pharmacistId
+        date: new Date(b.createdAt || new Date()).toLocaleString(),
+        ref: b.grnId || "SYS",
+        medicine: med ? med.name : "Unknown",
+        batch: b.batchNumber,
+        type: "Purchase",
+        in: b.quantity,
+        out: 0,
+        user: "SYS"
       });
-    });
+    }
+  });
+
+  // Synthesize legacy data for bills that have no transaction
+  bills.forEach(bill => {
+    if (!handledBills.has(bill.id)) {
+      bill.items.forEach(item => {
+        ledgerData.push({
+          date: new Date(bill.createdAt).toLocaleString(),
+          ref: bill.id,
+          medicine: item.medicineName,
+          batch: item.batchNumber,
+          type: "Sale",
+          in: 0,
+          out: item.quantity,
+          user: bill.pharmacistId
+        });
+      });
+    }
   });
 
   // Sort by date descending

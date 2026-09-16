@@ -2,24 +2,28 @@ import { useState } from "react";
 import { Search, Download, Printer, RefreshCcw, Eye, X } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
-
-const invoices: any[] = []
-
-const invoiceItems: any[] = []
+import InvoicePrintModal from "../components/InvoicePrintModal";
+import { usePharmacyData } from "../data/usePharmacyData";
 
 interface SalesReturnsProps { onNavigate: (page: string) => void }
 
 export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
+  const { bills } = usePharmacyData();
   const [view, setView] = useState<"sales" | "returns">("sales");
-  const [selectedInv, setSelectedInv] = useState<typeof invoices[0] | null>(null);
+  const [selectedInv, setSelectedInv] = useState<any | null>(null);
+  const [printInv, setPrintInv] = useState<any | null>(null);
   const [search, setSearch] = useState("");
 
-  const filtered = invoices.filter(inv =>
-    !search || inv.id.includes(search) || inv.patient.toLowerCase().includes(search.toLowerCase())
+  const filtered = bills.filter(inv =>
+    !search || inv.billNumber.includes(search) || inv.patientName.toLowerCase().includes(search.toLowerCase())
   );
+  
+  const todayRevenue = bills.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+  const avgBill = bills.length > 0 ? (todayRevenue / bills.length) : 0;
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-5 relative">
+      {printInv && <InvoicePrintModal bill={printInv} onClose={() => setPrintInv(null)} />}
       <PageHeader
         breadcrumbs={[{ label: "Pharmacy" }, { label: "Sales" }, { label: "Sales & Returns" }]}
         title="Sales & Returns"
@@ -37,10 +41,10 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
       {/* Summary */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Today's Revenue", value: "₹0", color: "#1B4FD8" },
-          { label: "Transactions", value: "0", color: "#16a34a" },
+          { label: "Total Revenue", value: "₹" + todayRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#1B4FD8" },
+          { label: "Transactions", value: bills.length.toString(), color: "#16a34a" },
           { label: "Refunds", value: "₹0", color: "#dc2626" },
-          { label: "Avg. Bill Value", value: "₹0", color: "#7c3aed" },
+          { label: "Avg. Bill Value", value: "₹" + avgBill.toLocaleString("en-IN", { maximumFractionDigits: 0 }), color: "#7c3aed" },
         ].map(s => (
           <div key={s.label} className="bg-white rounded p-4 border border-[#DDE2EC]">
             <p className="text-[11px] text-[#64748B] font-medium">{s.label}</p>
@@ -76,27 +80,25 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
             <tbody>
               {filtered.map(inv => (
                 <tr key={inv.id}>
-                  <td className="font-mono text-[12px] font-semibold" style={{ color: "#1B4FD8" }}>{inv.id}</td>
-                  <td className="text-[12px] text-[#64748B] whitespace-nowrap">{inv.date}</td>
-                  <td className="font-medium text-[13px] text-[#0F1624]">{inv.patient}</td>
-                  <td className="text-[13px] text-[#334155]">{inv.pharmacist}</td>
-                  <td className="text-[13px] text-center">{inv.items}</td>
+                  <td className="font-mono text-[12px] font-semibold" style={{ color: "#1B4FD8" }}>{inv.billNumber}</td>
+                  <td className="text-[12px] text-[#64748B] whitespace-nowrap">{new Date(inv.date || Date.now()).toLocaleString()}</td>
+                  <td className="font-medium text-[13px] text-[#0F1624]">{inv.patientName}</td>
+                  <td className="text-[13px] text-[#334155]">{inv.doctorName}</td>
+                  <td className="text-[13px] text-center">{inv.items ? inv.items.length : 0}</td>
                   <td>
                     <span className="text-[11px] font-medium px-2 py-0.5 rounded" style={{ background: "#F0F2F5", color: "#475569" }}>
-                      {inv.payment}
+                      {inv.paymentMode || "Cash"}
                     </span>
                   </td>
-                  <td className="text-[13px] font-semibold text-[#0F1624]">₹{inv.total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                  <td><StatusBadge status={inv.status} size="sm" /></td>
+                  <td className="text-[13px] font-semibold text-[#0F1624]">₹{(inv.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                  <td><StatusBadge status="completed" size="sm" /></td>
                   <td>
                     <div className="flex items-center gap-1">
                       <button onClick={() => setSelectedInv(inv)} className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B] transition-colors"><Eye size={13} /></button>
-                      <button className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B] transition-colors"><Printer size={13} /></button>
-                      {inv.status === "completed" && (
-                        <button onClick={() => setView("returns")} className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded" style={{ background: "#faf5ff", color: "#7c3aed" }}>
-                          <RefreshCcw size={10} /> Return
-                        </button>
-                      )}
+                      <button onClick={() => setPrintInv(inv)} className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B] transition-colors"><Printer size={13} /></button>
+                      <button onClick={() => alert("Refunds are out of scope for this demo")} className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded" style={{ background: "#faf5ff", color: "#7c3aed" }}>
+                        <RefreshCcw size={10} /> Return
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -138,43 +140,56 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
           <div className="bg-white rounded shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#F0F2F5]">
               <div>
-                <p className="font-bold text-[16px] text-[#0F1624]">{selectedInv.id}</p>
-                <p className="text-[12px] text-[#64748B]">{selectedInv.date} · {selectedInv.patient}</p>
+                <p className="font-bold text-[16px] text-[#0F1624]">{selectedInv.billNumber}</p>
+                <p className="text-[12px] text-[#64748B]">{new Date(selectedInv.createdAt || selectedInv.date).toLocaleString()} · {selectedInv.patientName}</p>
               </div>
               <button onClick={() => setSelectedInv(null)} className="p-2 rounded hover:bg-[#F0F2F5] text-[#94A3B8]"><X size={16} /></button>
             </div>
             <div className="flex-1 overflow-y-auto">
               <div className="px-6 py-4 border-b border-[#F0F2F5] grid grid-cols-2 gap-3 text-[13px]">
-                <div><span className="text-[#94A3B8]">Pharmacist</span><p className="font-medium text-[#0F1624]">{selectedInv.pharmacist}</p></div>
-                <div><span className="text-[#94A3B8]">Payment</span><p className="font-medium text-[#0F1624]">{selectedInv.payment}</p></div>
-                <div><span className="text-[#94A3B8]">Items</span><p className="font-medium text-[#0F1624]">{selectedInv.items}</p></div>
-                <div><span className="text-[#94A3B8]">Status</span><StatusBadge status={selectedInv.status} size="sm" /></div>
+                <div><span className="text-[#94A3B8]">Pharmacist</span><p className="font-medium text-[#0F1624]">{selectedInv.createdBy || "Pharmacist"}</p></div>
+                <div><span className="text-[#94A3B8]">Payment</span><p className="font-medium text-[#0F1624]">{selectedInv.paymentMode || "Cash"}</p></div>
+                <div><span className="text-[#94A3B8]">Items</span><p className="font-medium text-[#0F1624]">{selectedInv.items?.length || 0}</p></div>
+                <div><span className="text-[#94A3B8]">Status</span><StatusBadge status="completed" size="sm" /></div>
               </div>
-              <table>
-                <thead><tr><th>Medicine</th><th>Qty</th><th>MRP</th><th>Disc%</th><th>Total</th></tr></thead>
-                <tbody>
-                  {invoiceItems.slice(0, selectedInv.items).map((item, i) => (
+              <table className="w-full text-left">
+                <thead className="bg-[#F8FAFC]">
+                  <tr>
+                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase">Medicine</th>
+                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase">Qty</th>
+                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase">MRP</th>
+                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase">Disc%</th>
+                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0]">
+                  {(selectedInv.items || []).map((item: any, i: number) => {
+                    const qty = item.qty || item.quantity || 0;
+                    const mrp = item.mrp || item.unitPrice || 0;
+                    const discount = item.discount || 0;
+                    const total = (qty * mrp) * (1 - discount/100);
+                    return (
                     <tr key={i}>
-                      <td className="text-[13px] font-medium text-[#0F1624]">{item.medicine}</td>
-                      <td className="text-[13px]">{item.qty}</td>
-                      <td className="text-[13px]">₹{item.mrp}</td>
-                      <td className="text-[13px] text-[#d97706]">{item.discount}%</td>
-                      <td className="text-[13px] font-semibold">₹{item.total.toFixed(2)}</td>
+                      <td className="px-5 py-3 text-[13px] font-medium text-[#0F1624]">{item.medicine || item.medicineName}</td>
+                      <td className="px-5 py-3 text-[13px]">{qty}</td>
+                      <td className="px-5 py-3 text-[13px]">₹{mrp.toFixed(2)}</td>
+                      <td className="px-5 py-3 text-[13px] text-[#d97706]">{discount}%</td>
+                      <td className="px-5 py-3 text-[13px] font-semibold text-right">₹{total.toFixed(2)}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
               <div className="px-5 py-4 border-t border-[#F0F2F5] flex justify-end">
                 <div className="text-right">
                   <p className="text-[12px] text-[#64748B]">Grand Total</p>
-                  <p className="text-[20px] font-bold text-[#0F1624]">₹{selectedInv.total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[20px] font-bold text-[#0F1624]">₹{(selectedInv.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>
             <div className="p-5 border-t border-[#DDE2EC] flex gap-3">
-              <button className="flex items-center gap-1.5 flex-1 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors justify-center"><Printer size={13} /> Print</button>
-              <button className="flex items-center gap-1.5 flex-1 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors justify-center"><Download size={13} /> PDF</button>
-              {selectedInv.status === "completed" && <button className="flex-1 py-2.5 rounded text-white font-semibold text-[13px]" style={{ background: "#7c3aed" }}>Process Return</button>}
+              <button onClick={() => { setPrintInv(selectedInv); setSelectedInv(null); }} className="flex items-center gap-1.5 flex-1 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors justify-center"><Printer size={13} /> Print / Download</button>
+              {selectedInv.status === "completed" && <button onClick={() => alert("Refunds are out of scope for this demo")} className="flex-1 py-2.5 rounded text-white font-semibold text-[13px]" style={{ background: "#7c3aed" }}>Process Return</button>}
             </div>
           </div>
         </div>

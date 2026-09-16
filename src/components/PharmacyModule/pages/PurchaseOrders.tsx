@@ -1,4 +1,4 @@
-﻿import { usePharmacyData } from "../data/usePharmacyData";
+import { usePharmacyData } from "../data/usePharmacyData";
 import { PharmacyDatabase } from "../../../services/pharmacyDb";
 import { useState } from "react";
 import { Plus, Download, Eye, Send, Check, X, ChevronDown, Trash2 } from "lucide-react";
@@ -20,7 +20,7 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
   const [items, setItems] = useState<any[]>([]);
   const [medicineSearch, setMedicineSearch] = useState("");
 
-  const filtered = filter === "All" ? purchaseOrders : purchaseOrders.filter(po => po.status === filter.toLowerCase().replace(" ", "_"));
+  const filtered = filter === "All" ? purchaseOrders : purchaseOrders.filter(po => po.status === filter);
 
   const addItem = (med: any) => {
     setItems(prev => [...prev, { medicineId: med.id, name: med.name, qty: 100, price: med.price, gst: med.gst }]);
@@ -36,7 +36,10 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
       poDate,
       expectedDeliveryDate: expectedDate,
       status: status,
-      items: items.map(i => ({ medicineId: i.medicineId, quantity: i.qty, purchasePrice: i.price, taxPercentage: i.gst })),
+      items: items.map(i => {
+        const itemTotal = i.qty * i.price * (1 + i.gst/100);
+        return { medicineId: i.medicineId, quantity: i.qty, purchasePrice: i.price, taxPercentage: i.gst, discount: 0, totalAmount: itemTotal };
+      }),
       totalOrderValue: items.reduce((sum, i) => sum + (i.qty * i.price * (1 + i.gst/100)), 0),
       createdAt: new Date().toISOString(),
       createdBy: "SYS"
@@ -70,16 +73,19 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
 
       {/* Filter tabs */}
       <div className="flex items-center gap-2 flex-wrap">
-        {["All", "Draft", "Submitted", "Approved", "Ordered", "Received"].map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className="px-3 py-1.5 rounded text-[12px] font-medium transition-colors"
-            style={{ background: filter === f ? "#0F1624" : "#fff", color: filter === f ? "#fff" : "#64748B", border: "1px solid #DDE2EC" }}
-          >
-            {f}
-          </button>
-        ))}
+        {["All", "Draft", "Submitted", "Approved", "Ordered", "Received"].map(f => {
+          const count = f === "All" ? purchaseOrders.length : purchaseOrders.filter(po => po.status === f).length;
+          return (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className="px-3 py-1.5 rounded text-[12px] font-medium transition-colors"
+              style={{ background: filter === f ? "#0F1624" : "#fff", color: filter === f ? "#fff" : "#64748B", border: "1px solid #DDE2EC" }}
+            >
+              {f} <span className="opacity-70 ml-1 text-[11px]">({count})</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Table */}
@@ -95,7 +101,7 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
                 <td className="text-[13px] text-[#334155]">{po.supplier}</td>
                 <td className="text-[12px] text-[#64748B]">{po.poDate || po.date}</td>
                 <td className="text-[12px] text-[#64748B]">{po.expectedDeliveryDate || po.expected}</td>
-                <td className="text-[13px] font-semibold text-center">{po.items}</td>
+                <td className="text-[13px] font-semibold text-center">{po.itemsCount}</td>
                 <td className="text-[13px] font-semibold text-[#0F1624]">₹{(po.total || 0).toLocaleString("en-IN")}</td>
                 <td><StatusBadge status={po.status} size="sm" /></td>
                 <td>

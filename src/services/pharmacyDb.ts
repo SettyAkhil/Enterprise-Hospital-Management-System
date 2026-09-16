@@ -45,6 +45,8 @@ export interface AppSupplier {
   id: string;
   supplierName: string;
   contactInformation: string;
+  phone?: string;
+  email?: string;
   address: string;
   gstInformation: string;
   licenseDetails: string;
@@ -391,6 +393,19 @@ export class PharmacyDatabase {
   static saveUsers(users: AppUser[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
   }
+  static addUser(user: AppUser) {
+    const users = this.getUsers();
+    users.push(user);
+    this.saveUsers(users);
+  }
+  static updateUser(id: string, updates: Partial<AppUser>) {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === id);
+    if (idx > -1) {
+      users[idx] = { ...users[idx], ...updates };
+      this.saveUsers(users);
+    }
+  }
 
   static getNotifications(): AppNotification[] {
     if (typeof window === "undefined") return [];
@@ -398,6 +413,19 @@ export class PharmacyDatabase {
   }
   static saveNotifications(notifications: AppNotification[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+  }
+  static updateNotification(id: string, updates: Partial<AppNotification>) {
+    const notifs = this.getNotifications();
+    const idx = notifs.findIndex(n => n.id === id);
+    if (idx > -1) {
+      notifs[idx] = { ...notifs[idx], ...updates };
+      this.saveNotifications(notifs);
+    }
+  }
+  static deleteNotification(id: string) {
+    let notifs = this.getNotifications();
+    notifs = notifs.filter(n => n.id !== id);
+    this.saveNotifications(notifs);
   }
 
   static getAuditLogs(): AppAuditLog[] {
@@ -581,6 +609,12 @@ export class PharmacyDatabase {
     if (typeof window !== "undefined") window.localStorage.setItem(GRNS_KEY, JSON.stringify(grns));
   }
 
+  static addGRN(grn: AppGRN) {
+    const grns = this.getGRNs();
+    grns.push(grn);
+    this.saveGRNs(grns);
+  }
+
   // Stock Transactions
   static getStockTransactions(): AppStockTransaction[] {
     if (typeof window === "undefined") return [];
@@ -591,6 +625,12 @@ export class PharmacyDatabase {
   }
   static saveStockTransactions(txs: AppStockTransaction[]) {
     if (typeof window !== "undefined") window.localStorage.setItem(STOCK_TXS_KEY, JSON.stringify(txs));
+  }
+
+  static addTransaction(tx: AppStockTransaction) {
+    const txs = this.getStockTransactions();
+    txs.push(tx);
+    this.saveStockTransactions(txs);
   }
 
   // Prescriptions
