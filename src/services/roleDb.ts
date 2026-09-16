@@ -15,7 +15,7 @@ export interface AppUser {
   status?: "Active" | "Inactive";
 }
 
-const ROLES_STORAGE_KEY = "hospai_rbac_roles_v5";
+const ROLES_STORAGE_KEY = "hospai_rbac_roles_v8";
 const USERS_STORAGE_KEY = "hospai_rbac_users_v2";
 
 export const ALL_SYSTEM_MODULES = [
@@ -45,7 +45,7 @@ const INITIAL_ROLES: AppRole[] = [
     name: "Attending Physician / Doctor",
     allowedModules: [
       "dashboard", "doctor_portal", "patients", "appointments", "clinical", "chart", "emergency", "triage",
-      "icu", "inpatient", "op_nurse", "pharmacy", "pharmacy_dispensing", "pharmacy_rx", "pharmacy_ocr",
+      "icu", "inpatient", "op_nurse", "op_management", "pharmacy", "pharmacy_dispensing", "pharmacy_rx", "pharmacy_ocr",
       "pharmacy_medicine", "pharmacy_ledger", "pharmacy_expiry",
       "laboratory", "radiology", "intelligence", "dpi_ocr", "discharge"
     ]
@@ -54,7 +54,7 @@ const INITIAL_ROLES: AppRole[] = [
     id: "ROLE_RECEPTION",
     name: "Receptionist / Front Desk",
     allowedModules: [
-      "dashboard", "patients", "register", "appointments", "outpatient", "queue", "op_management",
+      "dashboard", "patients", "register", "appointments", "outpatient", "queue",
       // No op_nurse: vitals are the OP department's job, not the front desk's.
       "op_registration", "billing", "payments", "lab_billing", "laboratory"
     ]
@@ -78,7 +78,7 @@ const INITIAL_ROLES: AppRole[] = [
   {
     id: "ROLE_NURSE",
     name: "Registered Nurse",
-    allowedModules: ["dashboard", "inpatient", "nursing", "icu", "beds", "chart", "emergency", "triage", "op_nurse", "outpatient"]
+    allowedModules: ["dashboard", "inpatient", "nursing", "icu", "beds", "chart", "emergency", "triage", "op_nurse", "op_management", "queue", "outpatient"]
   },
   {
     id: "ROLE_PHARMACY_MANAGER",

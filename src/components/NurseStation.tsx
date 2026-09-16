@@ -87,6 +87,19 @@ export default function NurseStation({ nurseName = "OP Nurse" }: { nurseName?: s
     [encounters],
   );
 
+  // Ticks so the wait times on screen stay honest without a reload.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const waitMinutes = (e: DBOPEncounter) => {
+    const t = Date.parse(e.timestamps?.arrival || "");
+    return Number.isNaN(t) ? 0 : Math.max(0, Math.floor((now - t) / 60000));
+  };
+  const longestWait = waiting.reduce((m, e) => Math.max(m, waitMinutes(e)), 0);
+
   const selected = waiting.find(e => e.id === selectedId) || null;
 
   // Patients booked since this screen was opened. Reception triages and
@@ -126,12 +139,27 @@ export default function NurseStation({ nurseName = "OP Nurse" }: { nurseName?: s
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#F0F2F5]">
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3">
-        <h1 className="text-base font-semibold text-gray-900">OP Nurse Station</h1>
-        <p className="text-[11.5px] text-[#64748B]">
-          Take baseline vitals, then send the patient in to their doctor.
-          {" "}{waiting.length} waiting · {readyForDoctor.length} already with a doctor
-        </p>
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-base font-semibold text-gray-900">OP Nurse Station</h1>
+          <p className="text-[11.5px] text-[#64748B]">
+            Take baseline vitals, then send the patient in to their doctor.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {[
+            { label: "Waiting", value: waiting.length, tone: "text-[#B45309]", bg: "bg-[#FFFBEB] border-[#FDE68A]" },
+            { label: "Longest wait", value: longestWait, tone: "text-[#B91C1C]", bg: "bg-white border-[#DDE2EC]", suffix: "m" },
+            { label: "Sent in today", value: readyForDoctor.length, tone: "text-[#15803D]", bg: "bg-[#F0FDF4] border-[#BBF7D0]" },
+          ].map(st => (
+            <div key={st.label} className={`px-3.5 py-1.5 rounded border ${st.bg} text-center min-w-[92px]`}>
+              <p className="text-[9.5px] font-bold uppercase tracking-wide text-[#64748B]">{st.label}</p>
+              <p className={`text-[17px] font-black font-mono leading-tight ${st.tone}`}>
+                {st.value}{st.suffix || ""}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {sent && (
@@ -191,7 +219,13 @@ export default function NurseStation({ nurseName = "OP Nurse" }: { nurseName?: s
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold text-[13px] text-gray-900 truncate">{e.patientName}</span>
-                    <span className="text-[10px] font-mono text-[#94A3B8] flex-shrink-0">{e.timestamps?.arrival}</span>
+                    <span
+                      className={`text-[10.5px] font-mono font-semibold flex-shrink-0 ${
+                        waitMinutes(e) >= 30 ? "text-[#B91C1C]" : waitMinutes(e) >= 15 ? "text-[#B45309]" : "text-[#94A3B8]"
+                      }`}
+                    >
+                      {waitMinutes(e)}m
+                    </span>
                   </div>
                   <div className="text-[11px] font-mono text-[#64748B] mt-0.5">
                     {e.umr} · {e.opNumber} · {e.age}{e.sex?.[0]}
@@ -215,13 +249,60 @@ export default function NurseStation({ nurseName = "OP Nurse" }: { nurseName?: s
         {/* Vitals form */}
         <section className="flex-1 min-w-0 overflow-y-auto">
           {!selected ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center max-w-sm">
+            <div className="space-y-4">
+              <div className="bg-white border border-[#DDE2EC] rounded p-6 text-center">
                 <div className="text-3xl mb-2">👩‍⚕️</div>
-                <h3 className="text-[14px] font-bold text-gray-900">Pick a patient</h3>
-                <p className="text-[12.5px] text-[#64748B] mt-1.5">
-                  Choose someone from the waiting list to record their observations and send them in to their doctor.
+                <h3 className="text-[14px] font-bold text-gray-900">
+                  {waiting.length > 0 ? "Pick a patient to start" : "Nobody is waiting"}
+                </h3>
+                <p className="text-[12.5px] text-[#64748B] mt-1.5 max-w-md mx-auto">
+                  {waiting.length > 0
+                    ? "Choose someone from the waiting list to record their observations and send them in to their doctor."
+                    : "Patients appear on the left the moment reception books their appointment."}
                 </p>
+                {waiting.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => select(waiting[0])}
+                    className="mt-4 px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded transition-colors cursor-pointer"
+                  >
+                    Start with {waiting[0].patientName} ({waitMinutes(waiting[0])}m waiting) →
+                  </button>
+                )}
+              </div>
+
+              {/* Already handed over -- so the nurse can see her own work and spot
+                  anyone she sent in who is still sitting in the waiting room. */}
+              <div className="bg-white border border-[#DDE2EC] rounded">
+                <div className="px-4 py-2.5 border-b border-[#DDE2EC]">
+                  <h3 className="text-[12.5px] font-bold text-gray-900">
+                    Sent in to a doctor ({readyForDoctor.length})
+                  </h3>
+                </div>
+                {readyForDoctor.length === 0 ? (
+                  <p className="p-5 text-center text-[12px] text-[#94A3B8]">Nobody sent in yet.</p>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto">
+                    {readyForDoctor.map(e => (
+                      <div key={e.id} className="px-4 py-2.5 border-b border-[#F1F5F9] last:border-b-0 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[12.5px] font-semibold text-gray-900 truncate">{e.patientName}</p>
+                          <p className="text-[11px] font-mono text-[#64748B]">
+                            {e.umr} · {e.assignedDoctor || "No doctor"} · {e.room || "—"}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-[11px] font-mono text-[#15803D]">
+                            {e.vitals?.bp || "--"} · {e.vitals?.pulse || "--"}
+                          </p>
+                          <p className="text-[10px] text-[#94A3B8]">
+                            {e.timestamps?.vitalsRecorded ? `sent ${e.timestamps.vitalsRecorded}` : "vitals on file"}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ) : (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import ClinicByDoctor from "./ClinicByDoctor";
 import { Icon } from './icons';
 import { db, DBOPEncounter, DBPatient } from '../services/db';
 
@@ -452,6 +453,13 @@ export default function OPManagement({
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* By-doctor view of the same day, folded in from what was briefly a
+              separate Appointment Board page. Department load above, consultant
+              clinics here -- one hub, two ways to read it. */}
+          <div className="lg:col-span-2">
+            <ClinicByDoctor onOpenNurseStation={onNavigateToNurseStation} />
           </div>
 
           {/* Interactive OP Workflow Pipeline Card */}

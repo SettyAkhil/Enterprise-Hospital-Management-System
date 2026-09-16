@@ -96,6 +96,9 @@ export interface DoctorNotification {
   vitals: DBOPEncounter["vitals"];
   status: DBOPEncounter["status"];
   arrivedAt: string;
+  /** Who took the baseline vitals at the OP nurse station, and when. */
+  vitalsBy?: string;
+  vitalsAt?: string;
   read: boolean;
 }
 
@@ -314,6 +317,8 @@ export class DoctorPortalDatabase {
         vitals: e.vitals,
         status: e.status,
         arrivedAt: e.timestamps?.arrival || e.registrationTime,
+        vitalsBy: e.timestamps?.vitalsBy,
+        vitalsAt: e.timestamps?.vitalsRecorded,
         read: readIds.has(`NOTIF-${e.id}`),
       }))
       .sort((a, b) => new Date(b.arrivedAt).getTime() - new Date(a.arrivedAt).getTime());
@@ -370,6 +375,8 @@ export class DoctorPortalDatabase {
         vitals: e.vitals,
         status: e.status,
         arrivedAt: e.timestamps?.arrival || e.registrationTime,
+        vitalsBy: e.timestamps?.vitalsBy,
+        vitalsAt: e.timestamps?.vitalsRecorded,
         read: readIds.has(`NOTIF-${e.id}`),
       }))
       .sort((a, b) => new Date(b.arrivedAt).getTime() - new Date(a.arrivedAt).getTime());

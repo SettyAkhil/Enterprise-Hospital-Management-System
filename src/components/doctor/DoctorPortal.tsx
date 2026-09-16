@@ -1233,8 +1233,9 @@ function PatientContextPanel({
       </section>
 
       <section className="bg-white border border-[#DDE2EC] rounded">
-        <div className="px-4 py-2.5 border-b border-[#DDE2EC]">
+        <div className="px-4 py-2.5 border-b border-[#DDE2EC] flex items-center justify-between gap-3">
           <h3 className="text-[13px] font-bold text-gray-900">Presenting complaint &amp; symptoms</h3>
+          <span className="text-[10.5px] text-[#94A3B8]">Recorded by reception at booking</span>
         </div>
         <div className="p-4 space-y-3">
           <p className="text-[13px] text-gray-800">{notification.chiefComplaint || "No chief complaint recorded at registration."}</p>
@@ -1255,6 +1256,14 @@ function PatientContextPanel({
               <p className="text-[12px] text-[#475569]">{notification.aiReasoning}</p>
             </div>
           )}
+          <div className="flex items-center justify-between gap-3 pt-1 border-t border-[#F1F5F9] mt-1">
+            <h4 className="text-[12px] font-bold text-gray-900">Baseline vitals</h4>
+            <span className="text-[10.5px] text-[#94A3B8]">
+              {notification.vitalsBy
+                ? `Recorded by ${notification.vitalsBy}${notification.vitalsAt ? ` at ${notification.vitalsAt}` : ""}`
+                : "Not taken yet — patient is still with the OP nurse"}
+            </span>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { label: "BP", value: notification.vitals?.bp },

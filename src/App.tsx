@@ -86,19 +86,23 @@ interface NavItem {
 const NAV: NavItem[] = [
   { key: "dashboard", label: "Dashboard", Icon: Icon.Dashboard },
   { key: "doctor_portal", label: "Doctor Workspace", Icon: Icon.Stethoscope },
+  // The front desk, in the order the desk actually works: find or register the
+  // patient, book their doctor, take payment -- with OP Management alongside so
+  // reception can see where a patient has got to without leaving their own area.
   {
-    key: "patients", label: "Patients", Icon: Icon.Patients,
+    key: "patients", label: "Reception", Icon: Icon.Patients,
     children: [
       { key: "patients", label: "Patient Search" },
       { key: "register", label: "Registration" },
+      { key: "appointments", label: "Appointments" },
     ]
   },
+  // The OP department floor: who has arrived, whose vitals are outstanding, and
+  // what each doctor's clinic looks like today.
   {
-    key: "outpatient", label: "Outpatient", Icon: Icon.Stethoscope,
+    key: "outpatient", label: "OP Department", Icon: Icon.Stethoscope,
     children: [
       { key: "op_management", label: "OP Management" },
-      { key: "op_workflow", label: "OP Clinical Journey" },
-      { key: "appointments", label: "Appointments" },
       { key: "op_nurse", label: "Nurse Station" },
       { key: "queue", label: "Queue Management" },
     ]
@@ -201,6 +205,9 @@ const BREADCRUMB_OVERRIDES: Record<string, string> = {
   register: "Registration",
   discharge: "Discharge Workflow",
   op_management: "OP Management",
+  // Off the menu -- every step it offered now lives in a screen that writes a
+  // real record (Registration, Appointments, Billing). Still routable because
+  // OP Management and OP Registration deep-link into it with an encounter.
   op_workflow: "OP Clinical Journey",
   patient_exp: "Patient Experience",
   clinical_rag: "Clinical RAG",
@@ -975,13 +982,6 @@ export default function App() {
                     setModule("appointments");
                   }}
                   onGoToBilling={() => setModule("billing")}
-                  onProceedToQueue={(patient) => {
-                    if (patient?.id) {
-                      setSelectedWorkflowEncounterId(patient.id);
-                    }
-                    setWorkflowInitialStep(2);
-                    setModule("op_workflow");
-                  }}
                   onComplete={() => setModule("patients")}
                   onBack={() => setModule("patients")}
                 />

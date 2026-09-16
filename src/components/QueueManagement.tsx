@@ -551,7 +551,9 @@ export default function QueueManagement({
         <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B] mr-1 flex items-center gap-1 flex-shrink-0">
           <span>🏥</span> Dept:
         </span>
-        {DEPARTMENTS.map((dept) => {
+        {DEPARTMENTS.filter(dept =>
+          dept === "All Departments" || dept === selectedDept || (departmentCounts[dept] || 0) > 0
+        ).map((dept) => {
           const isSelected = selectedDept === dept;
           const count = departmentCounts[dept] || 0;
           return (
@@ -717,7 +719,7 @@ export default function QueueManagement({
                       <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Room</th>
                       <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Reg Time</th>
                       <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Status</th>
-                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider text-right whitespace-nowrap">Actions</th>
+                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider text-right whitespace-nowrap sticky right-0 bg-[#FAFAFA] shadow-[-6px_0_6px_-6px_rgba(15,22,36,0.18)]">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#F1F5F9] text-[12px]">
@@ -744,7 +746,7 @@ export default function QueueManagement({
                           </td>
 
                           {/* Patient Info */}
-                          <td className="px-3 py-2.5 min-w-[170px]">
+                          <td className="px-3 py-2.5 min-w-[170px] max-w-[260px]">
                             <div className="font-bold text-gray-900">{enc.patientName}</div>
                             <div className="text-[10.5px] text-[#64748B] flex items-center gap-1 mt-0.5">
                               <span>{enc.age} yrs, {enc.sex}</span>
@@ -781,8 +783,9 @@ export default function QueueManagement({
                             {getStatusBadge(enc.status)}
                           </td>
 
-                          {/* Action Buttons */}
-                          <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          {/* Action Buttons -- pinned so they stay reachable
+                              however wide the patient/doctor columns get. */}
+                          <td className="px-3 py-2.5 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-inherit shadow-[-6px_0_6px_-6px_rgba(15,22,36,0.18)]">
                             <div className="flex items-center justify-end gap-1">
                               {!isCompleted && !isInConsult && (
                                 <button

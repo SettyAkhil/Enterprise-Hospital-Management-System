@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useStickyState } from "../hooks/useStickyState";
+import { AppointmentBookingModal } from "./Appointments";
+import { bookAppointment, type BookedAppointment } from "../services/appointmentBooking";
 import { Icon } from "./icons";
 import { Btn, Input } from "./shared";
 import { db, DBPatient, DBOPEncounter, findMatchingPatient } from "../services/db";
@@ -19,26 +21,28 @@ const calculateAge = (dobString: string): number => {
 };
 
 export default function Registration({
-  onProceedToQueue,
   onComplete,
   onBack,
   onBookAppointment,
   onGoToBilling,
 }: {
-  onProceedToQueue?: (patient: DBOPEncounter) => void;
   onComplete?: () => void;
   onBack?: () => void;
   /** Reception's next step: symptom triage picks the doctor on the appointment desk. */
   onBookAppointment?: (patient: DBOPEncounter) => void;
   onGoToBilling?: () => void;
 }) {
-  const [activeTab, setActiveTab] = useStickyState<"new" | "revisit" | "records">("registration_tab", "new");
+  const [activeTab, setActiveTab] = useStickyState<"new" | "revisit" | "appointment" | "records">("registration_tab", "new");
   const [searchQuery, setSearchQuery] = useStickyState("registration_search", "");
 
   // Database live state
   const [patients, setPatients] = useState<DBPatient[]>([]);
   const [encounters, setEncounters] = useState<DBOPEncounter[]>([]);
   const [selectedEncounter, setSelectedEncounter] = useState<DBOPEncounter | null>(null);
+
+  // Appointment tab: reception books the doctor without leaving this desk.
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [booked, setBooked] = useState<BookedAppointment | null>(null);
 
   // Generation Audit alert state
   const [generationAlert, setGenerationAlert] = useState<{
@@ -289,6 +293,14 @@ export default function Registration({
               🔄 Existing Patient Revisit
             </button>
             <button
+              onClick={() => setActiveTab("appointment")}
+              className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
+                activeTab === "appointment" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              🗓 Book Appointment
+            </button>
+            <button
               onClick={() => setActiveTab("records")}
               className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
                 activeTab === "records" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-gray-600 hover:text-gray-900"
@@ -304,6 +316,20 @@ export default function Registration({
       <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-6">
 
         {/* ── GENERATION AUDIT BANNER ─────────────────────────────────── */}
+        {bookingOpen && (
+          <AppointmentBookingModal
+            initialEncounter={selectedEncounter}
+            onClose={() => setBookingOpen(false)}
+            onSchedule={(booking) => {
+              const result = bookAppointment(booking);
+              setBooked(result);
+              setBookingOpen(false);
+              setActiveTab("appointment");
+              refreshFromDb();
+            }}
+          />
+        )}
+
         {generationAlert && (
           <div className={`p-4 rounded-xl border flex items-center justify-between shadow-xs animate-in fade-in ${
             generationAlert.type === "new"
@@ -334,7 +360,7 @@ export default function Registration({
               {onBookAppointment && selectedEncounter && (
                 <button
                   type="button"
-                  onClick={() => onBookAppointment(selectedEncounter)}
+                  onClick={() => setActiveTab("appointment")}
                   className="text-xs px-3.5 py-1.5 rounded-lg bg-[#1B4FD8] hover:bg-[#1740B4] text-white font-semibold shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   Book appointment &amp; triage →
@@ -788,6 +814,121 @@ export default function Registration({
         )}
 
         {/* ── TAB 3: DIGITAL OP BOOK & TODAYS REGISTRATIONS ───────────── */}
+        {/* ── TAB: BOOK APPOINTMENT ──────────────────────────────────────────
+            Reception registers and books in one place. The doctor is chosen
+            here (directly off the roster, or by AI symptom triage), the visit
+            moves to "Doctor Assigned", and the OP nurse and the assigned doctor
+            both see the patient immediately -- the nurse in her waiting list,
+            the doctor in their workspace inbox. */}
+        {activeTab === "appointment" && (
+          <div className="p-5 space-y-4">
+            {booked ? (
+              <div className="rounded border border-[#BBF7D0] bg-[#F0FDF4] p-5">
+                <h3 className="text-[15px] font-bold text-[#15803D]">
+                  Appointment booked — {booked.name} with {booked.doctor}
+                </h3>
+                <p className="text-[12.5px] text-[#166534] mt-1">
+                  {booked.umr} · {booked.opNumber} · {booked.dept} · {booked.room} · token{" "}
+                  <span className="font-mono">{booked.token}</span>
+                </p>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  <div className="bg-white border border-[#BBF7D0] rounded px-3 py-2">
+                    <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#15803D]">Sent to OP department</p>
+                    <p className="text-[11.5px] text-[#166534] mt-0.5">Nurse station, for baseline vitals</p>
+                  </div>
+                  <div className="bg-white border border-[#BBF7D0] rounded px-3 py-2">
+                    <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#15803D]">Doctor notified</p>
+                    <p className="text-[11.5px] text-[#166534] mt-0.5">{booked.doctor} — in their workspace</p>
+                  </div>
+                  <div className="bg-white border border-[#FDE68A] rounded px-3 py-2">
+                    <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#92400E]">Next at this desk</p>
+                    <p className="text-[11.5px] text-[#B45309] mt-0.5">Collect the consultation fee</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {onGoToBilling && (
+                    <button
+                      type="button"
+                      onClick={onGoToBilling}
+                      className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded shadow-xs transition-colors cursor-pointer"
+                    >
+                      💳 Collect consultation fee →
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setBooked(null); setActiveTab("new"); }}
+                    className="px-4 py-2 bg-white hover:bg-[#F8FAFC] border border-[#DDE2EC] text-[#334155] text-[12.5px] font-semibold rounded transition-colors cursor-pointer"
+                  >
+                    Register next patient
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBooked(null)}
+                    className="text-[11.5px] font-semibold text-[#15803D] cursor-pointer"
+                  >
+                    Book another appointment
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="bg-white border border-[#DDE2EC] rounded p-4">
+                  <h3 className="text-[13px] font-bold text-gray-900">Book a doctor for this patient</h3>
+                  <p className="text-[11.5px] text-[#64748B] mt-0.5">
+                    {selectedEncounter
+                      ? `Booking for ${selectedEncounter.patientName} (${selectedEncounter.umr} · ${selectedEncounter.opNumber}).`
+                      : "Register a patient or pick one from the OP book first, or book a walk-in below."}
+                  </p>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setBookingOpen(true)}
+                      className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded shadow-xs transition-colors cursor-pointer"
+                    >
+                      🗓 {selectedEncounter ? "Choose doctor & book" : "Book walk-in appointment"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-[#DDE2EC] rounded">
+                  <div className="px-4 py-2.5 border-b border-[#DDE2EC]">
+                    <h3 className="text-[12.5px] font-bold text-gray-900">
+                      Registered today, no doctor booked yet (
+                      {encounters.filter(e => !e.assignedDoctor?.trim()).length})
+                    </h3>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto">
+                    {encounters.filter(e => !e.assignedDoctor?.trim()).slice(0, 25).map(e => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => { setSelectedEncounter(e); setBookingOpen(true); }}
+                        className="w-full text-left px-4 py-2.5 border-b border-[#F1F5F9] hover:bg-[#F8FAFC] flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[12.5px] font-semibold text-gray-900 truncate">{e.patientName}</p>
+                          <p className="text-[11px] font-mono text-[#64748B]">
+                            {e.umr} · {e.opNumber} · {e.age}{e.sex?.[0]} · {e.chiefComplaint || "No complaint recorded"}
+                          </p>
+                        </div>
+                        <span className="text-[11.5px] font-semibold text-[#1B4FD8] whitespace-nowrap">Book →</span>
+                      </button>
+                    ))}
+                    {encounters.filter(e => !e.assignedDoctor?.trim()).length === 0 && (
+                      <p className="p-5 text-center text-[12px] text-[#94A3B8]">
+                        Everyone registered today already has a doctor booked.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {activeTab === "records" && (
           <div className="space-y-6">
             {/* OP Book Card Preview */}
@@ -813,13 +954,18 @@ export default function Registration({
                     <Btn variant="outline" size="sm" onClick={() => window.print()}>
                       <Icon.Download /> Print OP Pass
                     </Btn>
-                    {onProceedToQueue && (
+                    {/* Reception's next desk is Appointments, where symptom triage
+                        picks the doctor. This used to open the OP Clinical Journey
+                        -- a six-panel clinical pathway that is not reception's
+                        screen -- so registering a patient dumped the front desk
+                        into a workflow meant for the wards. */}
+                    {onBookAppointment && (
                       <button
                         type="button"
-                        onClick={() => onProceedToQueue(selectedEncounter)}
+                        onClick={() => setActiveTab("appointment")}
                         className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                       >
-                        <span>✨</span> Proceed to Symptoms &amp; AI Triage →
+                        <span>✨</span> Book appointment &amp; triage →
                       </button>
                     )}
                   </div>

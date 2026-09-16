@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { StatusBadge, Btn, Card, Table, TR, TD } from "./shared";
 import { Icon } from "./icons";
 import { db, DBOPEncounter } from "../services/db";
+import { bookAppointment, type AppointmentBooking } from "../services/appointmentBooking";
 import { 
   getDoctorMaster, 
   pickDoctorForSpecialty, 
@@ -71,7 +72,7 @@ const detectDepartmentFromSymptoms = (
   };
 };
 
-function AppointmentBookingModal({
+export function AppointmentBookingModal({
   initialEncounter,
   onClose,
   onSchedule,
@@ -398,16 +399,11 @@ function AppointmentBookingModal({
 
         {/* Footer Actions */}
         <div className="px-6 py-4 border-t border-[#DDE2EC] bg-[#F8FAFC] flex items-center justify-between">
-          <div>
-            {onGoToBilling && (
-              <button
-                type="button"
-                onClick={onGoToBilling}
-                className="text-[12px] font-semibold text-[#1B4FD8] hover:underline cursor-pointer"
-              >
-                Proceed directly to Billing →
-              </button>
-            )}
+          <div className="text-[11.5px] text-[#64748B]">
+            {/* Billing comes after the booking, not instead of it -- this link
+                used to sit here and navigate away mid-booking, losing the
+                appointment the receptionist was in the middle of making. */}
+            Consultation fee is collected once the doctor is assigned.
           </div>
           <div className="flex gap-2">
             <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
@@ -432,6 +428,11 @@ export default function Appointments({
 }) {
   const [appointments, setAppointments] = useState(INITIAL_APPOINTMENTS);
   const [view, setView] = useState<"day" | "week" | "list">("day");
+  // What reception just booked, so the next action (the consultation fee) is on
+  // screen rather than something they have to go and find.
+  const [justBooked, setJustBooked] = useState<
+    { name: string; umr: string; doctor: string; dept: string; room: string } | null
+  >(null);
   const [activeDay, setActiveDay] = useState(SELECTED_DAY);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [targetEncounter, setTargetEncounter] = useState<DBOPEncounter | null>(null);
@@ -485,54 +486,20 @@ export default function Appointments({
   const inProgress = appointments.filter(a => a.status === "In Progress").length;
   const pending = appointments.filter(a => a.status === "Pending" || a.status === "Checked In").length;
 
-  const handleAddAppointment = (booking: {
-    encounterId?: string;
-    time: string; 
-    patient: string; 
-    age: number; 
-    sex: string; 
-    phone: string;
-    complaint: string; 
-    dept: string; 
-    doctor: string; 
-    registryType: "OP" | "IP";
-  }) => {
-    const sex = booking.sex === "Female" ? "Female" : booking.sex === "Other" ? "Other" : "Male";
-    const doctorRoom = getDoctorByName(booking.doctor)?.room;
-
-    if (booking.encounterId) {
-      const existing = db.getEncounterById(booking.encounterId);
-      db.updateEncounter(booking.encounterId, {
-        dept: booking.dept,
-        assignedDoctor: booking.doctor,
-        room: booking.registryType === "IP" ? "Ward Pending" : doctorRoom || "Room 103",
-        queueToken: `${booking.dept.charAt(0).toUpperCase()}-OP${Math.floor(10 + Math.random() * 90)}`,
-        status: "Doctor Assigned",
-        chiefComplaint: booking.complaint,
-        timestamps: { ...(existing?.timestamps || { arrival: new Date().toLocaleTimeString() }), doctorAssigned: booking.time },
-      });
-    } else {
-      // Register new patient and encounter
-      const parts = booking.patient.trim().split(" ");
-      const { encounter } = db.registerNewPatient({
-        firstName: parts[0],
-        lastName: parts.slice(1).join(" ") || "Patient",
-        age: booking.age,
-        sex,
-        phone: booking.phone,
-        dept: booking.dept,
-        chiefComplaint: booking.complaint,
-      });
-
-      db.updateEncounter(encounter.id, {
-        dept: booking.dept,
-        assignedDoctor: booking.doctor,
-        room: booking.registryType === "IP" ? "Ward Pending" : doctorRoom || "Room 103",
-        queueToken: `${booking.dept.charAt(0).toUpperCase()}-${encounter.opNumber}`,
-        status: "Doctor Assigned",
-        timestamps: { ...encounter.timestamps, doctorAssigned: booking.time },
-      });
-    }
+  const handleAddAppointment = (booking: AppointmentBooking) => {
+    // Shared with the registration desk's Appointment tab -- see
+    // `appointmentBooking.ts`. The confirmation fires for both an existing
+    // patient and a walk-in; it used to be set only on the walk-in branch, so
+    // booking for someone reception had just registered produced no
+    // confirmation and no consultation-fee step.
+    const booked = bookAppointment(booking);
+    setJustBooked({
+      name: booked.name,
+      umr: booked.umr,
+      doctor: booked.doctor,
+      dept: booked.dept,
+      room: booked.room,
+    });
   };
 
   return (
@@ -547,6 +514,38 @@ export default function Appointments({
           onSchedule={handleAddAppointment}
           onGoToBilling={onGoToBilling}
         />
+      )}
+
+      {justBooked && (
+        <div className="mx-6 mt-4 rounded border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[13px] font-bold text-[#15803D]">
+              Appointment booked — {justBooked.name} with {justBooked.doctor}
+            </p>
+            <p className="text-[11.5px] text-[#166534] mt-0.5">
+              {justBooked.umr} · {justBooked.dept} · {justBooked.room}. Collect the consultation fee, then send the
+              patient to the OP department for vitals.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {onGoToBilling && (
+              <button
+                type="button"
+                onClick={onGoToBilling}
+                className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded shadow-xs transition-colors cursor-pointer"
+              >
+                💳 Collect consultation fee →
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setJustBooked(null)}
+              className="text-[11.5px] font-semibold text-[#15803D] cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
