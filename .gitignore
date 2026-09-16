@@ -34,3 +34,5 @@ logs/
 # Symlink to the backend project, target is a machine-local absolute path
 # (not portable across clones/machines).
 /hospital-backend
+/scratch/
+

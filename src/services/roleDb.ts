@@ -31,7 +31,6 @@ export const ALL_SYSTEM_MODULES = [
   "reports", "admin", "chart", "register",
   "outpatient", "queue", "op_management", "op_registration", "op_workflow",
   "doctor_workflow", "doctor_portal", "scheduling", "admissions", "readmission",
-  "lab_billing",
   "payments", "revenue_reports", "hrms", "employees", "patient_exp",
   "intelligence", "ocr", "dpi_ocr", "symptom_ai", "clinical_rag", "clinical_summaries", "bulk_ai", "nl_filtering",
   "beds"
@@ -56,7 +55,7 @@ const INITIAL_ROLES: AppRole[] = [
     name: "Receptionist / Front Desk",
     allowedModules: [
       "dashboard", "patients", "register", "appointments", "outpatient", "queue", "op_management",
-      "op_registration", "billing", "payments", "lab_billing", "laboratory"
+      "op_registration", "billing", "payments", "laboratory"
     ]
   },
   {
@@ -72,7 +71,7 @@ const INITIAL_ROLES: AppRole[] = [
   {
     id: "ROLE_LAB",
     name: "Laboratory & Radiology Tech",
-    allowedModules: ["dashboard", "laboratory", "radiology", "patients", "chart", "reports", "lab_billing"]
+    allowedModules: ["dashboard", "laboratory", "radiology", "patients", "chart", "reports"]
   },
   {
     id: "ROLE_NURSE",

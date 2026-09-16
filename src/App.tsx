@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Icon, type IconProps } from "./components/icons";
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
@@ -36,7 +36,6 @@ import QueueManagement from "./components/QueueManagement";
 import OPManagement from "./components/OPManagement";
 import DoctorWorkflow from "./components/DoctorWorkflow";
 import DoctorPortal from "./components/doctor/DoctorPortal";
-import LabBillingQueue from "./components/LabBillingQueue";
 import DoctorScheduling from "./components/DoctorScheduling";
 import PatientExperience from "./components/PatientExperience";
 import HRMS from "./components/HRMS";
@@ -65,7 +64,7 @@ type Module =
   | "reports" | "admin"
   | "chart" | "register"
   | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow"
-  | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing"
+  | "doctor_workflow" | "doctor_portal" | "scheduling"
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
   | "hrms" | "employees" | "patient_exp"
@@ -151,8 +150,7 @@ const NAV: NavItem[] = [
     key: "billing", label: "Billing", Icon: Icon.Billing,
     children: [
       { key: "billing", label: "Invoices" },
-      { key: "lab_billing", label: "Lab Test Billing" },
-      { key: "payments", label: "Payment Collection" },
+      { key: "payments", label: "Payment History" },
     ]
   },
   { key: "insurance", label: "Insurance", Icon: Icon.Insurance },
@@ -346,6 +344,7 @@ export default function App() {
   const [activeDoctor, setActiveDoctor] = useState<DoctorAccount | null>(null);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const stableSetNotice = useCallback((n: Notice | null) => setNotice(n), []);
   const [module, setModule] = useState<Module>("dashboard");
   // Set alongside setModule("chart") when another page (e.g. a bed card's
   // patient name) wants Patient Chart to open directly on that patient
@@ -509,7 +508,6 @@ export default function App() {
 
       setSubBadges({
         doctor_portal: activeDoctor ? DoctorPortalDatabase.getUnreadCount(activeDoctor.id) : 0,
-        lab_billing: LabOrderDatabase.getBillingQueue().length,
         laboratory: LabOrderDatabase.getLabWorklist().filter(o => o.status !== "Completed").length,
         pharmacy_rx: prescriptions.filter(p => p.status === "Verification Pending" || p.status === "OCR Processing").length,
         pharmacy_ocr: prescriptions.filter(
@@ -919,7 +917,7 @@ export default function App() {
                             module === "op_workflow" ? "OP Clinical Journey" :
                                 module === "patient_exp" ? "Patient Experience" :
                                   module === "doctor_portal" ? "My Doctor Portal" :
-                                  module === "lab_billing" ? "Lab Test Billing" :
+                                  module === "payments" ? "Payment History" :
                                   module === "doctor_workflow" ? "Doctor Workflow" :
                                     module === "scheduling" ? "Doctor Scheduling" :
                                       module === "revenue_reports" ? "Revenue Reports" :
@@ -972,7 +970,7 @@ export default function App() {
               {module === "appointments" && <Appointments onSelect={() => setModule("chart")} />}
               {module === "emergency" && (
                 <ErPage
-                  setNotice={setNotice}
+                  setNotice={stableSetNotice}
                   onNavigate={(m) => setModule(m as any)}
                   onOpenTriage={(visitId) => {
                     setSelectedTriageVisitId(visitId);
@@ -985,7 +983,7 @@ export default function App() {
               )}
               {module === "beds" && (
                 <BedManagementPage
-                  setNotice={setNotice}
+                  setNotice={stableSetNotice}
                   onOpenPatientClinical={openPatientClinical}
                   permissions={userPermissions}
                 />
@@ -998,11 +996,11 @@ export default function App() {
               {module === "radiology" && <Radiology />}
               {module === "icu" && <ICU />}
               {module === "analytics" && <Analytics />}
-              {module === "discharge" && <Discharge setNotice={setNotice} onComplete={() => setModule("inpatient")} />}
+              {module === "discharge" && <Discharge setNotice={stableSetNotice} onComplete={() => setModule("inpatient")} />}
               {module === "triage" && (
                 <Triage
                   initialVisitId={selectedTriageVisitId}
-                  setNotice={setNotice}
+                  setNotice={stableSetNotice}
                   onNavigate={(m) => setModule(m as any)}
                 />
               )}
@@ -1078,7 +1076,6 @@ export default function App() {
               {module === "doctor_portal" && (
                 <DoctorPortal doctor={activeDoctor || resolveDoctorAccount({ name: activeStaff.name })} />
               )}
-              {module === "lab_billing" && <LabBillingQueue collectedBy={activeStaff.name} />}
               {module === "scheduling" && <DoctorScheduling />}
               {module === "admissions" && <Admissions setNotice={setNotice} navigate={navigate} />}
               {module === "readmission" && <Readmission setNotice={setNotice} />}

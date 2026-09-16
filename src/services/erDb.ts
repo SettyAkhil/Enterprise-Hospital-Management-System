@@ -132,6 +132,7 @@ export type ErTimelineEventType =
   | "initial_vitals"
   | "medication_given"
   | "intervention_given"
+  | "investigation_ordered"
   | "followup_vitals"
   | "patient_stabilized"
   | "doctor_assigned"
@@ -169,8 +170,8 @@ export interface ErTimelineEventItem {
 
   medication_data?: {
     drug_name: string;
-    dosage?: string;
-    route?: string;
+    dosage: string;
+    route: string;
     response?: string;
     notes?: string;
   };
@@ -179,6 +180,13 @@ export interface ErTimelineEventItem {
     intervention_type: string;
     details?: string;
     patient_response?: string;
+    notes?: string;
+  };
+
+  investigation_data?: {
+    test_name: string;
+    priority?: string;
+    category?: string;
     notes?: string;
   };
 
@@ -1419,7 +1427,7 @@ export class ErDatabase {
 
   private static save<T>(key: string, data: T): void {
     try {
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && window.localStorage) {
         window.localStorage.setItem(key, JSON.stringify(data));
       }
     } catch (e) {
@@ -1464,6 +1472,36 @@ export class ErDatabase {
     list.unshift(fullPatient);
     this.save(ER_STORAGE_KEY_PATIENTS, list);
     return fullPatient;
+  }
+
+  static updatePatient(patientId: string, updates: Partial<ErPatient>): ErPatient {
+    const list = this.getPatients();
+    const idx = list.findIndex((p) => p.patient_id === patientId);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...updates };
+      this.save(ER_STORAGE_KEY_PATIENTS, list);
+
+      // Also sync existing visits for this patient
+      const visits = this.getVisits("all");
+      let changed = false;
+      visits.forEach((v) => {
+        if (v.patient_id === patientId) {
+          if (updates.name) v.patient_name = updates.name;
+          if (updates.last_name !== undefined) v.patient_last_name = updates.last_name;
+          if (updates.gender) v.patient_gender = updates.gender;
+          if (updates.age !== undefined) v.patient_age = updates.age;
+          if (updates.phone) v.patient_phone = updates.phone;
+          if (updates.emergency_contact) v.patient_emergency_contact = updates.emergency_contact;
+          changed = true;
+        }
+      });
+      if (changed) {
+        this.save(ER_STORAGE_KEY_VISITS, visits);
+      }
+      return list[idx];
+    }
+    const newPat = this.addPatient({ patient_id: patientId, ...updates });
+    return newPat;
   }
 
   // Triage Categories
@@ -1525,6 +1563,8 @@ export class ErDatabase {
     complaintText?: string;
     caseCategory?: string;
     vitals?: Partial<ErVitalsItem>;
+    assignedDoctorName?: string;
+    assignedSpecialty?: string;
   }): Promise<{ visit: ErVisitRecord; patient: ErPatient | null }> {
     let patient: ErPatient | null = null;
 
@@ -1586,6 +1626,9 @@ export class ErDatabase {
     // Run smart clinical triage logic using Qwen / fallback to rules
     const triageCalc = await this.evaluateClinicalTriage(visitData.complaintText || "", visitData.vitals || {});
 
+    const finalDoctorName = visitData.assignedDoctorName || triageCalc.suggestedDoctor || null;
+    const finalSpecialty = visitData.assignedSpecialty || triageCalc.suggestedDepartment || "Emergency";
+
     const newRecord: ErVisitRecord = {
       id: nextId,
       visit_no: visitNo,
@@ -1601,9 +1644,9 @@ export class ErDatabase {
       info_provided_by: visitData.infoProvidedBy || "Relative",
       arrival_at: arrivalTimestamp,
       status: "registered",
-      assigned_doctor_name: triageCalc.suggestedDoctor || null,
-      assigned_specialty: triageCalc.suggestedDepartment || "Emergency",
-      doctor_assigned_at: triageCalc.suggestedDoctor ? now : null,
+      assigned_doctor_name: finalDoctorName,
+      assigned_specialty: finalSpecialty,
+      doctor_assigned_at: finalDoctorName ? now : null,
       doctor_accepted_at: null,
       triage_category: triageCalc.categoryCode,
       triage_bed_label: triageCalc.triageBedLabel,
@@ -1711,8 +1754,8 @@ export class ErDatabase {
     const visit = this.getVisit(visitId);
     if (!visit) throw new Error("Visit not found");
     this.updateVisit(visitId, {
-      assigned_doctor_name: data.doctor_name || visit.assigned_doctor_name || "Dr. Vikram Seth",
-      assigned_specialty: data.specialty || visit.assigned_specialty || "Emergency",
+      assigned_doctor_name: data.doctor_name || visit.assigned_doctor_name || "Dr. Anita Roy",
+      assigned_specialty: data.specialty || visit.assigned_specialty || "Emergency Medicine",
       doctor_assigned_at: new Date().toISOString(),
       status: "doctor_assigned",
     });
@@ -1807,7 +1850,7 @@ export class ErDatabase {
       signed_by: data.signed_by || "Self",
       relation_to_patient: data.relation_to_patient || "Self",
       status: "Signed",
-      witness_doctor: data.witness_doctor || visit.assigned_doctor_name || "Dr. Vikram Seth",
+      witness_doctor: data.witness_doctor || visit.assigned_doctor_name || "Dr. Anita Roy",
       signed_by_phone: data.signed_by_phone || visit.patient_phone || "",
       legal_waiver_acknowledged: true,
       signed_at: new Date().toISOString(),
@@ -1826,7 +1869,7 @@ export class ErDatabase {
         outcome: data.is_dama ? "dama" : "lama",
         required_specialty: null,
         clinical_reason: data.reason || "Patient left against medical advice after signing liability waiver.",
-        decided_by: data.witness_doctor || "Dr. Vikram Seth",
+        decided_by: data.witness_doctor || visit.assigned_doctor_name || "Dr. Anita Roy",
         decided_at: new Date().toISOString(),
         priority: "High",
       },
@@ -1852,7 +1895,7 @@ export class ErDatabase {
     er_visit_id?: number;
     er_bed_request_id?: number;
   }) {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !window.localStorage) return;
     try {
       const key = "hospai_bed_transfer_notifications_v3";
       const existing = JSON.parse(window.localStorage.getItem(key) || "[]");

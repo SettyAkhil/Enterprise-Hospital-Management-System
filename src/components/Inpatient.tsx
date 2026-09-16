@@ -4,6 +4,7 @@ import { Btn } from "./shared";
 import { bedGenderVariant, bedOccupantName } from "./bed/BedCard";
 import { WardBedBoard } from "./bed/WardBedBoard";
 import { BedTransferNotificationPanel } from "./bed/BedTransferNotificationPanel";
+import IcuDepartment from "./IcuDepartment";
 import { apiFetch } from "../lib/api";
 import { formatDateTimeIST } from "../lib/format";
 

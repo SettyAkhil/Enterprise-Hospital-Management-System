@@ -101,16 +101,16 @@ export function Table({ headers, children }: { headers: string[]; children: Reac
   );
 }
 
-export function TR({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
+export function TR({ children, onClick, className }: { children: React.ReactNode; onClick?: () => void; className?: string }) {
   return (
-    <tr onClick={onClick} className={`border-b border-[#F1F5F9] tr-hover ${onClick ? "cursor-pointer" : ""}`}>
+    <tr onClick={onClick} className={`border-b border-[#F1F5F9] tr-hover ${onClick ? "cursor-pointer" : ""} ${className || ""}`}>
       {children}
     </tr>
   );
 }
 
-export function TD({ children, className }: { children?: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2.5 ${className || ""}`}>{children}</td>;
+export function TD({ children, className, colSpan }: { children?: React.ReactNode; className?: string; colSpan?: number }) {
+  return <td colSpan={colSpan} className={`px-3 py-2.5 ${className || ""}`}>{children}</td>;
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
