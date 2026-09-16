@@ -136,10 +136,20 @@ export function usePharmacyData() {
   }));
 
   const salesData = last7Days.map(dateStr => {
-    const dayBills = mappedBills.filter(b => (b.billDate || "").startsWith(dateStr));
+    // Only original bills (not MOD- bills) count toward orders and gross sales
+    const dayBills = mappedBills.filter(
+      b => (b.billDate || "").startsWith(dateStr) && !b.billNumber.startsWith("MOD-") && !b.isModifiedReturnBill
+    );
+    const dayReturns = PharmacyDatabase.getReturns().filter(
+      r => (r.createdAt || "").startsWith(dateStr)
+    );
+    const dayGross = dayBills.reduce((acc, b) => acc + (b.totalAmount || 0), 0);
+    const dayRefunds = dayReturns.reduce((acc, r) => acc + (r.refundAmount || 0), 0);
+    const dayNetRevenue = Math.max(0, dayGross - dayRefunds);
+
     return {
       date: new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short' }),
-      revenue: dayBills.reduce((acc, b) => acc + (b.totalAmount || 0), 0),
+      revenue: dayNetRevenue,
       orders: dayBills.length
     };
   });

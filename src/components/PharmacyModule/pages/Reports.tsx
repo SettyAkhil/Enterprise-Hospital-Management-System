@@ -3,6 +3,7 @@ import { useState } from "react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Download, FileText, Printer, Filter } from "lucide-react";
 import PageHeader from "../components/PageHeader";
+import { PharmacyDatabase } from "../../../services/pharmacyDb";
 
 const reportCategories = [
   { id: "sales", label: "Sales Reports", items: ["Daily Sales", "Monthly Sales", "Medicine-wise Sales", "Category-wise Sales", "Pharmacist-wise Sales"] },
@@ -23,7 +24,13 @@ export default function Reports({ onNavigate }: ReportsProps) {
   const gstMap: Record<string, number> = { "5%": 0, "12%": 0, "18%": 0 };
   const pharmMap: Record<string, { value: number, bills: number }> = {};
 
-  bills.forEach(b => {
+  const returns = PharmacyDatabase.getReturns();
+  const totalRefunds = returns.reduce((sum, r) => sum + (r.refundAmount || 0), 0);
+
+  // Exclude modified bills from sales calculations to prevent double-counting
+  const originalBills = bills.filter(b => !b.billNumber.startsWith("MOD-"));
+
+  originalBills.forEach(b => {
     totalRevenue += b.totalAmount || 0;
     
     // Pharmacist
@@ -43,6 +50,9 @@ export default function Reports({ onNavigate }: ReportsProps) {
       else gstMap["5%"] += rev * 0.05;
     });
   });
+
+  // Net Revenue = Gross Sales Revenue - Total Refunds
+  totalRevenue = Math.max(0, totalRevenue - totalRefunds);
 
   const medSalesData = Object.keys(medSalesMap)
     .map(name => ({ name, sales: medSalesMap[name] }))
