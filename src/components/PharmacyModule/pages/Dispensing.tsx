@@ -58,7 +58,7 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
   const [discount, setDiscount] = useState(0);
   
   const [showInvoice, setShowInvoice] = useState(false);
-  const [lastBillId, setLastBillId] = useState("");
+  const [lastBillId, setLastBillId] = useState<any>("");
   const [printDate, setPrintDate] = useState("");
   const [loadedRxMeta, setLoadedRxMeta] = useState<any>(null);
 
@@ -417,7 +417,7 @@ const completeTransaction = () => {
                     {bills.filter(b => !historySearch || b.billNumber.includes(historySearch) || b.patientName.toLowerCase().includes(historySearch.toLowerCase())).map((inv, i) => (
                       <tr key={i} className="hover:bg-[#F5F7FA] transition-colors">
                         <td className="px-5 py-3 font-mono text-[12px] font-semibold text-[#1B4FD8]">{inv.billNumber}</td>
-                        <td className="px-5 py-3 text-[12px] text-[#64748B]">{new Date(inv.createdAt || inv.date).toLocaleString()}</td>
+                        <td className="px-5 py-3 text-[12px] text-[#64748B]">{new Date(inv.createdAt || (inv as any).date || (inv as any).billDate).toLocaleString()}</td>
                         <td className="px-5 py-3 font-medium text-[13px] text-[#0F1624]">{inv.patientName}</td>
                         <td className="px-5 py-3 text-[13px] text-center">{inv.items ? inv.items.length : 0}</td>
                         <td className="px-5 py-3">

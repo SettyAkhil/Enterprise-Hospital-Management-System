@@ -81,7 +81,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
               {filtered.map(inv => (
                 <tr key={inv.id}>
                   <td className="font-mono text-[12px] font-semibold" style={{ color: "#1B4FD8" }}>{inv.billNumber}</td>
-                  <td className="text-[12px] text-[#64748B] whitespace-nowrap">{new Date(inv.date || Date.now()).toLocaleString()}</td>
+                  <td className="text-[12px] text-[#64748B] whitespace-nowrap">{new Date((inv as any).date || (inv as any).createdAt || (inv as any).billDate || Date.now()).toLocaleString()}</td>
                   <td className="font-medium text-[13px] text-[#0F1624]">{inv.patientName}</td>
                   <td className="text-[13px] text-[#334155]">{inv.doctorName}</td>
                   <td className="text-[13px] text-center">{inv.items ? inv.items.length : 0}</td>

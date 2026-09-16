@@ -30,9 +30,11 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
       id: "USR" + Date.now(),
       name: form.name,
       email: form.email,
+      phone: form.phone || "N/A",
       role: form.role,
       department: form.branch,
-      status: "Active"
+      status: "Active",
+      lastLogin: new Date().toISOString()
     });
     PharmacyDatabase.logAudit("System", "Created", "User", `Created user ${form.name}`, `Assigned role ${form.role}`);
     setShowAdd(false);
