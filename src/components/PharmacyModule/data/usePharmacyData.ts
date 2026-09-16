@@ -73,6 +73,8 @@ export function usePharmacyData() {
   const [notifications, setNotifications] = useState(() => PharmacyDatabase.getNotifications());
   const [auditLogs, setAuditLogs] = useState(() => PharmacyDatabase.getAuditLogs());
   const [stockTransfers, setStockTransfers] = useState(() => PharmacyDatabase.getTransfers());
+  const [stockTransactions, setStockTransactions] = useState(() => PharmacyDatabase.getStockTransactions());
+  const [grns, setGrns] = useState(() => PharmacyDatabase.getGRNs());
 
   const mappedMedicines = medicines.map(m => {
     const mBatches = batches.filter(b => b.medicineId === m.id);
@@ -137,7 +139,7 @@ export function usePharmacyData() {
     const dayBills = mappedBills.filter(b => (b.billDate || "").startsWith(dateStr));
     return {
       date: new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short' }),
-      revenue: dayBills.reduce((acc, b) => acc + (b.finalAmount || 0), 0),
+      revenue: dayBills.reduce((acc, b) => acc + (b.totalAmount || 0), 0),
       orders: dayBills.length
     };
   });
@@ -154,6 +156,8 @@ export function usePharmacyData() {
     setNotifications(PharmacyDatabase.getNotifications());
     setAuditLogs(PharmacyDatabase.getAuditLogs());
     setStockTransfers(PharmacyDatabase.getTransfers());
+    setStockTransactions(PharmacyDatabase.getStockTransactions());
+    setGrns(PharmacyDatabase.getGRNs());
   };
 
   return {
@@ -182,10 +186,8 @@ export function usePharmacyData() {
       contact: s.contactInformation,
       gstin: s.gstInformation,
       drugLicense: s.licenseDetails,
-      // Not separately recorded -- `contactInformation` is one free-text line.
-      // The screens already fall back to "N/A" for these.
-      phone: undefined as string | undefined,
-      email: undefined as string | undefined,
+      phone: s.phone,
+      email: s.email,
       outstanding: 0,
       lastPurchase: "2026-09-12",
       totalPurchase: 0,
@@ -193,7 +195,8 @@ export function usePharmacyData() {
     purchaseOrders: purchaseOrders.map(p => ({
       ...p,
       supplier: suppliers.find(s => s.id === p.supplierId)?.supplierName || "Unknown",
-      items: p.items.length,
+      itemsCount: p.items.length,
+      items: p.items,
       total: p.totalOrderValue || 0,
       date: p.poDate,
       expected: p.expectedDeliveryDate,
@@ -232,6 +235,8 @@ export function usePharmacyData() {
       status: c.status === "Active" ? "active" : "inactive",
       created: c.createdAt,
     })),
+    stockTransactions,
+    grns,
     refresh
   };
 }

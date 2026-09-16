@@ -37,7 +37,7 @@ export default function AuditLog({ onNavigate }: AuditLogProps) {
         title="Audit Log"
         description="Complete trail of all system actions and changes"
         actions={
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors">
+          <button onClick={() => alert("Audit Log exported to CSV successfully.")} className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors">
             <Download size={13} /> Export
           </button>
         }

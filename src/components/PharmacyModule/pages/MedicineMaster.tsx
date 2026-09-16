@@ -73,15 +73,27 @@ export default function MedicineMaster({ onNavigate }: MedicineMasterProps) {
       PharmacyDatabase.addMedicine(newMed as any);
       
       if (editingMedicine.stock > 0) {
+        const batchId = "INIT" + Date.now();
         PharmacyDatabase.addBatch({
           medicineId: newMed.id,
-          batchNumber: "INIT" + Date.now(),
+          batchNumber: batchId,
           expiryDate: "2026-12-31",
           quantity: editingMedicine.stock,
           availableQuantity: editingMedicine.stock,
           mrp: editingMedicine.mrp || 0,
           purchasePrice: (editingMedicine.mrp || 0) * 0.6,
           grnId: "INIT"
+        });
+
+        PharmacyDatabase.addTransaction({
+          id: "TXN" + Math.floor(Math.random() * 100000),
+          date: new Date().toISOString(),
+          medicineId: newMed.id,
+          batchId: batchId,
+          quantity: editingMedicine.stock,
+          transactionType: "PURCHASE_RECEIVED",
+          userId: "SYS",
+          reason: "Initial Stock"
         });
       }
     }

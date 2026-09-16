@@ -20,7 +20,6 @@ const MODULE_TO_PAGE: Record<string, string> = {
   pharmacy_po: "purchase-orders",
   pharmacy_grn: "grn",
   pharmacy_ledger: "inventory-ledger",
-  pharmacy_transfers: "stock-transfers",
   pharmacy_expiry: "expiry-low-stock",
   pharmacy_analytics: "reports",
   pharmacy_notifications: "notifications",

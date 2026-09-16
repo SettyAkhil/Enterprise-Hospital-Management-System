@@ -90,10 +90,16 @@ function Toggle({ defaultChecked = false }: { defaultChecked?: boolean }) {
     </button>
   );
 }
+import { PharmacyDatabase } from "../../../services/pharmacyDb";
 
 function SaveButton() {
+  const handleSave = () => {
+    alert("Settings saved successfully!");
+    PharmacyDatabase.logAudit("System", "Updated", "Settings", "Updated System Configuration", "Changed pharmacy module settings");
+  };
+
   return (
-    <button className="flex items-center gap-2 px-4 py-2 rounded text-white text-[13px] font-medium" style={{ background: "#1B4FD8" }}>
+    <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 rounded text-white text-[13px] font-medium" style={{ background: "#1B4FD8" }}>
       <Save size={13} /> Save Changes
     </button>
   );

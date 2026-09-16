@@ -16,10 +16,36 @@ const permMatrix = [
 
 interface UserManagementProps { onNavigate: (page: string) => void }
 
+import { PharmacyDatabase } from "../../../services/pharmacyDb";
+
 export default function UserManagement({ onNavigate }: UserManagementProps) {
-  const {  users  } = usePharmacyData();
+  const {  users, refresh  } = usePharmacyData();
   const [tab, setTab] = useState<"users" | "permissions">("users");
   const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", role: "Pharmacist", branch: "Main Pharmacy" });
+
+  const handleAddUser = () => {
+    if (!form.name || !form.email) return alert("Name and Email are required.");
+    PharmacyDatabase.addUser({
+      id: "USR" + Date.now(),
+      name: form.name,
+      email: form.email,
+      role: form.role,
+      department: form.branch,
+      status: "Active"
+    });
+    PharmacyDatabase.logAudit("System", "Created", "User", `Created user ${form.name}`, `Assigned role ${form.role}`);
+    setShowAdd(false);
+    setForm({ name: "", email: "", phone: "", role: "Pharmacist", branch: "Main Pharmacy" });
+    refresh();
+  };
+
+  const handleToggleStatus = (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === "active" ? "Inactive" : "Active";
+    PharmacyDatabase.updateUser(id, { status: newStatus });
+    PharmacyDatabase.logAudit("System", "Updated", "User", `Updated user ${id}`, `Changed status to ${newStatus}`);
+    refresh();
+  };
 
   return (
     <div className="p-6 space-y-5">
@@ -76,9 +102,9 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                     <td><StatusBadge status={u.status} size="sm" /></td>
                     <td>
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded hover:bg-[#E8EDF5] text-[#1B4FD8] transition-colors" title="Edit"><Edit2 size={13} /></button>
-                        <button className="p-1.5 rounded hover:bg-[#faf5ff] text-[#7c3aed] transition-colors" title="Permissions"><Shield size={13} /></button>
-                        <button className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B] transition-colors" title="Toggle">
+                        <button onClick={() => alert("Edit User feature is currently a mockup.")} className="p-1.5 rounded hover:bg-[#E8EDF5] text-[#1B4FD8] transition-colors" title="Edit"><Edit2 size={13} /></button>
+                        <button onClick={() => alert("Detailed Permissions grid is currently a mockup.")} className="p-1.5 rounded hover:bg-[#faf5ff] text-[#7c3aed] transition-colors" title="Permissions"><Shield size={13} /></button>
+                        <button onClick={() => handleToggleStatus(u.id, u.status)} className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B] transition-colors" title="Toggle">
                           {u.status === "active" ? <ToggleRight size={14} style={{ color: "#16a34a" }} /> : <ToggleLeft size={14} />}
                         </button>
                       </div>
@@ -131,28 +157,34 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
               <button onClick={() => setShowAdd(false)} className="p-2 rounded hover:bg-[#F0F2F5] text-[#94A3B8]"><X size={16} /></button>
             </div>
             <div className="p-6 space-y-4">
-              {["Full Name", "Email Address", "Phone Number"].map(l => (
-                <div key={l}>
-                  <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">{l} *</label>
-                  <input className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none transition-colors" />
-                </div>
-              ))}
+              <div>
+                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Full Name *</label>
+                <input value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none transition-colors" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Email Address *</label>
+                <input value={form.email} onChange={e=>setForm({...form, email: e.target.value})} className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none transition-colors" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Phone Number *</label>
+                <input value={form.phone} onChange={e=>setForm({...form, phone: e.target.value})} className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none transition-colors" />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Role *</label>
-                  <select className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none">
+                  <select value={form.role} onChange={e=>setForm({...form, role: e.target.value})} className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none">
                     <option>Pharmacist</option><option>Pharmacy Manager</option><option>Billing Operator</option><option>Inventory Manager</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Branch *</label>
-                  <select className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none">
-                    <option>Main Branch</option><option>Branch 2</option><option>All Branches</option>
+                  <select value={form.branch} onChange={e=>setForm({...form, branch: e.target.value})} className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] focus:border-[#1B4FD8] focus:outline-none">
+                    <option>Main Pharmacy</option><option>IP Pharmacy</option><option>All Branches</option>
                   </select>
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
-                <button className="flex-1 py-2.5 rounded text-white font-semibold text-[13px]" style={{ background: "#1B4FD8" }}>Create User</button>
+                <button onClick={handleAddUser} className="flex-1 py-2.5 rounded text-white font-semibold text-[13px]" style={{ background: "#1B4FD8" }}>Create User</button>
                 <button onClick={() => setShowAdd(false)} className="flex-1 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors">Cancel</button>
               </div>
             </div>
