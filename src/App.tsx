@@ -139,8 +139,7 @@ const NAV: NavItem[] = [
       { key: "pharmacy", label: "Dashboard" },
       { key: "pharmacy_dispensing", label: "Dispensing & Billing", group: "Sales & Dispensing" },
       { key: "pharmacy_rx", label: "Prescription Queue", group: "Sales & Dispensing" },
-      { key: "pharmacy_ocr", label: "OCR Verification", group: "Sales & Dispensing" },
-      { key: "pharmacy_returns", label: "Returns", group: "Sales & Dispensing" },
+      { key: "pharmacy_returns", label: "Sales Returns", group: "Sales & Dispensing" },
       { key: "pharmacy_medicine", label: "Medicine Master", group: "Catalog" },
       { key: "pharmacy_category", label: "Category Master", group: "Catalog" },
       { key: "pharmacy_suppliers", label: "Suppliers", group: "Procurement" },
@@ -396,6 +395,7 @@ export default function App() {
     setModule("chart");
   };
   const [expanded, setExpanded] = useState<string[]>([]);
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [subBadges, setSubBadges] = useState<Record<string, number>>({});
   // Bumped whenever the doctor inbox or the lab-order queue changes, so the
   // sidebar counts move without waiting for the next navigation.
@@ -565,10 +565,7 @@ export default function App() {
         // Shared helper, not a list kept here: this badge omitted "Sent To Pharmacy"
         // -- the status the doctor portal dispatches with -- so a prescription sat
         // in the queue while the sidebar reported nothing waiting.
-        pharmacy_rx: prescriptions.filter(p => isAwaitingVerification(p.status)).length,
-        pharmacy_ocr: prescriptions.filter(
-          p => (p.sourceType === "OCR" || p.sourceType === "UPLOADED_IMAGE") && p.items.some(i => !i.medicineId)
-        ).length,
+        pharmacy_rx: prescriptions.filter(p => p.status === "Sent To Pharmacy").length,
         pharmacy_dispensing: prescriptions.filter(
           p => p.status === "Verified" || p.status === "Approved"
             || p.status === "Preparing" || p.status === "Ready For Dispensing"
@@ -893,10 +890,18 @@ export default function App() {
 
                             return (
                               <div key={`${item.key}:${group}`} className="mt-2 first:mt-1">
-                                <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748B] select-none">
-                                  {group}
+                                <div 
+                                  className="px-3 pt-1 pb-1 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors mx-1 rounded"
+                                  onClick={() => setCollapsedGroups(prev => prev.includes(`${item.key}:${group}`) ? prev.filter(g => g !== `${item.key}:${group}`) : [...prev, `${item.key}:${group}`])}
+                                >
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748B] select-none">
+                                    {group}
+                                  </span>
+                                  <span className={`text-[#64748B] transition-transform ${collapsedGroups.includes(`${item.key}:${group}`) ? "-rotate-90" : ""}`}>
+                                    <Icon.ChevronDown size={14} />
+                                  </span>
                                 </div>
-                                {groupChildren.map(child => (
+                                {!collapsedGroups.includes(`${item.key}:${group}`) && groupChildren.map(child => (
                                   <div
                                     key={`${child.key}_${child.label}`}
                                     className={`nav-item sub justify-between ${module === child.key && isActive ? "active" : ""}`}

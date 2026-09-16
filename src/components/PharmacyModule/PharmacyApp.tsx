@@ -6,7 +6,6 @@ import GlobalSearch from "./components/GlobalSearch";
 import Dashboard from "./pages/Dashboard";
 import Dispensing from "./pages/Dispensing";
 import PrescriptionQueue from "./pages/PrescriptionQueue";
-import OCRVerification from "./pages/OCRVerification";
 import MedicineMaster from "./pages/MedicineMaster";
 import CategoryMaster from "./pages/CategoryMaster";
 import Suppliers from "./pages/Suppliers";
@@ -24,7 +23,6 @@ const pages: Record<string, React.ComponentType<{ onNavigate: (page: string) => 
   dashboard: Dashboard,
   dispensing: Dispensing,
   prescriptions: PrescriptionQueue,
-  ocr: OCRVerification,
   medicines: MedicineMaster,
   categories: CategoryMaster,
   suppliers: Suppliers,
