@@ -216,7 +216,7 @@ export default function InvoiceOCR({ onNavigate }: InvoiceOCRProps) {
           expiry: item.expiry,
           activeStatus: "Active"
         } as any);
-        PharmacyDatabase.logAudit("Pharmacy", "Created", `Auto-created medicine ${item.matched} via Invoice OCR`, "SYS");
+        PharmacyDatabase.logAudit("Pharmacy", "Created", "Medicine", item.matched, "Auto-created medicine via Invoice OCR");
       } else {
         medId = existing.id;
       }
