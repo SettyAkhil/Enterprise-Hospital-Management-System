@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import ClinicByDoctor from "./ClinicByDoctor";
+import { ACTIVE_DOCTORS, MasterDoctor } from "../services/doctorMaster";
+import { notifyPatientCalledToNurse } from "../services/patientNotifications";
 import { Icon } from './icons';
 import { db, DBOPEncounter, DBPatient } from '../services/db';
 
 interface OPManagementProps {
   onNavigateToOPWorkflow?: (encId: string, step?: number) => void;
   onNavigateToNurseStation?: () => void;
+  staffName?: string;
   onNavigateToDoctorWorkflow?: (encId: string) => void;
   onNavigateToQueue?: (dept?: string) => void;
   onNavigateToOPRegistration?: () => void;
-  onNavigateToPharmacy?: () => void;
-  onNavigateToBilling?: () => void;
+  onNavigateToOPDProcedures?: () => void;
 }
 
 interface DepartmentCapacity {
@@ -21,104 +22,95 @@ interface DepartmentCapacity {
   totalDoctors: number;
   rooms: string[];
   capacityThreshold: number;
+  doctors: MasterDoctor[];
+  totalEncounters?: number;
+  waitingCount?: number;
+  inConsultCount?: number;
+  completedCount?: number;
+  loadPercentage?: number;
+  status?: string;
+  encounters?: DBOPEncounter[];
 }
 
-const DEPARTMENTS_CONFIG: DepartmentCapacity[] = [
-  {
-    name: "Cardiology",
-    code: "CARD",
-    headDoctor: "Dr. Arjun Mehta",
-    activeDoctors: 4,
-    totalDoctors: 4,
-    rooms: ["Room 107", "Room 104", "Room 105", "Room 102"],
-    capacityThreshold: 15
-  },
-  {
-    name: "Orthopedics",
-    code: "ORTH",
-    headDoctor: "Dr. David Anderson",
-    activeDoctors: 2,
-    totalDoctors: 3,
-    rooms: ["Room 112", "Room 116"],
-    capacityThreshold: 12
-  },
-  {
-    name: "General Medicine",
-    code: "GEN",
-    headDoctor: "Dr. Vikram Malhotra",
-    activeDoctors: 3,
-    totalDoctors: 4,
-    rooms: ["Room 111", "Room 101", "Room 103"],
-    capacityThreshold: 20
-  },
-  {
-    name: "Pediatrics",
-    code: "PED",
-    headDoctor: "Dr. Maya Lin",
-    activeDoctors: 2,
-    totalDoctors: 2,
-    rooms: ["Room 120", "Room 121"],
-    capacityThreshold: 10
-  },
-  {
-    name: "Neurology",
-    code: "NEUR",
-    headDoctor: "Dr. Gregory House",
-    activeDoctors: 2,
-    totalDoctors: 2,
-    rooms: ["Room 130", "Room 131"],
-    capacityThreshold: 8
-  },
-  {
-    name: "Dermatology",
-    code: "DERM",
-    headDoctor: "Dr. Elena Rostova",
-    activeDoctors: 1,
-    totalDoctors: 2,
-    rooms: ["Room 140"],
-    capacityThreshold: 8
-  },
-  {
-    name: "ENT",
-    code: "ENT",
-    headDoctor: "Dr. Marcus Vance",
-    activeDoctors: 1,
-    totalDoctors: 2,
-    rooms: ["Room 150"],
-    capacityThreshold: 8
-  },
-  {
-    name: "Emergency / Casualty",
-    code: "ER",
-    headDoctor: "Dr. John Carter",
-    activeDoctors: 2,
-    totalDoctors: 3,
-    rooms: ["Trauma Bay 1", "Trauma Bay 2"],
-    capacityThreshold: 10
-  }
+/** Statuses considered awaiting triage at Nurse Station */
+const AWAITING_VITALS_STATUSES: DBOPEncounter["status"][] = [
+  "Registered",
+  "Symptoms Captured",
+  "AI Recommended",
+  "Awaiting Doctor",
+  "Doctor Assigned",
 ];
+
+// Helper: Calculate NEWS2 Early Warning Score from Vitals
+function calculateNEWS2(vitals?: { bp: string; pulse: string; temp: string; spo2: string }): { score: number; risk: "Low" | "Medium" | "High" } {
+  if (!vitals || !vitals.bp) return { score: 0, risk: "Low" };
+  let score = 0;
+
+  // Pulse (bpm)
+  const pulse = parseInt(vitals.pulse) || 75;
+  if (pulse <= 40 || pulse >= 131) score += 3;
+  else if (pulse >= 111) score += 2;
+  else if (pulse <= 50 || pulse >= 91) score += 1;
+
+  // Temp (F)
+  const tempF = parseFloat(vitals.temp) || 98.6;
+  if (tempF < 95.0) score += 3;
+  else if (tempF >= 102.2) score += 2;
+  else if (tempF <= 96.8 || tempF >= 100.4) score += 1;
+
+  // SpO2 (%)
+  const spo2 = parseInt(vitals.spo2) || 98;
+  if (spo2 <= 91) score += 3;
+  else if (spo2 <= 93) score += 2;
+  else if (spo2 <= 95) score += 1;
+
+  // BP Systolic
+  const bpSys = parseInt((vitals.bp || "").split("/")[0]) || 120;
+  if (bpSys <= 90 || bpSys >= 220) score += 3;
+  else if (bpSys <= 100) score += 2;
+  else if (bpSys <= 110) score += 1;
+
+  let risk: "Low" | "Medium" | "High" = "Low";
+  if (score >= 7) risk = "High";
+  else if (score >= 5) risk = "Medium";
+
+  return { score, risk };
+}
+
+// Clean Doctor Name Formatter
+function formatCleanDoctorName(name: string): string {
+  if (!name) return "Doctor";
+  // Remove multi-initial cluster bloat for clean sleek display
+  return name.replace(/Dr\.\s+([A-Z]\.\s*)+/g, "Dr. ");
+}
 
 export default function OPManagement({
   onNavigateToOPWorkflow,
   onNavigateToNurseStation,
+  staffName = "OP desk",
   onNavigateToDoctorWorkflow,
   onNavigateToQueue,
   onNavigateToOPRegistration,
-  onNavigateToPharmacy,
-  onNavigateToBilling,
+  onNavigateToOPDProcedures,
 }: OPManagementProps) {
-  // State
+  // DB state & subscription
   const [encounters, setEncounters] = useState<DBOPEncounter[]>([]);
   const [patients, setPatients] = useState<DBPatient[]>([]);
+
+  // View state
+  const [activeTab, setActiveTab] = useState<"patient_flow" | "doctor_chambers" | "department_capacity">("patient_flow");
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>("All");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
-  
+  const [chamberFilterActiveOnly, setChamberFilterActiveOnly] = useState(false);
+
   // Modals
   const [selectedDeptRoster, setSelectedDeptRoster] = useState<DepartmentCapacity | null>(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [selectedJourneyEncounter, setSelectedJourneyEncounter] = useState<DBOPEncounter | null>(null);
+  const [selectedChamberDetail, setSelectedChamberDetail] = useState<any | null>(null);
 
-  // Load from database & subscribe to updates
+  // Subscribe to DB
   useEffect(() => {
     const loadData = () => {
       setEncounters(db.getEncounters());
@@ -131,95 +123,185 @@ export default function OPManagement({
     };
   }, []);
 
-  // Top Statistics Calculations
-  // Patients the OP nurse still has to see -- the same set the Nurse Station lists.
-  const awaitingVitals = encounters.filter(e =>
-    ["Registered", "Symptoms Captured", "AI Recommended", "Awaiting Doctor", "Doctor Assigned"].includes(e.status)
-  ).length;
+  // Department Config derived dynamically from doctor master
+  const departmentRows = useMemo(() => {
+    const map: Record<string, DepartmentCapacity> = {};
 
+    ACTIVE_DOCTORS.forEach(d => {
+      const name = d.specialty || "General Medicine";
+      if (!map[name]) {
+        map[name] = {
+          name,
+          code: name.slice(0, 4).toUpperCase(),
+          headDoctor: d.name,
+          activeDoctors: 0,
+          totalDoctors: 0,
+          rooms: [],
+          capacityThreshold: 0,
+          doctors: [],
+        };
+      }
+      const dept = map[name];
+      if (d.section === "Main" && (!dept.rooms.length || !dept.headDoctor)) {
+        dept.headDoctor = d.name;
+      }
+      dept.totalDoctors += 1;
+      if (d.section === "Main") dept.activeDoctors += 1;
+      if (!dept.rooms.includes(d.room)) dept.rooms.push(d.room);
+      dept.doctors.push(d);
+      dept.capacityThreshold = Math.max(5, dept.totalDoctors * 5);
+    });
+
+    return Object.values(map)
+      .map(dept => {
+        const deptEncounters = encounters.filter(e =>
+          (e.dept || "").toLowerCase().includes(dept.name.toLowerCase()) ||
+          (e.aiSpecialty || "").toLowerCase().includes(dept.name.toLowerCase())
+        );
+
+        const waitingCount = deptEncounters.filter(e =>
+          e.status === "In Queue" || e.status === "Registered" || e.status === "Awaiting Doctor" || e.status === "Doctor Assigned"
+        ).length;
+
+        const inConsultCount = deptEncounters.filter(e => e.status === "Under Consultation").length;
+        const completedCount = deptEncounters.filter(e =>
+          e.status === "Consultation Completed" || e.status === "OP Completed" || e.status === "Billing Completed"
+        ).length;
+
+        const loadPercentage = Math.min(100, Math.round((waitingCount / dept.capacityThreshold) * 100));
+
+        let status = "Optimal";
+        if (loadPercentage > 85) status = "Overloaded";
+        else if (loadPercentage > 60) status = "High";
+        else if (loadPercentage > 30) status = "Normal";
+
+        return {
+          ...dept,
+          totalEncounters: deptEncounters.length,
+          waitingCount,
+          inConsultCount,
+          completedCount,
+          loadPercentage,
+          status,
+          encounters: deptEncounters
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [encounters]);
+
+  // Overall Floor Stats
   const stats = useMemo(() => {
     const totalVisits = encounters.length;
-    const waiting = encounters.filter(e => 
-      e.status === "In Queue" || e.status === "Registered" || e.status === "Awaiting Doctor" || e.status === "Doctor Assigned" || e.status === "Symptoms Captured" || e.status === "AI Recommended"
-    ).length;
+    const awaitingVitals = encounters.filter(e => AWAITING_VITALS_STATUSES.includes(e.status)).length;
+    const readyInQueue = encounters.filter(e => e.status === "In Queue").length;
     const inConsult = encounters.filter(e => e.status === "Under Consultation").length;
     const completed = encounters.filter(e => e.status === "Consultation Completed" || e.status === "OP Completed" || e.status === "Billing Completed").length;
-    const pendingBilling = encounters.filter(e => e.billing?.status === "Pending").length;
-    const pharmacyOrders = encounters.reduce((sum, e) => sum + (e.prescription?.length || 0), 0);
-    const activeDoctors = DEPARTMENTS_CONFIG.reduce((sum, d) => sum + d.activeDoctors, 0);
+    const activeDoctorsOnDuty = ACTIVE_DOCTORS.filter(d => d.section === "Main" || encounters.some(e => e.assignedDoctor === d.name)).length;
 
     return {
       totalVisits,
-      waiting,
+      awaitingVitals,
+      readyInQueue,
       inConsult,
       completed,
-      pendingBilling,
-      pharmacyOrders,
-      activeDoctors,
-      avgWait: totalVisits > 0 ? `${Math.max(12, 16 + waiting * 3)}m` : "0m"
+      activeDoctorsOnDuty,
     };
   }, [encounters]);
 
-  // Department Load Calculation
-  const departmentRows = useMemo(() => {
-    return DEPARTMENTS_CONFIG.map(dept => {
-      const deptEncounters = encounters.filter(e => 
-        (e.dept || "").toLowerCase().includes(dept.name.toLowerCase()) ||
-        (e.aiSpecialty || "").toLowerCase().includes(dept.name.toLowerCase())
-      );
+  // Doctor Roster & Live Chamber Statuses
+  const doctorRosterData = useMemo(() => {
+    const list = ACTIVE_DOCTORS.map(doc => {
+      const docEncounters = encounters.filter(e => e.assignedDoctor === doc.name);
+      const activePatient = docEncounters.find(e => e.status === "Under Consultation") || null;
+      const waitingQueue = docEncounters.filter(e => e.status === "In Queue");
+      const awaitingTriage = docEncounters.filter(e => AWAITING_VITALS_STATUSES.includes(e.status));
+      const completed = docEncounters.filter(e => e.status === "Consultation Completed" || e.status === "OP Completed" || e.status === "Billing Completed");
 
-      const waitingCount = deptEncounters.filter(e => 
-        e.status === "In Queue" || e.status === "Registered" || e.status === "Awaiting Doctor" || e.status === "Doctor Assigned"
-      ).length;
-
-      const inConsultCount = deptEncounters.filter(e => e.status === "Under Consultation").length;
-      const completedCount = deptEncounters.filter(e => e.status === "Consultation Completed" || e.status === "OP Completed" || e.status === "Billing Completed").length;
-      
-      const loadPercentage = Math.min(100, Math.round((waitingCount / dept.capacityThreshold) * 100));
-
-      let status = "Optimal";
-      if (loadPercentage > 85) status = "Overloaded";
-      else if (loadPercentage > 60) status = "High";
-      else if (loadPercentage > 30) status = "Normal";
+      let currentStatus: "CONSULTING" | "AVAILABLE" | "WAITING" | "OFF_DUTY" = "OFF_DUTY";
+      if (activePatient) {
+        currentStatus = "CONSULTING";
+      } else if (waitingQueue.length > 0) {
+        currentStatus = "WAITING";
+      } else if (doc.section === "Main" || docEncounters.length > 0) {
+        currentStatus = "AVAILABLE";
+      }
 
       return {
-        ...dept,
-        totalEncounters: deptEncounters.length,
-        waitingCount,
-        inConsultCount,
-        completedCount,
-        loadPercentage,
-        status,
-        encounters: deptEncounters
+        ...doc,
+        cleanName: formatCleanDoctorName(doc.name),
+        docEncounters,
+        activePatient,
+        waitingQueue,
+        waitingQueueCount: waitingQueue.length,
+        awaitingTriageCount: awaitingTriage.length,
+        completedCount: completed.length,
+        totalBooked: docEncounters.length,
+        currentStatus
       };
+    });
+
+    // Sort active chambers with patients or consultations FIRST
+    return list.sort((a, b) => {
+      const scoreA = (a.activePatient ? 100 : 0) + a.waitingQueueCount * 10 + a.completedCount;
+      const scoreB = (b.activePatient ? 100 : 0) + b.waitingQueueCount * 10 + b.completedCount;
+      return scoreB - scoreA;
     });
   }, [encounters]);
 
-  // Filtered Encounters for Bottom Activity Roster
+  // Filtered Doctor Chambers
+  const filteredChambers = useMemo(() => {
+    if (!chamberFilterActiveOnly) return doctorRosterData;
+    return doctorRosterData.filter(d => d.activePatient || d.waitingQueueCount > 0 || d.completedCount > 0);
+  }, [doctorRosterData, chamberFilterActiveOnly]);
+
+  // Filtered Encounters
   const filteredEncounters = useMemo(() => {
     return encounters.filter(enc => {
       if (selectedDeptFilter !== "All") {
         const encDept = (enc.dept || "").toLowerCase();
         if (!encDept.includes(selectedDeptFilter.toLowerCase())) return false;
       }
-
+      if (selectedStatusFilter !== "All") {
+        if (selectedStatusFilter === "Triage" && !AWAITING_VITALS_STATUSES.includes(enc.status)) return false;
+        if (selectedStatusFilter === "In Queue" && enc.status !== "In Queue") return false;
+        if (selectedStatusFilter === "In Consult" && enc.status !== "Under Consultation") return false;
+        if (selectedStatusFilter === "Completed" && !["Consultation Completed", "OP Completed", "Billing Completed"].includes(enc.status)) return false;
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const token = (enc.queueToken || enc.opNumber || "").toLowerCase();
-        const name = (enc.patientName || "").toLowerCase();
-        const umr = (enc.umr || "").toLowerCase();
-        const doc = (enc.assignedDoctor || "").toLowerCase();
-        const complaint = (enc.chiefComplaint || "").toLowerCase();
-        return token.includes(q) || name.includes(q) || umr.includes(q) || doc.includes(q) || complaint.includes(q);
+        return (
+          enc.patientName.toLowerCase().includes(q) ||
+          enc.umr.toLowerCase().includes(q) ||
+          enc.opNumber.toLowerCase().includes(q) ||
+          (enc.assignedDoctor || "").toLowerCase().includes(q) ||
+          (enc.chiefComplaint || "").toLowerCase().includes(q)
+        );
       }
-
       return true;
     });
-  }, [encounters, selectedDeptFilter, searchQuery]);
+  }, [encounters, selectedDeptFilter, selectedStatusFilter, searchQuery]);
+
+  // Helper for specialty color pill styles
+  const getSpecialtyBadgeStyle = (dept: string) => {
+    const d = (dept || "").toLowerCase();
+    if (d.includes("cardio")) return "bg-rose-50 text-rose-800 border-rose-200";
+    if (d.includes("ortho")) return "bg-amber-50 text-amber-800 border-amber-200";
+    if (d.includes("neuro")) return "bg-purple-50 text-purple-800 border-purple-200";
+    if (d.includes("pediat")) return "bg-teal-50 text-teal-800 border-teal-200";
+    if (d.includes("ent") || d.includes("ophthal")) return "bg-sky-50 text-sky-800 border-sky-200";
+    if (d.includes("gynaec") || d.includes("obg")) return "bg-pink-50 text-pink-800 border-pink-200";
+    return "bg-blue-50 text-blue-800 border-blue-200";
+  };
+
+  // Call Patient to Nurse Station
+  const callToNurse = (enc: DBOPEncounter) => {
+    notifyPatientCalledToNurse(enc);
+    db.callToNurseStation(enc.id, staffName);
+  };
 
   // Export CSV Report
   const handleExportCSV = () => {
-    const headers = ["Encounter_ID", "UMR", "OP_Number", "Patient_Name", "Age", "Sex", "Department", "Doctor", "Room", "Status", "Diagnosis", "Registration_Time"];
+    const headers = ["Encounter_ID", "UMR", "OP_Number", "Patient_Name", "Age", "Sex", "Department", "Doctor", "Room", "Status", "Registration_Time"];
     const rows = encounters.map(e => [
       e.id,
       e.umr,
@@ -231,7 +313,6 @@ export default function OPManagement({
       `"${e.assignedDoctor || 'Unassigned'}"`,
       e.room || "Room 101",
       e.status,
-      `"${e.diagnosis || 'Pending'}"`,
       e.registrationTime || "10:00 AM"
     ]);
 
@@ -239,7 +320,7 @@ export default function OPManagement({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `HospAI_OP_Daily_Report_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `OP_Management_Report_${new Date().toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -247,206 +328,521 @@ export default function OPManagement({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#F0F2F5] overflow-hidden">
-      {/* ── TOP HEADER ── */}
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-lg font-bold text-gray-900">Outpatient (OP) Management Hub</h1>
-            <span className="text-[11px] font-mono font-bold bg-green-50 text-[#15803D] border border-green-200 px-2 py-0.5 rounded">
-              ● Live Hospital Sync
-            </span>
+    <div className="flex-1 flex flex-col h-full bg-[#F1F5F9] text-slate-800 font-sans overflow-hidden">
+      {/* ── MINIMALIST COLORFUL HEADER WITH SEARCH ── */}
+      <div className="bg-white border-b border-[#CBD5E1] px-6 py-3 flex items-center justify-between flex-shrink-0 shadow-2xs gap-4">
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="w-9 h-9 bg-blue-600 text-white font-bold flex items-center justify-center text-base rounded-none shadow-xs">
+            🏥
           </div>
-          <p className="text-[12.5px] text-[#64748B] mt-0.5">
-            High-level coordination of outpatient departments, doctors, patient queues, and clinical workflow throughput.
-          </p>
+          <div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              OP Management Hub
+              <span className="text-[10.5px] bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded-none font-mono uppercase font-bold">
+                Live Floor Operations
+              </span>
+            </h1>
+            <p className="text-[11.5px] text-slate-500">
+              Outpatient floor status, active doctor chambers, and department capacity.
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {onNavigateToOPRegistration && (
-            <button
-              type="button"
-              onClick={onNavigateToOPRegistration}
-              className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-bold rounded transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <Icon.Plus /> Register New OP
-            </button>
-          )}
-
-          {onNavigateToQueue && (
-            <button
-              type="button"
-              onClick={() => onNavigateToQueue()}
-              className="px-3.5 py-1.5 bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-[#1B4FD8] text-[12.5px] font-bold rounded transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <span>🎟️</span> Live Queue
-            </button>
-          )}
+        {/* Header Search & Actions */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Global Search Box in Header */}
+          <div className="relative">
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search patient, UMR, token..."
+              className="pl-8 pr-3 h-8 text-xs border border-[#CBD5E1] rounded-none bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-600 w-56 sm:w-64 font-medium shadow-2xs"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"><Icon.Search size={13} /></span>
+          </div>
 
           <button 
             type="button"
             onClick={() => setIsExportModalOpen(true)}
-            className="px-3.5 py-1.5 bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-gray-700 text-[12.5px] font-bold rounded transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-800 text-[12px] font-bold rounded-none transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs h-8"
           >
-            <Icon.Download /> Export Daily Report
+            <Icon.Download size={13} /> Daily Report
           </button>
         </div>
       </div>
 
       {/* ── MAIN WORKSPACE ── */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5 max-w-7xl mx-auto w-full">
-        
-        {/* ── 1. TOP STATS CARDS ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded hover:border-[#1B4FD8] transition-colors shadow-2xs">
-            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              Total OP Visits Today
+      <div className="flex-1 overflow-y-auto p-5 space-y-4 max-w-7xl mx-auto w-full">
+
+        {/* ── 1. VIBRANT SQUARED COLORFUL KPI CARDS ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="bg-blue-50/80 border border-blue-200 border-l-4 border-l-blue-600 rounded-none p-3 shadow-2xs">
+            <div className="text-[10.5px] font-bold uppercase tracking-wider text-blue-900 flex justify-between items-center">
+              <span>Total OP Bookings</span>
+              <span className="text-blue-600">📊</span>
             </div>
-            <div className="flex items-end justify-between">
-              <div className="text-2xl font-bold text-gray-900">{stats.totalVisits}</div>
-              <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                +100% Live
-              </span>
-            </div>
+            <div className="text-2xl font-bold font-mono text-blue-950 mt-1">{stats.totalVisits}</div>
+            <div className="text-[11px] text-blue-700 mt-0.5 font-medium">Today's encounters</div>
           </div>
 
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded hover:border-[#1B4FD8] transition-colors shadow-2xs">
-            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              Currently Waiting
+          <div className="bg-amber-50/80 border border-amber-200 border-l-4 border-l-amber-500 rounded-none p-3 shadow-2xs">
+            <div className="text-[10.5px] font-bold uppercase tracking-wider text-amber-900 flex justify-between items-center">
+              <span>Awaiting Vitals</span>
+              <span className="text-amber-600">⏳</span>
             </div>
-            <div className="flex items-end justify-between">
-              <div className="text-2xl font-bold text-amber-600">{stats.waiting}</div>
-              <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                In Queue
-              </span>
-            </div>
+            <div className="text-2xl font-bold font-mono text-amber-950 mt-1">{stats.awaitingVitals}</div>
+            <div className="text-[11px] text-amber-800 mt-0.5 font-medium">Pending triage</div>
           </div>
 
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded hover:border-[#1B4FD8] transition-colors shadow-2xs">
-            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              In Consultation
+          <div className="bg-sky-50/80 border border-sky-200 border-l-4 border-l-sky-600 rounded-none p-3 shadow-2xs">
+            <div className="text-[10.5px] font-bold uppercase tracking-wider text-sky-900 flex justify-between items-center">
+              <span>Ready in Queue</span>
+              <span className="text-sky-600">⏱️</span>
             </div>
-            <div className="flex items-end justify-between">
-              <div className="text-2xl font-bold text-[#1B4FD8]">{stats.inConsult}</div>
-              <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                Active Drs
-              </span>
-            </div>
+            <div className="text-2xl font-bold font-mono text-sky-950 mt-1">{stats.readyInQueue}</div>
+            <div className="text-[11px] text-sky-800 mt-0.5 font-medium">Awaiting doctor call</div>
           </div>
 
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded hover:border-[#1B4FD8] transition-colors shadow-2xs">
-            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              Avg Wait Time
+          <div className="bg-purple-50/80 border border-purple-200 border-l-4 border-l-purple-600 rounded-none p-3 shadow-2xs">
+            <div className="text-[10.5px] font-bold uppercase tracking-wider text-purple-900 flex justify-between items-center">
+              <span>In Consultation</span>
+              <span className="text-purple-600">👨‍⚕️</span>
             </div>
-            <div className="flex items-end justify-between">
-              <div className="text-2xl font-bold text-gray-900">{stats.avgWait}</div>
-              <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
-                Estimated
-              </span>
-            </div>
+            <div className="text-2xl font-bold font-mono text-purple-950 mt-1">{stats.inConsult}</div>
+            <div className="text-[11px] text-purple-800 mt-0.5 font-medium">Inside chambers</div>
           </div>
 
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded hover:border-[#1B4FD8] transition-colors shadow-2xs col-span-2 sm:col-span-1">
-            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              Active Doctors
+          <div className="bg-emerald-50/80 border border-emerald-200 border-l-4 border-l-emerald-600 rounded-none p-3 shadow-2xs">
+            <div className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-900 flex justify-between items-center">
+              <span>Completed Visits</span>
+              <span className="text-emerald-600">✅</span>
             </div>
-            <div className="flex items-end justify-between">
-              <div className="text-2xl font-bold text-[#15803D]">{stats.activeDoctors}</div>
-              <span className="text-[11px] font-semibold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
-                8 Depts
+            <div className="text-2xl font-bold font-mono text-emerald-950 mt-1">{stats.completed}</div>
+            <div className="text-[11px] text-emerald-800 mt-0.5 font-medium">Finished visits</div>
+          </div>
+        </div>
+
+        {/* ── 2. MINIMAL ORGANIZED TAB BAR & CONTROLS ── */}
+        <div className="bg-white border border-[#CBD5E1] rounded-none p-2 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-2xs">
+          {/* Tab Navigation Row */}
+          <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap border-b border-[#E2E8F0] lg:border-b-0 pb-1 lg:pb-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab("patient_flow")}
+              className={`px-3.5 py-1.5 text-[12.5px] font-bold transition-all cursor-pointer rounded-none flex items-center gap-2 whitespace-nowrap border ${
+                activeTab === "patient_flow"
+                  ? "bg-blue-600 text-white border-blue-700 shadow-xs"
+                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <span>📋 OP Patient Roster</span>
+              <span className={`px-1.5 py-0.2 text-[11px] font-mono font-bold ${
+                activeTab === "patient_flow" ? "bg-white text-blue-900" : "bg-blue-100 text-blue-900 border border-blue-200"
+              }`}>
+                {filteredEncounters.length}
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("doctor_chambers")}
+              className={`px-3.5 py-1.5 text-[12.5px] font-bold transition-all cursor-pointer rounded-none flex items-center gap-2 whitespace-nowrap border ${
+                activeTab === "doctor_chambers"
+                  ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <span>🚪 Doctor Chambers</span>
+              <span className={`px-1.5 py-0.2 text-[11px] font-mono font-bold ${
+                activeTab === "doctor_chambers" ? "bg-white text-emerald-900" : "bg-emerald-100 text-emerald-900 border border-emerald-200"
+              }`}>
+                {stats.activeDoctorsOnDuty} Active
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("department_capacity")}
+              className={`px-3.5 py-1.5 text-[12.5px] font-bold transition-all cursor-pointer rounded-none flex items-center gap-2 whitespace-nowrap border ${
+                activeTab === "department_capacity"
+                  ? "bg-indigo-600 text-white border-indigo-700 shadow-xs"
+                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <span>🏥 Department Capacity</span>
+              <span className={`px-1.5 py-0.2 text-[11px] font-mono font-bold ${
+                activeTab === "department_capacity" ? "bg-white text-indigo-900" : "bg-indigo-100 text-indigo-900 border border-indigo-200"
+              }`}>
+                {departmentRows.length}
+              </span>
+            </button>
+          </div>
+
+          {/* Filter Controls */}
+          <div className="flex items-center gap-2 overflow-x-auto shrink-0 flex-nowrap">
+            {/* Status Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-[#CBD5E1] rounded-none px-2.5 h-8 text-xs shrink-0">
+              <span className="text-slate-600 font-bold text-[11px] whitespace-nowrap">Status:</span>
+              <select
+                value={selectedStatusFilter}
+                onChange={e => setSelectedStatusFilter(e.target.value)}
+                className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer text-xs rounded-none h-full"
+              >
+                <option value="All">All Statuses</option>
+                <option value="Triage">Awaiting Triage</option>
+                <option value="In Queue">In Queue</option>
+                <option value="In Consult">In Consultation</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+
+            {/* Specialty Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-[#CBD5E1] rounded-none px-2.5 h-8 text-xs shrink-0">
+              <span className="text-slate-600 font-bold text-[11px] whitespace-nowrap">Dept:</span>
+              <select
+                value={selectedDeptFilter}
+                onChange={e => setSelectedDeptFilter(e.target.value)}
+                className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer text-xs rounded-none h-full"
+              >
+                <option value="All">All Specialties</option>
+                {departmentRows.map(d => (
+                  <option key={d.name} value={d.name}>{d.name}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
 
-        {/* ── 2. TWO COLUMN: DEPARTMENT LOAD & INTERACTIVE OP WORKFLOW PIPELINE ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          
-          {/* Department Load & Capacity Table */}
-          <div className="lg:col-span-2 bg-white border border-[#DDE2EC] rounded shadow-xs overflow-hidden flex flex-col">
-            <div className="px-5 py-3.5 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
-              <div>
-                <h2 className="text-[14px] font-bold text-gray-900">Department Load &amp; Capacity Roster</h2>
-                <p className="text-[11.5px] text-[#64748B]">Real-time patient waiting queues and capacity utilization across clinics.</p>
-              </div>
-              {onNavigateToQueue && (
-                <button
-                  type="button"
-                  onClick={() => onNavigateToQueue()}
-                  className="text-[12px] font-bold text-[#1B4FD8] hover:underline cursor-pointer"
-                >
-                  Manage Live Queue →
-                </button>
-              )}
+        {/* ── TAB 1: TODAY'S LIVE OP PATIENT ROSTER ── */}
+        {activeTab === "patient_flow" && (
+          <div className="bg-white border border-[#CBD5E1] rounded-none shadow-2xs overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#CBD5E1] bg-slate-100 flex items-center justify-between">
+              <h2 className="text-[13.5px] font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-blue-600 inline-block"></span>
+                Today's Outpatient Care Roster
+              </h2>
+              <span className="text-[11px] font-mono font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5">
+                {filteredEncounters.length} Encounters
+              </span>
             </div>
 
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left">
-                <thead className="border-b border-[#DDE2EC] bg-[#FAFAFA] text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
+            <div className="overflow-x-auto">
+              {filteredEncounters.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-xs font-medium">
+                  No patient records match the selected search/filter.
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-100 border-b border-slate-300 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3">OP Token &amp; UMR</th>
+                      <th className="px-4 py-3">Patient Details</th>
+                      <th className="px-4 py-3">Specialty &amp; Doctor</th>
+                      <th className="px-4 py-3">NEWS2 Baseline</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Floor Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2E8F0] text-[12px]">
+                    {filteredEncounters.map((enc) => {
+                      const isCompleted = enc.status === "Consultation Completed" || enc.status === "OP Completed" || enc.status === "Billing Completed";
+                      const isAwaitingVitals = AWAITING_VITALS_STATUSES.includes(enc.status);
+                      const news2 = calculateNEWS2(enc.vitals);
+
+                      return (
+                        <tr key={enc.id} className="hover:bg-blue-50/40 transition-colors">
+                          {/* Token & UMR */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="font-mono font-bold text-xs text-blue-900 bg-blue-100 px-2.5 py-1 rounded-none border border-blue-300 inline-block shadow-2xs">
+                              {enc.opNumber}
+                            </span>
+                            <div className="text-[10.5px] font-mono text-slate-600 font-bold mt-1">
+                              UMR: {enc.umr}
+                            </div>
+                          </td>
+
+                          {/* Patient Info */}
+                          <td className="px-4 py-3">
+                            <div className="font-bold text-slate-900 text-[13px]">{enc.patientName}</div>
+                            <div className="text-[11px] text-slate-600 font-medium">{enc.age} yrs · {enc.sex} · {enc.phone}</div>
+                            <div className="text-[10.5px] text-slate-500 truncate max-w-xs mt-0.5 font-medium">
+                              💬 {enc.chiefComplaint || enc.symptoms.join(", ") || "General Evaluation"}
+                            </div>
+                          </td>
+
+                          {/* Dept & Doctor (MINIMALIST UNIFIED ALIGNED BADGE) */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center mb-1">
+                              <span className={`px-2.5 py-0.5 text-[11px] font-bold uppercase border ${getSpecialtyBadgeStyle(enc.dept)} rounded-none inline-flex items-center gap-1.5 h-5 leading-none shadow-2xs`}>
+                                <span>{enc.dept || "General Medicine"}</span>
+                                <span className="opacity-40 font-normal">|</span>
+                                <span className="font-mono text-slate-800 text-[10.5px] font-bold">{enc.room || "Room 101"}</span>
+                              </span>
+                            </div>
+                            <div className="text-[11.5px] text-slate-900 font-bold flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full shrink-0"></span>
+                              <span>{enc.assignedDoctor || "Assigned by Reception"}</span>
+                            </div>
+                          </td>
+
+                          {/* NEWS2 & Vitals */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {enc.vitals?.bp ? (
+                              <div>
+                                <span className={`px-2 py-0.5 rounded-none text-[10px] font-bold uppercase border inline-block ${
+                                  news2.risk === 'High' ? 'bg-red-100 text-red-900 border-red-300' :
+                                  news2.risk === 'Medium' ? 'bg-amber-100 text-amber-900 border-amber-300' :
+                                  'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                }`}>
+                                  NEWS2: {news2.score} ({news2.risk})
+                                </span>
+                                <div className="text-slate-700 font-mono text-[10.5px] mt-1 font-semibold">
+                                  BP: <strong>{enc.vitals.bp}</strong> · HR: <strong>{enc.vitals.pulse}</strong>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-amber-900 bg-amber-100 px-2 py-0.5 rounded-none text-[10.5px] font-bold border border-amber-300 inline-block">
+                                ⏳ Pending Triage
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-none uppercase border inline-block ${
+                              isCompleted ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                              enc.status === 'Under Consultation' ? 'bg-purple-100 text-purple-900 border-purple-300' :
+                              enc.status === 'In Queue' ? 'bg-blue-100 text-blue-900 border-blue-300' :
+                              'bg-amber-100 text-amber-900 border-amber-300'
+                            }`}>
+                              {enc.status}
+                            </span>
+                          </td>
+
+                          {/* Floor Actions */}
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {isAwaitingVitals && (
+                                <button
+                                  type="button"
+                                  onClick={() => callToNurse(enc)}
+                                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-none cursor-pointer shadow-xs transition-colors"
+                                >
+                                  📢 Call Nurse
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => setSelectedJourneyEncounter(enc)}
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold rounded-none border border-slate-900 cursor-pointer shadow-xs transition-colors"
+                              >
+                                Journey →
+                              </button>
+
+                              {onNavigateToDoctorWorkflow && (
+                                <button
+                                  type="button"
+                                  onClick={() => onNavigateToDoctorWorkflow(enc.id)}
+                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700 text-[11px] font-bold rounded-none cursor-pointer shadow-xs transition-colors"
+                                >
+                                  Doctor →
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 2: ULTRA-SLEEK MINIMAL DOCTOR CHAMBERS ROSTER ── */}
+        {activeTab === "doctor_chambers" && (
+          <div className="bg-white border border-[#CBD5E1] rounded-none shadow-2xs overflow-hidden">
+            {/* Header & Filter Toggle Bar */}
+            <div className="px-5 py-3 border-b border-[#CBD5E1] bg-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-[13.5px] font-bold text-slate-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 bg-emerald-600 inline-block"></span>
+                  Doctor Chamber Corridor Status
+                </h2>
+                <p className="text-[11.5px] text-slate-600 font-medium">Live room utilization &amp; consultant queue status.</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChamberFilterActiveOnly(false)}
+                  className={`px-3 py-1 text-xs font-bold rounded-none transition-colors border cursor-pointer ${
+                    !chamberFilterActiveOnly
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-700 border-[#CBD5E1] hover:bg-slate-50"
+                  }`}
+                >
+                  All Chambers ({doctorRosterData.length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setChamberFilterActiveOnly(true)}
+                  className={`px-3 py-1 text-xs font-bold rounded-none transition-colors border cursor-pointer ${
+                    chamberFilterActiveOnly
+                      ? "bg-emerald-600 text-white border-emerald-700"
+                      : "bg-white text-slate-700 border-[#CBD5E1] hover:bg-slate-50"
+                  }`}
+                >
+                  Active Today ({doctorRosterData.filter(d => d.activePatient || d.waitingQueueCount > 0 || d.completedCount > 0).length})
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-100 border-b border-slate-300 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                   <tr>
-                    <th className="px-4 py-2.5">Department</th>
-                    <th className="px-4 py-2.5">Active Staff</th>
-                    <th className="px-4 py-2.5">Waiting</th>
-                    <th className="px-4 py-2.5">In Consult</th>
-                    <th className="px-4 py-2.5">Load &amp; Capacity</th>
-                    <th className="px-4 py-2.5 text-right">Actions</th>
+                    <th className="px-4 py-3">Room &amp; Consultant</th>
+                    <th className="px-4 py-3">Specialty</th>
+                    <th className="px-4 py-3">Chamber Live Status</th>
+                    <th className="px-4 py-3 text-center">Queue Load</th>
+                    <th className="px-4 py-3 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
-                  {departmentRows.map((row) => (
-                    <tr key={row.name} className="hover:bg-[#F8FAFC] transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-gray-900">{row.name}</div>
-                        <div className="text-[11px] text-[#64748B]">{row.headDoctor}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-gray-800 font-semibold">{row.activeDoctors} / {row.totalDoctors} Drs</span>
-                        <div className="text-[10.5px] text-gray-500">{row.rooms.length} Rooms</div>
-                      </td>
-                      <td className="px-4 py-3 font-mono font-bold text-gray-900">
-                        {row.waitingCount}
-                      </td>
-                      <td className="px-4 py-3 font-mono font-bold text-[#1B4FD8]">
-                        {row.inConsultCount}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-20 px-1.5 py-0.5 text-[10px] font-bold text-center rounded uppercase tracking-wider ${
-                            row.status === 'Overloaded' ? 'bg-[#FEE2E2] text-[#991B1B]' :
-                            row.status === 'High' ? 'bg-[#FEF3C7] text-[#92400E]' :
-                            'bg-[#DCFCE7] text-[#15803D]'
-                          }`}>
-                            {row.status}
-                          </span>
-                          <div className="w-20 h-1.5 bg-[#E2E8F0] rounded overflow-hidden">
-                            <div 
-                              className={`h-full ${row.loadPercentage > 85 ? 'bg-[#DC2626]' : row.loadPercentage > 60 ? 'bg-[#D97706]' : 'bg-[#16A34A]'}`} 
-                              style={{ width: `${Math.max(5, row.loadPercentage)}%` }}
-                            ></div>
+                <tbody className="divide-y divide-[#E2E8F0] text-[12px]">
+                  {filteredChambers.map((doc) => {
+                    const isConsulting = doc.currentStatus === "CONSULTING";
+                    const isWaiting = doc.currentStatus === "WAITING";
+
+                    return (
+                      <tr key={doc.id} className="hover:bg-emerald-50/30 transition-colors">
+                        {/* Room & Doctor */}
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-mono font-bold text-xs bg-slate-100 text-slate-800 border border-slate-300 px-2 py-0.5 rounded-none shadow-2xs">
+                              {doc.room}
+                            </span>
+                            <span className="font-bold text-slate-900 text-[13px]">{doc.cleanName}</span>
                           </div>
-                          <span className="text-[11px] font-mono text-gray-500">{row.loadPercentage}%</span>
+                        </td>
+
+                        {/* Specialty */}
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <span className={`text-[11px] font-bold px-2 py-0.5 border rounded-none inline-block ${getSpecialtyBadgeStyle(doc.specialty || "")}`}>
+                            {doc.specialty}
+                          </span>
+                        </td>
+
+                        {/* Live Chamber Status */}
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          {isConsulting ? (
+                            <span className="bg-purple-100 text-purple-950 border border-purple-300 font-bold text-[11.5px] px-2.5 py-1 rounded-none inline-flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
+                              In Consult: <strong>{doc.activePatient?.opNumber}</strong> ({doc.activePatient?.patientName})
+                            </span>
+                          ) : isWaiting ? (
+                            <span className="bg-amber-100 text-amber-950 border border-amber-300 font-bold text-[11.5px] px-2.5 py-1 rounded-none inline-flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                              <strong>{doc.waitingQueueCount} Waiting</strong> (Next: {doc.waitingQueue[0]?.opNumber})
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold text-[11.5px] px-2.5 py-1 rounded-none inline-flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                              Available
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Queue Metrics */}
+                        <td className="px-4 py-3.5 text-center whitespace-nowrap font-mono text-[11.5px]">
+                          <span className="text-slate-700 font-semibold">
+                            Queue: <strong className="text-slate-900">{doc.waitingQueueCount}</strong> · Done: <strong className="text-emerald-700">{doc.completedCount}</strong>
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedChamberDetail(doc)}
+                            className="text-[12px] font-bold text-blue-700 hover:text-blue-900 hover:underline cursor-pointer bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-none"
+                          >
+                            Queue →
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 3: DEPARTMENT CAPACITY ROSTER ── */}
+        {activeTab === "department_capacity" && (
+          <div className="bg-white border border-[#CBD5E1] rounded-none shadow-2xs overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#CBD5E1] bg-slate-100 flex justify-between items-center">
+              <h2 className="text-[13.5px] font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-indigo-600 inline-block"></span>
+                Outpatient Specialty &amp; Capacity Roster
+              </h2>
+              <span className="text-xs text-indigo-900 font-mono font-bold bg-indigo-100 border border-indigo-300 px-2 py-0.5">
+                {departmentRows.length} Specialties Active
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[12px]">
+                <thead className="bg-slate-100 border-b border-slate-300 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3">Department</th>
+                    <th className="px-4 py-3">Head Consultant</th>
+                    <th className="px-4 py-3">Active Doctors</th>
+                    <th className="px-4 py-3">Waiting</th>
+                    <th className="px-4 py-3">In Consult</th>
+                    <th className="px-4 py-3">Completed</th>
+                    <th className="px-4 py-3">Capacity Load</th>
+                    <th className="px-4 py-3 text-right">Roster</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0]">
+                  {departmentRows.map(d => (
+                    <tr key={d.name} className="hover:bg-indigo-50/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 text-[11px] font-bold border rounded-none inline-block ${getSpecialtyBadgeStyle(d.name)}`}>
+                          {d.name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-900 font-bold">👨‍⚕️ {d.headDoctor}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-slate-900">{d.activeDoctors} / {d.totalDoctors} Drs</td>
+                      <td className="px-4 py-3 font-mono font-bold text-amber-700">{d.waitingCount}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-purple-700">{d.inConsultCount}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-emerald-700">{d.completedCount}</td>
+                      <td className="px-4 py-3">
+                        <div className="w-28 space-y-1">
+                          <div className="flex justify-between text-[10px] font-mono text-slate-700 font-bold">
+                            <span>{d.loadPercentage}%</span>
+                            <span>{d.status}</span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-200 rounded-none overflow-hidden border border-slate-300">
+                            <div className={`h-full transition-all ${
+                              (d.loadPercentage || 0) > 80 ? 'bg-red-600' :
+                              (d.loadPercentage || 0) > 50 ? 'bg-amber-500' : 'bg-emerald-600'
+                            }`} style={{ width: `${d.loadPercentage}%` }}></div>
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedDeptRoster(row)}
-                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-semibold rounded transition-colors cursor-pointer"
-                            title="Inspect Doctor Roster"
-                          >
-                            Staffing
-                          </button>
-                          {onNavigateToQueue && (
-                            <button
-                              type="button"
-                              onClick={() => onNavigateToQueue(row.name)}
-                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#1B4FD8] border border-blue-200 text-[11px] font-bold rounded transition-colors cursor-pointer"
-                            >
-                              Queue →
-                            </button>
-                          )}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDeptRoster(d)}
+                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-none cursor-pointer"
+                        >
+                          Roster →
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -454,787 +850,164 @@ export default function OPManagement({
               </table>
             </div>
           </div>
+        )}
 
-          {/* By-doctor view of the same day, folded in from what was briefly a
-              separate Appointment Board page. Department load above, consultant
-              clinics here -- one hub, two ways to read it. */}
-          <div className="lg:col-span-2">
-            <ClinicByDoctor onOpenNurseStation={onNavigateToNurseStation} />
-          </div>
+      </div>
 
-          {/* Interactive OP Workflow Pipeline Card */}
-          <div className="bg-white border border-[#DDE2EC] rounded shadow-xs overflow-hidden flex flex-col">
-            <div className="px-5 py-3.5 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
+      {/* ── MODAL: PATIENT JOURNEY TIMELINE ── */}
+      {selectedJourneyEncounter && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded-none shadow-xl max-w-lg w-full p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-2">
               <div>
-                <h2 className="text-[14px] font-bold text-gray-900">OP Workflow Pipeline</h2>
-                <p className="text-[11.5px] text-[#64748B]">Live throughput across clinical care stages.</p>
+                <h3 className="font-bold text-slate-900 text-sm">Patient Journey — {selectedJourneyEncounter.patientName}</h3>
+                <p className="text-[11px] text-slate-500">UMR: {selectedJourneyEncounter.umr} · OP Token: {selectedJourneyEncounter.opNumber}</p>
               </div>
+              <button onClick={() => setSelectedJourneyEncounter(null)} className="text-slate-400 hover:text-slate-700">✕</button>
             </div>
 
-            <div className="p-5 space-y-4 flex-1">
+            {/* Visual Step Progress */}
+            <div className="space-y-2 text-xs">
               {[
-                { 
-                  stage: "1. Registration Desk", 
-                  count: `${stats.totalVisits} Patients`, 
-                  desc: "New & revisit outpatient intakes", 
-                  color: "border-blue-500 text-blue-600 bg-blue-50",
-                  actionText: "Open Desk ➔",
-                  onClick: onNavigateToOPRegistration 
-                },
-                { 
-                  stage: "2. Nurse Triage & Vitals", 
-                  count: `${awaitingVitals} awaiting vitals`, 
-                  desc: "Baseline observations before the consulting room", 
-                  color: "border-emerald-500 text-emerald-600 bg-emerald-50",
-                  actionText: onNavigateToNurseStation ? "Nurse Station ➔" : undefined,
-                  // Opens the nurse's own worklist. This used to deep-link into
-                  // the workflow for `encounters[0]` -- whichever patient happened
-                  // to be first in the array, not the one actually waiting.
-                  onClick: onNavigateToNurseStation 
-                },
-                { 
-                  stage: "3. Doctor Consultations", 
-                  count: `${stats.inConsult} Active / ${stats.completed} Done`, 
-                  desc: "Live chamber clinical examinations", 
-                  color: "border-purple-500 text-purple-600 bg-purple-50",
-                  actionText: "Doctor Portal ➔",
-                  // Wrapping this in an arrow made it always truthy, so the tile
-                  // rendered a Doctor Portal link even for roles that cannot open
-                  // one -- clicking it bounced them to the dashboard.
-                  onClick: onNavigateToDoctorWorkflow
-                    ? () => onNavigateToDoctorWorkflow(encounters[0]?.id || "")
-                    : undefined
-                },
-                { 
-                  stage: "4. Billing & Cashier", 
-                  count: `${stats.pendingBilling} Pending Invoices`, 
-                  desc: "Consultation & diagnostic settlement", 
-                  color: "border-amber-500 text-amber-600 bg-amber-50",
-                  actionText: "Billing Desk ➔",
-                  onClick: onNavigateToBilling 
-                },
-                { 
-                  stage: "5. Pharmacy Dispensing", 
-                  count: `${stats.pharmacyOrders} Prescriptions`, 
-                  desc: "Medication fulfillment & live Rx", 
-                  color: "border-cyan-500 text-cyan-600 bg-cyan-50",
-                  actionText: "Pharmacy ➔",
-                  onClick: onNavigateToPharmacy 
-                },
+                { stage: "Reception Registration", status: "Completed", desc: `Registered at ${selectedJourneyEncounter.registrationTime || '10:00 AM'}` },
+                { stage: "Nurse Vitals Baseline", status: selectedJourneyEncounter.vitals ? "Completed" : "Pending", desc: selectedJourneyEncounter.vitals ? `BP: ${selectedJourneyEncounter.vitals.bp}, HR: ${selectedJourneyEncounter.vitals.pulse}` : "Awaiting triage at Nurse Station" },
+                { stage: "Token Queue Call", status: selectedJourneyEncounter.status === "In Queue" || selectedJourneyEncounter.status === "Under Consultation" || selectedJourneyEncounter.status === "OP Completed" ? "Completed" : "Pending", desc: `Assigned Room: ${selectedJourneyEncounter.room || 'Chamber 101'}` },
+                { stage: "Physician Consultation", status: selectedJourneyEncounter.status === "Under Consultation" || selectedJourneyEncounter.status === "OP Completed" ? "Completed" : "Pending", desc: `Doctor: ${selectedJourneyEncounter.assignedDoctor || 'Assigned Consultant'}` },
               ].map((step, idx) => (
-                <div 
-                  key={idx} 
-                  className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#CBD5E1] rounded transition-all flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded border-2 flex items-center justify-center font-bold text-xs font-mono ${step.color}`}>
-                      {idx + 1}
-                    </div>
-                    <div>
-                      <div className="text-[13px] font-bold text-gray-900">{step.stage}</div>
-                      <div className="text-[11px] text-[#64748B]">{step.desc}</div>
-                    </div>
+                <div key={idx} className="flex items-start gap-2.5 p-2.5 bg-slate-50 border border-slate-200 rounded-none">
+                  <div className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-none ${
+                    step.status === 'Completed' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    {step.status === 'Completed' ? '✓' : idx + 1}
                   </div>
-
-                  <div className="text-right flex items-center gap-2">
-                    <span className="font-mono font-bold text-[12px] text-gray-800 bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
-                      {step.count}
-                    </span>
-                    {step.onClick && (
-                      <button
-                        type="button"
-                        onClick={step.onClick}
-                        className="text-[11px] font-bold text-[#1B4FD8] hover:underline cursor-pointer whitespace-nowrap"
-                      >
-                        {step.actionText}
-                      </button>
-                    )}
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-slate-900">{step.stage}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-none border ${
+                        step.status === 'Completed' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'
+                      }`}>{step.status}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{step.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
 
-        </div>
-
-        {/* ── 3. LIVE OUTPATIENT ENCOUNTERS & ACTIVITY ROSTER ── */}
-        <div className="bg-white border border-[#DDE2EC] rounded shadow-xs overflow-hidden space-y-0">
-          <div className="px-5 py-3.5 border-b border-[#DDE2EC] bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-[14px] font-bold text-gray-900">Today's Live Outpatient Encounters</h2>
-                <span className="text-[11px] font-mono font-bold bg-blue-100 text-[#1B4FD8] px-2 py-0.5 rounded">
-                  {filteredEncounters.length} Records
-                </span>
-              </div>
-              <p className="text-[11.5px] text-[#64748B]">All active and historical outpatient registrations linked to permanent UMRs.</p>
-            </div>
-
-            <div className="flex items-center gap-2.5 flex-wrap">
-              {/* Department Filter Selector */}
-              <div className="flex items-center gap-1.5 bg-white border border-[#CBD5E1] rounded px-2.5 py-1 text-[12px]">
-                <span className="text-[#64748B] font-semibold text-[11px]">Dept:</span>
-                <select
-                  value={selectedDeptFilter}
-                  onChange={e => setSelectedDeptFilter(e.target.value)}
-                  className="bg-transparent font-bold text-gray-900 focus:outline-none cursor-pointer"
-                >
-                  <option value="All">All Departments ({encounters.length})</option>
-                  {DEPARTMENTS_CONFIG.map(d => (
-                    <option key={d.name} value={d.name}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Search Box */}
-              <div className="relative">
-                <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search patient, UMR, OP No, Doctor..."
-                  className="pl-7 pr-3 py-1 text-[12px] border border-[#CBD5E1] rounded bg-white focus:outline-none focus:border-[#1B4FD8] w-52 sm:w-64"
-                />
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs"><Icon.Search /></span>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            {filteredEncounters.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 text-[13px]">
-                No encounters found matching the selected criteria.
-              </div>
-            ) : (
-              <table className="w-full text-left">
-                <thead className="bg-[#FAFAFA] border-b border-[#DDE2EC] text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
-                  <tr>
-                    <th className="px-4 py-2.5">Permanent UMR &amp; OP</th>
-                    <th className="px-4 py-2.5">Patient Details</th>
-                    <th className="px-4 py-2.5">Department &amp; Doctor</th>
-                    <th className="px-4 py-2.5">Vitals / Notes</th>
-                    <th className="px-4 py-2.5">Encounter Status</th>
-                    <th className="px-4 py-2.5">Billing</th>
-                    <th className="px-4 py-2.5 text-right">Complete Journey</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
-                  {filteredEncounters.map((enc) => {
-                    const isCompleted = enc.status === "Consultation Completed" || enc.status === "OP Completed" || enc.status === "Billing Completed";
-                    return (
-                      <tr key={enc.id} className="hover:bg-[#F8FAFC] transition-colors">
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="font-mono font-bold text-[12px] text-[#1B4FD8] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 inline-block">
-                            {enc.opNumber}
-                          </div>
-                          <div className="text-[11px] font-mono text-gray-500 mt-0.5">
-                            UMR: {enc.umr}
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <div className="font-bold text-gray-900">{enc.patientName}</div>
-                          <div className="text-[11px] text-[#64748B]">
-                            {enc.age} yrs · {enc.sex} · {enc.phone}
-                          </div>
-                          <div className="text-[10.5px] text-gray-500 truncate max-w-xs mt-0.5">
-                            {enc.chiefComplaint || enc.symptoms.join(", ") || "General Consultation"}
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded text-[11px] inline-block mb-0.5">
-                            {enc.dept}
-                          </span>
-                          <div className="text-[11.5px] text-gray-700 font-medium flex items-center gap-1">
-                            <span>👨‍⚕️</span> {enc.assignedDoctor || "Physician"}
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3 text-[11.5px] text-gray-700">
-                          {enc.vitals?.bp ? (
-                            <div>
-                              <span className="font-mono font-semibold">{enc.vitals.bp}</span> · {enc.vitals.pulse}
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 italic">Pending Triage</span>
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded uppercase ${
-                            isCompleted ? 'bg-green-100 text-[#15803D]' :
-                            enc.status === 'Under Consultation' ? 'bg-blue-100 text-[#1D4ED8]' :
-                            'bg-amber-100 text-[#B45309]'
-                          }`}>
-                            {enc.status}
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded ${
-                            enc.billing?.status === 'Paid' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}>
-                            ${enc.billing?.total || 50}.00 ({enc.billing?.status || 'Pending'})
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Complete Patient Journey Button */}
-                            <button
-                              type="button"
-                              onClick={() => setSelectedJourneyEncounter(enc)}
-                              className="px-3 py-1.5 bg-gradient-to-r from-[#1B4FD8] to-[#2563EB] hover:from-[#1740B4] hover:to-[#1D4ED8] text-white text-[11.5px] font-bold rounded shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
-                              title="View Complete End-to-End Patient Journey Timeline"
-                            >
-                              <span>✨</span> Journey Timeline →
-                            </button>
-
-                            {onNavigateToDoctorWorkflow && (
-                              <button
-                                type="button"
-                                onClick={() => onNavigateToDoctorWorkflow(enc.id)}
-                                className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#1B4FD8] border border-blue-200 text-[11px] font-bold rounded transition-colors cursor-pointer"
-                                title="Open Doctor Examination Form"
-                              >
-                                Doctor →
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      {/* ── MODAL 1: COMPLETE PATIENT JOURNEY TIMELINE MODAL (ARRIVAL TO BILLING) ── */}
-      {selectedJourneyEncounter && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in overflow-y-auto">
-          <div className="bg-white border-2 border-[#CBD5E1] rounded shadow-2xl max-w-3xl w-full my-auto flex flex-col max-h-[92vh] overflow-hidden">
-            {/* Header */}
-            <div className="px-6 py-4 bg-[#0F172A] text-white flex justify-between items-center flex-shrink-0 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded bg-[#1B4FD8] flex items-center justify-center text-lg font-bold">
-                  🧭
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-[16px] font-bold text-white">Complete Outpatient Clinical Journey</h3>
-                    <span className="font-mono text-[11px] font-bold bg-blue-500/20 text-sky-300 border border-sky-400/30 px-2 py-0.5 rounded">
-                      {selectedJourneyEncounter.opNumber}
-                    </span>
-                  </div>
-                  <p className="text-[12px] text-slate-300">
-                    Comprehensive chronological care timeline from hospital arrival to final billing settlement.
-                  </p>
-                </div>
-              </div>
-
+            <div className="flex justify-end pt-1">
               <button
                 type="button"
                 onClick={() => setSelectedJourneyEncounter(null)}
-                className="text-slate-400 hover:text-white text-xl p-1 cursor-pointer"
+                className="px-3.5 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-none cursor-pointer"
               >
-                ✕
+                Close Journey
               </button>
             </div>
-
-            {/* Patient Credentials Card */}
-            <div className="bg-[#F8FAFC] border-b border-[#E2E8F0] px-6 py-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[12px] flex-shrink-0">
-              <div>
-                <span className="text-[10.5px] uppercase font-bold text-[#64748B] block">Patient Name</span>
-                <span className="font-bold text-gray-900 text-[13.5px]">{selectedJourneyEncounter.patientName}</span>
-                <span className="text-[11px] text-[#64748B] block">{selectedJourneyEncounter.age} yrs · {selectedJourneyEncounter.sex}</span>
-              </div>
-
-              <div>
-                <span className="text-[10.5px] uppercase font-bold text-[#64748B] block">Permanent UMR (Lifetime)</span>
-                <span className="font-mono font-bold text-[#1B4FD8] text-[13px] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 inline-block mt-0.5">
-                  {selectedJourneyEncounter.umr}
-                </span>
-                <span className="text-[11px] text-gray-500 block mt-0.5">{selectedJourneyEncounter.phone}</span>
-              </div>
-
-              <div>
-                <span className="text-[10.5px] uppercase font-bold text-[#64748B] block">Department &amp; Doctor</span>
-                <span className="font-semibold text-gray-900 block">{selectedJourneyEncounter.dept}</span>
-                <span className="text-[11px] text-gray-600 block">{selectedJourneyEncounter.assignedDoctor || "Attending Physician"} · {selectedJourneyEncounter.room || "Room 101"}</span>
-              </div>
-
-              <div>
-                <span className="text-[10.5px] uppercase font-bold text-[#64748B] block">Current Status &amp; Total</span>
-                <span className="font-bold text-[#15803D] bg-green-50 px-2 py-0.5 rounded border border-green-200 inline-block text-[11px]">
-                  {selectedJourneyEncounter.status}
-                </span>
-                <span className="text-[11px] font-mono font-bold text-gray-700 block mt-0.5">
-                  Fee: ${selectedJourneyEncounter.billing?.total || 50}.00 ({selectedJourneyEncounter.billing?.status || 'Pending'})
-                </span>
-              </div>
-            </div>
-
-            {/* Scrollable Journey Milestones Timeline */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              
-              {/* Timeline Container */}
-              <div className="relative pl-6 space-y-6 border-l-2 border-[#CBD5E1] ml-4">
-                
-                {/* 1. ARRIVAL & CHECK-IN */}
-                <div className="relative group">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded bg-[#1B4FD8] text-white flex items-center justify-center text-xs font-bold ring-4 ring-white shadow-xs">
-                    1
-                  </div>
-                  <div className="bg-white border border-[#CBD5E1] rounded p-4 shadow-2xs space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <div className="font-bold text-[13.5px] text-gray-900 flex items-center gap-1.5">
-                        <span>🏥</span> Arrival &amp; OPD Check-In
-                      </div>
-                      <span className="font-mono text-[11.5px] font-bold text-[#1B4FD8] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                        {selectedJourneyEncounter.timestamps?.arrival || selectedJourneyEncounter.registrationTime || "10:00 AM"}
-                      </span>
-                    </div>
-                    <p className="text-[12px] text-gray-700">
-                      Patient arrived at Hospital Outpatient Lobby. Walk-in token entry initialized and ticket printed.
-                    </p>
-                    <div className="text-[11px] text-[#64748B] bg-[#F8FAFC] p-2 rounded border border-[#E2E8F0]">
-                      Token ID: <strong>{selectedJourneyEncounter.queueToken || selectedJourneyEncounter.opNumber}</strong> · Type: <strong>{selectedJourneyEncounter.isNew ? "New Outpatient" : "Returning Patient Revisit"}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. REGISTRATION & UMR CONFIRMATION */}
-                <div className="relative group">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded bg-[#1B4FD8] text-white flex items-center justify-center text-xs font-bold ring-4 ring-white shadow-xs">
-                    2
-                  </div>
-                  <div className="bg-white border border-[#CBD5E1] rounded p-4 shadow-2xs space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <div className="font-bold text-[13.5px] text-gray-900 flex items-center gap-1.5">
-                        <span>📝</span> OP Registration &amp; Lifetime UMR Verification
-                      </div>
-                      <span className="font-mono text-[11.5px] font-bold text-[#1B4FD8] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                        {selectedJourneyEncounter.timestamps?.registration || selectedJourneyEncounter.registrationTime || "10:05 AM"}
-                      </span>
-                    </div>
-                    <p className="text-[12px] text-gray-700">
-                      Demographic credentials verified against permanent master database. Lifetime <strong>{selectedJourneyEncounter.umr}</strong> linked with today's visit OP number <strong>{selectedJourneyEncounter.opNumber}</strong>.
-                    </p>
-                    <div className="flex items-center gap-3 text-[11px] text-gray-600">
-                      <span>✓ Official OP Pass Issued</span>
-                      <span>•</span>
-                      <span>Contact: {selectedJourneyEncounter.phone}</span>
-                      <span>•</span>
-                      <span>Address: {selectedJourneyEncounter.address || "Boston, MA"}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. SYMPTOMS & AI CLINICAL TRIAGE */}
-                <div className="relative group">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded bg-[#8B5CF6] text-white flex items-center justify-center text-xs font-bold ring-4 ring-white shadow-xs">
-                    3
-                  </div>
-                  <div className="bg-white border border-[#CBD5E1] rounded p-4 shadow-2xs space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="font-bold text-[13.5px] text-gray-900 flex items-center gap-1.5">
-                        <span>🤖</span> Symptom Intake &amp; AI Specialty Recommendation
-                      </div>
-                      <span className="font-mono text-[11.5px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                        {selectedJourneyEncounter.timestamps?.symptoms || "10:10 AM"}
-                      </span>
-                    </div>
-                    <div className="bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0] text-[12px]">
-                      <span className="font-bold text-[#64748B] block text-[10.5px] uppercase">Presenting Chief Complaints:</span>
-                      <span className="text-gray-900 font-medium">
-                        "{selectedJourneyEncounter.chiefComplaint || selectedJourneyEncounter.symptoms?.join(", ") || "General outpatient evaluation requested."}"
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[11.5px]">
-                      <span className="bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded border border-purple-200">
-                        AI Specialty: {selectedJourneyEncounter.dept} (96% Confidence)
-                      </span>
-                      <span className="text-[#64748B]">Assigned to: <strong>{selectedJourneyEncounter.assignedDoctor || "Physician"}</strong></span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. NURSE STATION & VITAL SIGNS */}
-                <div className="relative group">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded bg-[#10B981] text-white flex items-center justify-center text-xs font-bold ring-4 ring-white shadow-xs">
-                    4
-                  </div>
-                  <div className="bg-white border border-[#CBD5E1] rounded p-4 shadow-2xs space-y-2.5">
-                    <div className="flex justify-between items-center">
-                      <div className="font-bold text-[13.5px] text-gray-900 flex items-center gap-1.5">
-                        <span>🩺</span> Nurse Station Triage &amp; Baseline Vitals
-                      </div>
-                      <span className="font-mono text-[11.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        {selectedJourneyEncounter.timestamps?.vitalsRecorded || "10:18 AM"}
-                      </span>
-                    </div>
-
-                    {/* Vitals Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11.5px]">
-                      <div className="bg-[#F8FAFC] p-2 rounded border border-[#E2E8F0] text-center">
-                        <span className="text-[#64748B] block text-[10px] uppercase font-bold">Blood Pressure</span>
-                        <span className="font-mono font-bold text-gray-900 text-[13px]">{selectedJourneyEncounter.vitals?.bp || "120/80 mmHg"}</span>
-                      </div>
-                      <div className="bg-[#F8FAFC] p-2 rounded border border-[#E2E8F0] text-center">
-                        <span className="text-[#64748B] block text-[10px] uppercase font-bold">Heart Rate</span>
-                        <span className="font-mono font-bold text-gray-900 text-[13px]">{selectedJourneyEncounter.vitals?.pulse || "76 bpm"}</span>
-                      </div>
-                      <div className="bg-[#F8FAFC] p-2 rounded border border-[#E2E8F0] text-center">
-                        <span className="text-[#64748B] block text-[10px] uppercase font-bold">Temperature</span>
-                        <span className="font-mono font-bold text-gray-900 text-[13px]">{selectedJourneyEncounter.vitals?.temp || "98.6 °F"}</span>
-                      </div>
-                      <div className="bg-[#F8FAFC] p-2 rounded border border-[#E2E8F0] text-center">
-                        <span className="text-[#64748B] block text-[10px] uppercase font-bold">SpO2 Oxygen</span>
-                        <span className="font-mono font-bold text-gray-900 text-[13px]">{selectedJourneyEncounter.vitals?.spo2 || "99%"}</span>
-                      </div>
-                      <div className="bg-[#F8FAFC] p-2 rounded border border-[#E2E8F0] text-center">
-                        <span className="text-[#64748B] block text-[10px] uppercase font-bold">Body Weight</span>
-                        <span className="font-mono font-bold text-gray-900 text-[13px]">{selectedJourneyEncounter.vitals?.weight || "74 kg"}</span>
-                      </div>
-                    </div>
-
-                    <div className="text-[11.5px] text-[#166534] bg-[#F0FDF4] p-2 rounded border border-green-200">
-                      👩‍⚕️ <strong>Nurse Assessment:</strong> {selectedJourneyEncounter.vitals?.notes || "Alert, oriented, stable physiological baseline recorded."}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 5. DOCTOR QUEUE ALLOCATION */}
-                <div className="relative group">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded bg-[#F59E0B] text-white flex items-center justify-center text-xs font-bold ring-4 ring-white shadow-xs">
-                    5
-                  </div>
-                  <div className="bg-white border border-[#CBD5E1] rounded p-4 shadow-2xs space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <div className="font-bold text-[13.5px] text-gray-900 flex items-center gap-1.5">
-                        <span>⏳</span> Doctor Queue Allocation &amp; Chamber Calling
-                      </div>
-                      <span className="font-mono text-[11.5px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                        {selectedJourneyEncounter.timestamps?.doctorAssigned || "10:25 AM"}
-                      </span>
-                    </div>
-                    <p className="text-[12px] text-gray-700">
-                      Allocated to <strong>{selectedJourneyEncounter.assignedDoctor || "Attending Physician"}</strong> in <strong>{selectedJourneyEncounter.room || "Room 101"}</strong> with live token <strong>#{selectedJourneyEncounter.queueToken || selectedJourneyEncounter.opNumber}</strong>. Broadcasted on waiting room kiosk.
-                    </p>
-                  </div>
-                </div>
-
-                {/* 6. PHYSICIAN CONSULTATION & LIVE RX PAD */}
-                <div className="relative group">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded bg-[#1B4FD8] text-white flex items-center justify-center text-xs font-bold ring-4 ring-white shadow-xs">
-                    6
-                  </div>
-                  <div className="bg-white border-2 border-blue-200 rounded p-4 shadow-xs space-y-3">
-                    <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-2">
-                      <div className="font-bold text-[13.5px] text-gray-900 flex items-center gap-1.5">
-                        <span>🩺</span> Physician Examination &amp; Live Prescription (Rx)
-                      </div>
-                      <span className="font-mono text-[11.5px] font-bold text-[#1B4FD8] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                        {selectedJourneyEncounter.timestamps?.consultationStart || "10:32 AM"} — {selectedJourneyEncounter.timestamps?.consultationEnd || "10:45 AM"}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[12px]">
-                      <div className="bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0]">
-                        <span className="text-[10.5px] uppercase font-bold text-[#64748B] block">Clinical Diagnosis</span>
-                        <span className="font-bold text-gray-900 block mt-0.5">
-                          {selectedJourneyEncounter.diagnosis || "Acute Coronary Syndrome Rule-Out / Stable Angina"}
-                        </span>
-                        <span className="text-[11px] font-mono text-[#1B4FD8]">ICD-10: {selectedJourneyEncounter.icd10 || "I20.9"}</span>
-                      </div>
-
-                      <div className="bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0]">
-                        <span className="text-[10.5px] uppercase font-bold text-[#64748B] block">Diagnostic Investigations</span>
-                        <span className="font-medium text-gray-800 block mt-0.5">
-                          {selectedJourneyEncounter.investigations && selectedJourneyEncounter.investigations.length > 0 
-                            ? selectedJourneyEncounter.investigations.join(", ") 
-                            : "ECG 12-Lead, Serum Troponin I, Lipid Profile"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Prescribed Medications Pad */}
-                    <div className="space-y-1 text-[12px]">
-                      <span className="text-[11px] uppercase font-bold text-[#64748B] block">Prescribed Medications (Rx):</span>
-                      <div className="bg-white border border-[#CBD5E1] rounded overflow-hidden">
-                        <table className="w-full text-left text-[11.5px]">
-                          <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] font-bold text-[#64748B]">
-                            <tr>
-                              <th className="px-3 py-1.5">Medicine</th>
-                              <th className="px-3 py-1.5">Dosage</th>
-                              <th className="px-3 py-1.5">Frequency</th>
-                              <th className="px-3 py-1.5">Duration</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-[#F1F5F9]">
-                            {selectedJourneyEncounter.prescription && selectedJourneyEncounter.prescription.length > 0 ? (
-                              selectedJourneyEncounter.prescription.map((rx, i) => (
-                                <tr key={i}>
-                                  <td className="px-3 py-1.5 font-semibold text-gray-900">{rx.medicine}</td>
-                                  <td className="px-3 py-1.5 text-gray-700">{rx.dosage}</td>
-                                  <td className="px-3 py-1.5 text-gray-700">{rx.frequency}</td>
-                                  <td className="px-3 py-1.5 text-gray-700">{rx.duration}</td>
-                                </tr>
-                              ))
-                            ) : (
-                              <tr>
-                                <td className="px-3 py-1.5 font-semibold text-gray-900">Aspirin 81mg</td>
-                                <td className="px-3 py-1.5 text-gray-700">1 tab</td>
-                                <td className="px-3 py-1.5 text-gray-700">OD (Once Daily)</td>
-                                <td className="px-3 py-1.5 text-gray-700">30 days</td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* Advice */}
-                    <div className="text-[11.5px] text-gray-700 bg-[#F8FAFC] p-2 rounded border border-[#E2E8F0]">
-                      <strong>Doctor Advice:</strong> {selectedJourneyEncounter.advice || "Avoid strenuous exertion, follow heart-healthy diet, and follow up in 2 weeks."}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 7. BILLING SETTLEMENT & INVOICE */}
-                <div className="relative group">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded bg-[#10B981] text-white flex items-center justify-center text-xs font-bold ring-4 ring-white shadow-xs">
-                    7
-                  </div>
-                  <div className="bg-white border border-[#CBD5E1] rounded p-4 shadow-2xs space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="font-bold text-[13.5px] text-gray-900 flex items-center gap-1.5">
-                        <span>💳</span> Billing Settlement &amp; Official Receipt
-                      </div>
-                      <span className="font-mono text-[11.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        {selectedJourneyEncounter.timestamps?.billingCompleted || "10:55 AM"}
-                      </span>
-                    </div>
-
-                    <div className="bg-[#F8FAFC] p-3 rounded border border-[#E2E8F0] space-y-1.5 text-[12px]">
-                      <div className="flex justify-between text-gray-700">
-                        <span>1. Physician Outpatient Consultation Fee</span>
-                        <span className="font-mono font-bold text-gray-900">₹{selectedJourneyEncounter.billing?.consultationFee || 50}.00</span>
-                      </div>
-                      <div className="flex justify-between text-gray-700">
-                        <span>2. Diagnostic Investigations / Triage</span>
-                        <span className="font-mono font-bold text-gray-900">₹{selectedJourneyEncounter.billing?.labFee || 40}.00</span>
-                      </div>
-                      <div className="pt-1.5 border-t border-[#E2E8F0] flex justify-between font-bold text-[13px] text-gray-900">
-                        <span>Total Official Settlement:</span>
-                        <span className="font-mono text-emerald-700">₹{selectedJourneyEncounter.billing?.total || 90}.00 (Status: {selectedJourneyEncounter.billing?.status || 'Paid'})</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 8. PHARMACY & DISPENSING */}
-                <div className="relative group">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded bg-[#06B6D4] text-white flex items-center justify-center text-xs font-bold ring-4 ring-white shadow-xs">
-                    8
-                  </div>
-                  <div className="bg-white border border-[#CBD5E1] rounded p-4 shadow-2xs space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <div className="font-bold text-[13.5px] text-gray-900 flex items-center gap-1.5">
-                        <span>💊</span> Pharmacy Dispensing &amp; Visit Completed
-                      </div>
-                      <span className="font-mono text-[11.5px] font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">
-                        {selectedJourneyEncounter.timestamps?.visitCompleted || "11:02 AM"}
-                      </span>
-                    </div>
-                    <p className="text-[12px] text-gray-700">
-                      Prescriptions routed to outpatient pharmacy queue. Patient departure counselled with lifestyle instructions.
-                    </p>
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-
-            {/* Modal Bottom Actions */}
-            <div className="px-6 py-3.5 bg-gray-50 border-t border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
-              <div className="text-[11.5px] text-[#64748B]">
-                Permanent UMR: <strong>{selectedJourneyEncounter.umr}</strong> · Visit: <strong>{selectedJourneyEncounter.opNumber}</strong>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="px-3.5 py-1.5 bg-white hover:bg-gray-100 border border-[#CBD5E1] text-gray-800 text-[12px] font-bold rounded shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  <Icon.Download /> Print Journey Report
-                </button>
-
-                {onNavigateToDoctorWorkflow && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const encId = selectedJourneyEncounter.id;
-                      setSelectedJourneyEncounter(null);
-                      onNavigateToDoctorWorkflow(encId);
-                    }}
-                    className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#1B4FD8] border border-blue-200 text-[12px] font-bold rounded transition-colors cursor-pointer"
-                  >
-                    Open Doctor Portal →
-                  </button>
-                )}
-
-                {onNavigateToOPWorkflow && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const encId = selectedJourneyEncounter.id;
-                      setSelectedJourneyEncounter(null);
-                      onNavigateToOPWorkflow(encId, 1);
-                    }}
-                    className="px-4 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-bold rounded shadow-xs transition-colors cursor-pointer"
-                  >
-                    Open Full 6-Step Clinical Journey ➔
-                  </button>
-                )}
-              </div>
-            </div>
-
           </div>
         </div>
       )}
 
-      {/* ── MODAL 2: DEPARTMENT STAFFING & ROOMS ── */}
-      {selectedDeptRoster && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white border-2 border-[#CBD5E1] rounded shadow-2xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-3">
+      {/* ── MODAL: CHAMBER FULL QUEUE DETAIL ── */}
+      {selectedChamberDetail && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded-none shadow-xl max-w-xl w-full p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
               <div>
-                <h3 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-                  <span>🏥</span> {selectedDeptRoster.name} — Staffing &amp; Capacity
-                </h3>
-                <p className="text-[11.5px] text-[#64748B]">Active physicians and chamber room assignments.</p>
+                <h3 className="font-bold text-slate-900 text-sm">Chamber Queue — {selectedChamberDetail.name}</h3>
+                <p className="text-xs text-slate-500">{selectedChamberDetail.specialty} · Room {selectedChamberDetail.room}</p>
               </div>
+              <button onClick={() => setSelectedChamberDetail(null)} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {selectedChamberDetail.waitingQueue.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500">No patients waiting in queue for this chamber.</div>
+              ) : (
+                selectedChamberDetail.waitingQueue.map((patient: DBOPEncounter, idx: number) => (
+                  <div key={patient.id} className="p-3 bg-slate-50 border border-slate-200 rounded-none flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-xs bg-blue-100 text-blue-800 font-bold px-2 py-0.5 border border-blue-200">
+                        #{idx + 1} Token {patient.opNumber}
+                      </span>
+                      <div>
+                        <div className="font-bold text-slate-900">{patient.patientName}</div>
+                        <div className="text-[11px] text-slate-500">UMR: {patient.umr} · {patient.age} yrs ({patient.sex})</div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[10.5px] bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 font-bold">
+                        {patient.status}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end pt-1">
               <button
                 type="button"
-                onClick={() => setSelectedDeptRoster(null)}
-                className="text-gray-400 hover:text-gray-700 text-lg cursor-pointer"
+                onClick={() => setSelectedChamberDetail(null)}
+                className="px-3.5 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-none cursor-pointer"
               >
-                ✕
+                Close
               </button>
-            </div>
-
-            <div className="space-y-3 text-[12.5px]">
-              <div className="bg-blue-50 border border-blue-200 p-3 rounded flex justify-between items-center">
-                <div>
-                  <div className="font-bold text-[#1E3A8A]">{selectedDeptRoster.headDoctor}</div>
-                  <div className="text-[11px] text-[#3B82F6]">Head of Department</div>
-                </div>
-                <span className="text-[11px] font-bold bg-white text-[#1B4FD8] px-2.5 py-1 rounded border border-blue-200">
-                  {selectedDeptRoster.code}
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
-                  Allocated Examination Rooms ({selectedDeptRoster.rooms.length})
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {selectedDeptRoster.rooms.map((rm) => (
-                    <div key={rm} className="p-2.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded flex items-center justify-between">
-                      <span className="font-bold text-gray-800">{rm}</span>
-                      <span className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200">
-                        Operational
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-[#E2E8F0] flex justify-between items-center">
-                <span className="text-[11.5px] text-[#64748B]">
-                  Capacity Threshold: <strong>{selectedDeptRoster.capacityThreshold} patients/hr</strong>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedDeptRoster(null)}
-                  className="px-4 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white rounded font-bold text-[12px] shadow-xs cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── MODAL 3: EXPORT OP REPORT ── */}
+      {/* ── MODAL: EXPORT REPORT ── */}
       {isExportModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white border-2 border-[#CBD5E1] rounded shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-3">
-              <div>
-                <h3 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
-                  <span>📊</span> Export Daily Outpatient Report
-                </h3>
-                <p className="text-[11.5px] text-[#64748B]">Generate comprehensive CSV summary for hospital audits.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsExportModalOpen(false)}
-                className="text-gray-400 hover:text-gray-700 text-lg cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 text-[12.5px]">
-              <div className="p-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-[#64748B]">Total OP Encounters:</span>
-                  <strong className="font-mono text-gray-900">{stats.totalVisits}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B]">Consultations Completed:</span>
-                  <strong className="font-mono text-green-700">{stats.completed}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B]">Pending Waiting Queue:</span>
-                  <strong className="font-mono text-amber-700">{stats.waiting}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B]">Export Format:</span>
-                  <strong className="font-mono text-[#1B4FD8]">CSV (Spreadsheet Compatible)</strong>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-[#E2E8F0] flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsExportModalOpen(false)}
-                  className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-semibold text-[12px] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportCSV}
-                  className="px-4 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white rounded font-bold text-[12px] shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Icon.Download /> Download CSV
-                </button>
-              </div>
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded-none shadow-xl max-w-md w-full p-5 space-y-4">
+            <h3 className="font-bold text-slate-900 text-sm">Export Daily OP Report</h3>
+            <p className="text-xs text-slate-600">Download CSV dataset of today's outpatient encounters ({encounters.length} records).</p>
+            <div className="flex justify-end gap-2 text-xs font-bold pt-1">
+              <button onClick={() => setIsExportModalOpen(false)} className="px-3 py-1.5 bg-slate-100 rounded-none text-slate-700">Cancel</button>
+              <button onClick={handleExportCSV} className="px-4 py-1.5 bg-[#1B4FD8] text-white rounded-none">Download CSV</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── MODAL: DEPARTMENT ROSTER DETAIL ── */}
+      {selectedDeptRoster && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white border-2 border-[#CBD5E1] rounded-none shadow-xl max-w-md w-full p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">{selectedDeptRoster.name} Roster</h3>
+                <p className="text-xs text-slate-500">Head Doctor: {selectedDeptRoster.headDoctor}</p>
+              </div>
+              <button onClick={() => setSelectedDeptRoster(null)} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+
+            <div className="space-y-1.5 max-h-56 overflow-y-auto">
+              {selectedDeptRoster.doctors.map(doc => (
+                <div key={doc.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-none flex justify-between items-center text-xs">
+                  <div>
+                    <span className="font-bold text-slate-900">{doc.name}</span>
+                    <p className="text-slate-500 text-[10.5px]">{doc.qualification}</p>
+                  </div>
+                  <span className="font-mono bg-slate-900 text-white px-2 py-0.5 rounded-none text-[10.5px] font-bold">
+                    📍 {doc.room}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => setSelectedDeptRoster(null)}
+                className="px-3.5 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-none cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

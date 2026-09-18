@@ -243,6 +243,8 @@ const OPEN_STATUSES: DBOPEncounter["status"][] = [
   "Doctor Assigned",
   "In Queue",
   "Under Consultation",
+  "Vitals Recorded",
+  "Awaiting Consultation",
 ];
 
 /**

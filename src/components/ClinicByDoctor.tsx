@@ -45,6 +45,7 @@ export default function ClinicByDoctor({
 }) {
   const [encounters, setEncounters] = useState<DBOPEncounter[]>(() => db.getEncounters());
   const [specialty, setSpecialty] = useState<string>("All");
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     const unsub = db.subscribe(() => setEncounters(db.getEncounters()));
@@ -80,6 +81,10 @@ export default function ClinicByDoctor({
       })
       .sort((a, b) => b.total - a.total || a.doctor.name.localeCompare(b.doctor.name));
   }, [live, specialty]);
+
+  const active = byDoctor.filter(r => r.total > 0);
+  const rows = showAll ? byDoctor : active;
+  const hiddenCount = byDoctor.length - active.length;
 
   const unassigned = live.filter(e => !e.assignedDoctor?.trim());
 
@@ -141,7 +146,7 @@ export default function ClinicByDoctor({
                 </tr>
               </thead>
               <tbody>
-                {byDoctor.map(row => (
+                {rows.map(row => (
                   <tr key={row.doctor.id} className={`border-b border-[#F1F5F9] ${row.total === 0 ? "opacity-55" : ""}`}>
                     <td className="px-4 py-2.5">
                       <p className="text-[12.5px] font-semibold text-gray-900">{row.doctor.name}</p>
@@ -183,6 +188,22 @@ export default function ClinicByDoctor({
               </tbody>
             </table>
           </div>
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAll(v => !v)}
+              className="w-full px-4 py-2 border-t border-[#DDE2EC] text-[11.5px] font-semibold text-[#1B4FD8] hover:bg-[#F8FAFC] transition-colors cursor-pointer text-left"
+            >
+              {showAll
+                ? `Hide ${hiddenCount} consultant${hiddenCount === 1 ? "" : "s"} with no appointments today`
+                : `Show all ${byDoctor.length} consultants (${hiddenCount} with no appointments today)`}
+            </button>
+          )}
+          {rows.length === 0 && (
+            <p className="px-4 py-5 text-center text-[12px] text-[#94A3B8]">
+              No clinics running{specialty !== "All" ? ` in ${specialty}` : ""} right now.
+            </p>
+          )}
           <div className="px-4 py-2 border-t border-[#DDE2EC] bg-[#F8FAFC] flex flex-wrap gap-3 text-[10.5px] text-[#64748B]">
             <span><span className="inline-block w-2 h-2 rounded-full bg-[#D97706] mr-1" />Awaiting vitals</span>
             <span><span className="inline-block w-2 h-2 rounded-full bg-[#16A34A] mr-1" />Vitals done, ready</span>

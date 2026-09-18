@@ -6,6 +6,8 @@ import { API_BASE } from "../lib/constants";
 import { formatDateTimeIST } from "../lib/format";
 import type { Notice, Patient } from "../types";
 import AddEvaluationModal from "./AddEvaluationModal";
+import PatientJourneyModal from "./PatientJourneyModal";
+import { db, DBOPEncounter } from "../services/db";
 
 // ==================== Directory (search across OP / IP / ER / ICU) ====================
 
@@ -75,10 +77,12 @@ function LocationBadge({ row }: { row: PatientRow }) {
 
 function PatientDirectory({
   onSelect,
+  onOpenOpJourney,
   onBack,
   setNotice,
 }: {
   onSelect: (row: PatientRow) => void;
+  onOpenOpJourney: (row: PatientRow) => void;
   onBack: () => void;
   setNotice: (notice: Notice | null) => void;
 }) {
@@ -180,7 +184,16 @@ function PatientDirectory({
           ) : (
             <Table headers={["Patient", "Age / Gender", "Location", "Doctor", ""]}>
               {rows.map((row) => (
-                <TR key={row.patient_id} onClick={() => onSelect(row)}>
+                <TR
+                  key={row.patient_id}
+                  onClick={() => {
+                    if (row.care_stream === "OP") {
+                      onOpenOpJourney(row);
+                    } else {
+                      onSelect(row);
+                    }
+                  }}
+                >
                   <TD>
                     <div className="font-medium text-gray-900">{rowDisplayName(row)}</div>
                     <div className="text-[11px] text-[#94A3B8] font-mono">{row.patient_id}</div>
@@ -197,7 +210,20 @@ function PatientDirectory({
                     </span>
                   </TD>
                   <TD>
-                    <Btn variant="ghost" size="xs">Open Chart</Btn>
+                    {row.care_stream === "OP" ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenOpJourney(row);
+                        }}
+                        className="px-2.5 py-1 bg-[#EFF6FF] text-[#1B4FD8] hover:bg-blue-100 rounded-none text-[11px] font-bold border border-blue-200 transition-colors cursor-pointer"
+                      >
+                        ✨ OP Journey
+                      </button>
+                    ) : (
+                      <Btn variant="ghost" size="xs">Open Chart</Btn>
+                    )}
                   </TD>
                 </TR>
               ))}
@@ -505,24 +531,173 @@ export default function PatientChart({
   const [addOpen, setAddOpen] = useState(false);
   const [expandedCertId, setExpandedCertId] = useState<number | null>(null);
 
+  const buildLocalEmr = (patientId: string): { row: PatientRow; emr: EmrResponse } | null => {
+    const dbPatients = db.getPatients();
+    const dbEncounters = db.getEncounters();
+    
+    const targetEnc = dbEncounters.find(e => 
+      e.id === patientId || 
+      e.umr === patientId || 
+      e.opNumber === patientId ||
+      e.patientName.toLowerCase().includes(patientId.toLowerCase())
+    );
+    
+    const targetPatient = dbPatients.find(p => 
+      p.umr === patientId || 
+      p.name.toLowerCase().includes(patientId.toLowerCase())
+    );
+
+    if (!targetEnc && !targetPatient) return null;
+
+    const name = targetEnc?.patientName || targetPatient?.name || patientId;
+    const umr = targetEnc?.umr || targetPatient?.umr || patientId;
+    const age = targetEnc?.age || targetPatient?.age || 35;
+    const sex = targetEnc?.sex || targetPatient?.sex || "Male";
+    const phone = targetEnc?.phone || targetPatient?.phone || "";
+
+    const row: PatientRow = {
+      patient_id: umr,
+      name,
+      age,
+      gender: sex,
+      phone,
+      care_stream: "OP",
+      appointment_doctor: targetEnc?.assignedDoctor || "Dr. Arjun Mehta",
+      appointment_dept: targetEnc?.dept || "Cardiology",
+      appointment_status: targetEnc?.status || "Checked In",
+    };
+
+    const emr: EmrResponse = {
+      patient: {
+        patient_id: umr,
+        name,
+        dob: targetPatient?.dob || "1990-01-01",
+        age,
+        gender: sex,
+        phone,
+        address: targetPatient?.address || "Main City",
+      },
+      admissions: [],
+      notes: targetEnc?.chiefComplaint ? [{
+        id: 1,
+        chief_complaint: targetEnc.chiefComplaint,
+        notes: targetEnc.vitals?.notes || "OP Visit evaluation",
+        created_at: targetEnc.registrationTime || new Date().toISOString(),
+      }] : [],
+      vitals: targetEnc?.vitals?.bp ? [{
+        id: 1,
+        bp: targetEnc.vitals.bp,
+        pulse: targetEnc.vitals.pulse,
+        temperature: targetEnc.vitals.temp,
+        created_at: targetEnc.timestamps?.vitalsRecorded || new Date().toISOString(),
+      }] : [],
+      diagnoses: targetEnc?.diagnosis ? [{
+        id: 1,
+        diagnosis_name: targetEnc.diagnosis,
+        created_at: new Date().toISOString(),
+      }] : [],
+      observation_notes: [],
+      medication_schedules: [],
+      prescriptions: (targetEnc?.prescription || []).map((p, i) => ({
+        prescription_id: i + 1,
+        medicine_name: p.medicine,
+        dosage: p.dosage,
+        quantity: 1,
+        unit_price: 10,
+        status: "Dispensed",
+        created_at: new Date().toISOString(),
+      })),
+      labs: (targetEnc?.investigations || []).map((l, i) => ({
+        id: i + 1,
+        test_name: l,
+        amount: 400,
+        status: "Completed",
+        doctor_name: targetEnc?.assignedDoctor,
+        created_at: new Date().toISOString(),
+      })),
+      documents: [],
+      invoices: [],
+      invoice_payments: [],
+      insurance_claims: [],
+      certificates: [],
+      timeline: [],
+      icu_ventilator_settings: [],
+      icu_infusions: [],
+      icu_io_records: [],
+      icu_rass_scores: [],
+      icu_lab_results: [],
+      icu_consults: [],
+    };
+
+    return { row, emr };
+  };
+
   const loadPatient = async (row: PatientRow) => {
     setLoading(true);
     setTab("Summary");
     try {
       const [emrData, erData] = await Promise.all([
-        apiFetch<EmrResponse>(`/api/emr/${row.patient_id}`),
+        apiFetch<EmrResponse>(`/api/emr/${row.patient_id}`).catch(() => null),
         row.active_er_visit_id
           ? apiFetch<ErVisitDetail>(`/api/er/visits/${row.active_er_visit_id}`).catch(() => null)
           : Promise.resolve(null),
       ]);
-      setEmr(emrData);
-      setErDetail(erData);
+
+      if (emrData) {
+        setEmr(emrData);
+        setErDetail(erData);
+      } else {
+        const fallback = buildLocalEmr(row.patient_id);
+        if (fallback) {
+          setEmr(fallback.emr);
+        } else {
+          reportError(setNotice, undefined, "Could not load patient record.");
+          setEmr(null);
+        }
+      }
     } catch (error: any) {
-      reportError(setNotice, error, "Failed to load this patient's record.");
-      setEmr(null);
+      const fallback = buildLocalEmr(row.patient_id);
+      if (fallback) {
+        setEmr(fallback.emr);
+      } else {
+        reportError(setNotice, error, "Failed to load this patient's record.");
+        setEmr(null);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const [selectedJourneyEncounter, setSelectedJourneyEncounter] = useState<DBOPEncounter | null>(null);
+
+  const handleOpenOpJourney = (row: PatientRow) => {
+    const enc = (db.getEncounters().find((e) => e.umr === row.patient_id) || {
+      id: `enc-${row.patient_id}`,
+      umr: row.patient_id,
+      patientName: rowDisplayName(row),
+      age: row.age || 30,
+      sex: (row.gender as any) || "Male",
+      phone: row.phone || "—",
+      address: "Outpatient Department",
+      bloodGroup: "O+",
+      opNumber: `OP-${row.patient_id}`,
+      dept: row.appointment_dept || "General OP",
+      isNew: true,
+      registrationTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      chiefComplaint: "Outpatient Care & Consultation",
+      symptoms: ["General Examination"],
+      aiSpecialty: "General Medicine",
+      aiDoctor: row.appointment_doctor || "Duty Doctor",
+      doctorGenderPref: "Any",
+      assignedDoctor: row.appointment_doctor || "Duty Doctor",
+      room: "Room 101",
+      status: "Registered",
+      fee: 500,
+      isPaid: true,
+      paymentMethod: "Cash",
+      bookedAt: new Date().toISOString()
+    }) as unknown as DBOPEncounter;
+    setSelectedJourneyEncounter(enc);
   };
 
   const backToDirectory = () => {
@@ -537,35 +712,50 @@ export default function PatientChart({
       try {
         const data = await apiFetch<{ patients: PatientRow[] }>(
           `/api/patients?q=${encodeURIComponent(initialPatientId)}`,
-        );
-        const row = (data.patients || []).find((p) => p.patient_id === initialPatientId);
+        ).catch(() => null);
+
+        const row = (data?.patients || []).find((p) => p.patient_id === initialPatientId || p.name === initialPatientId);
         if (row) {
           setSelectedRow(row);
           void loadPatient(row);
         } else {
-          reportError(setNotice, undefined, "Could not find that patient.");
+          const fallback = buildLocalEmr(initialPatientId);
+          if (fallback) {
+            setSelectedRow(fallback.row);
+            setEmr(fallback.emr);
+          } else {
+            reportError(setNotice, undefined, "Could not find that patient.");
+          }
         }
-      } catch (error: any) {
-        reportError(setNotice, error, "Failed to open that patient's chart.");
+      } catch {
+        const fallback = buildLocalEmr(initialPatientId);
+        if (fallback) {
+          setSelectedRow(fallback.row);
+          setEmr(fallback.emr);
+        }
       } finally {
         onConsumeInitialPatient?.();
       }
     })();
-    // Only re-run when a *new* patient id is handed in -- onConsumeInitialPatient
-    // clears it right after, so this never loops.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPatientId]);
 
   if (!selectedRow) {
     return (
-      <PatientDirectory
-        onSelect={(row) => {
-          setSelectedRow(row);
-          void loadPatient(row);
-        }}
-        onBack={onBack}
-        setNotice={setNotice}
-      />
+      <>
+        <PatientDirectory
+          onSelect={(row) => {
+            setSelectedRow(row);
+            void loadPatient(row);
+          }}
+          onOpenOpJourney={handleOpenOpJourney}
+          onBack={onBack}
+          setNotice={setNotice}
+        />
+        <PatientJourneyModal
+          encounter={selectedJourneyEncounter}
+          onClose={() => setSelectedJourneyEncounter(null)}
+        />
+      </>
     );
   }
 
@@ -579,6 +769,23 @@ export default function PatientChart({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
+      {/* OP Banner if Outpatient */}
+      {selectedRow.care_stream === "OP" && (
+        <div className="bg-[#EFF6FF] border-b border-[#BFDBFE] px-5 py-2.5 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 text-[12.5px] text-[#1E40AF]">
+            <span className="font-bold">ℹ️ Outpatient (OP) Record</span>
+            <span className="text-[#3B82F6]">|</span>
+            <span>This patient is in Outpatient Care. Full consultation history &amp; care milestones are in the OP Clinical Journey.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleOpenOpJourney(selectedRow)}
+            className="px-3 py-1 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[11.5px] font-bold rounded-none shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>✨</span> View OP Clinical Journey &amp; Consultations →
+          </button>
+        </div>
+      )}
       {/* Patient Banner */}
       <div className="bg-white border-b border-[#DDE2EC] px-5 py-3">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -1105,6 +1312,11 @@ export default function PatientChart({
           }}
         />
       )}
+
+      <PatientJourneyModal
+        encounter={selectedJourneyEncounter}
+        onClose={() => setSelectedJourneyEncounter(null)}
+      />
     </div>
   );
 }

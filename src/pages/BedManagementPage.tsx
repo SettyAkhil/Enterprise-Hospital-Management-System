@@ -6,11 +6,14 @@ import {
   FiAlertTriangle,
   FiBell,
   FiCheckCircle,
+  FiClipboard,
   FiDollarSign,
+  FiEdit2,
   FiHome,
   FiPlus,
   FiRepeat,
   FiSearch,
+  FiTrash2,
   FiTool,
   FiUser,
   FiX,
@@ -201,7 +204,13 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
   // allowed rather than locking everyone out; a logged-in account that HAS
   // a real permissions list but genuinely lacks beds.write is the actual
   // case this hides actions for.
-  const canManageBeds = !permissions || permissions.length === 0 || permissions.includes("beds.write");
+  // `permissions` is the RBAC module list (dashboard, inpatient, beds, ...),
+  // not granular action strings -- no role's allowedModules contains a dot, so
+  // the old "beds.write" test could never match and every user, Super Admin
+  // included, was locked out of adding, assigning, transferring or discharging.
+  // Access to the beds module IS the grant to manage beds, same as every other
+  // screen in this app.
+  const canManageBeds = !permissions || permissions.length === 0 || permissions.includes("beds");
   const [beds, setBeds] = useState<Bed[]>([]);
   const [summary, setSummary] = useState<Summary>({
     total: 0,
@@ -217,6 +226,7 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
   const [editingBedDetails, setEditingBedDetails] = useState(false);
   const [editBedForm, setEditBedForm] = useState(EMPTY_NEW_BED);
   const [savingBedEdit, setSavingBedEdit] = useState(false);
+  const [confirmDeleteBed, setConfirmDeleteBed] = useState(false);
 
   const [patientQuery, setPatientQuery] = useState("");
   const [patientResults, setPatientResults] = useState<Patient[]>([]);
@@ -258,6 +268,7 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
   const [allocateFilter, setAllocateFilter] = useState("");
   const [allocateBedId, setAllocateBedId] = useState<number | null>(null);
   const [allocateNotes, setAllocateNotes] = useState("");
+  const [printCensusOpen, setPrintCensusOpen] = useState(false);
   const [allocating, setAllocating] = useState(false);
   const [filterMatchingOnly, setFilterMatchingOnly] = useState(true);
 
@@ -473,6 +484,7 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
   const resetSelection = () => {
     setSelectedBed(null);
     setEditingBedDetails(false);
+    setConfirmDeleteBed(false);
     setPatientQuery("");
     setPatientResults([]);
     setSelectedPatient(null);
@@ -522,6 +534,51 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
     names.add("6th Floor");
     return Array.from(names).sort();
   }, [beds]);
+
+  // What "Add Beds" is actually about to create, read back to the user before
+  // they commit. Also catches the cases the old form let through silently: a
+  // reversed range, and a typo like "to bed 100" that would create 100 rows.
+  const newBedPlan = useMemo(() => {
+    const from = Number.parseInt(newBedRange.from_bed, 10);
+    const toRaw = newBedRange.to_bed.trim();
+    const to = toRaw ? Number.parseInt(toRaw, 10) : from;
+    const ward = newBedRange.ward.trim();
+    const room = newBedRange.room_no.trim();
+
+    if (!ward || !room) {
+      return { count: 0, invalid: false, message: "Enter a ward and room number to continue." };
+    }
+    if (!Number.isFinite(from) || from < 1) {
+      return { count: 0, invalid: false, message: "Enter the first bed number." };
+    }
+    if (!Number.isFinite(to) || to < from) {
+      return { count: 0, invalid: true, message: `"To" bed number must be ${from} or higher.` };
+    }
+    const count = to - from + 1;
+    if (count > 100) {
+      return { count, invalid: true, message: `That range is ${count} beds — check the numbers before continuing.` };
+    }
+    const existing = new Set(
+      beds.filter((b) => b.ward === ward && b.room_no === room).map((b) => String(b.bed_no)),
+    );
+    const clashes: string[] = [];
+    for (let n = from; n <= to; n += 1) if (existing.has(String(n))) clashes.push(String(n));
+    if (clashes.length > 0) {
+      return {
+        count,
+        invalid: true,
+        message: `${ward} Room ${room} already has bed ${clashes.slice(0, 6).join(", ")}${clashes.length > 6 ? "…" : ""}.`,
+      };
+    }
+    return {
+      count,
+      invalid: false,
+      message:
+        count === 1
+          ? `Creates bed ${from} in ${ward}, Room ${room}.`
+          : `Creates ${count} beds (${from}–${to}) in ${ward}, Room ${room}.`,
+    };
+  }, [newBedRange, beds]);
 
   const wardScopedBeds = useMemo(() => {
     if (selectedWard === "all") return beds;
@@ -705,7 +762,7 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
           (roomChargeSegments.length > 0
             ? `Bed ${selectedBed.bed_no} released. Room charges bill: ${formatINR(roomChargeTotal)}.`
             : `Bed ${selectedBed.bed_no} released and patient discharged.`) +
-          (summaryFailed ? " (Discharge summary could not be generated -- add it manually from the patient's chart.)" : ""),
+          (summaryFailed ? " (Discharge summary could not be generated — add it manually from the patient's chart.)" : ""),
       });
       resetSelection();
       await Promise.all([loadBeds(), loadDischarged()]);
@@ -744,6 +801,7 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
 
   const handleDeleteBed = async () => {
     if (!selectedBed) return;
+    setConfirmDeleteBed(false);
     try {
       await apiFetch(`/api/beds/${selectedBed.id}`, { method: "DELETE" });
       setNotice({ type: "success", message: `Bed ${selectedBed.bed_no} deleted.` });
@@ -841,20 +899,20 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
   return (
     <section className="w-full min-h-screen bg-[#F8FAFC]">
       {/* ── SEGMENTED TOP NAVIGATION HEADER TABS ── */}
-      <div className="w-full bg-white border-b border-[#E2E8F0] px-6 sm:px-8 pt-4 pb-0 mb-4 flex items-center justify-between flex-wrap gap-4 shadow-xs">
-        <div className="flex items-center gap-1">
+      <div className="w-full bg-white border-b border-[#E2E8F0] px-6 sm:px-8 pt-3 mb-5 flex items-end justify-between flex-wrap gap-4 shadow-xs">
+        <div className="flex items-end gap-1">
           <button
             type="button"
             onClick={() => setActiveView("bed_board")}
-            className={`px-5 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2.5 cursor-pointer ${
+            className={`px-4 py-2.5 text-[13px] font-bold border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeView === "bed_board"
                 ? "border-[#1B4FD8] text-[#1B4FD8] bg-transparent"
                 : "border-transparent text-[#64748B] hover:text-[#0F172A] bg-transparent"
             }`}
           >
-            <span>🛏️ Assign &amp; Manage Beds</span>
+            <span className="flex items-center gap-2"><FaBed aria-hidden /> Assign &amp; Manage Beds</span>
             <span
-              className={`px-2 py-0.5 text-xs font-mono rounded-full font-bold ${
+              className={`px-2 py-0.5 text-[11px] font-mono rounded-full font-bold ${
                 activeView === "bed_board"
                   ? "bg-[#EFF6FF] text-[#1B4FD8]"
                   : "bg-[#F1F5F9] text-[#64748B]"
@@ -870,15 +928,15 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
               setActiveView("discharged");
               void loadDischarged();
             }}
-            className={`px-5 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2.5 cursor-pointer ${
+            className={`px-4 py-2.5 text-[13px] font-bold border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeView === "discharged"
                 ? "border-[#1B4FD8] text-[#1B4FD8] bg-transparent"
                 : "border-transparent text-[#64748B] hover:text-[#0F172A] bg-transparent"
             }`}
           >
-            <span>📑 Discharged Patients Directory</span>
+            <span className="flex items-center gap-2"><FiClipboard aria-hidden /> Discharged Patients</span>
             <span
-              className={`px-2 py-0.5 text-xs font-mono rounded-full font-bold ${
+              className={`px-2 py-0.5 text-[11px] font-mono rounded-full font-bold ${
                 activeView === "discharged"
                   ? "bg-[#EFF6FF] text-[#1B4FD8]"
                   : "bg-[#F1F5F9] text-[#64748B]"
@@ -889,7 +947,7 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
           </button>
         </div>
 
-        <div className="flex items-center gap-3 pb-2">
+        <div className="flex items-center gap-3 pb-2.5">
           {/* Notification Icon & Flyout Panel */}
           <BedTransferNotificationPanel
             onAllocateTransfer={handleAllocateFromNotification}
@@ -897,9 +955,8 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
             canManageBeds={canManageBeds}
             setNotice={setNotice}
           />
-
           {activeView === "bed_board" && canManageBeds && (
-            <Button onClick={() => setAddBedOpen(true)}>
+            <Button onClick={() => setAddBedOpen(true)} className="font-bold">
               <FiPlus aria-hidden /> Add Bed
             </Button>
           )}
@@ -913,9 +970,12 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
           onRefresh={loadDischarged}
         />
       ) : (
-        <div className="px-6 sm:px-8 pb-12">
+        <div className="px-6 sm:px-8 pb-12 space-y-5">
         <>
-          <div className="stat-grid">
+          {/* Explicit 4-up: the shared .stat-grid is repeat(5,...) for modules
+              with five counts, which left this page's four cards ending ~250px
+              short of the panel below them. */}
+          <div className="stat-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
             <StatCard
               icon={<FaBed aria-hidden />}
               label={selectedWard === "all" ? "Total Beds" : `${selectedWard} — Beds`}
@@ -933,7 +993,7 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
                   <FiBell aria-hidden /> ER Bed Requests
                 </h3>
                 <p className="muted" style={{ margin: 0 }}>
-                  The ER doctor's clinical decision -- pick the actual bed here.
+                  The ER doctor's clinical decision &mdash; pick the actual bed here.
                 </p>
               </div>
               {erRequestsLoading ? (
@@ -988,27 +1048,31 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
 
       <div className="panel">
         <div className="bed-map-toolbar">
-          <select
-            className="ui-input bed-ward-select"
-            aria-label="Filter by ward"
-            value={selectedWard}
-            onChange={(event) => setSelectedWard(event.target.value)}
-          >
-            <option value="all">All Wards</option>
-            {wardOptions.map((ward) => (
-              <option key={ward} value={ward}>
-                {ward}
-              </option>
-            ))}
-          </select>
-          <div className="ai-search-bar" style={{ maxWidth: "420px" }}>
-            <FiSearch className="ai-search-icon" aria-hidden />
-            <Input
-              className="ai-search-input"
-              placeholder="Filter by room, bed number, or patient name"
-              value={filterText}
-              onChange={(event) => setFilterText(event.target.value)}
-            />
+          {/* Ward picker and search read as one filter group; the legend is a
+              key, not a control, so it sits apart on the right. */}
+          <div className="flex items-center gap-2.5 flex-1 min-w-[280px]">
+            <select
+              className="ui-input bed-ward-select"
+              aria-label="Filter by ward"
+              value={selectedWard}
+              onChange={(event) => setSelectedWard(event.target.value)}
+            >
+              <option value="all">All Wards</option>
+              {wardOptions.map((ward) => (
+                <option key={ward} value={ward}>
+                  {ward}
+                </option>
+              ))}
+            </select>
+            <div className="ai-search-bar" style={{ flex: 1, maxWidth: "420px" }}>
+              <FiSearch className="ai-search-icon" aria-hidden />
+              <Input
+                className="ai-search-input"
+                placeholder="Filter by room, bed or patient"
+                value={filterText}
+                onChange={(event) => setFilterText(event.target.value)}
+              />
+            </div>
           </div>
           <div className="bed-map-legend">
             <span className="bed-legend-item">
@@ -1060,51 +1124,59 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
                     )}{" "}
                     {ward}
                   </h4>
-                  <div className="bed-ward-counts">
-                    <span
-                      className="bed-count-badge bed-count-badge-available"
-                      title="Available"
-                    >
-                      {wardCounts.available}
-                    </span>
-                    <span
-                      className="bed-count-badge bed-count-badge-occupied"
-                      title="Occupied"
-                    >
-                      {wardCounts.occupied}
-                    </span>
+                  <div
+                    className="bed-occupancy-bar"
+                    title={`${wardCounts.available} available, ${wardCounts.occupied} occupied, ${wardCounts.maintenance} maintenance`}
+                  >
+                    {wardCounts.occupied > 0 && (
+                      <span
+                        className="bed-occupancy-segment bed-occupancy-segment-occupied"
+                        style={{ width: `${(wardCounts.occupied / total) * 100}%` }}
+                      />
+                    )}
                     {wardCounts.maintenance > 0 && (
                       <span
-                        className="bed-count-badge bed-count-badge-maintenance"
-                        title="Maintenance"
-                      >
-                        {wardCounts.maintenance}
-                      </span>
+                        className="bed-occupancy-segment bed-occupancy-segment-maintenance"
+                        style={{ width: `${(wardCounts.maintenance / total) * 100}%` }}
+                      />
+                    )}
+                    {wardCounts.available > 0 && (
+                      <span
+                        className="bed-occupancy-segment bed-occupancy-segment-available"
+                        style={{ width: `${(wardCounts.available / total) * 100}%` }}
+                      />
                     )}
                   </div>
-                </div>
-                <div
-                  className="bed-occupancy-bar"
-                  title={`${wardCounts.available} available, ${wardCounts.occupied} occupied, ${wardCounts.maintenance} maintenance`}
-                >
-                  {wardCounts.available > 0 && (
-                    <span
-                      className="bed-occupancy-segment bed-occupancy-segment-available"
-                      style={{ width: `${(wardCounts.available / total) * 100}%` }}
-                    />
-                  )}
-                  {wardCounts.occupied > 0 && (
-                    <span
-                      className="bed-occupancy-segment bed-occupancy-segment-occupied"
-                      style={{ width: `${(wardCounts.occupied / total) * 100}%` }}
-                    />
-                  )}
-                  {wardCounts.maintenance > 0 && (
-                    <span
-                      className="bed-occupancy-segment bed-occupancy-segment-maintenance"
-                      style={{ width: `${(wardCounts.maintenance / total) * 100}%` }}
-                    />
-                  )}
+                  <div className="bed-ward-meta">
+                    <span>
+                      <strong style={{ color: "#0F172A" }}>
+                        {Math.round((wardCounts.occupied / total) * 100)}%
+                      </strong>{" "}
+                      occupied
+                    </span>
+                    <div className="bed-ward-counts">
+                      <span
+                        className="bed-count-badge bed-count-badge-occupied"
+                        title="Occupied"
+                      >
+                        {wardCounts.occupied}
+                      </span>
+                      <span
+                        className="bed-count-badge bed-count-badge-available"
+                        title="Available"
+                      >
+                        {wardCounts.available}
+                      </span>
+                      {wardCounts.maintenance > 0 && (
+                        <span
+                          className="bed-count-badge bed-count-badge-maintenance"
+                          title="Maintenance"
+                        >
+                          {wardCounts.maintenance}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <WardBedBoard
                   rooms={rooms}
@@ -1126,105 +1198,116 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
         open={addBedOpen}
         onClose={() => setAddBedOpen(false)}
         title="Add Beds"
-        description='Add one bed, or a whole numbered range at once -- e.g. 1 to 20 creates 20 beds in that room.'
+        description="Create a single bed, or a whole numbered range in one go."
       >
-        <div className="module-form-grid">
-          <Label>
-            Ward
-            <Input
-              value={newBedRange.ward}
-              onChange={(e) =>
-                setNewBedRange({ ...newBedRange, ward: e.target.value })
-              }
-              placeholder="e.g. General Ward"
-            />
-          </Label>
-          <Label>
-            Room No.
-            <Input
-              value={newBedRange.room_no}
-              onChange={(e) =>
-                setNewBedRange({ ...newBedRange, room_no: e.target.value })
-              }
-              placeholder="e.g. 101"
-            />
-          </Label>
-          <Label>
-            From Bed No.
-            <Input
-              type="number"
-              min={1}
-              value={newBedRange.from_bed}
-              onChange={(e) =>
-                setNewBedRange({ ...newBedRange, from_bed: e.target.value })
-              }
-              placeholder="e.g. 1"
-            />
-          </Label>
-          <Label>
-            To Bed No. (optional)
-            <Input
-              type="number"
-              min={1}
-              value={newBedRange.to_bed}
-              onChange={(e) =>
-                setNewBedRange({ ...newBedRange, to_bed: e.target.value })
-              }
-              placeholder="Leave blank for a single bed"
-            />
-          </Label>
-          <Label>
-            Bed Type
-            <select
-              className="ui-input"
-              value={newBedRange.bed_type}
-              onChange={(e) =>
-                setNewBedRange({
-                  ...newBedRange,
-                  bed_type: e.target.value,
-                  daily_rate: String(BED_TYPE_DEFAULT_DAILY_RATE[e.target.value] ?? BED_TYPE_DEFAULT_DAILY_RATE.General),
-                })
-              }
-            >
-              {BED_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
+        <div className="bed-form-section">
+          <span className="bed-form-legend">Location</span>
+          <div className="bed-form-grid">
+            <Label>
+              Ward
+              <Input
+                value={newBedRange.ward}
+                onChange={(e) => setNewBedRange({ ...newBedRange, ward: e.target.value })}
+                placeholder="e.g. General Ward"
+                list="bed-ward-suggestions"
+              />
+            </Label>
+            {/* Existing ward names offered as suggestions -- ward is free text,
+                and a typo silently creates a second ward on the board. */}
+            <datalist id="bed-ward-suggestions">
+              {wardOptions.map((ward) => (
+                <option key={ward} value={ward} />
               ))}
-            </select>
-          </Label>
-          <Label>
-            Daily Rate (₹)
-            <Input
-              type="number"
-              min={0}
-              value={newBedRange.daily_rate}
-              onChange={(e) =>
-                setNewBedRange({ ...newBedRange, daily_rate: e.target.value })
-              }
-              placeholder="Room charge per day"
-            />
-          </Label>
+            </datalist>
+            <Label>
+              Room No.
+              <Input
+                value={newBedRange.room_no}
+                onChange={(e) => setNewBedRange({ ...newBedRange, room_no: e.target.value })}
+                placeholder="e.g. 101"
+              />
+            </Label>
+          </div>
         </div>
-        <div className="ui-modal-actions" style={{ marginTop: "1rem" }}>
+
+        <div className="bed-form-section">
+          <span className="bed-form-legend">Bed numbers</span>
+          <div className="bed-form-grid">
+            <Label>
+              From bed no.
+              <Input
+                type="number"
+                min={1}
+                value={newBedRange.from_bed}
+                onChange={(e) => setNewBedRange({ ...newBedRange, from_bed: e.target.value })}
+                placeholder="e.g. 1"
+              />
+            </Label>
+            <Label>
+              To bed no.
+              <Input
+                type="number"
+                min={1}
+                value={newBedRange.to_bed}
+                onChange={(e) => setNewBedRange({ ...newBedRange, to_bed: e.target.value })}
+                placeholder="Blank = one bed"
+              />
+            </Label>
+          </div>
+          {/* Reads the range back before anything is created -- typing 100 in
+              "to bed" instead of 10 otherwise creates 100 beds silently. */}
+          <div className={`bed-form-preview${newBedPlan.invalid ? " bed-form-preview-warn" : ""}`}>
+            {newBedPlan.message}
+          </div>
+        </div>
+
+        <div className="bed-form-section">
+          <span className="bed-form-legend">Type &amp; rate</span>
+          <div className="bed-form-grid">
+            <Label>
+              Bed type
+              <select
+                className="ui-input"
+                value={newBedRange.bed_type}
+                onChange={(e) =>
+                  setNewBedRange({
+                    ...newBedRange,
+                    bed_type: e.target.value,
+                    daily_rate: String(
+                      BED_TYPE_DEFAULT_DAILY_RATE[e.target.value] ?? BED_TYPE_DEFAULT_DAILY_RATE.General,
+                    ),
+                  })
+                }
+              >
+                {BED_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </Label>
+            <Label>
+              Daily rate (₹)
+              <Input
+                type="number"
+                min={0}
+                value={newBedRange.daily_rate}
+                onChange={(e) => setNewBedRange({ ...newBedRange, daily_rate: e.target.value })}
+                placeholder="Room charge per day"
+              />
+            </Label>
+          </div>
+          <p className="bed-form-hint">
+            Changing the bed type resets the rate to that type's default; edit it after if this ward charges differently.
+          </p>
+        </div>
+
+        <div className="ui-modal-actions" style={{ marginTop: "1.1rem" }}>
           <Button variant="ghost" onClick={() => setAddBedOpen(false)}>
-            Done
+            Cancel
           </Button>
-          <Button
-            onClick={handleAddBed}
-            disabled={
-              addingBed ||
-              !newBedRange.ward.trim() ||
-              !newBedRange.room_no.trim() ||
-              !newBedRange.from_bed.trim()
-            }
-          >
-            {addingBed
-              ? "Adding..."
-              : newBedRange.to_bed.trim() &&
-                  newBedRange.to_bed.trim() !== newBedRange.from_bed.trim()
-                ? `Add Beds ${newBedRange.from_bed || "?"}-${newBedRange.to_bed}`
-                : "Add Bed"}
+          <Button onClick={handleAddBed} disabled={addingBed || newBedPlan.invalid || newBedPlan.count === 0}>
+            {addingBed ? "Adding..." : newBedPlan.count > 1 ? `Add ${newBedPlan.count} beds` : "Add bed"}
           </Button>
         </div>
       </Modal>
@@ -1235,7 +1318,7 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
         onClose={resetSelection}
         title={
           selectedBed
-            ? `${selectedBed.ward} -- Room ${selectedBed.room_no} -- Bed ${selectedBed.bed_no}`
+            ? `${selectedBed.ward} · Room ${selectedBed.room_no} · Bed ${selectedBed.bed_no}`
             : ""
         }
         description={selectedBed ? `${selectedBed.bed_type} bed` : undefined}
@@ -1250,9 +1333,9 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
                 </p>
                 <p className="muted">
                   {selectedBed.patient_id}
-                  {selectedBed.patient_age ? ` -- ${selectedBed.patient_age} yrs` : ""}
-                  {selectedBed.patient_gender ? ` -- ${selectedBed.patient_gender}` : ""}
-                  {selectedBed.patient_phone ? ` -- ${selectedBed.patient_phone}` : ""}
+                  {selectedBed.patient_age ? ` · ${selectedBed.patient_age} yrs` : ""}
+                  {selectedBed.patient_gender ? ` · ${selectedBed.patient_gender}` : ""}
+                  {selectedBed.patient_phone ? ` · ${selectedBed.patient_phone}` : ""}
                 </p>
               </div>
             </div>
@@ -1305,12 +1388,12 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
         {selectedBed && transferOpen && (
           <>
             <p className="muted">
-              Move {bedOccupantName(selectedBed)} to a different bed -- e.g. a
-              room change, or shifting them to ICU. This keeps the same
-              admission and bed history intact.
+              Move {bedOccupantName(selectedBed)} to a different bed &mdash; a room
+              change, or shifting them to ICU. This keeps the same admission and
+              bed history intact.
             </p>
-            <Label style={{ marginTop: "0.5rem" }}>
-              Find an Available Bed
+            <Label style={{ marginTop: "0.85rem" }}>
+              Find an available bed
               <Input
                 value={transferFilter}
                 onChange={(e) => setTransferFilter(e.target.value)}
@@ -1375,7 +1458,7 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
           <>
             <p className="muted">
               Review before discharging {bedOccupantName(selectedBed)}. Pending
-              items are shown as a warning -- you can still discharge if
+              items are shown as a warning — you can still discharge if
               needed (e.g. discharge against medical advice).
             </p>
             {checklistLoading ? (
@@ -1454,14 +1537,14 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
               </div>
             ) : (
               <p className="muted" style={{ padding: "0.75rem 0" }}>
-                Couldn't load the checklist -- you can still discharge below.
+                Couldn't load the checklist — you can still discharge below.
               </p>
             )}
 
             {roomChargeSegments.length > 0 && (
               <>
                 <p className="muted" style={{ marginTop: "1rem" }}>
-                  Room charges for this stay -- one line per ward/bed the
+                  Room charges for this stay — one line per ward/bed the
                   patient occupied. Rates are editable before billing.
                 </p>
                 <div className="table-responsive">
@@ -1562,15 +1645,18 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
             )}
             {selectedBed.status === "Available" && canManageBeds && (
               <>
-                <Label>Find Patient</Label>
-                <Input
-                  value={patientQuery}
-                  onChange={(e) => {
-                    setPatientQuery(e.target.value);
-                    setSelectedPatient(null);
-                  }}
-                  placeholder="Search by name, phone, or patient ID"
-                />
+                <div className="bed-form-section">
+                <Label>
+                  Find patient
+                  <Input
+                    value={patientQuery}
+                    onChange={(e) => {
+                      setPatientQuery(e.target.value);
+                      setSelectedPatient(null);
+                    }}
+                    placeholder="Search by name, phone, or patient ID"
+                  />
+                </Label>
                 {selectedPatient ? (
                   <div className="bed-selected-patient">
                     <span>
@@ -1610,32 +1696,41 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
                           </strong>
                           <span className="muted">
                             {patient.patient_id}
-                            {patient.phone ? ` -- ${patient.phone}` : ""}
+                            {patient.phone ? ` · ${patient.phone}` : ""}
                           </span>
                         </button>
                       ))}
                     </div>
                   )
                 )}
-                <Label style={{ marginTop: "0.75rem" }}>
-                  Expected Length of Stay (days, optional)
-                  <Input
-                    type="number"
-                    min={1}
-                    value={expectedLosDays}
-                    onChange={(e) => setExpectedLosDays(e.target.value)}
-                    placeholder="e.g. 3"
-                  />
-                </Label>
-                <Label style={{ marginTop: "0.75rem" }}>
-                  Admission Notes (optional)
-                  <Textarea
-                    rows={3}
-                    value={assignNotes}
-                    onChange={(e) => setAssignNotes(e.target.value)}
-                    placeholder="Reason for admission, attending doctor, etc."
-                  />
-                </Label>
+                </div>
+
+                <div className="bed-form-section">
+                  <span className="bed-form-legend">Admission details</span>
+                  <Label>
+                    <span className="bed-field-caption">
+                      Expected length of stay <em className="bed-field-optional">(days, optional)</em>
+                    </span>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={expectedLosDays}
+                      onChange={(e) => setExpectedLosDays(e.target.value)}
+                      placeholder="e.g. 3"
+                    />
+                  </Label>
+                  <Label>
+                    <span className="bed-field-caption">
+                      Admission notes <em className="bed-field-optional">(optional)</em>
+                    </span>
+                    <Textarea
+                      rows={3}
+                      value={assignNotes}
+                      onChange={(e) => setAssignNotes(e.target.value)}
+                      placeholder="Reason for admission, attending doctor, etc."
+                    />
+                  </Label>
+                </div>
                 <div className="ui-modal-actions" style={{ marginTop: "1rem" }}>
                   <Button variant="ghost" onClick={resetSelection}>
                     Cancel
@@ -1655,24 +1750,15 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
             )}
 
             {canManageBeds && (
-              <div className="bed-detail-footer-actions">
-                <button
-                  type="button"
-                  className="bed-link-button"
-                  onClick={handleToggleMaintenance}
-                  disabled={savingBedEdit}
-                >
-                  {selectedBed.status === "Maintenance"
-                    ? "Mark Available"
-                    : "Mark Under Maintenance"}
-                </button>
-                <button
-                  type="button"
-                  className="bed-link-button"
-                  onClick={() => setEditingBedDetails(true)}
-                >
-                  Edit Bed Details
-                </button>
+              <div className="bed-modal-secondary">
+                <span className="bed-modal-secondary-label">This bed</span>
+                <Button variant="ghost" onClick={handleToggleMaintenance} disabled={savingBedEdit}>
+                  <FiTool aria-hidden />
+                  {selectedBed.status === "Maintenance" ? "Mark available" : "Mark under maintenance"}
+                </Button>
+                <Button variant="ghost" onClick={() => { setConfirmDeleteBed(false); setEditingBedDetails(true); }}>
+                  <FiEdit2 aria-hidden /> Edit bed details
+                </Button>
               </div>
             )}
           </>
@@ -1737,24 +1823,53 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
                 />
               </Label>
             </div>
-            <div className="ui-modal-actions" style={{ marginTop: "1rem" }}>
-              <Button
-                variant="destructive"
-                onClick={handleDeleteBed}
-                disabled={savingBedEdit}
-              >
-                Delete Bed
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => setEditingBedDetails(false)}
-                disabled={savingBedEdit}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleSaveBedEdit} disabled={savingBedEdit}>
-                {savingBedEdit ? "Saving..." : "Save"}
-              </Button>
+            {/* Delete is irreversible and used to sit flush against Cancel,
+                firing on a single click. It now lives on the opposite side of
+                the bar and asks once. */}
+            <div className="bed-modal-actions-split">
+              <div className="bed-modal-actions-danger">
+                {confirmDeleteBed ? (
+                  <>
+                    <span className="bed-modal-danger-text">
+                      Delete bed {selectedBed.bed_no} permanently?
+                    </span>
+                    <Button variant="ghost" onClick={() => setConfirmDeleteBed(false)} disabled={savingBedEdit}>
+                      Keep
+                    </Button>
+                    <Button variant="destructive" onClick={handleDeleteBed} disabled={savingBedEdit}>
+                      <FiTrash2 aria-hidden /> Yes, delete
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    className="bed-danger-link"
+                    onClick={() => setConfirmDeleteBed(true)}
+                    disabled={savingBedEdit || selectedBed.status === "Occupied"}
+                    title={
+                      selectedBed.status === "Occupied"
+                        ? "Discharge or transfer the patient before deleting this bed"
+                        : undefined
+                    }
+                  >
+                    <FiTrash2 aria-hidden /> Delete bed
+                  </Button>
+                )}
+              </div>
+              {!confirmDeleteBed && (
+                <div className="ui-modal-actions" style={{ marginTop: 0 }}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => { setConfirmDeleteBed(false); setEditingBedDetails(false); }}
+                    disabled={savingBedEdit}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveBedEdit} disabled={savingBedEdit}>
+                    {savingBedEdit ? "Saving..." : "Save changes"}
+                  </Button>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -1984,8 +2099,9 @@ export default function BedManagementPage({ setNotice, onOpenPatientClinical, pe
         />
       )}
         </>
-        </div>
+      </div>
       )}
+
     </section>
   );
 }

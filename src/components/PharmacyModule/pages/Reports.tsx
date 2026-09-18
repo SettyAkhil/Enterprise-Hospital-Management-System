@@ -92,8 +92,8 @@ export default function Reports({ onNavigate }: ReportsProps) {
         description="Insights and business intelligence for pharmacy operations"
         actions={
           <div className="flex gap-2">
-            <button onClick={() => alert("Printing report...")} className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors"><Printer size={13} /> Print</button>
-            <button onClick={() => alert("PDF report generated successfully.")} className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors"><FileText size={13} /> PDF</button>
+            <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors cursor-pointer"><Printer size={13} /> Print</button>
+            <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors cursor-pointer"><FileText size={13} /> PDF</button>
             <button onClick={() => alert("Excel report exported successfully.")} className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium" style={{ background: "#16a34a" }}><Download size={14} /> Export Excel</button>
           </div>
         }

@@ -63,6 +63,29 @@ export function BedCard<T extends BedCardData>({
   // clickable when there's nothing behind the click.
   readOnly?: boolean;
 }) {
+  // Computed before render (rather than in an IIFE mid-JSX) so the card knows
+  // whether it has a flag row at all -- an empty row would still claim its
+  // padding and break the shared baseline across a grid row.
+  const flags: { key: string; text: string }[] = [];
+  if (bed.status === "Occupied" && bed.patient_id) {
+    const clr = BillingDatabase.getInpatientFinancialClearance(bed.patient_id, bedOccupantName(bed));
+    if (clr.totalAmount !== 0 || clr.balanceDue !== 0) {
+      if (!clr.isCleared && clr.balanceDue > 0) {
+        flags.push({ key: "due", text: `🔒 Due ₹${clr.balanceDue.toLocaleString("en-IN")}` });
+      } else if (clr.isCleared) {
+        flags.push({ key: "cleared", text: "✅ Bill cleared" });
+      }
+    }
+  }
+  if (
+    bed.status === "Occupied" &&
+    bed.admission_notes &&
+    (bed.admission_notes.toLowerCase().includes("er") ||
+      bed.admission_notes.toLowerCase().includes("transfer"))
+  ) {
+    flags.push({ key: "transfer", text: "🚑 Transferred" });
+  }
+
   const variant =
     bed.status === "Occupied"
       ? `occupied-${bedGenderVariant(bed)}`
@@ -93,7 +116,7 @@ export function BedCard<T extends BedCardData>({
         </div>
 
         {bed.status === "Occupied" ? (
-          <div className="bed-info-card-occupant">
+          <div className="bed-info-card-body">
             {onPatientClick && bed.patient_id ? (
               <span
                 className="bed-info-card-name bed-info-card-name-link"
@@ -123,40 +146,26 @@ export function BedCard<T extends BedCardData>({
             {bed.admission_date && (
               <span className="bed-info-card-meta">Day {daysSinceAdmission(bed.admission_date)}</span>
             )}
-            {(() => {
-              if (bed.status !== "Occupied" || !bed.patient_id) return null;
-              const clr = BillingDatabase.getInpatientFinancialClearance(bed.patient_id, bedOccupantName(bed));
-              if (clr.totalAmount === 0 && clr.balanceDue === 0) return null;
-              if (!clr.isCleared && clr.balanceDue > 0) {
-                return (
-                  <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-900 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded mt-0.5 w-fit">
-                    🔒 Due: ₹{clr.balanceDue.toLocaleString("en-IN")}
+            {flags.length > 0 && (
+              <div className="bed-info-card-flags">
+                {flags.map((flag) => (
+                  <span key={flag.key} className={`bed-info-card-flag bed-info-card-flag-${flag.key}`}>
+                    {flag.text}
                   </span>
-                );
-              }
-              if (clr.isCleared) {
-                return (
-                  <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded mt-0.5 w-fit">
-                    ✅ Bill Cleared
-                  </span>
-                );
-              }
-              return null;
-            })()}
-            {bed.admission_notes &&
-              (bed.admission_notes.toLowerCase().includes("er") ||
-                bed.admission_notes.toLowerCase().includes("transfer")) && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded mt-0.5 w-fit">
-                  🚑 Transferred
-                </span>
-              )}
+                ))}
+              </div>
+            )}
           </div>
         ) : bed.status === "Maintenance" ? (
-          <div className="bed-info-card-status">
-            <FiTool aria-hidden /> Under maintenance
+          <div className="bed-info-card-body">
+            <div className="bed-info-card-status">
+              <FiTool aria-hidden /> Under maintenance
+            </div>
           </div>
         ) : (
-          <div className="bed-info-card-status">Available</div>
+          <div className="bed-info-card-body">
+            <div className="bed-info-card-status">Available</div>
+          </div>
         )}
       </div>
 

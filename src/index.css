@@ -383,30 +383,80 @@ textarea:focus-visible {
   margin: 0;
 }
 
-/* ── Printable Hospital Receipt Slip Media Rules ─────────────────────────── */
+/* ── Universal Printable Hospital Documents Media Rules ─────────────────────────── */
 @media print {
-  body * {
-    visibility: hidden;
+  html, body, #root {
+    height: auto !important;
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
   }
+
+  /* Hide app chrome, sidebars, headers, action buttons, notifications */
+  aside,
+  nav,
+  header,
+  button,
+  .no-print,
+  .sidebar,
+  .app-header {
+    display: none !important;
+  }
+
+  /* Ensure card containers expand cleanly for printing */
+  .overflow-y-auto,
+  .overflow-hidden,
+  .overflow-auto {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* Target all printable medical passes, receipts, summaries, and census reports */
+  .printable-area,
+  .printable-card,
   #printable-receipt,
-  #printable-receipt * {
-    visibility: visible;
-  }
-  #printable-receipt {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
+  #printable-op-pass,
+  #printable-discharge-summary,
+  #printable-lab-report,
+  #printable-radiology-report,
+  #printable-bed-census,
+  #printable-prescription,
+  #printable-invoice,
+  #printable-area,
+  .printable-handover-document {
+    visibility: visible !important;
+    display: block !important;
+    position: relative !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
-    max-width: 650px !important;
-    margin: 5px auto !important;
-    padding: 14px !important;
+    max-width: 800px !important;
+    margin: 10px auto !important;
+    padding: 20px !important;
     box-shadow: none !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 8px !important;
-    background: white !important;
+    border: 1.5px solid #0F172A !important;
+    border-radius: 0px !important;
+    background: #FFFFFF !important;
+    color: #0F172A !important;
     page-break-inside: avoid !important;
-    page-break-after: avoid !important;
+  }
+
+  .printable-area *,
+  .printable-card *,
+  #printable-receipt *,
+  #printable-op-pass *,
+  #printable-discharge-summary *,
+  #printable-lab-report *,
+  #printable-radiology-report *,
+  #printable-bed-census *,
+  #printable-prescription *,
+  #printable-invoice *,
+  #printable-area *,
+  .printable-handover-document * {
+    visibility: visible !important;
   }
 }
 
