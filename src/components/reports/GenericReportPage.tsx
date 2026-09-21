@@ -58,6 +58,7 @@ import {
   printDoctorReport,
   downloadDoctorReportPdf,
 } from "../../utils/generalReportsExporter";
+import { useLiveClinic } from "../../hooks/useLiveClinic";
 import {
   PatientDataPdfModal,
   InReportEncounterModal,
@@ -360,6 +361,9 @@ export default function GenericReportPage({
 }: GenericReportPageProps) {
   const config = REPORT_CONFIGS[reportType] || REPORT_CONFIGS.reports_patients;
 
+  // Live clinic revision: automatically re-fetches report data whenever any patient, bed, or order is updated
+  const { revision } = useLiveClinic();
+
   // Filter States
   const [dateRange, setDateRange] = useState<DateRangePreset>("last30");
   const [customStart, setCustomStart] = useState("");
@@ -466,6 +470,7 @@ export default function GenericReportPage({
   useEffect(() => {
     fetchReportData();
   }, [
+    revision,
     reportType,
     dateRange,
     customStart,

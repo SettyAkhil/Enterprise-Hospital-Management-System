@@ -83,6 +83,7 @@ import { ErDatabase } from "../../services/erDb"
 import { BedDatabase } from "../../services/bedDb"
 import { PharmacyDatabase } from "../../services/pharmacyDb"
 import { LabOrderDatabase } from "../../services/labOrdersDb"
+import { useLiveClinic } from "../../hooks/useLiveClinic"
 
 interface GeneralReportsOverviewPageProps {
   onNavigate?: (module: string) => void
@@ -394,6 +395,9 @@ function resolvePatientClinicalDetails(
 export default function GeneralReportsOverviewPage({
   onNavigate,
 }: GeneralReportsOverviewPageProps) {
+  // Live clinic revision: automatically re-evaluates overview whenever a new patient is added or data changes
+  const { revision } = useLiveClinic()
+
   // Date and filter states
   const [dateRange, setDateRange] = useState<DateRangePreset>("last30")
   const [customStart, setCustomStart] = useState("")
@@ -435,7 +439,7 @@ export default function GeneralReportsOverviewPage({
   const [trendPeriod, setTrendPeriod] =
     useState<"daily" | "weekly" | "monthly">("daily")
 
-  // Fetch real data synchronized with date and filter state
+  // Fetch real data synchronized with date, filter state, and live database revisions
   const data = useMemo(() => {
     return GeneralReportsService.getOverviewData(
       dateRange,
@@ -447,6 +451,7 @@ export default function GeneralReportsOverviewPage({
       selectedStatus,
     )
   }, [
+    revision,
     dateRange,
     customStart,
     customEnd,
