@@ -375,33 +375,65 @@ export interface AppStockTransfer {
 export interface AppSupplierReturn {
   id: string; // returnId internal
   debitNoteNumber: string; // DN-YYYY-XXXXX
+  returnNumber?: string;
   supplierId: string;
+  supplierName?: string;
   medicineId: string;
+  medicineName?: string;
   batchId: string;
+  batchNumber?: string;
   quantity: number;
   purchaseRate: number;
+  unitCost?: number;
   returnAmount: number;
   reason: string;
-  status: "Draft" | "Submitted" | "Approved" | "Sent To Supplier" | "Credit Note Pending" | "Credit Received" | "Closed";
+  status:
+    | "Draft"
+    | "Submitted"
+    | "Approved"
+    | "Sent To Supplier"
+    | "Credit Note Pending"
+    | "Credit Received"
+    | "Closed"
+    | "Credit Note Received"
+    | string;
   poNumber?: string;
   grnNumber?: string;
   invoiceNumber?: string;
-  createdBy: string;
+  creditNoteId?: string;
+  notes?: string;
+  requestedBy?: string;
+  createdBy?: string;
   approvedBy?: string;
+  returnDate?: string;
   createdAt: string;
   updatedAt?: string;
 }
 
 export interface AppStockAdjustment {
   id: string;
+  adjustmentNumber?: string;
   medicineId: string;
+  medicineName?: string;
   batchId: string;
+  batchNumber?: string;
+  supplierId?: string;
+  supplierName?: string;
+  category?: string;
+  quantity?: number;
+  unitCost?: number;
+  lossValue?: number;
   systemQuantity: number;
   physicalQuantity: number;
   difference: number;
-  reason: "Physical Mismatch" | "Damage" | "Missing Stock";
-  approvedBy: string;
-  status: "Approved";
+  reason: "Physical Mismatch" | "Damage" | "Missing Stock" | string;
+  disposalMethod?: string;
+  location?: string;
+  witnessName?: string;
+  reportedBy?: string;
+  adjustmentDate?: string;
+  approvedBy?: string;
+  status?: "Approved" | string;
   createdAt: string;
 }
 

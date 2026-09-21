@@ -555,7 +555,7 @@ Output strictly valid JSON only without markdown formatting.`;
           expiry: item.expiry,
           activeStatus: "Active"
         } as any);
-        PharmacyDatabase.logAudit("System", "Create", "Pharmacy", item.matched, `Auto-created medicine ${item.matched} via Smart Invoice OCR`);
+        PharmacyDatabase.logAudit("System", "Create", "Medicine", item.matched, `Auto-created medicine ${item.matched} via Smart Invoice OCR`);
       } else {
         medId = existing.id;
         const newStock = (existing.stock || 0) + item.quantity;
