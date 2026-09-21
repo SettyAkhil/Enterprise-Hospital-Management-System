@@ -157,6 +157,24 @@ body {
   color: #93C5FD;
 }
 
+/* Category header in accordion menus (e.g. General Reports, Financial Reports) */
+.nav-item.category {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #94A3B8;
+}
+.nav-item.category:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #CBD5E1;
+}
+.nav-item.category.active {
+  background: rgba(27, 79, 216, 0.20);
+  color: #FFFFFF;
+}
+.nav-item.category.active:hover {
+  background: rgba(27, 79, 216, 0.28);
+}
+
 /* Nav icons must never be squeezed by the flex row */
 .nav-item > svg {
   flex-shrink: 0;
@@ -385,28 +403,73 @@ textarea:focus-visible {
 
 /* ── Printable Hospital Receipt Slip Media Rules ─────────────────────────── */
 @media print {
-  body * {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide app navigation chrome, sidebars, headers, and action buttons */
+  aside,
+  nav,
+  header,
+  button,
+  .print\:hidden,
+  .no-print {
+    display: none !important;
+  }
+
+  /* When printing the receipt or OP report, ensure the report content is visible */
+  body:has(#hospital-printable-receipt) *,
+  body:has(#printable-receipt) *,
+  body:has(#op-reports-printable) * {
     visibility: hidden;
   }
+
+  #hospital-printable-receipt,
+  #hospital-printable-receipt *,
   #printable-receipt,
-  #printable-receipt * {
-    visibility: visible;
+  #printable-receipt *,
+  #op-reports-printable,
+  #op-reports-printable * {
+    visibility: visible !important;
   }
+
+  #hospital-printable-receipt,
   #printable-receipt {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
     width: 100% !important;
-    max-width: 650px !important;
-    margin: 5px auto !important;
-    padding: 14px !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
     box-shadow: none !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 8px !important;
-    background: white !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
     page-break-inside: avoid !important;
     page-break-after: avoid !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #op-reports-printable {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
 
