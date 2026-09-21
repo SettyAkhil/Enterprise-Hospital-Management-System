@@ -1,32 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Search, Pill, ClipboardList, FileText, Truck, ShoppingBag, Package, ArrowLeftRight, X } from "lucide-react";
+import { PharmacyDatabase } from "../../../services/pharmacyDb";
 
 interface GlobalSearchProps {
   onClose: () => void;
   onNavigate: (page: string) => void;
 }
-
-const searchResults = [
-  { group: "Medicines", icon: Pill, items: [
-    { label: "Paracetamol 500mg", sub: "Cipla Ltd · Stock: 840", page: "medicines" },
-    { label: "Azithromycin 500mg", sub: "Cipla Ltd · Stock: 156", page: "medicines" },
-    { label: "Metformin 500mg", sub: "Dr. Reddy's · Stock: 18 ⚠ Low", page: "medicines" },
-  ]},
-  { group: "Prescriptions", icon: ClipboardList, items: [
-    { label: "RX-2026-1042", sub: "Lakshmi Devi · Dr. Rajan Pillai · Processing", page: "prescriptions" },
-    { label: "RX-2026-1046", sub: "Kavya Nambiar · Dr. Priya Menon · Pending", page: "prescriptions" },
-  ]},
-  { group: "Invoices", icon: FileText, items: [
-    { label: "INV-2026-8845", sub: "Arjun Sharma · ₹1,240 · 12 Sep 2026", page: "sales-returns" },
-    { label: "INV-2026-8821", sub: "Suresh Babu · ₹780 · 12 Sep 2026 · Cancelled", page: "sales-returns" },
-  ]},
-  { group: "Suppliers", icon: Truck, items: [
-    { label: "Medline Distributors", sub: "GSTIN: 29AABCM1234A1Z5", page: "suppliers" },
-  ]},
-  { group: "Purchase Orders", icon: ShoppingBag, items: [
-    { label: "PO-2026-0892", sub: "Medline Distributors · ₹1,24,500 · Ordered", page: "purchase-orders" },
-  ]},
-];
 
 export default function GlobalSearch({ onClose, onNavigate }: GlobalSearchProps) {
   const [query, setQuery] = useState("");
@@ -38,6 +17,78 @@ export default function GlobalSearch({ onClose, onNavigate }: GlobalSearchProps)
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  const searchResults = useMemo(() => {
+    const meds = PharmacyDatabase.getMedicines();
+    const prescriptions = PharmacyDatabase.getPrescriptions();
+    const bills = PharmacyDatabase.getBills();
+    const suppliers = PharmacyDatabase.getSuppliers();
+    const pos = PharmacyDatabase.getPurchaseOrders();
+
+    const groups = [];
+
+    if (meds.length > 0) {
+      groups.push({
+        group: "Medicines",
+        icon: Pill,
+        items: meds.slice(0, 10).map(m => ({
+          label: m.brandName || m.medicineName,
+          sub: `${m.genericName || "Generic"} · ${m.dosageForm || "Medicine"}`,
+          page: "medicines",
+        })),
+      });
+    }
+
+    if (prescriptions.length > 0) {
+      groups.push({
+        group: "Prescriptions",
+        icon: ClipboardList,
+        items: prescriptions.slice(0, 10).map(p => ({
+          label: p.id,
+          sub: `${p.patientName} · Dr. ${p.doctorName || "Doctor"} · ${p.status}`,
+          page: "prescriptions",
+        })),
+      });
+    }
+
+    if (bills.length > 0) {
+      groups.push({
+        group: "Invoices",
+        icon: FileText,
+        items: bills.slice(0, 10).map(b => ({
+          label: b.billNumber,
+          sub: `${b.patientName} · ₹${b.totalAmount} · ${b.createdAt?.split("T")[0] || ""}`,
+          page: "sales-returns",
+        })),
+      });
+    }
+
+    if (suppliers.length > 0) {
+      groups.push({
+        group: "Suppliers",
+        icon: Truck,
+        items: suppliers.slice(0, 10).map(s => ({
+          label: s.supplierName,
+          sub: `GSTIN: ${s.gstInformation || "N/A"}`,
+          page: "suppliers",
+        })),
+      });
+    }
+
+    if (pos.length > 0) {
+      groups.push({
+        group: "Purchase Orders",
+        icon: ShoppingBag,
+        items: pos.slice(0, 10).map(p => ({
+          label: p.id,
+          sub: `Value: ₹${p.totalOrderValue} · ${p.status}`,
+          page: "purchase-orders",
+        })),
+      });
+    }
+
+    return groups;
+  }, []);
 
   const filtered = query.trim().length > 0
     ? searchResults.map(g => ({

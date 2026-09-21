@@ -209,224 +209,288 @@ export default function Inpatient({ navigate, onOpenPatientClinical, permissions
     document.getElementById("ward-room-board")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const boardStats = [
+    { label: "Total beds", value: summary.total, tone: "#0F172A" },
+    { label: "Occupied", value: summary.occupied, tone: "#1B4FD8" },
+    { label: "Available", value: summary.available, tone: "#16A34A" },
+    { label: "Maintenance", value: summary.maintenance, tone: "#D97706" },
+  ];
+
   return (
     <div className="flex-1 overflow-y-auto bg-[#F0F2F5]">
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-gray-900">Inpatient Bed Board</h1>
-          <p className="text-[11.5px] text-[#64748B]">
-            Hospital-wide occupancy &amp; alerts &middot; read-only &mdash; use Bed Management to allocate, transfer, or discharge
-          </p>
+      {/* Masthead -- title, the four counts and the colour legend are one
+          block rather than two stacked white bands, and everything below
+          shares its px-6 gutter so nothing steps in or out by a few pixels. */}
+      <div className="bg-white border-b border-[#DDE2EC]">
+        <div className="px-6 pt-4 pb-3 flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="text-base font-semibold text-gray-900 leading-tight">Inpatient Bed Board</h1>
+            <p className="text-[11.5px] text-[#64748B] mt-0.5">
+              Hospital-wide occupancy &amp; alerts &middot; read-only &mdash; use Bed Management to allocate, transfer, or discharge
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <BedTransferNotificationPanel
+              onAllocateTransfer={() => goToBedManagement()}
+              onViewPatientChart={onOpenPatientClinical}
+              canManageBeds={!permissions || permissions.includes("beds")}
+            />
+            <Btn variant="primary" size="sm" onClick={goToBedManagement}>Open Bed Management →</Btn>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <BedTransferNotificationPanel
-            onAllocateTransfer={() => goToBedManagement()}
-            onViewPatientChart={onOpenPatientClinical}
-            canManageBeds={!permissions || permissions.includes("beds.write")}
-          />
-          <Btn variant="primary" size="sm" onClick={goToBedManagement}>Open Bed Management →</Btn>
+
+        <div className="px-6 pb-3 flex items-end justify-between gap-6 flex-wrap">
+          <div className="flex items-stretch divide-x divide-[#E2E8F0] border border-[#E2E8F0] rounded-md overflow-hidden">
+            {boardStats.map((stat) => (
+              <div key={stat.label} className="px-4 py-2 min-w-[104px]">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">{stat.label}</div>
+                <div className="font-mono text-xl font-bold leading-tight mt-0.5" style={{ color: stat.tone }}>
+                  {stat.value}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap pb-1">
+            <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-available" /> Available</span>
+            <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-male" /> Male</span>
+            <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-female" /> Female</span>
+            <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-maintenance" /> Maintenance</span>
+            <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-icu" /> ICU</span>
+          </div>
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center gap-8 text-[12.5px]">
-        <div><span className="font-mono font-semibold text-gray-900 text-lg">{summary.total}</span> <span className="text-[#64748B]">Total Beds</span></div>
-        <div><span className="font-mono font-semibold text-[#1B4FD8] text-lg">{summary.occupied}</span> <span className="text-[#64748B]">Occupied</span></div>
-        <div><span className="font-mono font-semibold text-[#16A34A] text-lg">{summary.available}</span> <span className="text-[#64748B]">Available</span></div>
-        <div><span className="font-mono font-semibold text-[#D97706] text-lg">{summary.maintenance}</span> <span className="text-[#64748B]">Maintenance</span></div>
-        <div className="ml-auto flex items-center gap-3 text-[11.5px]">
-          <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-available" /> Available</span>
-          <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-male" /> Male</span>
-          <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-female" /> Female</span>
-          <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-maintenance" /> Maintenance</span>
-          <span className="bed-legend-item"><span className="bed-legend-swatch bed-legend-swatch-icu" /> ICU</span>
-        </div>
-      </div>
-
-      <div className="p-5">
+      <div className="px-6 py-5 space-y-5">
         {loading ? (
           <p className="text-[12.5px] text-[#64748B]">Loading bed board...</p>
         ) : wardNames.length === 0 ? (
-          <div className="bg-white border border-[#DDE2EC] rounded p-6 text-center">
+          <div className="bg-white border border-[#DDE2EC] rounded-md p-8 text-center">
             <p className="text-[13px] font-semibold text-gray-800">No beds set up yet</p>
             <p className="text-[12px] text-[#64748B] mt-1">Add wards and beds from Bed Management to populate this board.</p>
             <Btn variant="primary" size="sm" className="mt-3" onClick={goToBedManagement}>Go to Bed Management</Btn>
           </div>
         ) : (
           <>
-            {/* ICU admission notifications -- persists per-browser via
-                localStorage until acknowledged, so a fresh allocation always
-                surfaces here even after the page is reloaded. */}
-            {icuAdmissionAlerts.length > 0 && (
-              <div className="bg-[#FEF2F2] border border-[#FCA5A5] rounded mb-5 overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-[#FCA5A5] flex items-center gap-2">
-                  <FiBell className="text-[#B91C1C] animate-pulse" aria-hidden />
-                  <span className="text-xs font-bold text-[#991B1B] uppercase tracking-wider">
-                    ICU Admission Alert{icuAdmissionAlerts.length > 1 ? "s" : ""} ({icuAdmissionAlerts.length})
-                  </span>
-                </div>
-                <div className="p-3 space-y-2">
-                  {icuAdmissionAlerts.map((bed) => (
-                    <div
-                      key={icuAdmissionKey(bed)}
-                      className="flex items-center gap-3 p-2.5 bg-white border border-[#FCA5A5] rounded"
+            {/* Ward occupancy -- auto-fit tracks, so three wards fill the row
+                instead of clustering at the left of a fixed 6-column grid. */}
+            <section className="bg-white border border-[#DDE2EC] rounded-md p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Ward occupancy</h2>
+                <span className="text-[11px] text-[#94A3B8]">Click a ward to open its beds below</span>
+              </div>
+              <div
+                className="grid gap-3"
+                style={{ gridTemplateColumns: "repeat(auto-fit, minmax(212px, 1fr))" }}
+              >
+                {wardNames.map((ward) => {
+                  const wardBeds = Array.from(groupedByWard.get(ward)!.values()).flat();
+                  const occupied = wardBeds.filter((b) => b.status === "Occupied").length;
+                  const total = wardBeds.length;
+                  const pct = total ? Math.round((occupied / total) * 100) : 0;
+                  const level = wardOccupancyLevel(occupied, total);
+                  const levelStyle =
+                    level === "critical"
+                      ? { bg: "#FEF2F2", border: "#FCA5A5", text: "#B91C1C", bar: "#DC2626" }
+                      : level === "high"
+                        ? { bg: "#FFFBEB", border: "#FDE68A", text: "#B45309", bar: "#D97706" }
+                        : { bg: "#F0FDF4", border: "#BBF7D0", text: "#15803D", bar: "#16A34A" };
+                  const isActive = ward === activeWard;
+                  return (
+                    <button
+                      key={ward}
+                      onClick={() => openWard(ward)}
+                      className={`text-left rounded-md p-3 border transition-all hover:-translate-y-0.5 hover:shadow-sm${
+                        isActive ? " ring-2 ring-[#1B4FD8] ring-offset-1" : ""
+                      }`}
+                      style={{ backgroundColor: levelStyle.bg, borderColor: levelStyle.border }}
                     >
-                      <div className="flex-1">
-                        <div className="text-[12.5px] font-semibold text-gray-900">
-                          {bedOccupantName(bed)} allocated to {bed.ward} &middot; Room {bed.room_no} &middot; Bed {bed.bed_no}
-                        </div>
-                        <div className="text-[11.5px] text-[#64748B]">
-                          {bed.patient_age ? `${bed.patient_age}y · ` : ""}
-                          {bed.patient_gender || "Gender N/A"} &middot; Allocated {formatDateTimeIST(bed.allocated_at || bed.admission_date!)}
-                        </div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[12px] font-semibold text-gray-800 truncate">{ward}</span>
+                        <span className="text-[10.5px] font-mono text-[#64748B] shrink-0">{occupied}/{total}</span>
                       </div>
-                      <Btn variant="outline" size="xs" onClick={() => acknowledgeIcuAdmission(bed)}>
-                        Acknowledge
-                      </Btn>
+                      <div className="flex items-baseline gap-1 mt-1.5">
+                        <span className="text-xl font-mono font-bold leading-none" style={{ color: levelStyle.text }}>{pct}%</span>
+                        <span className="text-[10.5px] text-[#64748B]">occupied</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-white/70 mt-2.5 overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: levelStyle.bar }} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* ICU admissions and ward alerts sit side by side -- each was a
+                full-width band whose rows ran ~200px wide inside 1300px of
+                white space, pushing the actual bed board below the fold.
+                ICU acknowledgements persist per-browser via localStorage, so
+                a fresh allocation still surfaces after a reload. */}
+            {(icuAdmissionAlerts.length > 0 || hasAlerts) && (
+              <div className="grid gap-5 items-start xl:grid-cols-2">
+                {icuAdmissionAlerts.length > 0 && (
+                  <section className="bg-white border border-[#FCA5A5] rounded-md overflow-hidden">
+                    <div className="px-4 py-2.5 bg-[#FEF2F2] border-b border-[#FCA5A5] flex items-center gap-2">
+                      <FiBell className="text-[#B91C1C] animate-pulse" aria-hidden />
+                      <span className="text-xs font-bold text-[#991B1B] uppercase tracking-wider">
+                        ICU admission alert{icuAdmissionAlerts.length > 1 ? "s" : ""}
+                      </span>
+                      <span className="ml-auto font-mono text-[11px] font-bold text-[#991B1B] bg-white border border-[#FCA5A5] rounded-full px-2 py-0.5">
+                        {icuAdmissionAlerts.length}
+                      </span>
                     </div>
-                  ))}
-                </div>
+                    <ul className="divide-y divide-[#F1F5F9]">
+                      {icuAdmissionAlerts.map((bed) => (
+                        <li key={icuAdmissionKey(bed)} className="flex items-center gap-3 px-4 py-2.5">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12.5px] font-semibold text-gray-900 truncate">
+                              {bedOccupantName(bed)}
+                            </div>
+                            <div className="text-[11px] text-[#64748B] truncate">
+                              {bed.ward} &middot; Room {bed.room_no} &middot; Bed {bed.bed_no}
+                              {bed.patient_age ? ` · ${bed.patient_age}y` : ""}
+                              {bed.patient_gender ? ` · ${bed.patient_gender}` : ""}
+                            </div>
+                            <div className="text-[10.5px] text-[#94A3B8] mt-0.5">
+                              Allocated {formatDateTimeIST(bed.allocated_at || bed.admission_date!)}
+                            </div>
+                          </div>
+                          <Btn variant="outline" size="xs" onClick={() => acknowledgeIcuAdmission(bed)}>
+                            Acknowledge
+                          </Btn>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                {hasAlerts && (
+                  <section className="bg-white border border-[#DDE2EC] rounded-md overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-[#DDE2EC] flex items-center gap-2">
+                      <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Ward alerts</span>
+                      <span className="ml-auto font-mono text-[11px] font-bold text-[#64748B] bg-[#F1F5F9] rounded-full px-2 py-0.5">
+                        {overdueBeds.length + mixedGenderRooms.length}
+                      </span>
+                    </div>
+                    <ul className="divide-y divide-[#F1F5F9]">
+                      {overdueBeds.map((bed) => (
+                        <li key={`overdue-${bed.id}`} className="flex items-start gap-3 px-4 py-2.5">
+                          <FiClock className="text-[#B91C1C] shrink-0 mt-0.5" aria-hidden />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12.5px] font-semibold text-gray-800 truncate">
+                              {bedOccupantName(bed)} &mdash; extended stay
+                            </div>
+                            <div className="text-[11px] text-[#64748B] truncate">
+                              {bed.ward} &middot; Room {bed.room_no} &middot; Bed {bed.bed_no}
+                            </div>
+                          </div>
+                          <span className="shrink-0 text-[10.5px] font-bold text-[#B91C1C] bg-[#FEF2F2] border border-[#FCA5A5] rounded px-1.5 py-0.5">
+                            {overdueDays(bed)}d over
+                          </span>
+                        </li>
+                      ))}
+                      {mixedGenderRooms.map(({ ward, room_no, beds: roomBeds }) => (
+                        <li key={`mixed-${ward}-${room_no}`} className="flex items-start gap-3 px-4 py-2.5">
+                          <FiUsers className="text-[#B45309] shrink-0 mt-0.5" aria-hidden />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12.5px] font-semibold text-gray-800">Mixed-gender room</div>
+                            <div className="text-[11px] text-[#64748B] truncate">
+                              {ward} &middot; Room {room_no} &middot; {roomBeds.map((b) => bedOccupantName(b)).join(", ")}
+                            </div>
+                          </div>
+                          <span className="shrink-0 text-[10.5px] font-bold text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] rounded px-1.5 py-0.5">
+                            Review
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
               </div>
             )}
 
-            {/* Ward occupancy heatmap -- click a ward to jump to its beds below */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-5">
-              {wardNames.map((ward) => {
-                const wardBeds = Array.from(groupedByWard.get(ward)!.values()).flat();
-                const occupied = wardBeds.filter((b) => b.status === "Occupied").length;
-                const total = wardBeds.length;
-                const pct = total ? Math.round((occupied / total) * 100) : 0;
-                const level = wardOccupancyLevel(occupied, total);
-                const levelStyle =
-                  level === "critical"
-                    ? { bg: "#FEF2F2", border: "#FCA5A5", text: "#B91C1C", bar: "#DC2626" }
-                    : level === "high"
-                      ? { bg: "#FFFBEB", border: "#FDE68A", text: "#B45309", bar: "#D97706" }
-                      : { bg: "#F0FDF4", border: "#BBF7D0", text: "#15803D", bar: "#16A34A" };
-                return (
-                  <button
-                    key={ward}
-                    onClick={() => openWard(ward)}
-                    className="text-left rounded p-3 border transition-transform hover:-translate-y-0.5"
-                    style={{ backgroundColor: levelStyle.bg, borderColor: levelStyle.border }}
+            {/* Ward board -- pick a ward, then a room within it */}
+            <section className="bg-white border border-[#DDE2EC] rounded-md" id="ward-room-board">
+              <div className="px-4 py-3 border-b border-[#DDE2EC] flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Ward</span>
+                  <select
+                    className="ui-input bed-ward-select"
+                    aria-label="Select ward"
+                    value={activeWard || ""}
+                    onChange={(e) => setSelectedWard(e.target.value)}
                   >
-                    <div className="text-[12px] font-semibold text-gray-800 truncate">{ward}</div>
-                    <div className="flex items-baseline gap-1 mt-1">
-                      <span className="text-lg font-mono font-bold" style={{ color: levelStyle.text }}>{pct}%</span>
-                      <span className="text-[10.5px] text-[#64748B]">full</span>
-                    </div>
-                    <div className="text-[10.5px] text-[#64748B] mt-0.5">{occupied}/{total} beds</div>
-                    <div className="h-1 rounded-full bg-white/60 mt-2 overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: levelStyle.bar }} />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Alerts */}
-            <div className="bg-white border border-[#DDE2EC] rounded mb-5">
-              <div className="px-4 py-2.5 border-b border-[#DDE2EC]">
-                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Alerts</span>
-              </div>
-              {!hasAlerts ? (
-                <p className="text-[12px] text-[#94A3B8] px-4 py-3">No active alerts &mdash; all clear.</p>
-              ) : (
-                <div className="p-3 space-y-2">
-                  {overdueBeds.map((bed) => (
-                    <div key={`overdue-${bed.id}`} className="flex items-center gap-3 p-2.5 border border-[#FCA5A5] bg-[#FEF2F2] rounded">
-                      <FiClock className="text-[#B91C1C] flex-shrink-0" aria-hidden />
-                      <div className="flex-1">
-                        <div className="text-[12.5px] font-semibold text-gray-800">
-                          {bedOccupantName(bed)} &mdash; extended stay
-                        </div>
-                        <div className="text-[11.5px] text-[#64748B]">
-                          {bed.ward} &middot; Room {bed.room_no} &middot; Bed {bed.bed_no} &middot;{" "}
-                          {overdueDays(bed)}d past expected discharge
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {mixedGenderRooms.map(({ ward, room_no, beds: roomBeds }) => (
-                    <div key={`mixed-${ward}-${room_no}`} className="flex items-center gap-3 p-2.5 border border-[#FDE68A] bg-[#FFFBEB] rounded">
-                      <FiUsers className="text-[#B45309] flex-shrink-0" aria-hidden />
-                      <div className="flex-1">
-                        <div className="text-[12.5px] font-semibold text-gray-800">Mixed-gender room</div>
-                        <div className="text-[11.5px] text-[#64748B]">
-                          {ward} &middot; Room {room_no} &middot; {roomBeds.map((b) => bedOccupantName(b)).join(", ")}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    {wardNames.map((ward) => (
+                      <option key={ward} value={ward}>{ward}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
-            </div>
-
-            {/* Ward board -- pick a ward, then click a room to open it */}
-            <div className="bg-white border border-[#DDE2EC] rounded p-4" id="ward-room-board">
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <select
-                  className="ui-input bed-ward-select"
-                  aria-label="Select ward"
-                  value={activeWard || ""}
-                  onChange={(e) => setSelectedWard(e.target.value)}
-                >
-                  {wardNames.map((ward) => (
-                    <option key={ward} value={ward}>{ward}</option>
-                  ))}
-                </select>
                 {activeWard && (
-                  <span className="text-[11.5px] text-[#64748B]">
-                    {Array.from(activeRooms.values()).flat().filter((b) => b.status === "Occupied").length} occupied &middot;{" "}
-                    {Array.from(activeRooms.values()).flat().filter((b) => b.status === "Available").length} available
-                  </span>
+                  <div className="flex items-center gap-4 text-[11.5px]">
+                    <span className="flex items-center gap-1.5 text-[#64748B]">
+                      <span className="w-2 h-2 rounded-full bg-[#1B4FD8]" />
+                      <span className="font-mono font-bold text-gray-800">
+                        {Array.from(activeRooms.values()).flat().filter((b) => b.status === "Occupied").length}
+                      </span>
+                      occupied
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[#64748B]">
+                      <span className="w-2 h-2 rounded-full bg-[#16A34A]" />
+                      <span className="font-mono font-bold text-gray-800">
+                        {Array.from(activeRooms.values()).flat().filter((b) => b.status === "Available").length}
+                      </span>
+                      available
+                    </span>
+                  </div>
                 )}
               </div>
-              {activeWard === "ICU" ? (
-                <IcuDepartment embedded navigate={navigate} onOpenPatientClinical={onOpenPatientClinical} permissions={permissions} />
-              ) : (
-                <WardBedBoard
-                  rooms={activeRooms}
-                  readOnly
-                  onPatientClick={
-                    onOpenPatientClinical
-                      ? (bed) => bed.patient_id && onOpenPatientClinical(bed.patient_id)
-                      : undefined
-                  }
-                />
-              )}
-            </div>
+              <div className="p-4">
+                {activeWard === "ICU" ? (
+                  <IcuDepartment embedded navigate={navigate} onOpenPatientClinical={onOpenPatientClinical} permissions={permissions} />
+                ) : (
+                  <WardBedBoard
+                    rooms={activeRooms}
+                    readOnly
+                    onPatientClick={
+                      onOpenPatientClinical
+                        ? (bed) => bed.patient_id && onOpenPatientClinical(bed.patient_id)
+                        : undefined
+                    }
+                  />
+                )}
+              </div>
+            </section>
           </>
         )}
 
-        {/* Pending Bed Assignments -- real ER bed requests awaiting allocation */}
-        <div className="mt-4 bg-white border border-[#DDE2EC] rounded">
-          <div className="px-4 py-2.5 border-b border-[#DDE2EC] flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Pending Bed Assignments</span>
-            <span className="bg-[#FEF3C7] text-[#B45309] text-[11px] font-semibold px-2 py-0.5 rounded">
+      {/* Pending Bed Assignments -- real ER bed requests awaiting allocation */}
+        <section className="bg-white border border-[#DDE2EC] rounded-md overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-[#DDE2EC] flex items-center justify-between gap-3">
+            <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Pending bed assignments</span>
+            <span className="bg-[#FEF3C7] text-[#B45309] text-[11px] font-semibold px-2 py-0.5 rounded-full">
               {pendingRequests.length} awaiting
             </span>
           </div>
-          <div className="p-3 space-y-2">
-            {pendingRequests.length === 0 ? (
-              <p className="text-[12px] text-[#94A3B8] px-1 py-2">No ER visits are currently awaiting a bed.</p>
-            ) : (
-              pendingRequests.map((req) => (
-                <div key={req.id} className="flex items-center gap-3 p-2.5 border border-[#DDE2EC] rounded hover:border-[#1B4FD8] transition-colors">
-                  <div className="flex-1">
-                    <div className="text-[12.5px] font-semibold text-gray-800">{erRequestPatientLabel(req)}</div>
-                    <div className="text-[11.5px] text-[#64748B]">
+          {pendingRequests.length === 0 ? (
+            <p className="text-[12px] text-[#94A3B8] px-4 py-4">No ER visits are currently awaiting a bed.</p>
+          ) : (
+            <ul className="divide-y divide-[#F1F5F9]">
+              {pendingRequests.map((req) => (
+                <li key={req.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12.5px] font-semibold text-gray-800 truncate">{erRequestPatientLabel(req)}</div>
+                    <div className="text-[11px] text-[#64748B] truncate">
                       {req.visit_no} &middot; {req.requested_level_of_care.toUpperCase()}
                       {req.requested_specialty ? ` · ${req.requested_specialty}` : ""}
                     </div>
                   </div>
-                  <span className="font-mono text-[11px] text-[#94A3B8]">{formatDateTimeIST(req.requested_at)}</span>
+                  <span className="shrink-0 font-mono text-[10.5px] text-[#94A3B8]">{formatDateTimeIST(req.requested_at)}</span>
                   <Btn variant="primary" size="xs" onClick={goToBedManagement}>Assign Bed</Btn>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

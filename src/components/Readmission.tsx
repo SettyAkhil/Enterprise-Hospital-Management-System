@@ -71,7 +71,7 @@ export default function Readmission({ setNotice }: { setNotice?: (n: Notice | nu
         <div>
           <h1 className="text-lg font-semibold text-gray-900">Readmission Tracking</h1>
           <p className="text-[12.5px] text-[#64748B]">
-            Real admission/discharge dates, computed directly -- no predictive model behind these numbers.
+            Real admission/discharge dates, computed directly — no predictive model behind these numbers.
           </p>
         </div>
         <select
@@ -85,31 +85,31 @@ export default function Readmission({ setNotice }: { setNotice?: (n: Notice | nu
         </select>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 flex flex-col gap-6 max-w-7xl mx-auto w-full">
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded-xl shadow-sm">
-            <div className="text-[11.5px] font-semibold text-[#64748B] mb-1">{data.window_days}-Day Readmission Rate</div>
-            <div className="text-2xl font-bold text-[#D97706]">{loading ? "—" : `${data.readmission_rate_pct}%`}</div>
-          </div>
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded-xl shadow-sm">
-            <div className="text-[11.5px] font-semibold text-[#64748B] mb-1">Total Readmissions</div>
-            <div className="text-2xl font-bold text-gray-900">{loading ? "—" : data.total_readmissions}</div>
-          </div>
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded-xl shadow-sm">
-            <div className="text-[11.5px] font-semibold text-[#64748B] mb-1">Total Discharges</div>
-            <div className="text-2xl font-bold text-gray-900">{loading ? "—" : data.total_discharges}</div>
-          </div>
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded-xl shadow-sm">
-            <div className="text-[11.5px] font-semibold text-[#64748B] mb-1">High-Frequency Patients</div>
-            <div className="text-2xl font-bold text-[#DC2626]">{loading ? "—" : data.high_frequency_patients.length}</div>
-            <div className="text-[10px] text-[#94A3B8] mt-0.5">3+ admissions in 12 months</div>
-          </div>
+      <div className="flex-1 overflow-auto px-6 py-5 flex flex-col gap-5 w-full">
+        {/* Stats -- same micro-label + mono numeral as Admissions and the Bed
+            Board, so the four Inpatient screens read as one module. The last
+            card carries a footnote, so every card reserves that line and the
+            numerals stay on one baseline across the row. */}
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+          {[
+            { label: `${data.window_days}-day readmission rate`, value: `${data.readmission_rate_pct}%`, tone: "#D97706", note: "" },
+            { label: "Total readmissions", value: data.total_readmissions, tone: "#0F172A", note: "" },
+            { label: "Total discharges", value: data.total_discharges, tone: "#0F172A", note: "" },
+            { label: "High-frequency patients", value: data.high_frequency_patients.length, tone: "#B91C1C", note: "3+ admissions in 12 months" },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-white border border-[#DDE2EC] px-4 py-3 rounded-md flex flex-col">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">{stat.label}</div>
+              <div className="text-2xl font-mono font-bold leading-tight mt-1" style={{ color: stat.tone }}>
+                {loading ? "—" : stat.value}
+              </div>
+              <div className="text-[10px] text-[#94A3B8] mt-auto pt-0.5 min-h-[14px]">{stat.note}</div>
+            </div>
+          ))}
         </div>
 
-        <div className="flex gap-6 flex-1">
+        <div className="flex gap-5 items-start">
           {/* Readmission events */}
-          <div className="flex-1 bg-white border border-[#DDE2EC] rounded-xl shadow-sm flex flex-col overflow-hidden">
+          <div className="flex-1 min-w-0 bg-white border border-[#DDE2EC] rounded-md flex flex-col overflow-hidden">
             <div className="px-5 py-3 border-b border-[#DDE2EC] bg-[#F8FAFC] flex justify-between items-center">
               <h2 className="text-[14px] font-semibold text-gray-900">Readmissions within {data.window_days} days</h2>
               <div className="relative">
@@ -122,7 +122,7 @@ export default function Readmission({ setNotice }: { setNotice?: (n: Notice | nu
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8]"><Icon.Search /></span>
               </div>
             </div>
-            <div className="flex-1 overflow-auto">
+            <div className="overflow-auto" style={{ maxHeight: "60vh" }}>
               {loading ? (
                 <p className="text-[12.5px] text-[#64748B] p-5">Loading...</p>
               ) : filteredEvents.length === 0 ? (
@@ -164,12 +164,12 @@ export default function Readmission({ setNotice }: { setNotice?: (n: Notice | nu
           </div>
 
           {/* High-frequency patients */}
-          <div className="w-96 bg-white border border-[#DDE2EC] rounded-xl shadow-sm flex flex-col overflow-hidden">
+          <div className="w-80 shrink-0 bg-white border border-[#DDE2EC] rounded-md flex flex-col overflow-hidden">
             <div className="px-5 py-4 border-b border-[#DDE2EC]">
               <h2 className="text-[14px] font-bold text-gray-900">High-Frequency Admissions</h2>
-              <p className="text-[11px] text-[#64748B] mt-0.5">3 or more admissions in the trailing 12 months -- a plain count, not a risk score.</p>
+              <p className="text-[11px] text-[#64748B] mt-0.5">3 or more admissions in the trailing 12 months — a plain count, not a risk score.</p>
             </div>
-            <div className="flex-1 overflow-auto p-4 space-y-2.5">
+            <div className="overflow-auto p-4 space-y-2.5" style={{ maxHeight: "60vh" }}>
               {loading ? (
                 <p className="text-[12px] text-[#94A3B8]">Loading...</p>
               ) : data.high_frequency_patients.length === 0 ? (

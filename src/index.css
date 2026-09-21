@@ -157,6 +157,24 @@ body {
   color: #93C5FD;
 }
 
+/* Category header in accordion menus (e.g. General Reports, Financial Reports) */
+.nav-item.category {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #94A3B8;
+}
+.nav-item.category:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #CBD5E1;
+}
+.nav-item.category.active {
+  background: rgba(27, 79, 216, 0.20);
+  color: #FFFFFF;
+}
+.nav-item.category.active:hover {
+  background: rgba(27, 79, 216, 0.28);
+}
+
 /* Nav icons must never be squeezed by the flex row */
 .nav-item > svg {
   flex-shrink: 0;
@@ -383,30 +401,119 @@ textarea:focus-visible {
   margin: 0;
 }
 
-/* ── Printable Hospital Receipt Slip Media Rules ─────────────────────────── */
+/* ── Universal Printable Hospital Documents Media Rules ─────────────────────────── */
 @media print {
-  body * {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  html, body, #root {
+    height: auto !important;
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Hide app navigation chrome, sidebars, headers, and action buttons */
+  aside,
+  nav,
+  header,
+  button,
+  .print\:hidden,
+  .no-print,
+  .sidebar,
+  .app-header {
+    display: none !important;
+  }
+
+  /* Ensure card containers expand cleanly for printing */
+  .overflow-y-auto,
+  .overflow-hidden,
+  .overflow-auto {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* When printing specific reports, ensure report content is visible */
+  body:has(#hospital-printable-receipt) *,
+  body:has(#printable-receipt) *,
+  body:has(#op-reports-printable) * {
     visibility: hidden;
   }
+
+  /* Target all printable medical passes, receipts, summaries, and census reports */
+  .printable-area,
+  .printable-card,
+  #hospital-printable-receipt,
   #printable-receipt,
-  #printable-receipt * {
-    visibility: visible;
-  }
-  #printable-receipt {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
+  #printable-op-pass,
+  #printable-discharge-summary,
+  #printable-lab-report,
+  #printable-radiology-report,
+  #printable-bed-census,
+  #printable-prescription,
+  #printable-invoice,
+  #printable-area,
+  .printable-handover-document {
+    visibility: visible !important;
+    display: block !important;
+    position: relative !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
-    max-width: 650px !important;
-    margin: 5px auto !important;
-    padding: 14px !important;
+    max-width: 800px !important;
+    margin: 10px auto !important;
+    padding: 20px !important;
     box-shadow: none !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 8px !important;
-    background: white !important;
+    border: 1.5px solid #0F172A !important;
+    border-radius: 0px !important;
+    background: #FFFFFF !important;
+    color: #0F172A !important;
     page-break-inside: avoid !important;
-    page-break-after: avoid !important;
+  }
+
+  #hospital-printable-receipt,
+  #printable-receipt {
+    border: none !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+  }
+
+  #op-reports-printable {
+    visibility: visible !important;
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .printable-area *,
+  .printable-card *,
+  #hospital-printable-receipt *,
+  #printable-receipt *,
+  #printable-op-pass *,
+  #printable-discharge-summary *,
+  #printable-lab-report *,
+  #printable-radiology-report *,
+  #printable-bed-census *,
+  #printable-prescription *,
+  #printable-invoice *,
+  #printable-area *,
+  #op-reports-printable *,
+  .printable-handover-document * {
+    visibility: visible !important;
   }
 }
 

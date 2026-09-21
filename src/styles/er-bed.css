@@ -525,14 +525,248 @@
   font-weight: 600;
 }
 
+/* The Input/Select/Textarea primitives carried only a font-size here, and
+   Tailwind's preflight zeroes border-width/padding on form controls -- so
+   every <Input> in the app rendered as bare text on the page background with
+   no field box at all. Most visible on Bed Management's add/edit/assign
+   forms, where you are meant to type. */
 .ui-input,
 .ui-select,
 .ui-textarea {
+  width: 100%;
+  min-width: 0;
+  font-family: inherit;
   font-size: 12px;
+  line-height: 1.45;
+  color: hsl(var(--foreground));
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.ui-input::placeholder,
+.ui-textarea::placeholder {
+  color: #94A3B8;
+}
+
+.ui-input:hover:not(:disabled),
+.ui-select:hover:not(:disabled),
+.ui-textarea:hover:not(:disabled) {
+  border-color: #94A3B8;
+}
+
+.ui-input:focus-visible,
+.ui-select:focus-visible,
+.ui-textarea:focus-visible,
+.ui-input:focus,
+.ui-select:focus,
+.ui-textarea:focus {
+  outline: none;
+  border-color: #1B4FD8;
+  box-shadow: 0 0 0 3px rgba(27, 79, 216, 0.14);
+}
+
+.ui-input:disabled,
+.ui-select:disabled,
+.ui-textarea:disabled {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  cursor: not-allowed;
+}
+
+.ui-textarea {
+  resize: vertical;
+  min-height: 62px;
+}
+
+/* A colour swatch is not a text field -- the width/padding above stretched
+   ER's triage colour picker into a flat bar. */
+.ui-input[type="color"] {
+  width: 3rem;
+  height: 2rem;
+  padding: 0.15rem;
+  cursor: pointer;
+}
+
+.ui-input[type="checkbox"],
+.ui-input[type="radio"] {
+  width: auto;
+  height: auto;
+  padding: 0;
+}
+
+/* Already sits inside a bordered .ai-search-bar -- it must not draw a second
+   box inside the first. */
+.ai-search-bar .ui-input,
+.ui-input.ai-search-input {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.ai-search-bar .ui-input:focus,
+.ai-search-bar .ui-input:focus-visible,
+.ui-input.ai-search-input:focus,
+.ui-input.ai-search-input:focus-visible {
+  box-shadow: none;
+}
+
+.ai-search-bar:focus-within {
+  border-color: #1B4FD8;
+  box-shadow: 0 0 0 3px rgba(27, 79, 216, 0.14);
 }
 
 .ui-label {
   gap: 0.3rem;
+}
+
+/* Bed Management's forms put the control *inside* its <Label>
+   (<Label>Ward<Input/></Label>). The shared rule near the top of this file
+   forces every .ui-label to inline-flex + align-items:center with
+   !important, which laid the caption and the field side by side on one line:
+   "Ward | e.g. General Ward", with the input clipped and a caption like
+   "To Bed No. (optional)" wrapping to three lines. A label that wraps a
+   control stacks instead. Scoped by :has() so standalone captions elsewhere
+   (.module-page label, .er-field-label) keep the inline treatment. */
+.ui-label:has(input, select, textarea) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.3rem !important;
+  min-width: 0;
+  margin-bottom: 0 !important;
+}
+
+/* ── Bed Management forms ─────────────────────────────────────────────── */
+.bed-form-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: start;
+}
+
+.bed-form-grid-wide {
+  grid-column: 1 / -1;
+}
+
+.bed-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bed-form-section + .bed-form-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.bed-form-legend {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Caption + its parenthetical hint on one line. A stacked .ui-label makes
+   every child its own row, so a bare inline <span> hint dropped below the
+   caption. */
+.bed-field-caption {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.bed-field-caption .bed-field-optional {
+  font-weight: 500;
+  font-style: normal;
+  color: #94A3B8;
+}
+
+.bed-form-hint {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+}
+
+/* Reads back what the form is about to do, so a range typo is caught before
+   20 beds are created. */
+.bed-form-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius);
+  border: 1px solid #BFDBFE;
+  background: #EFF6FF;
+  color: #1E40AF;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.bed-form-preview-warn {
+  border-color: #FCD34D;
+  background: #FFFBEB;
+  color: #92400E;
+}
+
+/* Secondary bed actions (maintenance, edit) belong on their own bar, not as
+   loose links under the primary buttons. */
+/* Destructive action on one side, confirm/cancel on the other, so Delete is
+   never adjacent to the button you reach for to back out. */
+.bed-modal-actions-split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.bed-modal-actions-danger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bed-modal-danger-text {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #B91C1C;
+}
+
+.bed-danger-link {
+  color: #B91C1C !important;
+}
+
+.bed-danger-link:hover:not(:disabled) {
+  background: #FEF2F2 !important;
+}
+
+.bed-modal-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.bed-modal-secondary-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  margin-right: auto;
 }
 
 .ui-tabs-content {
@@ -708,11 +942,30 @@
 .bed-ward-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.35rem;
+  gap: 0.75rem;
+  padding-bottom: 0.45rem;
   margin-bottom: 0.7rem;
   border-bottom: 1px solid hsl(var(--border));
+}
+
+/* The occupancy bar sits inside the header row between the ward name and its
+   counts, so it is read as that ward's data. As a full-bleed stripe under the
+   header it looked like a mis-styled divider. */
+.bed-ward-header .bed-occupancy-bar {
+  flex: 1;
+  min-width: 90px;
+  max-width: 340px;
+  margin-bottom: 0;
+}
+
+.bed-ward-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
 }
 
 .bed-ward-title {
@@ -723,6 +976,7 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  white-space: nowrap;
 }
 
 .bed-ward-counts {
@@ -793,12 +1047,18 @@
    (phone, admission timestamp, charges) that don't fit on the card itself. */
 .bed-info-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  /* One shared track size so two room columns sitting side by side resolve to
+     identical card widths -- auto-fill against slightly different container
+     widths used to give 196px in one column and 199px in the other, and
+     nothing lined up across the gutter. */
+  grid-template-columns: repeat(auto-fill, minmax(var(--bed-card-min, 196px), 1fr));
+  align-items: stretch;
   gap: 0.6rem;
 }
 
 .bed-info-card {
   position: relative;
+  display: flex;
   border-radius: var(--radius);
   overflow: visible;
 }
@@ -810,10 +1070,14 @@
 .bed-info-card-main {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.3rem;
   width: 100%;
+  /* Fills the stretched grid row. Without this an "Available" tile collapsed
+     to its own 78px while an occupied neighbour grew to 125px, so every row
+     containing a patient left a visible hole under the empty beds. */
+  height: 100%;
   padding: 0.6rem 0.7rem;
-  min-height: 78px;
+  min-height: 92px;
   border-radius: var(--radius);
   border: 1px solid;
   text-align: left;
@@ -853,9 +1117,16 @@
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  min-width: 0;
+  flex: 1;
   font-size: 11px;
   font-weight: 600;
   color: #64748B;
+  /* "Room 102 · Bed 20" used to wrap onto a second line and push that one
+     tile taller than the rest of its row. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bed-info-card-icon {
@@ -863,6 +1134,7 @@
 }
 
 .bed-info-card-type {
+  flex-shrink: 0;
   font-size: 10px;
   font-weight: 700;
   padding: 0.1rem 0.4rem;
@@ -870,6 +1142,43 @@
   white-space: nowrap;
   background: rgba(255, 255, 255, 0.6);
 }
+
+/* Body takes the slack so the flag row below can pin itself to the bottom --
+   that is what keeps "Transferred" / "Due ₹…" chips on one baseline across a
+   row instead of floating at whatever height the name above them ended. */
+.bed-info-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.bed-info-card-flags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: auto;
+  padding-top: 0.15rem;
+}
+
+.bed-info-card-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.bed-info-card-flag-due { background: #FFFBEB; border-color: #FCD34D; color: #92400E; }
+.bed-info-card-flag-cleared { background: #ECFDF5; border-color: #6EE7B7; color: #065F46; }
+.bed-info-card-flag-transfer { background: #EFF6FF; border-color: #BFDBFE; color: #1D4ED8; }
 
 .bed-info-card-occupant {
   display: flex;
@@ -910,7 +1219,6 @@
   gap: 0.3rem;
   font-size: 11.5px;
   font-weight: 600;
-  flex: 1;
 }
 
 .bed-info-card-tooltip {
@@ -949,6 +1257,62 @@
 
 .bed-info-card:hover .bed-info-card-tooltip {
   opacity: 1;
+}
+
+/* ── Room columns ───────────────────────────────────────────────────────
+   Two-or-fewer rooms render side by side; more than two collapse to the tab
+   row above. Both branches use .bed-room-head so a room reads the same either
+   way, and both set the same --bed-card-min so card tracks line up across the
+   gutter. */
+.bed-room-grid {
+  display: grid;
+  gap: 1.25rem 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  align-items: start;
+}
+
+.bed-room-col {
+  min-width: 0;
+}
+
+.bed-room-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.bed-room-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+}
+
+.bed-room-count {
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+.bed-room-count-full {
+  background: #FEF2F2;
+  color: #B91C1C;
+}
+
+.bed-room-free {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
 }
 
 .bed-transfer-target-list {
@@ -1848,18 +2212,21 @@
 }
 
 @media print {
-  body * {
-    visibility: hidden;
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  .printable-handover-document,
-  .printable-handover-document * {
-    visibility: visible;
+  .no-print,
+  button,
+  .modal-backdrop {
+    display: none !important;
   }
   .printable-handover-document {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
   }
 }
 

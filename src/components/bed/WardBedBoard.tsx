@@ -1,6 +1,22 @@
 import { useEffect, useState } from "react";
 import { BedCard, type BedCardData } from "./BedCard";
 
+// One room's header -- used by both branches below so a room reads the same
+// whether it rendered as a side-by-side column or behind a tab.
+function RoomHead<T extends BedCardData>({ room, beds }: { room: string; beds: T[] }) {
+  const occupied = beds.filter((b) => b.status === "Occupied").length;
+  const free = beds.filter((b) => b.status === "Available").length;
+  return (
+    <div className="bed-room-head">
+      <span className="bed-room-name">Room {room}</span>
+      <span className={`bed-room-count${occupied === beds.length ? " bed-room-count-full" : ""}`}>
+        {occupied}/{beds.length}
+      </span>
+      <span className="bed-room-free">{free} free</span>
+    </div>
+  );
+}
+
 // Rooms sit as a horizontal tab row (click one to open it) instead of every
 // room's beds being stacked and shown at once -- makes a ward with many
 // rooms fast to scan and drill into, on both Bed Management (interactive)
@@ -36,34 +52,32 @@ export function WardBedBoard<T extends BedCardData>({
 
   if (roomNames.length === 0) return null;
 
+  const grid = (beds: T[]) => (
+    <div className="bed-info-card-grid">
+      {beds.map((bed) => (
+        <BedCard
+          key={bed.id}
+          bed={bed}
+          readOnly={readOnly}
+          onClick={onBedClick ? () => onBedClick(bed) : undefined}
+          onPatientClick={onPatientClick}
+        />
+      ))}
+    </div>
+  );
+
+  // One or two rooms fit side by side. Both columns are auto-fit tracks off
+  // the same --bed-card-min, so the cards line up across the gutter instead of
+  // each column sizing itself independently (196px one side, 199px the other).
   if (roomNames.length <= 2) {
     return (
-      <div className={`pt-2 ${roomNames.length === 2 ? "grid grid-cols-2 gap-6" : ""}`}>
-        {roomNames.map((room) => {
-          const roomBeds = rooms.get(room)!;
-          const occupied = roomBeds.filter((b) => b.status === "Occupied").length;
-          return (
-            <div key={room}>
-              {roomNames.length === 2 && (
-                <div className="flex items-center gap-2 mb-3 px-1">
-                  <span className="text-[13px] font-bold text-gray-700 uppercase tracking-wide">Room {room}</span>
-                  <span className="text-[11px] bg-[#F1F5F9] text-[#64748B] px-2 py-0.5 rounded font-mono font-bold">{occupied}/{roomBeds.length}</span>
-                </div>
-              )}
-              <div className="bed-info-card-grid">
-                {roomBeds.map((bed) => (
-                  <BedCard
-                    key={bed.id}
-                    bed={bed}
-                    readOnly={readOnly}
-                    onClick={onBedClick ? () => onBedClick(bed) : undefined}
-                    onPatientClick={onPatientClick}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <div className="bed-room-grid">
+        {roomNames.map((room) => (
+          <div className="bed-room-col" key={room}>
+            <RoomHead room={room} beds={rooms.get(room)!} />
+            {grid(rooms.get(room)!)}
+          </div>
+        ))}
       </div>
     );
   }
@@ -89,16 +103,9 @@ export function WardBedBoard<T extends BedCardData>({
           );
         })}
       </div>
-      <div className="bed-info-card-grid" style={{ marginTop: "0.75rem" }}>
-        {activeBeds.map((bed) => (
-          <BedCard
-            key={bed.id}
-            bed={bed}
-            readOnly={readOnly}
-            onClick={onBedClick ? () => onBedClick(bed) : undefined}
-            onPatientClick={onPatientClick}
-          />
-        ))}
+      <div className="bed-room-col" style={{ marginTop: "0.9rem" }}>
+        <RoomHead room={selectedRoom} beds={activeBeds} />
+        {grid(activeBeds)}
       </div>
     </div>
   );

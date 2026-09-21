@@ -97,7 +97,39 @@ export default function SupplierReturns({ onNavigate }: { onNavigate: (page: str
     }
   };
 
+  const seedTestData = () => {
+    try {
+      const sId = "SUP-TEST-" + Date.now();
+      const mId = "MED-TEST-" + Date.now();
+      const bId = "BAT-TEST-" + Date.now();
 
+      const newSuppliers = PharmacyDatabase.getSuppliers();
+      newSuppliers.push({
+        id: sId, supplierName: "Apollo Demo Pharma", contactInformation: "John Doe", phone: "9876543210", email: "demo@apollo.com", gstInformation: "29ABCDE1234F1Z5", licenseDetails: "DL-12345", status: "Active", createdAt: new Date().toISOString(),
+        address: "123 Pharma St", paymentTerms: "Net 30"
+      });
+      PharmacyDatabase.saveSuppliers(newSuppliers);
+
+      const newMedicines = PharmacyDatabase.getMedicines();
+      newMedicines.push({
+        id: mId, medicineName: "DemoAmoxicillin 500mg", genericName: "Amoxicillin",  manufacturer: "Apollo Demo Pharma", reorderLevel: 20, activeStatus: "Active", createdAt: new Date().toISOString(),
+        brandName: "Amox", dosageForm: "Tablet", strength: "500mg", unit: "Strip", barcode: "12345", taxPercentage: 12, hsnCode: "3004", scheduleType: "H", storageCondition: "Room Temperature", controlledSubstanceFlag: false
+      });
+      PharmacyDatabase.saveMedicines(newMedicines);
+
+      const newBatches = PharmacyDatabase.getBatches();
+      newBatches.push({
+        id: bId, medicineId: mId, supplierId: sId, batchNumber: "TX-2026A", expiryDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(), availableQuantity: 100, purchasePrice: 12, mrp: 20, status: "Active", createdAt: new Date().toISOString(),
+        manufacturingDate: new Date().toISOString(), quantity: 100
+      });
+      PharmacyDatabase.saveBatches(newBatches);
+
+      toast.success("Test Data Injected successfully! You can now initiate a return.");
+      refresh();
+    } catch (e: any) {
+      toast.error("Failed to inject data");
+    }
+  };
 
   const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
   const getMedicineName = (id: string) => medicines.find(m => m.id === id)?.name || id;
@@ -287,9 +319,14 @@ export default function SupplierReturns({ onNavigate }: { onNavigate: (page: str
         title="Purchase Returns (Debit Notes)"
         description={`${supplierReturns.length} historical returns tracking`}
         actions={
-          <button onClick={() => setViewState("create")} className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium" style={{ background: "#1B4FD8" }}>
-            <Plus size={14} /> Initiate Return
-          </button>
+          <div className="flex gap-2">
+            <button onClick={seedTestData} className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium bg-emerald-600 hover:bg-emerald-700">
+              Inject Test Data
+            </button>
+            <button onClick={() => setViewState("create")} className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium" style={{ background: "#1B4FD8" }}>
+              <Plus size={14} /> Initiate Return
+            </button>
+          </div>
         }
         onNavigate={onNavigate}
       />

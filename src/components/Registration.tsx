@@ -5,6 +5,7 @@ import { bookAppointment, type BookedAppointment } from "../services/appointment
 import { Icon } from "./icons";
 import { Btn, Input } from "./shared";
 import { db, DBPatient, DBOPEncounter, findMatchingPatient } from "../services/db";
+import PatientJourneyModal from "./PatientJourneyModal";
 
 // Accurate age calculation from Date of Birth
 const calculateAge = (dobString: string): number => {
@@ -43,6 +44,7 @@ export default function Registration({
   // Appointment tab: reception books the doctor without leaving this desk.
   const [bookingOpen, setBookingOpen] = useState(false);
   const [booked, setBooked] = useState<BookedAppointment | null>(null);
+  const [selectedJourneyEncounter, setSelectedJourneyEncounter] = useState<DBOPEncounter | null>(null);
 
   // Generation Audit alert state
   const [generationAlert, setGenerationAlert] = useState<{
@@ -311,6 +313,12 @@ export default function Registration({
           </div>
         </div>
       </div>
+
+      {/* Clinical Journey Modal */}
+      <PatientJourneyModal
+        encounter={selectedJourneyEncounter}
+        onClose={() => setSelectedJourneyEncounter(null)}
+      />
 
       {/* Main Workspace */}
       <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-6">
@@ -959,11 +967,18 @@ export default function Registration({
                         -- a six-panel clinical pathway that is not reception's
                         screen -- so registering a patient dumped the front desk
                         into a workflow meant for the wards. */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJourneyEncounter(selectedEncounter)}
+                      className="px-3 py-1.5 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#1B4FD8] text-[12px] font-bold rounded-none border border-blue-200 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>✨</span> Clinical Journey →
+                    </button>
                     {onBookAppointment && (
                       <button
                         type="button"
                         onClick={() => setActiveTab("appointment")}
-                        className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                        className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded-none shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                       >
                         <span>✨</span> Book appointment &amp; triage →
                       </button>
@@ -971,7 +986,7 @@ export default function Registration({
                   </div>
                 </div>
 
-                <div className="printable-card max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded p-6 shadow-lg relative overflow-hidden">
+                <div id="printable-op-pass" className="printable-card printable-area max-w-xl mx-auto bg-white border-2 border-[#94A3B8] text-gray-900 rounded p-6 shadow-lg relative overflow-hidden">
                   {/* Top Header Accent Strip */}
                   <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1B4FD8]"></div>
 
@@ -1069,11 +1084,21 @@ export default function Registration({
                           <button
                             onClick={(ev) => {
                               ev.stopPropagation();
+                              setSelectedJourneyEncounter(e);
+                            }}
+                            className="px-2.5 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-none text-[11.5px] font-bold border border-purple-200 transition-colors cursor-pointer"
+                            title="View Complete Outpatient Clinical Journey Timeline"
+                          >
+                            ✨ Journey →
+                          </button>
+                          <button
+                            onClick={(ev) => {
+                              ev.stopPropagation();
                               handleViewOpBook(e);
                             }}
-                            className="px-2.5 py-1 bg-blue-50 text-[#1B4FD8] hover:bg-blue-100 rounded text-[11.5px] font-semibold border border-blue-200 transition-colors"
+                            className="px-2.5 py-1 bg-blue-50 text-[#1B4FD8] hover:bg-blue-100 rounded-none text-[11.5px] font-semibold border border-blue-200 transition-colors"
                           >
-                            View OP Book
+                            View Pass
                           </button>
                           <button
                             onClick={(ev) => {

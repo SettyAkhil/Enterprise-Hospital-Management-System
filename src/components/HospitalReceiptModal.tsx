@@ -1,133 +1,359 @@
-import React, { useMemo } from "react";
-import { ClaimRecord, PaymentRecord } from "../services/billingDb";
+import React, { useMemo } from "react"
+
+import { ClaimRecord, PaymentRecord } from "../services/billingDb"
+
 import {
   formatReceiptDateTime,
   formatReceiptDateShort,
   formatReceiptTimeWithSeconds,
   groupReceiptItems,
   numberToWordsINR,
-} from "../utils/receiptFormatter";
+} from "../utils/receiptFormatter"
 
 interface HospitalReceiptModalProps {
-  claim: ClaimRecord;
-  payment?: PaymentRecord | null;
-  onClose: () => void;
+  claim: ClaimRecord
+
+  payment?: PaymentRecord | null
+
+  onClose: () => void
+
   hospitalDetails?: {
-    name?: string;
-    unitOf?: string;
-    addressLine1?: string;
-    addressLine2?: string;
-    addressLine3?: string;
-    gstNo?: string;
-    phone?: string;
-  };
+    name?: string
+
+    unitOf?: string
+
+    addressLine1?: string
+
+    addressLine2?: string
+
+    addressLine3?: string
+
+    gstNo?: string
+
+    phone?: string
+  }
 }
 
 export default function HospitalReceiptModal({
   claim,
+
   payment,
+
   onClose,
+
   hospitalDetails,
 }: HospitalReceiptModalProps) {
   // Hospital Information Defaults
+
   const hospital = {
     name: hospitalDetails?.name || "IMPERIAL HOSPITALS",
-    unitOf: hospitalDetails?.unitOf || "A UNIT OF MUKUNDA HEALTHCARE PRIVATE LIMITED",
-    addressLine1: hospitalDetails?.addressLine1 || "# 27-14-13/A, OPP. GANESH CANTEN STREET,",
-    addressLine2: hospitalDetails?.addressLine2 || "BESIDE BHASYAM SCHOOL, BHIMAVARAM-534202,",
-    addressLine3: hospitalDetails?.addressLine3 || "W.G. DIST.(A.P) 08816-279999,279988.",
+
+    unitOf:
+      hospitalDetails?.unitOf || "A UNIT OF MUKUNDA HEALTHCARE PRIVATE LIMITED",
+
+    addressLine1:
+      hospitalDetails?.addressLine1 ||
+      "# 27-14-13/A, OPP. GANESH CANTEN STREET,",
+
+    addressLine2:
+      hospitalDetails?.addressLine2 ||
+      "BESIDE BHASYAM SCHOOL, BHIMAVARAM-534202,",
+
+    addressLine3:
+      hospitalDetails?.addressLine3 || "W.G. DIST.(A.P) 08816-279999,279988.",
+
     gstNo: hospitalDetails?.gstNo || "GST No - 37AALCM2238A1ZQ",
-  };
+  }
 
   // Determine Title based on Department / Care Pathway
+
   const billTitle = useMemo(() => {
-    const d = claim.department;
+    const d = claim.department
+
     if (d === "Inpatient" || d === "ICU" || d === "Surgery") {
-      return "In Patient Final Bill";
+      return "In Patient Final Bill"
     }
+
     if (d === "Outpatient") {
-      return "Out Patient Consultation Bill";
+      return "Out Patient Consultation Bill"
     }
+
     if (d === "Emergency") {
-      return "Emergency Services Bill";
+      return "Emergency Services Bill"
     }
+
     if (d === "Laboratory") {
-      return "Laboratory Diagnostic Bill";
+      return "Laboratory Diagnostic Bill"
     }
+
     if (d === "Radiology") {
-      return "Radiology & Imaging Bill";
+      return "Radiology & Imaging Bill"
     }
-    return "Hospital Bill & Receipt";
-  }, [claim.department]);
+
+    return "Hospital Bill & Receipt"
+  }, [claim.department])
 
   // Generate or Format Receipt and Bill metadata
-  const billNo = claim.invoiceNo || `FB${Math.floor(20000 + Math.random() * 80000)}`;
+
+  const billNo =
+    claim.invoiceNo || `FB${Math.floor(20000 + Math.random() * 80000)}`
+
   const admissionNo =
     claim.encounterId ||
     claim.hospitalStayId ||
-    (claim.department === "Inpatient" ? `IP${Math.floor(20000 + Math.random() * 80000)}` : `OP${Math.floor(10000 + Math.random() * 90000)}`);
+    (claim.department === "Inpatient"
+      ? `IP${Math.floor(20000 + Math.random() * 80000)}`
+      : `OP${Math.floor(10000 + Math.random() * 90000)}`)
 
-  const billDateTimeStr = formatReceiptDateTime(payment?.paymentDate || claim.updatedAt || claim.createdAt);
-  const billDateShortStr = formatReceiptDateShort(payment?.paymentDate || claim.updatedAt || claim.createdAt);
-  const admissionDateTimeStr = formatReceiptDateTime(claim.dateOfService || claim.createdAt);
+  const billDateTimeStr = formatReceiptDateTime(
+    payment?.paymentDate || claim.updatedAt || claim.createdAt,
+  )
 
-  const startPeriodStr = `${formatReceiptDateShort(claim.dateOfService || claim.createdAt)} 11:14:50AM`;
-  const endPeriodStr = `${billDateShortStr} ${formatReceiptTimeWithSeconds(payment?.paymentDate || claim.updatedAt || new Date())}`;
+  const billDateShortStr = formatReceiptDateShort(
+    payment?.paymentDate || claim.updatedAt || claim.createdAt,
+  )
+
+  const admissionDateTimeStr = formatReceiptDateTime(
+    claim.dateOfService || claim.createdAt,
+  )
+
+  const startPeriodStr = `${formatReceiptDateShort(claim.dateOfService || claim.createdAt)} 11:14:50AM`
+
+  const endPeriodStr = `${billDateShortStr} ${formatReceiptTimeWithSeconds(payment?.paymentDate || claim.updatedAt || new Date())}`
 
   // Patient Info
-  const prefix = claim.gender === "Female" ? (claim.age > 25 ? "Mrs." : "Ms.") : "Mr.";
-  const patientDisplayName = `${prefix} ${claim.patientName.toUpperCase()}`;
-  const consultantName = (claim.attendingDoctor || "DR. M.RAMA KRISHNA M.S. ENT").toUpperCase();
-  const departmentName = (claim.department || "ENT").toUpperCase();
+
+  const prefix =
+    claim.gender === "Female" ? (claim.age > 25 ? "Mrs." : "Ms.") : "Mr."
+
+  const patientDisplayName = `${prefix} ${claim.patientName.toUpperCase()}`
+
+  const consultantName = (
+    claim.attendingDoctor || "DR. M.RAMA KRISHNA M.S. ENT"
+  ).toUpperCase()
+
+  const departmentName = (claim.department || "ENT").toUpperCase()
+
   const admittedWard =
     claim.department === "Inpatient"
       ? `RECOVERY ROOM 5 FLOOR / BED-${claim.bedId || "204"}`
       : claim.department === "ICU"
-      ? "ICU CRITICAL CARE BED-04"
-      : claim.department === "Emergency"
-      ? "EMERGENCY TRIAGE BED-02"
-      : "OP CONSULTATION SUITE #102";
+        ? "ICU CRITICAL CARE BED-04"
+        : claim.department === "Emergency"
+          ? "EMERGENCY TRIAGE BED-02"
+          : "OP CONSULTATION SUITE #102"
 
   // Itemized Groups
-  const groupedSections = useMemo(() => groupReceiptItems(claim.items || []), [claim.items]);
+
+  const groupedSections = useMemo(
+    () => groupReceiptItems(claim.items || []),
+    [claim.items],
+  )
 
   // Payment Rows (Receipt / Payment Details Table)
+
   const paymentsList = useMemo(() => {
     if (claim.payments && claim.payments.length > 0) {
-      return claim.payments;
+      return claim.payments
     }
+
     if (payment) {
-      return [payment];
+      return [payment]
     }
+
     return [
       {
         id: `PAY-${claim.id}`,
+
         invoiceId: claim.id,
+
         receiptNo: `59${Math.floor(8500 + Math.random() * 900)}`,
+
         amount: claim.amountPaid || claim.totalAmount,
+
         paymentDate: claim.dateOfService || new Date().toISOString(),
+
         paymentMethod: "Credit Card",
+
         collectedBy: "VHC70251",
+
         notes: "Settlement",
       },
-    ];
-  }, [claim.payments, payment, claim.id, claim.amountPaid, claim.totalAmount, claim.dateOfService]);
+    ]
+  }, [
+    claim.payments,
+    payment,
+    claim.id,
+    claim.amountPaid,
+    claim.totalAmount,
+    claim.dateOfService,
+  ])
 
-  const totalReceiptAmount = paymentsList.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const grossAmount = claim.totalAmount || totalReceiptAmount;
+  const totalReceiptAmount = paymentsList.reduce(
+    (sum, p) => sum + (p.amount || 0),
+    0,
+  )
 
-  const totalReceivedWords = numberToWordsINR(totalReceiptAmount);
-  const grossAmountWords = numberToWordsINR(grossAmount);
+  const grossAmount = claim.totalAmount || totalReceiptAmount
 
-  const staffCode = payment?.collectedBy?.includes("VHC") ? payment.collectedBy : "VHC70251";
-  const printedOnStr = `${formatReceiptDateShort(new Date())} ${formatReceiptTimeWithSeconds(new Date())}`;
+  const totalReceivedWords = numberToWordsINR(totalReceiptAmount)
+
+  const grossAmountWords = numberToWordsINR(grossAmount)
+
+  const staffCode = payment?.collectedBy?.includes("VHC")
+    ? payment.collectedBy
+    : "VHC70251"
+
+  const printedOnStr = `${formatReceiptDateShort(new Date())} ${formatReceiptTimeWithSeconds(new Date())}`
 
   const handlePrint = () => {
-    window.print();
-  };
+    const printEl = document.getElementById("hospital-printable-receipt")
+
+    if (!printEl) {
+      window.print()
+
+      return
+    }
+
+    try {
+      const existingFrame = document.getElementById("receipt-print-frame")
+
+      if (existingFrame) existingFrame.remove()
+
+      const iframe = document.createElement("iframe")
+
+      iframe.id = "receipt-print-frame"
+
+      iframe.style.position = "fixed"
+
+      iframe.style.right = "0"
+
+      iframe.style.bottom = "0"
+
+      iframe.style.width = "0"
+
+      iframe.style.height = "0"
+
+      iframe.style.border = "0"
+
+      iframe.style.visibility = "hidden"
+
+      document.body.appendChild(iframe)
+
+      const frameDoc = iframe.contentWindow?.document
+
+      if (frameDoc) {
+        frameDoc.open()
+
+        const styleTags = Array.from(
+          document.querySelectorAll("style, link[rel='stylesheet']"),
+        )
+
+          .map((el) => el.outerHTML)
+
+          .join("\n")
+
+        frameDoc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>${hospital.name} - ${billTitle}</title>
+              ${styleTags}
+              <style>
+                @page {
+                  size: A4 portrait;
+                  margin: 8mm 10mm;
+                }
+                * {
+                  box-sizing: border-box;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                html, body {
+                  background: #ffffff !important;
+                  color: #0f172a !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                }
+                #hospital-printable-receipt {
+                  width: 100% !important;
+                  max-width: 100% !important;
+                  margin: 0 !important;
+                  padding: 6px 10px !important;
+                  background: #ffffff !important;
+                  color: #0f172a !important;
+                }
+                table {
+                  width: 100% !important;
+                  border-collapse: collapse !important;
+                }
+                th, td {
+                  vertical-align: top;
+                }
+              </style>
+            </head>
+            <body>
+              ${printEl.outerHTML}
+            </body>
+          </html>
+        `)
+
+        frameDoc.close()
+
+        setTimeout(() => {
+          iframe.contentWindow?.focus()
+
+          iframe.contentWindow?.print()
+
+          setTimeout(() => {
+            iframe.remove()
+          }, 2000)
+        }, 250)
+
+        return
+      }
+    } catch (e) {
+      console.warn("Iframe printing failed, falling back to window.print():", e)
+    }
+
+    window.print()
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static print:overflow-visible">
+      {/* Standalone Print Style Rules */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #hospital-printable-receipt,
+          #hospital-printable-receipt *,
+          #printable-receipt,
+          #printable-receipt * {
+            visibility: visible !important;
+          }
+          #hospital-printable-receipt,
+          #printable-receipt {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #0f172a !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 8mm 10mm;
+          }
+        }
+      `}</style>
+
       {/* Container Card */}
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[850px] my-auto overflow-hidden border border-slate-300 print:border-0 print:shadow-none print:max-w-none print:w-full">
         {/* Modal Top Bar (Hidden in Print) */}
@@ -158,8 +384,14 @@ export default function HospitalReceiptModal({
         </div>
 
         {/* Printable Paper Canvas */}
-        <div className="p-4 sm:p-8 bg-white text-slate-900 font-sans print:p-0">
-          <div id="hospital-printable-receipt" className="space-y-3 text-[12px] leading-tight select-text">
+        <div
+          id="printable-receipt"
+          className="p-4 sm:p-8 bg-white text-slate-900 font-sans print:p-0"
+        >
+          <div
+            id="hospital-printable-receipt"
+            className="space-y-3 text-[12px] leading-tight select-text"
+          >
             {/* 1. Header Section */}
             <div className="text-center space-y-0.5">
               <h1 className="text-lg sm:text-xl font-extrabold tracking-wide text-slate-900 uppercase">
@@ -198,40 +430,64 @@ export default function HospitalReceiptModal({
               {/* Left Column */}
               <div className="space-y-0.5">
                 <div className="flex">
-                  <span className="w-36 text-slate-700 font-semibold">Bill No</span>
+                  <span className="w-36 text-slate-700 font-semibold">
+                    Bill No
+                  </span>
                   <span className="mr-2">:</span>
                   <span className="font-bold text-slate-900">{billNo}</span>
                 </div>
                 <div className="flex">
-                  <span className="w-36 text-slate-700 font-semibold">Bill Date</span>
+                  <span className="w-36 text-slate-700 font-semibold">
+                    Bill Date
+                  </span>
                   <span className="mr-2">:</span>
-                  <span className="font-semibold text-slate-900">{billDateTimeStr}</span>
+                  <span className="font-semibold text-slate-900">
+                    {billDateTimeStr}
+                  </span>
                 </div>
                 <div className="flex">
-                  <span className="w-36 text-slate-700 font-semibold">Patient Name</span>
+                  <span className="w-36 text-slate-700 font-semibold">
+                    Patient Name
+                  </span>
                   <span className="mr-2">:</span>
-                  <span className="font-bold text-slate-900">{patientDisplayName}</span>
+                  <span className="font-bold text-slate-900">
+                    {patientDisplayName}
+                  </span>
                 </div>
                 <div className="flex">
-                  <span className="w-36 text-slate-700 font-semibold">Date Of Admission</span>
+                  <span className="w-36 text-slate-700 font-semibold">
+                    Date Of Admission
+                  </span>
                   <span className="mr-2">:</span>
                   <span className="text-slate-900">{admissionDateTimeStr}</span>
                 </div>
                 <div className="flex">
-                  <span className="w-36 text-slate-700 font-semibold">Consultant</span>
+                  <span className="w-36 text-slate-700 font-semibold">
+                    Consultant
+                  </span>
                   <span className="mr-2">:</span>
-                  <span className="font-bold text-slate-900">{consultantName}</span>
+                  <span className="font-bold text-slate-900">
+                    {consultantName}
+                  </span>
                 </div>
                 <div className="flex">
-                  <span className="w-36 text-slate-700 font-semibold">Department</span>
+                  <span className="w-36 text-slate-700 font-semibold">
+                    Department
+                  </span>
                   <span className="mr-2">:</span>
-                  <span className="font-bold text-slate-900">{departmentName}</span>
+                  <span className="font-bold text-slate-900">
+                    {departmentName}
+                  </span>
                 </div>
                 <div className="flex items-start">
-                  <span className="w-36 text-slate-700 font-semibold shrink-0">Address</span>
+                  <span className="w-36 text-slate-700 font-semibold shrink-0">
+                    Address
+                  </span>
                   <span className="mr-2">:</span>
                   <span className="text-slate-800">
-                    VEDANGI<br />BHIMAVARAM, ANDHRA PRADESH
+                    VEDANGI
+                    <br />
+                    BHIMAVARAM, ANDHRA PRADESH
                   </span>
                 </div>
               </div>
@@ -239,39 +495,59 @@ export default function HospitalReceiptModal({
               {/* Right Column */}
               <div className="space-y-0.5">
                 <div className="flex">
-                  <span className="w-32 text-slate-700 font-semibold">Admission No</span>
+                  <span className="w-32 text-slate-700 font-semibold">
+                    Admission No
+                  </span>
                   <span className="mr-2">:</span>
-                  <span className="font-bold text-slate-900">{admissionNo}</span>
+                  <span className="font-bold text-slate-900">
+                    {admissionNo}
+                  </span>
                 </div>
                 <div className="flex">
-                  <span className="w-32 text-slate-700 font-semibold">Bill Date</span>
+                  <span className="w-32 text-slate-700 font-semibold">
+                    Bill Date
+                  </span>
                   <span className="mr-2">:</span>
                   <span className="text-slate-900">{billDateShortStr}</span>
                 </div>
                 <div className="flex">
-                  <span className="w-32 text-slate-700 font-semibold">S-W-D-B/O</span>
+                  <span className="w-32 text-slate-700 font-semibold">
+                    S-W-D-B/O
+                  </span>
                   <span className="mr-2">:</span>
                   <span className="text-slate-900"></span>
                 </div>
                 <div className="flex">
-                  <span className="w-32 text-slate-700 font-semibold">UMR No</span>
+                  <span className="w-32 text-slate-700 font-semibold">
+                    UMR No
+                  </span>
                   <span className="mr-2">:</span>
-                  <span className="font-bold text-slate-900 font-mono">{claim.patientId || claim.mrn}</span>
+                  <span className="font-bold text-slate-900 font-mono">
+                    {claim.patientId || claim.mrn}
+                  </span>
                 </div>
                 <div className="flex">
-                  <span className="w-32 text-slate-700 font-semibold">Age / Sex</span>
+                  <span className="w-32 text-slate-700 font-semibold">
+                    Age / Sex
+                  </span>
                   <span className="mr-2">:</span>
                   <span className="font-semibold text-slate-900">
                     {claim.age}Y(s)/{claim.gender}
                   </span>
                 </div>
                 <div className="flex">
-                  <span className="w-32 text-slate-700 font-semibold">Admitted Ward</span>
+                  <span className="w-32 text-slate-700 font-semibold">
+                    Admitted Ward
+                  </span>
                   <span className="mr-2">:</span>
-                  <span className="font-bold text-slate-900 uppercase">{admittedWard}</span>
+                  <span className="font-bold text-slate-900 uppercase">
+                    {admittedWard}
+                  </span>
                 </div>
                 <div className="flex">
-                  <span className="w-32 text-slate-700 font-semibold">Referral</span>
+                  <span className="w-32 text-slate-700 font-semibold">
+                    Referral
+                  </span>
                   <span className="mr-2">:</span>
                   <span className="font-semibold text-slate-900">WALKIN</span>
                 </div>
@@ -308,17 +584,26 @@ export default function HospitalReceiptModal({
                           {section.mainCategory}
                         </td>
                         <td className="pt-2 px-2 text-right font-mono font-bold">
-                          {section.subTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {section.subTotal.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
                         </td>
                       </tr>
 
                       {/* Sub Category Header (e.g. EMERGENCY / HOSPITALITY SERVICES / ENT) */}
                       <tr className="font-bold text-slate-800">
-                        <td colSpan={5} className="pt-0.5 pl-6 px-2 text-[11px]">
+                        <td
+                          colSpan={5}
+                          className="pt-0.5 pl-6 px-2 text-[11px]"
+                        >
                           {section.subCategory}
                         </td>
                         <td className="pt-0.5 px-2 text-right font-mono font-bold text-[11px]">
-                          {section.subTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {section.subTotal.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
                         </td>
                       </tr>
 
@@ -338,10 +623,17 @@ export default function HospitalReceiptModal({
                             {item.qty}
                           </td>
                           <td className="py-0.5 px-2 text-right font-mono">
-                            * {item.rate.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            *{" "}
+                            {item.rate.toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
                           </td>
                           <td className="py-0.5 px-2 text-right font-mono font-semibold">
-                            {item.amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {item.amount.toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
                           </td>
                         </tr>
                       ))}
@@ -350,19 +642,31 @@ export default function HospitalReceiptModal({
 
                   {/* Summary Rows at Bottom of Services */}
                   <tr className="border-t border-slate-300">
-                    <td colSpan={5} className="pt-2 text-right font-bold text-slate-800 pr-4">
+                    <td
+                      colSpan={5}
+                      className="pt-2 text-right font-bold text-slate-800 pr-4"
+                    >
                       Gross Amount
                     </td>
                     <td className="pt-2 text-right font-mono font-bold text-slate-900 px-2">
-                      {grossAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {grossAmount.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={5} className="pb-1 text-right font-bold text-slate-800 pr-4">
+                    <td
+                      colSpan={5}
+                      className="pb-1 text-right font-bold text-slate-800 pr-4"
+                    >
                       Total Receipt
                     </td>
                     <td className="pb-1 text-right font-mono font-bold text-slate-900 px-2">
-                      {totalReceiptAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {totalReceiptAmount.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </td>
                   </tr>
                 </tbody>
@@ -388,40 +692,82 @@ export default function HospitalReceiptModal({
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {paymentsList.map((p, pIdx) => {
-                    const isCash = p.paymentMethod === "Cash";
+                    const isCash = p.paymentMethod === "Cash"
+
                     const isCard =
                       p.paymentMethod === "Credit Card" ||
                       p.paymentMethod === "Debit Card" ||
                       p.paymentMethod === "UPI / Digital" ||
-                      (p.paymentMethod as any) === "Card";
-                    const isCheque = p.paymentMethod === "Cheque" || p.paymentMethod === "Bank Transfer";
+                      p.paymentMethod as any === "Card"
 
-                    const cashAmt = isCash ? p.amount : 0;
-                    const cardAmt = isCard ? p.amount : 0;
-                    const chequeAmt = isCheque ? p.amount : 0;
-                    const recptDate = formatReceiptDateShort(p.paymentDate);
-                    const remarks = p.notes || (pIdx === 0 && paymentsList.length > 1 ? "Advances : ADVANCE" : "Advances : INVESTIGATIONS / SETTLEMENT");
+                    const isCheque =
+                      p.paymentMethod === "Cheque" ||
+                      p.paymentMethod === "Bank Transfer"
+
+                    const cashAmt = isCash ? p.amount : 0
+
+                    const cardAmt = isCard ? p.amount : 0
+
+                    const chequeAmt = isCheque ? p.amount : 0
+
+                    const recptDate = formatReceiptDateShort(p.paymentDate)
+
+                    const remarks =
+                      p.notes ||
+                      (pIdx === 0 && paymentsList.length > 1
+                        ? "Advances : ADVANCE"
+                        : "Advances : INVESTIGATIONS / SETTLEMENT")
 
                     return (
                       <tr key={pIdx} className="font-mono text-[11px]">
-                        <td className="py-1 px-2 font-bold text-slate-900">{p.receiptNo || "598566"}</td>
-                        <td className="py-1 px-2 text-slate-700">{recptDate}</td>
-                        <td className="py-1 px-2 text-right">{cashAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="py-1 px-2 text-right">{chequeAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="py-1 px-2 text-right">{cardAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="py-1 px-2 text-right font-bold text-slate-900">
-                          {p.amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <td className="py-1 px-2 font-bold text-slate-900">
+                          {p.receiptNo || "598566"}
                         </td>
-                        <td className="py-1 px-2 pl-4 font-sans text-slate-800">{remarks}</td>
+                        <td className="py-1 px-2 text-slate-700">
+                          {recptDate}
+                        </td>
+                        <td className="py-1 px-2 text-right">
+                          {cashAmt.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td className="py-1 px-2 text-right">
+                          {chequeAmt.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td className="py-1 px-2 text-right">
+                          {cardAmt.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td className="py-1 px-2 text-right font-bold text-slate-900">
+                          {p.amount.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td className="py-1 px-2 pl-4 font-sans text-slate-800">
+                          {remarks}
+                        </td>
                       </tr>
-                    );
+                    )
                   })}
                   <tr className="border-t border-b border-slate-400 font-bold">
-                    <td colSpan={5} className="py-1 px-2 text-center font-sans text-slate-900">
+                    <td
+                      colSpan={5}
+                      className="py-1 px-2 text-center font-sans text-slate-900"
+                    >
                       Total
                     </td>
                     <td className="py-1 px-2 text-right font-mono text-slate-900">
-                      {totalReceiptAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {totalReceiptAmount.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </td>
                     <td></td>
                   </tr>
@@ -458,27 +804,43 @@ export default function HospitalReceiptModal({
             <div className="pt-4 border-t border-slate-300 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700">
               <div className="space-y-0.5">
                 <div className="flex">
-                  <span className="w-24 font-bold text-slate-900">Prepared By</span>
+                  <span className="w-24 font-bold text-slate-900">
+                    Prepared By
+                  </span>
                   <span className="mr-2 font-bold">:</span>
-                  <span className="font-mono font-bold text-slate-900">{staffCode}</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {staffCode}
+                  </span>
                 </div>
                 <div className="flex">
-                  <span className="w-24 font-bold text-slate-900">Printed By</span>
+                  <span className="w-24 font-bold text-slate-900">
+                    Printed By
+                  </span>
                   <span className="mr-2 font-bold">:</span>
-                  <span className="font-mono font-bold text-slate-900">{staffCode}</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {staffCode}
+                  </span>
                 </div>
               </div>
 
               <div className="space-y-0.5 sm:text-right">
                 <div className="flex sm:justify-end">
-                  <span className="w-24 font-bold text-slate-900 text-left sm:text-right sm:mr-2">Prepared Dt</span>
+                  <span className="w-24 font-bold text-slate-900 text-left sm:text-right sm:mr-2">
+                    Prepared Dt
+                  </span>
                   <span className="mr-2 font-bold">:</span>
-                  <span className="font-semibold text-slate-900">{billDateTimeStr}</span>
+                  <span className="font-semibold text-slate-900">
+                    {billDateTimeStr}
+                  </span>
                 </div>
                 <div className="flex sm:justify-end">
-                  <span className="w-24 font-bold text-slate-900 text-left sm:text-right sm:mr-2">Printed On</span>
+                  <span className="w-24 font-bold text-slate-900 text-left sm:text-right sm:mr-2">
+                    Printed On
+                  </span>
                   <span className="mr-2 font-bold">:</span>
-                  <span className="font-semibold text-slate-900">{printedOnStr}</span>
+                  <span className="font-semibold text-slate-900">
+                    {printedOnStr}
+                  </span>
                 </div>
               </div>
             </div>
@@ -514,5 +876,5 @@ export default function HospitalReceiptModal({
         </div>
       </div>
     </div>
-  );
+  )
 }
