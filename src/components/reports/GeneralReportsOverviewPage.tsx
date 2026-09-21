@@ -974,8 +974,169 @@ export default function GeneralReportsOverviewPage({
           )}
         </div>
 
+        {/* ── 2. HOSPITAL LIFECYCLE & PATIENT FLOW PIPELINE ────────────────── */}
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 sm:p-4 shadow-2xs animate-flow-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center font-bold">
+                <Activity className="w-4 h-4 animate-pulse" />
+              </div>
+              <div>
+                <h2 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <span>Hospital Lifecycle & Patient Flow Pipeline</span>
+                  <span className="text-[9.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Live Operational Flow
+                  </span>
+                </h2>
+                <p className="text-[11px] text-slate-500">
+                  End-to-end patient journey progression across hospital departments
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse-glow" />
+                <span>Continuous Pipeline Flow</span>
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="font-semibold text-slate-700">
+                {(data.kpis.find((k) => k.id === "total_patients")?.rawValue || 0).toLocaleString()} Active Patients
+              </span>
+            </div>
+          </div>
+
+          {/* 5-Stage Interactive Flow Stepper */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 relative">
+            {/* Stage 1: Intake & Triage */}
+            <div className="relative group bg-slate-50/70 hover:bg-blue-50/50 border border-slate-200/80 hover:border-blue-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-100/60 px-1.5 py-0.5 rounded">
+                    01 · Intake & Triage
+                  </span>
+                  <div className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                    <Users className="w-3 h-3" />
+                  </div>
+                </div>
+                <div className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  {(
+                    (data.kpis.find((k) => k.id === "op_visits")?.rawValue || 0) +
+                    (data.kpis.find((k) => k.id === "er_visits")?.rawValue || 0)
+                  ).toLocaleString()}
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                  {(data.kpis.find((k) => k.id === "op_visits")?.rawValue || 0).toLocaleString()} OP · {(data.kpis.find((k) => k.id === "er_visits")?.rawValue || 0).toLocaleString()} ER
+                </div>
+              </div>
+              <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
+                <span className="text-slate-500">Registration</span>
+                <span className="font-bold text-blue-700">100% Inflow</span>
+              </div>
+            </div>
+
+            {/* Stage 2: Clinical Consultations */}
+            <div className="relative group bg-slate-50/70 hover:bg-indigo-50/50 border border-slate-200/80 hover:border-indigo-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-100/60 px-1.5 py-0.5 rounded">
+                    02 · Consultations
+                  </span>
+                  <div className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                    <Stethoscope className="w-3 h-3" />
+                  </div>
+                </div>
+                <div className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  {(
+                    data.kpis.find((k) => k.id === "total_appointments")?.rawValue ||
+                    data.kpis.find((k) => k.id === "op_visits")?.rawValue || 0
+                  ).toLocaleString()}
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                  Doctor Encounters & Review
+                </div>
+              </div>
+              <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
+                <span className="text-slate-500">Evaluation</span>
+                <span className="font-bold text-indigo-700">Clinical Review</span>
+              </div>
+            </div>
+
+            {/* Stage 3: Diagnostics & Labs */}
+            <div className="relative group bg-slate-50/70 hover:bg-purple-50/50 border border-slate-200/80 hover:border-purple-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-600 bg-purple-100/60 px-1.5 py-0.5 rounded">
+                    03 · Diagnostics
+                  </span>
+                  <div className="w-5 h-5 rounded-full bg-purple-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                    <TestTube className="w-3 h-3" />
+                  </div>
+                </div>
+                <div className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  Active Worklist
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                  Pathology, Labs & Imaging
+                </div>
+              </div>
+              <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
+                <span className="text-slate-500">Processing</span>
+                <span className="font-bold text-purple-700">Lab Orders</span>
+              </div>
+            </div>
+
+            {/* Stage 4: Inpatient & ICU */}
+            <div className="relative group bg-slate-50/70 hover:bg-amber-50/50 border border-slate-200/80 hover:border-amber-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-600 bg-amber-100/60 px-1.5 py-0.5 rounded">
+                    04 · Inpatient Care
+                  </span>
+                  <div className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                    <Bed className="w-3 h-3" />
+                  </div>
+                </div>
+                <div className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  {(data.kpis.find((k) => k.id === "ip_admissions")?.rawValue || 0).toLocaleString()}
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                  {data.bedOccupancyRate}% Ward Bed Occupancy
+                </div>
+              </div>
+              <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
+                <span className="text-slate-500">Admissions</span>
+                <span className="font-bold text-amber-700">Ward & ICU</span>
+              </div>
+            </div>
+
+            {/* Stage 5: Discharge & Recovery */}
+            <div className="relative group bg-slate-50/70 hover:bg-emerald-50/50 border border-slate-200/80 hover:border-emerald-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 bg-emerald-100/60 px-1.5 py-0.5 rounded">
+                    05 · Clearances
+                  </span>
+                  <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                    <CheckCircle2 className="w-3 h-3" />
+                  </div>
+                </div>
+                <div className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  {(data.kpis.find((k) => k.id === "discharges")?.rawValue || 0).toLocaleString()}
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                  Completed Discharges & Billing
+                </div>
+              </div>
+              <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
+                <span className="text-slate-500">Resolution</span>
+                <span className="font-bold text-emerald-700">Cleared</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* ── 3. SUMMARY CARDS (6) ─────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 animate-flow-in delay-75">
           {data.kpis.map((kpi) => {
             const isUp = kpi.trend === "up"
             const isGood = kpi.isPositiveGood ? isUp : !isUp
@@ -1042,7 +1203,7 @@ export default function GeneralReportsOverviewPage({
         </div>
 
         {/* ── 4. VISUAL ANALYTICS (6 PANELS) ───────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 animate-flow-in delay-150">
           {/* Chart 1: Patient Visit Trend */}
           <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs">
             <div className="flex items-center justify-between mb-2">
@@ -1071,7 +1232,11 @@ export default function GeneralReportsOverviewPage({
               </div>
             </div>
             <div className="h-40 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                key={`trend_${dateRange}_${trendPeriod}_${data.visitTrend.length}`}
+                width="100%"
+                height="100%"
+              >
                 <LineChart data={data.visitTrend}>
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -1103,6 +1268,10 @@ export default function GeneralReportsOverviewPage({
                     stroke="#1B4FD8"
                     strokeWidth={2.5}
                     dot={{ r: 2.5 }}
+                    isAnimationActive={true}
+                    animationDuration={1500}
+                    animationEasing="ease-out"
+                    animationBegin={150}
                   />
                   <Line
                     type="monotone"
@@ -1111,6 +1280,10 @@ export default function GeneralReportsOverviewPage({
                     stroke="#DC2626"
                     strokeWidth={2}
                     dot={{ r: 2.5 }}
+                    isAnimationActive={true}
+                    animationDuration={1500}
+                    animationEasing="ease-out"
+                    animationBegin={250}
                   />
                   <Line
                     type="monotone"
@@ -1119,6 +1292,10 @@ export default function GeneralReportsOverviewPage({
                     stroke="#0EA5E9"
                     strokeWidth={2}
                     dot={{ r: 2.5 }}
+                    isAnimationActive={true}
+                    animationDuration={1500}
+                    animationEasing="ease-out"
+                    animationBegin={350}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -1138,7 +1315,11 @@ export default function GeneralReportsOverviewPage({
               </div>
             </div>
             <div className="h-40 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                key={`dept_${dateRange}_${selectedDept}_${data.deptVisits.length}`}
+                width="100%"
+                height="100%"
+              >
                 <BarChart data={data.deptVisits} margin={{ bottom: 5 }}>
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -1172,6 +1353,10 @@ export default function GeneralReportsOverviewPage({
                     fill="#1B4FD8"
                     radius={[4, 4, 0, 0]}
                     minPointSize={3}
+                    isAnimationActive={true}
+                    animationDuration={1300}
+                    animationEasing="ease-out"
+                    animationBegin={150}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -1191,7 +1376,11 @@ export default function GeneralReportsOverviewPage({
               </div>
             </div>
             <div className="h-40 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                key={`adm_${dateRange}_${selectedDept}_${data.admVsDisTrend.length}`}
+                width="100%"
+                height="100%"
+              >
                 <BarChart data={data.admVsDisTrend}>
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -1224,6 +1413,10 @@ export default function GeneralReportsOverviewPage({
                     fill="#0EA5E9"
                     radius={[4, 4, 0, 0]}
                     minPointSize={4}
+                    isAnimationActive={true}
+                    animationDuration={1300}
+                    animationEasing="ease-out"
+                    animationBegin={200}
                   />
                   <Bar
                     dataKey="discharges"
@@ -1231,6 +1424,10 @@ export default function GeneralReportsOverviewPage({
                     fill="#10B981"
                     radius={[4, 4, 0, 0]}
                     minPointSize={4}
+                    isAnimationActive={true}
+                    animationDuration={1300}
+                    animationEasing="ease-out"
+                    animationBegin={300}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -1253,7 +1450,11 @@ export default function GeneralReportsOverviewPage({
               </span>
             </div>
             <div className="h-40 w-full flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                key={`bed_${dateRange}_${data.bedOccupancyRate}`}
+                width="100%"
+                height="100%"
+              >
                 <PieChart>
                   <Pie
                     data={data.bedOccupancyData}
@@ -1263,6 +1464,10 @@ export default function GeneralReportsOverviewPage({
                     outerRadius={56}
                     paddingAngle={4}
                     dataKey="count"
+                    isAnimationActive={true}
+                    animationDuration={1200}
+                    animationEasing="ease-out"
+                    animationBegin={250}
                   >
                     {data.bedOccupancyData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1294,7 +1499,11 @@ export default function GeneralReportsOverviewPage({
               </div>
             </div>
             <div className="h-40 w-full flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                key={`visit_dist_${dateRange}_${data.visitDistribution.length}`}
+                width="100%"
+                height="100%"
+              >
                 <PieChart>
                   <Pie
                     data={data.visitDistribution}
@@ -1304,6 +1513,10 @@ export default function GeneralReportsOverviewPage({
                     outerRadius={52}
                     paddingAngle={3}
                     dataKey="value"
+                    isAnimationActive={true}
+                    animationDuration={1200}
+                    animationEasing="ease-out"
+                    animationBegin={300}
                   >
                     {data.visitDistribution.map((entry, index) => (
                       <Cell key={`cell-dist-${index}`} fill={entry.color} />
@@ -1335,7 +1548,11 @@ export default function GeneralReportsOverviewPage({
               </div>
             </div>
             <div className="h-40 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                key={`dept_act_${dateRange}_${data.deptActivity.length}`}
+                width="100%"
+                height="100%"
+              >
                 <BarChart
                   data={data.deptActivity}
                   layout="vertical"
@@ -1370,6 +1587,10 @@ export default function GeneralReportsOverviewPage({
                     name="Activity Score"
                     fill="#1B4FD8"
                     radius={[0, 4, 4, 0]}
+                    isAnimationActive={true}
+                    animationDuration={1300}
+                    animationEasing="ease-out"
+                    animationBegin={350}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -1378,7 +1599,7 @@ export default function GeneralReportsOverviewPage({
         </div>
 
         {/* ── 5. RECENT HOSPITAL ACTIVITY TABLE ────────────────────────────── */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-2xs overflow-hidden">
+        <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-2xs overflow-hidden animate-flow-in delay-225">
           <div className="px-4 py-2.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-[#FCFDFE]">
             <div>
               <h3 className="text-sm font-bold text-slate-900">

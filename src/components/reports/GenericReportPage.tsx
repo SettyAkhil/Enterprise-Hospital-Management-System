@@ -4220,7 +4220,7 @@ export default function GenericReportPage({
         {!loading && !error && data && (
           <>
             {/* ── 3. KPI SUMMARY CARDS ────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 animate-flow-in delay-75">
               {data.kpis.map((kpi) => {
                 const isUp = kpi.trend === "up";
                 return (
@@ -4261,10 +4261,15 @@ export default function GenericReportPage({
             </div>
 
             {/* ── 4. DATA VISUALIZATIONS ────────────────────────────────────── */}
-            {renderVisualizations()}
+            <div
+              key={`vis_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}`}
+              className="animate-flow-in delay-150"
+            >
+              {renderVisualizations()}
+            </div>
 
             {/* ── 5. DETAILED REPORT TABLE ──────────────────────────────────── */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-2xs overflow-hidden">
+            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-2xs overflow-hidden animate-flow-in delay-225">
               <div className="p-4 border-b border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#F8FAFC]/50">
                 <div>
                   <h2 className="text-sm font-bold text-slate-900">
