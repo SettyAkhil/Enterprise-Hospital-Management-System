@@ -134,6 +134,7 @@ type Module =
   | "pharmacy_rx"
   | "pharmacy_ocr"
   | "pharmacy_returns"
+  | "pharmacy_supplier_returns"
   | "pharmacy_medicine"
   | "pharmacy_category"
   | "pharmacy_suppliers"
@@ -325,10 +326,11 @@ const NAV: NavItem[] = [
         group: "Sales & Dispensing",
       },
       { key: "pharmacy_medicine", label: "Medicine Master", group: "Catalog" },
-
       { key: "pharmacy_category", label: "Category Master", group: "Catalog" },
 
       { key: "pharmacy_suppliers", label: "Suppliers", group: "Procurement" },
+
+      { key: "pharmacy_supplier_returns", label: "Supplier Returns", group: "Inventory Management" },
 
       { key: "pharmacy_po", label: "Purchase Orders", group: "Procurement" },
 
@@ -337,7 +339,6 @@ const NAV: NavItem[] = [
         label: "Scan Invoice (GRN)",
         group: "Procurement",
       },
-
       { key: "pharmacy_ledger", label: "Inventory Ledger", group: "Inventory" },
 
       {

@@ -262,7 +262,7 @@ export function usePharmacyData() {
   }))
 
   const salesData = last7Days.map((dateStr) => {
-    // Only original bills (not MOD- bills) count toward orders and gross sales
+    // Only original bills (not modified return bills) count toward orders and gross sales
     const dayBills = mappedBills.filter(
       (b) =>
         (b.billDate || "").startsWith(dateStr) &&
@@ -279,41 +279,29 @@ export function usePharmacyData() {
     return {
       date: new Date(dateStr).toLocaleDateString("en-US", { weekday: "short" }),
       revenue: dayNetRevenue,
+      gross: dayGross,
+      refunds: dayRefunds,
       orders: dayBills.length,
     };
   });
 
   const refresh = () => {
-    setMedicines(PharmacyDatabase.getMedicines())
-
-    setPrescriptions(PharmacyDatabase.getPrescriptions())
-
-    setSuppliers(PharmacyDatabase.getSuppliers())
-
-    setPurchaseOrders(PharmacyDatabase.getPurchaseOrders())
-
-    setCategories(PharmacyDatabase.getCategories())
-
-    setBatches(PharmacyDatabase.getBatches())
-
-    setBills(PharmacyDatabase.getBills())
-
-    setUsers(PharmacyDatabase.getUsers())
-
-    setNotifications(PharmacyDatabase.getNotifications())
-
-    setAuditLogs(PharmacyDatabase.getAuditLogs())
-
-    setStockTransfers(PharmacyDatabase.getTransfers())
-
-    setStockTransactions(PharmacyDatabase.getStockTransactions())
-
-    setGrns(PharmacyDatabase.getGRNs())
-
-    setSupplierReturns(PharmacyDatabase.getSupplierReturns())
-
-    setAdjustments(PharmacyDatabase.getAdjustments())
-  }
+    setMedicines(PharmacyDatabase.getMedicines());
+    setPrescriptions(PharmacyDatabase.getPrescriptions());
+    setSuppliers(PharmacyDatabase.getSuppliers());
+    setPurchaseOrders(PharmacyDatabase.getPurchaseOrders());
+    setCategories(PharmacyDatabase.getCategories());
+    setBatches(PharmacyDatabase.getBatches());
+    setBills(PharmacyDatabase.getBills());
+    setUsers(PharmacyDatabase.getUsers());
+    setNotifications(PharmacyDatabase.getNotifications());
+    setAuditLogs(PharmacyDatabase.getAuditLogs());
+    setStockTransfers(PharmacyDatabase.getTransfers());
+    setStockTransactions(PharmacyDatabase.getStockTransactions());
+    setGrns(PharmacyDatabase.getGRNs());
+    setSupplierReturns(PharmacyDatabase.getSupplierReturns());
+    setAdjustments(PharmacyDatabase.getAdjustments());
+  };
 
   useEffect(() => {
     const handleUpdate = () => refresh()

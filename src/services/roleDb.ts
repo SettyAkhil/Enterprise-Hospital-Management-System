@@ -45,6 +45,7 @@ export const ALL_SYSTEM_MODULES = [
   "pharmacy_rx",
   "pharmacy_ocr",
   "pharmacy_returns",
+  "pharmacy_supplier_returns",
 
   "pharmacy_medicine",
   "pharmacy_category",
@@ -105,7 +106,6 @@ export const ALL_SYSTEM_MODULES = [
   "scheduling",
   "admissions",
   "readmission",
-
   "lab_billing",
 
   "payments",
@@ -147,7 +147,6 @@ const INITIAL_ROLES: AppRole[] = [
     id: "ROLE_DOCTOR",
 
     name: "Attending Physician / Doctor",
-
     allowedModules: [
       "dashboard",
       "doctor_portal",
@@ -215,6 +214,7 @@ const INITIAL_ROLES: AppRole[] = [
       "pharmacy_rx",
       "pharmacy_ocr",
       "pharmacy_returns",
+      "pharmacy_supplier_returns",
 
       "pharmacy_medicine",
       "pharmacy_category",
@@ -292,6 +292,7 @@ const INITIAL_ROLES: AppRole[] = [
       "pharmacy_rx",
       "pharmacy_ocr",
       "pharmacy_returns",
+      "pharmacy_supplier_returns",
 
       "pharmacy_medicine",
       "pharmacy_category",
@@ -328,6 +329,7 @@ const INITIAL_ROLES: AppRole[] = [
       "pharmacy_rx",
       "pharmacy_ocr",
       "pharmacy_returns",
+      "pharmacy_supplier_returns",
 
       "pharmacy_medicine",
       "pharmacy_category",
@@ -354,13 +356,14 @@ const INITIAL_ROLES: AppRole[] = [
       "pharmacy_rx",
       "pharmacy_ocr",
       "pharmacy_returns",
+      "pharmacy_supplier_returns",
 
       "pharmacy_medicine",
       "pharmacy_ledger",
       "pharmacy_expiry",
     ],
   },
-]
+];
 
 export function getInitialUsers(): AppUser[] {
   const baseUsers: AppUser[] = [
