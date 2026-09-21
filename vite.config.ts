@@ -29,6 +29,11 @@ const proxy = {
     changeOrigin: true,
     rewrite: (path: string) => path.replace(/^\/hms-api/, ''),
   },
+  '/vllm-api': {
+    target: 'http://localhost:8700',
+    changeOrigin: true,
+    rewrite: (path: string) => path.replace(/^\/vllm-api/, ''),
+  },
   '/api': { target: 'http://localhost:3000', changeOrigin: true },
 }
 
@@ -39,12 +44,29 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-is',
+      'recharts',
+      'lucide-react',
+      'react-hot-toast',
+      'react-icons',
+    ],
+  },
   server: {
     host: '0.0.0.0',
     port: parseInt(process.env.PORT || '8443'),
     strictPort: true,
     allowedHosts: ['.trycloudflare.com', 'all'],
     watch: { ignored: ['**/hospital-backend/**', '**/archive/**'] },
+    warmup: {
+      clientFiles: [
+        './src/main.tsx',
+        './src/App.tsx',
+      ],
+    },
     proxy,
   },
   preview: {
@@ -54,7 +76,10 @@ export default defineConfig({
     // recognize -- needed here because `vite preview` gets tunneled through
     // a random *.trycloudflare.com hostname for demo links (see the "run"
     // skill / deployment notes), not accessed as localhost.
-    allowedHosts: ['.trycloudflare.com'],
+    // `.loca.lt` is here because a Cloudflare quick tunnel cannot choose its
+    // own hostname -- it is assigned a random three-word name. localtunnel can,
+    // which is how the demo gets a readable `enterprise-hms-demo` address.
+    allowedHosts: ['.trycloudflare.com', '.loca.lt'],
     // A previewed build is tunneled for demos too, so it needs the same
     // proxies the dev server has -- it had none, so every backend call and the
     // whole embedded Keppler app 404'd there.

@@ -71,7 +71,7 @@ import IntelligenceHub from "./components/IntelligenceHub";
 import QueueManagement from "./components/QueueManagement";
 
 import OPManagement from "./components/OPManagement";
-
+import OPDProcedures from "./components/OPDProcedures";
 import DoctorWorkflow from "./components/DoctorWorkflow";
 
 import DoctorPortal from "./components/doctor/DoctorPortal";
@@ -178,6 +178,7 @@ type Module =
   | "op_registration"
   | "op_workflow"
   | "op_nurse"
+  | "opd_procedures"
   | "doctor_workflow"
   | "doctor_portal"
   | "scheduling"
@@ -246,13 +247,11 @@ const NAV: NavItem[] = [
     key: "outpatient",
     label: "OP Department",
     Icon: Icon.Stethoscope,
-
     children: [
       { key: "op_management", label: "OP Management" },
-
+      { key: "queue", label: "Live Queue Board" },
       { key: "op_nurse", label: "Nurse Station" },
-
-      { key: "queue", label: "Queue Management" },
+      { key: "opd_procedures", label: "OPD Minor Procedures" },
     ],
   },
 
@@ -310,31 +309,21 @@ const NAV: NavItem[] = [
 
     children: [
       { key: "pharmacy", label: "Dashboard" },
-
       {
         key: "pharmacy_dispensing",
         label: "Dispensing & Billing",
         group: "Sales & Dispensing",
       },
-
       {
         key: "pharmacy_rx",
         label: "Prescription Queue",
         group: "Sales & Dispensing",
       },
-
-      {
-        key: "pharmacy_ocr",
-        label: "OCR Verification",
-        group: "Sales & Dispensing",
-      },
-
       {
         key: "pharmacy_returns",
-        label: "Returns",
+        label: "Sales Returns",
         group: "Sales & Dispensing",
       },
-
       { key: "pharmacy_medicine", label: "Medicine Master", group: "Catalog" },
 
       { key: "pharmacy_category", label: "Category Master", group: "Catalog" },
@@ -536,15 +525,9 @@ const BREADCRUMB_OVERRIDES: Record<string, string | string[]> = {
   discharge: "Discharge Workflow",
 
   op_management: "OP Management",
-
-  // Off the menu -- every step it offered now lives in a screen that writes a
-
-  // real record (Registration, Appointments, Billing). Still routable because
-
-  // OP Management and OP Registration deep-link into it with an encounter.
-
   op_workflow: "OP Clinical Journey",
-
+  doctor_workflow: "Doctor Workspace",
+  doctor_portal: "Doctor Workspace",
   patient_exp: "Patient Experience",
 
   clinical_rag: "Clinical RAG",
@@ -1050,11 +1033,10 @@ export default function App() {
   };
 
   const [expanded, setExpanded] = useState<string[]>([]);
-
   const [expandedReportGroups, setExpandedReportGroups] = useState<string[]>([
     "General Reports",
   ]);
-
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [subBadges, setSubBadges] = useState<Record<string, number>>({});
 
   // Bumped whenever the doctor inbox or the lab-order queue changes, so the
@@ -1345,18 +1327,9 @@ export default function App() {
 
         // -- the status the doctor portal dispatches with -- so a prescription sat
 
-        // in the queue while the sidebar reported nothing waiting.
-
         pharmacy_rx: prescriptions.filter((p) =>
           isAwaitingVerification(p.status),
         ).length,
-
-        pharmacy_ocr: prescriptions.filter(
-          (p) =>
-            (p.sourceType === "OCR" || p.sourceType === "UPLOADED_IMAGE") &&
-            p.items.some((i) => !i.medicineId),
-        ).length,
-
         pharmacy_dispensing: prescriptions.filter(
           (p) =>
             p.status === "Verified" ||
@@ -2013,30 +1986,58 @@ export default function App() {
                                   key={`${item.key}:${group}`}
                                   className="mt-2 first:mt-1"
                                 >
-                                  <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748B] select-none">
-                                    {group}
-                                  </div>
-                                  {groupChildren.map((child) => (
-                                    <div
-                                      key={`${child.key}_${child.label}`}
-                                      className={`nav-item sub justify-between ${
-                                        module === child.key && isActive
-                                          ? "active"
+                                  <div
+                                    className="px-3 pt-1 pb-1 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors mx-1 rounded"
+                                    onClick={() =>
+                                      setCollapsedGroups((prev) =>
+                                        prev.includes(`${item.key}:${group}`)
+                                          ? prev.filter(
+                                              (g) =>
+                                                g !== `${item.key}:${group}`,
+                                            )
+                                          : [...prev, `${item.key}:${group}`],
+                                      )
+                                    }
+                                  >
+                                    <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748B] select-none">
+                                      {group}
+                                    </span>
+                                    <span
+                                      className={`text-[#64748B] transition-transform ${
+                                        collapsedGroups.includes(
+                                          `${item.key}:${group}`,
+                                        )
+                                          ? "-rotate-90"
                                           : ""
                                       }`}
-                                      onClick={() => setModule(child.key)}
                                     >
-                                      <span className="flex-1 truncate">
-                                        {child.label}
-                                      </span>
-                                      {(subBadges[child.key] || 0) > 0 &&
-                                        module !== child.key && (
-                                          <span className="badge bg-[#334155] text-[#CBD5E1]">
-                                            {subBadges[child.key]}
-                                          </span>
-                                        )}
-                                    </div>
-                                  ))}
+                                      <Icon.ChevronDown size={14} />
+                                    </span>
+                                  </div>
+                                  {!collapsedGroups.includes(
+                                    `${item.key}:${group}`,
+                                  ) &&
+                                    groupChildren.map((child) => (
+                                      <div
+                                        key={`${child.key}_${child.label}`}
+                                        className={`nav-item sub justify-between ${
+                                          module === child.key && isActive
+                                            ? "active"
+                                            : ""
+                                        }`}
+                                        onClick={() => setModule(child.key)}
+                                      >
+                                        <span className="flex-1 truncate">
+                                          {child.label}
+                                        </span>
+                                        {(subBadges[child.key] || 0) > 0 &&
+                                          module !== child.key && (
+                                            <span className="badge bg-[#334155] text-[#CBD5E1]">
+                                              {subBadges[child.key]}
+                                            </span>
+                                          )}
+                                      </div>
+                                    ))}
                                 </div>
                               );
                             })}
@@ -2147,7 +2148,10 @@ export default function App() {
               {module === "appointments" && (
                 <Appointments
                   initialEncounterId={selectedWorkflowEncounterId}
-                  onSelect={() => setModule("chart")}
+                  onSelect={(patientId?: string) => {
+                    if (patientId) setClinicalPatientId(patientId);
+                    setModule("chart");
+                  }}
                   onGoToBilling={() => setModule("billing")}
                 />
               )}
@@ -2237,14 +2241,33 @@ export default function App() {
                   onNavigate={(m) => setModule(m as any)}
                 />
               )}
+              {module === "clinical" && (
+                <PlaceholderModule
+                  title="Clinical"
+                  sub="Encounters, orders, results, and care plans"
+                />
+              )}
               {module === "op_nurse" && (
-                <NurseStation nurseName={activeStaff?.name || "OP Nurse"} />
+                <NurseStation
+                  nurseName={activeStaff?.name || "OP Nurse"}
+                  onOpenQueue={
+                    userPermissions.includes("queue")
+                      ? () => setModule("queue")
+                      : undefined
+                  }
+                />
               )}
               {module === "admin" && <Administration />}
 
-              {/* New modules */}
-              {module === "queue" && (
-                <QueueManagement
+              {/* Outpatient Department Modular Suite */}
+              {module === "op_management" && (
+                <OPManagement
+                  staffName={activeStaff?.name || "OP desk"}
+                  onNavigateToNurseStation={
+                    userPermissions.includes("op_nurse") ? () => setModule("op_nurse") : undefined
+                  }
+                  onNavigateToQueue={() => setModule("queue")}
+                  onNavigateToOPDProcedures={() => setModule("opd_procedures")}
                   onNavigateToOPWorkflow={(encId, step) => {
                     if (encId) setSelectedWorkflowEncounterId(encId);
 
@@ -2258,7 +2281,7 @@ export default function App() {
                       : (encId) => {
                           if (encId) setSelectedWorkflowEncounterId(encId);
 
-                          setModule("doctor_workflow");
+                          setModule("doctor_portal");
                         }
                   }
                   onNavigateToOPRegistration={() => {
@@ -2266,8 +2289,8 @@ export default function App() {
                   }}
                 />
               )}
-              {module === "op_management" && (
-                <OPManagement
+              {module === "queue" && (
+                <QueueManagement
                   onNavigateToNurseStation={
                     userPermissions.includes("op_nurse")
                       ? () => setModule("op_nurse")
@@ -2286,21 +2309,17 @@ export default function App() {
                       : (encId) => {
                           if (encId) setSelectedWorkflowEncounterId(encId);
 
-                          setModule("doctor_workflow");
+                          setModule("doctor_portal");
                         }
                   }
-                  onNavigateToQueue={() => {
-                    setModule("queue");
-                  }}
                   onNavigateToOPRegistration={() => {
                     setModule("op_registration");
                   }}
-                  onNavigateToPharmacy={() => {
-                    setModule("pharmacy");
-                  }}
-                  onNavigateToBilling={() => {
-                    setModule("billing");
-                  }}
+                />
+              )}
+              {module === "opd_procedures" && (
+                <OPDProcedures
+                  onNavigateToOPManagement={() => setModule("op_management")}
                 />
               )}
               {module === "op_workflow" && (
@@ -2314,24 +2333,13 @@ export default function App() {
                       : (encId) => {
                           if (encId) setSelectedWorkflowEncounterId(encId);
 
-                          setModule("doctor_workflow");
+                          setModule("doctor_portal");
                         }
                   }
                 />
               )}
               {module === "patient_exp" && <PatientExperience />}
-              {module === "doctor_workflow" && (
-                <DoctorWorkflow
-                  onNavigateToOPWorkflow={(encId) => {
-                    if (encId) setSelectedWorkflowEncounterId(encId);
-
-                    setWorkflowInitialStep(5);
-
-                    setModule("op_workflow");
-                  }}
-                />
-              )}
-              {module === "doctor_portal" && (
+              {(module === "doctor_workflow" || module === "doctor_portal") && (
                 <DoctorPortal
                   doctor={
                     activeDoctor ||

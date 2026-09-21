@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { StatusBadge, Btn, Input } from "./shared";
 import { Icon } from "./icons";
 import { db, DBPatient, DBOPEncounter } from "../services/db";
+import PatientJourneyModal from "./PatientJourneyModal";
 
 export default function PatientSearch({
   onSelect,
@@ -19,6 +20,7 @@ export default function PatientSearch({
 
   const [patients, setPatients] = useState<DBPatient[]>([]);
   const [encounters, setEncounters] = useState<DBOPEncounter[]>([]);
+  const [selectedJourneyEncounter, setSelectedJourneyEncounter] = useState<DBOPEncounter | null>(null);
 
   const refreshFromDb = () => {
     setPatients(db.getPatients());
@@ -295,14 +297,12 @@ export default function PatientSearch({
                         </div>
 
                         {/* Quick Clinical Journey Action */}
-                        {onNavigateToWorkflow && (
-                          <button
-                            onClick={() => onNavigateToWorkflow(latestEncounter.id)}
-                            className="px-3 py-1 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[11.5px] font-semibold rounded-none shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
-                          >
-                            <span>✨</span> Clinical Triage &amp; Journey →
-                          </button>
-                        )}
+                        <button
+                          onClick={() => setSelectedJourneyEncounter(latestEncounter)}
+                          className="px-3 py-1 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[11.5px] font-bold rounded-none shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>✨</span> OP Clinical Journey &amp; History →
+                        </button>
                       </div>
                     )}
 
@@ -312,9 +312,48 @@ export default function PatientSearch({
                         Registered on: {new Date(p.createdAt).toLocaleDateString()}
                       </div>
                       <div className="flex items-center gap-2">
-                        <Btn variant="outline" size="xs" onClick={() => onSelect(p)} className="rounded-none">
-                          Open Chart
-                        </Btn>
+                        {latestEncounter ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedJourneyEncounter(latestEncounter)}
+                            className="px-2.5 py-1 bg-[#EFF6FF] text-[#1B4FD8] hover:bg-blue-100 rounded-none text-[11px] font-bold border border-blue-200 transition-colors cursor-pointer"
+                          >
+                            View OP Chart
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const syntheticEnc: DBOPEncounter = {
+                                id: `enc-${p.umr}`,
+                                umr: p.umr,
+                                patientName: p.name,
+                                age: p.age,
+                                sex: p.sex,
+                                phone: p.phone,
+                                address: p.address || "OP Patient",
+                                bloodGroup: p.bloodGroup || "O+",
+                                opNumber: `OP-${p.umr}`,
+                                dept: "General OP",
+                                isNew: true,
+                                registrationTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                                chiefComplaint: "Outpatient Consultation",
+                                symptoms: ["General Examination"],
+                                aiSpecialty: "General Medicine",
+                                aiDoctor: "Duty Doctor",
+                                doctorGenderPref: "Any",
+                                assignedDoctor: "Duty Doctor",
+                                room: "Room 101",
+                                status: "Registered",
+                                bookedAt: p.createdAt || new Date().toISOString()
+                              } as unknown as DBOPEncounter;
+                              setSelectedJourneyEncounter(syntheticEnc);
+                            }}
+                            className="px-2.5 py-1 bg-[#EFF6FF] text-[#1B4FD8] hover:bg-blue-100 rounded-none text-[11px] font-bold border border-blue-200 transition-colors cursor-pointer"
+                          >
+                            View OP Chart &amp; Journey
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             if (window.confirm(`Delete patient record and all history for ${p.name} (${p.umr})?`)) {
@@ -349,6 +388,12 @@ export default function PatientSearch({
           )}
         </div>
       </div>
+
+      {/* Outpatient Clinical Journey & Consultation History Modal */}
+      <PatientJourneyModal
+        encounter={selectedJourneyEncounter}
+        onClose={() => setSelectedJourneyEncounter(null)}
+      />
     </div>
   );
 }

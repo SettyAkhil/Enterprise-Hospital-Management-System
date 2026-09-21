@@ -20,6 +20,7 @@ import {
 import { Download, FileText, Printer, Filter } from "lucide-react";
 
 import PageHeader from "../components/PageHeader";
+import { PharmacyDatabase } from "../../../services/pharmacyDb";
 
 const reportCategories = [
   {
@@ -76,14 +77,17 @@ export default function Reports({ onNavigate }: ReportsProps) {
   // Synthesize Data
 
   let totalRevenue = 0;
-
   const medSalesMap: Record<string, number> = {};
-
   const gstMap: Record<string, number> = { "5%": 0, "12%": 0, "18%": 0 };
-
   const pharmMap: Record<string, { value: number; bills: number }> = {};
 
-  bills.forEach((b) => {
+  const returns = typeof PharmacyDatabase.getReturns === "function" ? PharmacyDatabase.getReturns() : [];
+  const totalRefunds = returns.reduce((sum: number, r: any) => sum + (r.refundAmount || 0), 0);
+
+  // Exclude modified bills from sales calculations to prevent double-counting
+  const originalBills = bills.filter((b) => !b.billNumber?.startsWith("MOD-"));
+
+  originalBills.forEach((b) => {
     totalRevenue += b.totalAmount || 0;
 
     // Pharmacist
@@ -110,6 +114,9 @@ export default function Reports({ onNavigate }: ReportsProps) {
       else gstMap["5%"] += rev * 0.05;
     });
   });
+
+  // Net Revenue = Gross Sales Revenue - Total Refunds
+  totalRevenue = Math.max(0, totalRevenue - totalRefunds);
 
   const medSalesData = Object.keys(medSalesMap)
 
@@ -181,20 +188,20 @@ export default function Reports({ onNavigate }: ReportsProps) {
         actions={
           <div className="flex gap-2">
             <button
-              onClick={() => alert("Printing report...")}
-              className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors"
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors cursor-pointer"
             >
               <Printer size={13} /> Print
             </button>
             <button
-              onClick={() => alert("PDF report generated successfully.")}
-              className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors"
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors cursor-pointer"
             >
               <FileText size={13} /> PDF
             </button>
             <button
               onClick={() => alert("Excel report exported successfully.")}
-              className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium"
+              className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium cursor-pointer"
               style={{ background: "#16a34a" }}
             >
               <Download size={14} /> Export Excel

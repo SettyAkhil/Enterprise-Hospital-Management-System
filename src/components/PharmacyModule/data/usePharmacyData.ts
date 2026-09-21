@@ -256,27 +256,32 @@ export function usePharmacyData() {
     ...b,
 
     billDate: b.createdAt,
-
     finalAmount: b.totalAmount,
-
     pharmacistId: b.createdBy,
-
     items: b.items.map((i) => ({ ...i, price: i.unitPrice })),
   }))
 
   const salesData = last7Days.map((dateStr) => {
-    const dayBills = mappedBills.filter((b) =>
-      (b.billDate || "").startsWith(dateStr),
-    )
+    // Only original bills (not MOD- bills) count toward orders and gross sales
+    const dayBills = mappedBills.filter(
+      (b) =>
+        (b.billDate || "").startsWith(dateStr) &&
+        !b.billNumber?.startsWith("MOD-") &&
+        !(b as any).isModifiedReturnBill,
+    );
+    const dayReturns = (typeof PharmacyDatabase.getReturns === "function" ? PharmacyDatabase.getReturns() : []).filter(
+      (r: any) => (r.createdAt || "").startsWith(dateStr),
+    );
+    const dayGross = dayBills.reduce((acc, b) => acc + (b.totalAmount || 0), 0);
+    const dayRefunds = dayReturns.reduce((acc: number, r: any) => acc + (r.refundAmount || 0), 0);
+    const dayNetRevenue = Math.max(0, dayGross - dayRefunds);
 
     return {
       date: new Date(dateStr).toLocaleDateString("en-US", { weekday: "short" }),
-
-      revenue: dayBills.reduce((acc, b) => acc + (b.totalAmount || 0), 0),
-
+      revenue: dayNetRevenue,
       orders: dayBills.length,
-    }
-  })
+    };
+  });
 
   const refresh = () => {
     setMedicines(PharmacyDatabase.getMedicines())

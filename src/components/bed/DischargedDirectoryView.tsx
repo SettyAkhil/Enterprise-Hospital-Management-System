@@ -187,18 +187,13 @@ export default function DischargedDirectoryView({
 
   return (
     <div className="w-full bg-[#F8FAFC] min-h-full text-[#0F172A] font-sans pb-24">
-      {/* ── BREADCRUMB & PAGE TITLE ── */}
-      <div className="px-6 sm:px-8 pt-6 pb-4 border-b border-[#E2E8F0] bg-white flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold tracking-wider text-[#64748B] uppercase mb-1">
-            <span>Beds</span>
-            <span>/</span>
-            <span className="text-[#1B4FD8]">Discharged Patients Directory</span>
-          </div>
-          <h1 className="text-2xl sm:text-[28px] font-extrabold text-[#0F172A] tracking-tight m-0">
+      {/* ── PAGE TITLE ── */}
+      <div className="px-6 sm:px-8 py-4 border-b border-[#E2E8F0] bg-white flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-base font-semibold text-[#0F172A] leading-tight m-0">
             Discharged Patients Directory
           </h1>
-          <p className="text-sm text-[#64748B] mt-1 mb-0 max-w-3xl font-normal">
+          <p className="text-[11.5px] text-[#64748B] mt-0.5 mb-0 max-w-3xl font-normal">
             Review completed inpatient stays, medical discharge clearance summaries, length of stay (LOS), and settled room charges.
           </p>
         </div>
@@ -224,16 +219,16 @@ export default function DischargedDirectoryView({
         </div>
       </div>
 
-      <div className="px-6 sm:px-8 pt-6">
+      <div className="px-6 sm:px-8 pt-5">
         {/* ── OPERATIONAL SUMMARY KPI CARDS (LARGE FORMAT) ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
           {/* Card 1 */}
           <div className="bg-white rounded-none border border-[#E2E8F0] p-5 shadow-xs flex flex-col justify-between">
             <div className="text-[11px] font-bold tracking-wider text-[#64748B] uppercase">
               Total Discharged
             </div>
             <div className="my-2 flex items-baseline justify-between">
-              <span className="text-3xl font-extrabold text-[#0F172A] font-mono">
+              <span className="text-2xl font-extrabold text-[#0F172A] font-mono">
                 {metrics.total}
               </span>
               <span className="text-[11px] font-semibold text-[#15803D] bg-[#DCFCE7] px-2 py-0.5 rounded-full">
@@ -249,7 +244,7 @@ export default function DischargedDirectoryView({
               Today's Discharges
             </div>
             <div className="my-2 flex items-baseline justify-between">
-              <span className="text-3xl font-extrabold text-[#1B4FD8] font-mono">
+              <span className="text-2xl font-extrabold text-[#1B4FD8] font-mono">
                 {metrics.todayCount}
               </span>
               <span className="text-[11px] font-semibold text-[#1B4FD8] bg-[#EFF6FF] px-2 py-0.5 rounded-full">
@@ -265,7 +260,7 @@ export default function DischargedDirectoryView({
               Avg. Length of Stay
             </div>
             <div className="my-2 flex items-baseline justify-between">
-              <span className="text-3xl font-extrabold text-[#0F172A] font-mono">
+              <span className="text-2xl font-extrabold text-[#0F172A] font-mono">
                 {metrics.avgLos}
               </span>
               <span className="text-[11px] font-semibold text-[#7C3AED] bg-[#F3E8FF] px-2 py-0.5 rounded-full">
@@ -281,7 +276,7 @@ export default function DischargedDirectoryView({
               Room Charges Settled
             </div>
             <div className="my-2 flex items-baseline justify-between">
-              <span className="text-2xl sm:text-[26px] font-extrabold text-[#0F172A] font-mono">
+              <span className="text-2xl font-extrabold text-[#0F172A] font-mono">
                 {metrics.totalCharges}
               </span>
               <span className="text-[11px] font-semibold text-[#0369A1] bg-[#E0F2FE] px-2 py-0.5 rounded-full">

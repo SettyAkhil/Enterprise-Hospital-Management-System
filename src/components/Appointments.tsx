@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { StatusBadge, Btn, Card, Table, TR, TD } from "./shared";
+import React, { useState, useEffect, useMemo } from "react";
+import { StatusBadge, Btn, Card } from "./shared";
 import { Icon } from "./icons";
 import { db, DBOPEncounter } from "../services/db";
 import { bookAppointment, type AppointmentBooking } from "../services/appointmentBooking";
@@ -11,8 +11,19 @@ import {
   doctorsForSpecialty,
   MasterDoctor 
 } from "../services/doctorMaster";
+import PatientJourneyModal from "./PatientJourneyModal";
 
-const INITIAL_APPOINTMENTS: any[] = [];
+const DEPARTMENTS = [
+  "All Departments",
+  "Cardiology",
+  "Orthopedics",
+  "General Medicine",
+  "Pediatrics",
+  "Neurology",
+  "Dermatology",
+  "ENT",
+  "Emergency / Casualty"
+];
 
 const DAYS = ["Mon\nAug 19", "Tue\nAug 20", "Wed\nAug 21", "Thu\nAug 22", "Fri\nAug 23", "Sat\nAug 24", "Sun\nAug 25"];
 const SELECTED_DAY = 4;
@@ -168,31 +179,31 @@ export function AppointmentBookingModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[92vh]">
+    <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-none shadow-2xl border-2 border-[#CBD5E1] w-full max-w-2xl flex flex-col overflow-hidden max-h-[92vh]">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#DDE2EC] flex items-center justify-between bg-[#F8FAFC]">
+        <div className="px-6 py-4 border-b border-[#DDE2EC] flex items-center justify-between bg-[#0F172A] text-white">
           <div>
-            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-              <span>📅</span> Doctor Appointment &amp; Consultation Booking
+            <h2 className="text-base font-bold flex items-center gap-2 text-white">
+              <span>📅</span> Doctor Appointment & Consultation Booking
             </h2>
-            <p className="text-[12px] text-[#64748B]">
+            <p className="text-[12px] text-slate-300">
               {initialEncounter ? `Booking appointment for registered patient: ${initialEncounter.patientName} (${initialEncounter.umr})` : "Book doctor appointment directly or use AI symptom triage"}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl cursor-pointer">✕</button>
         </div>
 
         {/* Mode Switcher Banner */}
         <div className="bg-[#EFF6FF] border-b border-blue-200 px-6 py-2.5 flex items-center justify-between gap-4">
-          <span className="text-[12px] font-semibold text-[#1B4FD8]">Booking Mode:</span>
-          <div className="flex bg-white p-1 rounded border border-blue-200 gap-1">
+          <span className="text-[12px] font-bold text-[#1B4FD8]">Booking Method:</span>
+          <div className="flex bg-white p-1 rounded-none border border-blue-200 gap-1">
             <button
               type="button"
               onClick={() => setBookingMode("direct")}
-              className={`px-3 py-1 text-[12px] font-bold rounded transition-colors cursor-pointer ${
-                bookingMode === "direct" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-gray-700 hover:bg-gray-100"
+              className={`px-3 py-1 text-[12px] font-bold rounded-none transition-colors cursor-pointer ${
+                bookingMode === "direct" ? "bg-[#1B4FD8] text-white" : "text-gray-700 hover:bg-gray-100"
               }`}
             >
               👨‍⚕️ Direct Doctor Roster
@@ -200,8 +211,8 @@ export function AppointmentBookingModal({
             <button
               type="button"
               onClick={() => setBookingMode("ai")}
-              className={`px-3 py-1 text-[12px] font-bold rounded transition-colors cursor-pointer ${
-                bookingMode === "ai" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-gray-700 hover:bg-gray-100"
+              className={`px-3 py-1 text-[12px] font-bold rounded-none transition-colors cursor-pointer ${
+                bookingMode === "ai" ? "bg-[#1B4FD8] text-white" : "text-gray-700 hover:bg-gray-100"
               }`}
             >
               ✨ AI Symptom Triage
@@ -218,7 +229,7 @@ export function AppointmentBookingModal({
               <input 
                 value={patient} 
                 onChange={e => setPatient(e.target.value)} 
-                className="w-full h-9 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]" 
+                className="w-full h-9 bg-white border border-[#DDE2EC] rounded-none px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]" 
                 placeholder="e.g. Suresh Bapatla" 
               />
             </div>
@@ -230,7 +241,7 @@ export function AppointmentBookingModal({
                 maxLength={10}
                 value={phone}
                 onChange={e => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                className="w-full h-9 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]"
+                className="w-full h-9 bg-white border border-[#DDE2EC] rounded-none px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]"
                 placeholder="e.g. 9876543210"
               />
             </div>
@@ -243,13 +254,13 @@ export function AppointmentBookingModal({
                 type="number" 
                 value={age} 
                 onChange={e => setAge(e.target.value)} 
-                className="w-full h-9 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]" 
+                className="w-full h-9 bg-white border border-[#DDE2EC] rounded-none px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]" 
                 placeholder="27" 
               />
             </div>
             <div>
               <label className="block text-[12px] font-semibold text-gray-700 mb-1">Gender</label>
-              <select value={gender} onChange={e => setGender(e.target.value as "Male" | "Female" | "Other")} className="w-full h-9 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]">
+              <select value={gender} onChange={e => setGender(e.target.value as "Male" | "Female" | "Other")} className="w-full h-9 bg-white border border-[#DDE2EC] rounded-none px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]">
                 <option>Male</option>
                 <option>Female</option>
                 <option>Other</option>
@@ -257,19 +268,19 @@ export function AppointmentBookingModal({
             </div>
             <div>
               <label className="block text-[12px] font-semibold text-gray-700 mb-1">Registry Type</label>
-              <div className="flex bg-[#F0F2F5] p-0.5 rounded h-9">
-                <button type="button" onClick={() => setRegistryType("OP")} className={`flex-1 text-[11px] font-bold rounded ${registryType === "OP" ? "bg-white text-[#1B4FD8] shadow-xs" : "text-[#64748B]"}`}>OP Clinic</button>
-                <button type="button" onClick={() => setRegistryType("IP")} className={`flex-1 text-[11px] font-bold rounded ${registryType === "IP" ? "bg-[#1B4FD8] text-white shadow-xs" : "text-[#64748B]"}`}>IP Admission</button>
+              <div className="flex bg-[#F0F2F5] p-0.5 rounded-none h-9">
+                <button type="button" onClick={() => setRegistryType("OP")} className={`flex-1 text-[11px] font-bold rounded-none ${registryType === "OP" ? "bg-white text-[#1B4FD8]" : "text-[#64748B]"}`}>OP Clinic</button>
+                <button type="button" onClick={() => setRegistryType("IP")} className={`flex-1 text-[11px] font-bold rounded-none ${registryType === "IP" ? "bg-[#1B4FD8] text-white" : "text-[#64748B]"}`}>IP Admission</button>
               </div>
             </div>
           </div>
 
           {/* MODE 1: DIRECT DOCTOR SELECTION */}
           {bookingMode === "direct" && (
-            <div className="bg-[#F8FAFC] border border-[#DDE2EC] p-4 rounded space-y-4">
+            <div className="bg-[#F8FAFC] border border-[#DDE2EC] p-4 rounded-none space-y-4">
               <h3 className="text-[13px] font-bold text-gray-900 border-b border-[#DDE2EC] pb-2 flex items-center justify-between">
-                <span>👨‍⚕️ Select Medical Specialty &amp; Attending Doctor</span>
-                <span className="text-[11px] text-[#64748B] font-normal">{allDoctors.length} doctors available on roster</span>
+                <span>👨‍⚕️ Select Medical Specialty & Attending Doctor</span>
+                <span className="text-[11px] text-[#64748B] font-normal">{allDoctors.length} doctors on roster</span>
               </h3>
 
               <div className="grid grid-cols-2 gap-4">
@@ -278,7 +289,7 @@ export function AppointmentBookingModal({
                   <select
                     value={selectedSpecialty}
                     onChange={e => setSelectedSpecialty(e.target.value)}
-                    className="w-full h-10 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                    className="w-full h-10 bg-white border border-[#DDE2EC] rounded-none px-3 text-[13px] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
                   >
                     {allSpecialties.map(spec => (
                       <option key={spec} value={spec}>{spec}</option>
@@ -291,7 +302,7 @@ export function AppointmentBookingModal({
                   <select
                     value={selectedDoctorName}
                     onChange={e => setSelectedDoctorName(e.target.value)}
-                    className="w-full h-10 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+                    className="w-full h-10 bg-white border border-[#DDE2EC] rounded-none px-3 text-[13px] font-semibold focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
                   >
                     {doctorsForSelectedDept.map(doc => (
                       <option key={doc.id} value={doc.name}>
@@ -304,14 +315,14 @@ export function AppointmentBookingModal({
 
               {/* Selected Doctor Summary Pill */}
               {selectedDoctorName && (
-                <div className="bg-white p-3 border border-blue-200 rounded flex items-center justify-between">
+                <div className="bg-white p-3 border border-blue-200 rounded-none flex items-center justify-between">
                   <div>
                     <div className="text-[13px] font-bold text-gray-900">{selectedDoctorName}</div>
                     <div className="text-[11.5px] text-[#64748B]">
                       {getDoctorByName(selectedDoctorName)?.qualification} • {getDoctorByName(selectedDoctorName)?.room} ({getDoctorByName(selectedDoctorName)?.section} Consultant)
                     </div>
                   </div>
-                  <span className="bg-[#DCFCE7] text-[#15803D] text-[11px] font-bold px-2.5 py-1 rounded border border-emerald-200">
+                  <span className="bg-[#DCFCE7] text-[#15803D] text-[11px] font-bold px-2.5 py-1 rounded-none border border-emerald-200">
                     Available for Booking
                   </span>
                 </div>
@@ -328,7 +339,7 @@ export function AppointmentBookingModal({
                   rows={2} 
                   value={complaint} 
                   onChange={e => setComplaint(e.target.value)} 
-                  className="w-full bg-white border border-[#DDE2EC] rounded p-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]" 
+                  className="w-full bg-white border border-[#DDE2EC] rounded-none p-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]" 
                   placeholder="e.g. Sharp chest pain, difficulty breathing, sweating since yesterday..."
                 />
               </div>
@@ -336,11 +347,11 @@ export function AppointmentBookingModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[12px] font-semibold text-gray-700 mb-1">Symptom Duration</label>
-                  <input value={symptomDuration} onChange={e => setSymptomDuration(e.target.value)} className="w-full h-9 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]" placeholder="e.g. 2 days" />
+                  <input value={symptomDuration} onChange={e => setSymptomDuration(e.target.value)} className="w-full h-9 bg-white border border-[#DDE2EC] rounded-none px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]" placeholder="e.g. 2 days" />
                 </div>
                 <div>
                   <label className="block text-[12px] font-semibold text-gray-700 mb-1">Severity</label>
-                  <select value={symptomSeverity} onChange={e => setSymptomSeverity(e.target.value)} className="w-full h-9 bg-white border border-[#DDE2EC] rounded px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]">
+                  <select value={symptomSeverity} onChange={e => setSymptomSeverity(e.target.value)} className="w-full h-9 bg-white border border-[#DDE2EC] rounded-none px-3 text-[13px] focus:outline-none focus:border-[#1B4FD8]">
                     <option value="mild">Mild</option>
                     <option value="moderate">Moderate</option>
                     <option value="severe">Severe</option>
@@ -352,7 +363,7 @@ export function AppointmentBookingModal({
               <button 
                 onClick={handleAnalyzeAI}
                 disabled={isAnalyzing || (!symptoms && !complaint)}
-                className="w-full h-10 bg-[#EFF6FF] text-[#1B4FD8] font-semibold text-[13px] rounded border border-[#BFDBFE] hover:bg-[#DBEAFE] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                className="w-full h-10 bg-[#EFF6FF] text-[#1B4FD8] font-bold text-[13px] rounded-none border border-[#BFDBFE] hover:bg-[#DBEAFE] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {isAnalyzing ? <div className="w-4 h-4 border-2 border-[#1B4FD8] border-t-transparent rounded-full animate-spin"></div> : <span>✨</span>}
                 {isAnalyzing ? "Analyzing Symptoms with AI..." : "Run AI Specialty Recommendation"}
@@ -361,7 +372,7 @@ export function AppointmentBookingModal({
           )}
 
           {result && (
-            <div className="bg-[#F8FAFC] border border-[#DDE2EC] rounded p-4">
+            <div className="bg-[#F8FAFC] border border-[#DDE2EC] rounded-none p-4">
               <h3 className="text-[12.5px] font-bold text-gray-900 mb-2 border-b border-[#DDE2EC] pb-1.5 flex items-center justify-between">
                 <span>Appointment Allocation Confirmation</span>
                 <span className="text-[11px] font-mono text-[#1B4FD8]">{result.dept}</span>
@@ -377,7 +388,7 @@ export function AppointmentBookingModal({
                 </div>
                 <div>
                   <div className="text-[11px] text-[#64748B] mb-0.5">Consultation Priority</div>
-                  <div className="text-[12px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded inline-block border border-emerald-200">
+                  <div className="text-[12px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-none inline-block border border-emerald-200">
                     {result.urgency}
                   </div>
                 </div>
@@ -389,16 +400,24 @@ export function AppointmentBookingModal({
         {/* Footer Actions */}
         <div className="px-6 py-4 border-t border-[#DDE2EC] bg-[#F8FAFC] flex items-center justify-between">
           <div className="text-[11.5px] text-[#64748B]">
-            {/* Billing comes after the booking, not instead of it -- this link
-                used to sit here and navigate away mid-booking, losing the
-                appointment the receptionist was in the middle of making. */}
             Consultation fee is collected once the doctor is assigned.
           </div>
           <div className="flex gap-2">
-            <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-            <Btn variant="primary" disabled={!result || !patient} onClick={handleSchedule}>
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="px-4 py-2 border border-[#CBD5E1] bg-white text-gray-700 text-[12.5px] font-bold hover:bg-gray-100 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              disabled={!result || !patient} 
+              onClick={handleSchedule}
+              className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-bold shadow-xs cursor-pointer disabled:opacity-50"
+            >
               Confirm Appointment Booking
-            </Btn>
+            </button>
           </div>
         </div>
       </div>
@@ -409,16 +428,21 @@ export function AppointmentBookingModal({
 export default function Appointments({
   initialEncounterId,
   onSelect,
-  onGoToBilling
+  onGoToBilling,
+  onNavigateToOPWorkflow,
+  onNavigateToDoctorWorkflow
 }: {
   initialEncounterId?: string | null;
   onSelect?: () => void;
   onGoToBilling?: () => void;
+  onNavigateToOPWorkflow?: (encId: string, step?: number) => void;
+  onNavigateToDoctorWorkflow?: (encId: string) => void;
 }) {
-  const [appointments, setAppointments] = useState(INITIAL_APPOINTMENTS);
+  const [encounters, setEncounters] = useState<DBOPEncounter[]>([]);
+  const [selectedDept, setSelectedDept] = useState<string>("All Departments");
+  const [searchQuery, setSearchQuery] = useState("");
   const [view, setView] = useState<"day" | "week" | "list">("day");
-  // What reception just booked, so the next action (the consultation fee) is on
-  // screen rather than something they have to go and find.
+  
   const [justBooked, setJustBooked] = useState<
     { name: string; umr: string; doctor: string; dept: string; room: string } | null
   >(null);
@@ -426,7 +450,10 @@ export default function Appointments({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [targetEncounter, setTargetEncounter] = useState<DBOPEncounter | null>(null);
 
-  // If initialEncounterId is passed, look it up and open modal automatically
+  // Journey Modal state
+  const [selectedJourneyEncounter, setSelectedJourneyEncounter] = useState<DBOPEncounter | null>(null);
+
+  // Open modal automatically if initialEncounterId passed
   useEffect(() => {
     if (initialEncounterId) {
       const enc = db.getEncounterById(initialEncounterId);
@@ -441,46 +468,53 @@ export default function Appointments({
   useEffect(() => {
     const syncWithDb = () => {
       const dbEncs = db.getEncounters();
-      if (dbEncs.length > 0) {
-        const liveAppts = dbEncs.map((enc) => ({
-          time: enc.registrationTime.includes(" ") ? enc.registrationTime.split(" ")[1] : "09:30",
-          patient: enc.patientName,
-          age: enc.age,
-          type: enc.chiefComplaint || enc.dept,
-          provider: enc.assignedDoctor || "Unassigned",
-          room: enc.room || "Room 103",
-          duration: "30m",
-          status: enc.status === "OP Completed" ? "Completed" : enc.status === "Under Consultation" ? "In Progress" : "Checked In",
-          mrn: enc.umr.replace("UMR", "")
-        }));
-
-        setAppointments(prev => {
-          const liveNames = new Set(liveAppts.map(a => a.patient));
-          const filteredSeed = INITIAL_APPOINTMENTS.filter(a => !liveNames.has(a.patient));
-          return [...liveAppts, ...filteredSeed];
-        });
-      }
+      setEncounters(dbEncs);
     };
 
     syncWithDb();
-    const unsub = db.subscribe(() => {
-      syncWithDb();
-    });
+    const unsub = db.subscribe(syncWithDb);
     return () => {
       unsub();
     };
   }, []);
 
-  const completed = appointments.filter(a => a.status === "Completed").length;
-  const inProgress = appointments.filter(a => a.status === "In Progress").length;
-  const pending = appointments.filter(a => a.status === "Pending" || a.status === "Checked In").length;
+  // Filtered encounters based on department and search query
+  const filteredEncounters = useMemo(() => {
+    return encounters.filter(enc => {
+      // Dept filter
+      if (selectedDept !== "All Departments") {
+        const d1 = (enc.dept || "").toLowerCase();
+        const d2 = selectedDept.toLowerCase();
+        if (!d1.includes(d2) && !d2.includes(d1)) return false;
+      }
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const name = (enc.patientName || "").toLowerCase();
+        const umr = (enc.umr || "").toLowerCase();
+        const op = (enc.opNumber || "").toLowerCase();
+        const doc = (enc.assignedDoctor || "").toLowerCase();
+        const complaint = (enc.chiefComplaint || "").toLowerCase();
+        return (
+          name.includes(q) ||
+          umr.includes(q) ||
+          op.includes(q) ||
+          doc.includes(q) ||
+          complaint.includes(q)
+        );
+      }
+      return true;
+    });
+  }, [encounters, selectedDept, searchQuery]);
+
+  // Metric counts
+  const totalCount = encounters.length;
+  const completedCount = encounters.filter(e => e.status === "Consultation Completed" || e.status === "OP Completed").length;
+  const inProgressCount = encounters.filter(e => e.status === "Under Consultation" || e.status === "Doctor Assigned").length;
+  const waitingCount = encounters.filter(e => e.status !== "Consultation Completed" && e.status !== "OP Completed" && e.status !== "Under Consultation" && e.status !== "Doctor Assigned").length;
+  const activeDoctorsCount = getDoctorMaster().filter(d => d.verified).length;
 
   const handleAddAppointment = (booking: AppointmentBooking) => {
-    // Shared with the registration desk's Appointment tab -- see
-    // `appointmentBooking.ts`. The confirmation fires for both an existing
-    // patient and a walk-in; it used to be set only on the walk-in branch, so
-    // booking for someone reception had just registered produced no
-    // confirmation and no consultation-fee step.
     const booked = bookAppointment(booking);
     setJustBooked({
       name: booked.name,
@@ -492,7 +526,9 @@ export default function Appointments({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F0F2F5] relative">
+    <div className="flex-1 flex flex-col h-full bg-[#F0F2F5] overflow-hidden">
+      
+      {/* Modals */}
       {isModalOpen && (
         <AppointmentBookingModal 
           initialEncounter={targetEncounter}
@@ -505,15 +541,79 @@ export default function Appointments({
         />
       )}
 
+      {/* Complete Outpatient Clinical Journey Modal */}
+      <PatientJourneyModal
+        encounter={selectedJourneyEncounter}
+        onClose={() => setSelectedJourneyEncounter(null)}
+        onNavigateToDoctorPortal={onNavigateToDoctorWorkflow}
+        onNavigateToOPWorkflow={onNavigateToOPWorkflow}
+      />
+
+      {/* Top Header */}
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 flex-shrink-0">
+        <div>
+          <h1 className="text-base font-bold text-gray-900 flex items-center gap-2">
+            <span>📅</span> Appointments Schedule & Doctor Allocation
+          </h1>
+          <p className="text-[11.5px] text-[#64748B]">
+            Manage doctor appointments, patient check-ins, and outpatient clinical care handoffs.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Real-time search bar */}
+          <div className="relative w-64">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search patient, UMR, doctor..."
+              className="w-full h-9 bg-[#F8FAFC] border border-[#CBD5E1] rounded-none pl-8 pr-3 text-[12px] focus:outline-none focus:border-[#1B4FD8] focus:bg-white"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600">✕</button>
+            )}
+          </div>
+
+          {/* View Mode Switcher */}
+          <div className="flex border border-[#DDE2EC] rounded-none overflow-hidden">
+            {(["day", "week", "list"] as const).map(v => (
+              <button 
+                key={v} 
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 text-[12px] font-bold capitalize transition-colors cursor-pointer ${
+                  view === v ? "bg-[#1B4FD8] text-white" : "bg-white text-[#64748B] hover:bg-[#F8FAFC]"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          {/* Book Appointment Trigger */}
+          <button
+            type="button"
+            onClick={() => {
+              setTargetEncounter(null);
+              setIsModalOpen(true);
+            }}
+            className="px-3.5 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-bold rounded-none shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+          >
+            <span>+</span> Book New Appointment
+          </button>
+        </div>
+      </div>
+
+      {/* Just Booked Banner */}
       {justBooked && (
-        <div className="mx-6 mt-4 rounded border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="mx-6 mt-3 rounded-none border border-[#86EFAC] bg-[#F0FDF4] px-4 py-2.5 flex items-center justify-between gap-3 flex-shrink-0">
           <div>
-            <p className="text-[13px] font-bold text-[#15803D]">
-              Appointment booked — {justBooked.name} with {justBooked.doctor}
+            <p className="text-[13px] font-bold text-[#166534]">
+              🎉 Appointment Booked — {justBooked.name} with {justBooked.doctor}
             </p>
-            <p className="text-[11.5px] text-[#166534] mt-0.5">
-              {justBooked.umr} · {justBooked.dept} · {justBooked.room}. Collect the consultation fee, then send the
-              patient to the OP department for vitals.
+            <p className="text-[11.5px] text-[#15803D] mt-0.5">
+              UMR: {justBooked.umr} · {justBooked.dept} · {justBooked.room}. Collect the consultation fee, then direct patient for vitals.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -521,15 +621,15 @@ export default function Appointments({
               <button
                 type="button"
                 onClick={onGoToBilling}
-                className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded shadow-xs transition-colors cursor-pointer"
+                className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-bold rounded-none shadow-xs transition-colors cursor-pointer"
               >
-                💳 Collect consultation fee →
+                💳 Collect Consultation Fee →
               </button>
             )}
             <button
               type="button"
               onClick={() => setJustBooked(null)}
-              className="text-[11.5px] font-semibold text-[#15803D] cursor-pointer"
+              className="text-[12px] font-bold text-[#166534] hover:underline cursor-pointer"
             >
               Dismiss
             </button>
@@ -537,130 +637,211 @@ export default function Appointments({
         </div>
       )}
 
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-gray-900">Appointments Schedule &amp; Assigned Doctors</h1>
-          <p className="text-[11.5px] text-[#64748B]">{appointments.length} active appointments in database</p>
+      {/* KPI Metric Summary Strip */}
+      <div className="px-6 py-3 bg-[#F8FAFC] border-b border-[#DDE2EC] grid grid-cols-2 sm:grid-cols-5 gap-3 flex-shrink-0">
+        <div className="bg-white border border-[#CBD5E1] border-l-4 border-l-blue-600 p-2.5 rounded-none shadow-2xs">
+          <span className="text-[10.5px] uppercase font-bold text-[#64748B] block">Total Bookings</span>
+          <span className="font-mono text-lg font-extrabold text-blue-900">{totalCount}</span>
+          <span className="text-[10px] text-gray-500 block">Registered today</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex border border-[#DDE2EC] rounded overflow-hidden">
-            {(["day", "week", "list"] as const).map(v => (
-              <button key={v} onClick={() => setView(v)}
-                className={`px-3 py-1.5 text-[12px] font-medium capitalize transition-colors cursor-pointer ${view === v ? "bg-[#1B4FD8] text-white" : "bg-white text-[#64748B] hover:bg-[#F8FAFC]"}`}>
-                {v}
-              </button>
-            ))}
-          </div>
-          <Btn variant="primary" size="sm" onClick={() => {
-            setTargetEncounter(null);
-            setIsModalOpen(true);
-          }}>
-            <Icon.Plus /> Book New Appointment
-          </Btn>
+
+        <div className="bg-white border border-[#CBD5E1] border-l-4 border-l-amber-500 p-2.5 rounded-none shadow-2xs">
+          <span className="text-[10.5px] uppercase font-bold text-amber-800 block">Scheduled / Queue</span>
+          <span className="font-mono text-lg font-extrabold text-amber-950">{waitingCount}</span>
+          <span className="text-[10px] text-amber-700 block">Awaiting doctor</span>
+        </div>
+
+        <div className="bg-white border border-[#CBD5E1] border-l-4 border-l-sky-500 p-2.5 rounded-none shadow-2xs">
+          <span className="text-[10.5px] uppercase font-bold text-sky-800 block">In Progress</span>
+          <span className="font-mono text-lg font-extrabold text-sky-950">{inProgressCount}</span>
+          <span className="text-[10px] text-sky-700 block">Under consultation</span>
+        </div>
+
+        <div className="bg-white border border-[#CBD5E1] border-l-4 border-l-emerald-600 p-2.5 rounded-none shadow-2xs">
+          <span className="text-[10.5px] uppercase font-bold text-emerald-800 block">Completed</span>
+          <span className="font-mono text-lg font-extrabold text-emerald-950">{completedCount}</span>
+          <span className="text-[10px] text-emerald-700 block">Visits completed</span>
+        </div>
+
+        <div className="bg-white border border-[#CBD5E1] border-l-4 border-l-indigo-600 p-2.5 rounded-none shadow-2xs">
+          <span className="text-[10.5px] uppercase font-bold text-indigo-800 block">Onboarded Consultants</span>
+          <span className="font-mono text-lg font-extrabold text-indigo-950">{activeDoctorsCount}</span>
+          <span className="text-[10px] text-indigo-700 block">Active doctor master</span>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-2.5 flex items-center gap-6 text-[12.5px] flex-wrap">
-        <span><span className="font-mono font-semibold text-[#16A34A]">{completed}</span> Completed</span>
-        <span><span className="font-mono font-semibold text-[#0284C7]">{inProgress}</span> In Progress</span>
-        <span><span className="font-mono font-semibold text-[#D97706]">{pending}</span> Scheduled / In Queue</span>
-        <span className="text-[#64748B]">·</span>
-        <span className="text-[#64748B]">Doctor Master Onboarded: {getDoctorMaster().length} Active Consultants</span>
+      {/* Department Filter Bar */}
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-2 flex items-center gap-1.5 overflow-x-auto flex-shrink-0">
+        {DEPARTMENTS.map(d => {
+          const isSel = selectedDept === d;
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setSelectedDept(d)}
+              className={`px-3 py-1 text-[11.5px] font-bold rounded-none whitespace-nowrap transition-colors cursor-pointer ${
+                isSel
+                  ? "bg-[#1B4FD8] text-white"
+                  : "bg-[#F8FAFC] border border-[#CBD5E1] text-[#64748B] hover:bg-gray-100 hover:text-gray-900"
+              }`}
+            >
+              {d}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="p-5">
+      {/* Main Appointments Workspace */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        
         {view === "week" && (
-          <div className="bg-white border border-[#DDE2EC] rounded overflow-hidden mb-4">
+          <div className="bg-white border border-[#DDE2EC] rounded-none overflow-hidden mb-4 shadow-2xs">
             <div className="grid border-b border-[#DDE2EC]" style={{ gridTemplateColumns: "80px repeat(7, 1fr)" }}>
               <div className="bg-[#F8FAFC] border-r border-[#DDE2EC]" />
               {DAYS.map((d, i) => (
                 <button key={i} onClick={() => { setActiveDay(i); setView("day"); }}
-                  className={`px-2 py-2.5 text-center border-r border-[#DDE2EC] last:border-r-0 transition-colors
+                  className={`px-2 py-2.5 text-center border-r border-[#DDE2EC] last:border-r-0 transition-colors cursor-pointer
                     ${i === activeDay ? "bg-[#EFF6FF] text-[#1B4FD8]" : "hover:bg-[#F8FAFC] text-[#64748B]"}`}>
-                  <div className="text-[11px] font-semibold whitespace-pre-line">{d}</div>
+                  <div className="text-[11px] font-bold whitespace-pre-line">{d}</div>
                   {i === SELECTED_DAY && <div className="w-1.5 h-1.5 bg-[#1B4FD8] rounded-full mx-auto mt-1" />}
                 </button>
               ))}
             </div>
-            <div className="h-32 flex items-center justify-center text-[#94A3B8] text-[12px]">
-              Weekly calendar schedule
+            <div className="h-32 flex items-center justify-center text-[#94A3B8] text-[12px] font-medium">
+              Weekly appointment calendar schedule view
             </div>
           </div>
         )}
 
-        {(view === "day" || view === "week") && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
-              <Card title={`All Booked Appointments (${appointments.length})`} actions={
-                <div className="flex gap-2">
-                  <Btn variant="ghost" size="xs"><Icon.Filter /> Filter</Btn>
-                  <Btn variant="ghost" size="xs">Provider</Btn>
+        {/* List & Day Workspace */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Main Appointment Table / Cards Column */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="bg-white border-2 border-[#CBD5E1] rounded-none shadow-2xs overflow-hidden">
+              <div className="px-5 py-3.5 bg-[#F8FAFC] border-b border-[#DDE2EC] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[13.5px] font-bold text-gray-900">Booked Patient Appointments</h2>
+                  <span className="font-mono text-[11px] font-bold bg-blue-100 text-[#1B4FD8] px-2 py-0.5 rounded-none border border-blue-200">
+                    {filteredEncounters.length} Patients
+                  </span>
                 </div>
-              }>
-                <div className="space-y-1">
-                  {appointments.map((a, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-[#E2E8F0] hover:bg-[#F8FAFC] transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 text-center">
-                          <span className="font-mono text-[12px] font-bold text-gray-900">{a.time}</span>
-                        </div>
-                        <div>
-                          <div className="font-bold text-[13.5px] text-gray-900 flex items-center gap-2">
-                            <span>{a.patient}</span>
-                            <span className="text-[11px] text-[#64748B] font-normal">({a.age} yrs)</span>
-                          </div>
-                          <div className="text-[11.5px] text-[#64748B] mt-0.5">
-                            {a.type} • <strong className="text-[#0F172A]">{a.provider}</strong> ({a.room})
-                          </div>
-                        </div>
-                      </div>
+                <div className="text-[11.5px] text-[#64748B]">
+                  Click <strong className="text-[#1B4FD8]">✨ Clinical Journey</strong> to view full patient timeline
+                </div>
+              </div>
 
-                      <div className="flex items-center gap-3">
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${
-                          a.status === "Completed" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                          a.status === "In Progress" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                          "bg-amber-50 text-amber-700 border-amber-200"
-                        }`}>
-                          {a.status}
-                        </span>
+              {filteredEncounters.length === 0 ? (
+                <div className="p-8 text-center text-[#64748B] text-[13px]">
+                  No appointments found for the selected department or query.
+                </div>
+              ) : (
+                <div className="divide-y divide-[#E2E8F0]">
+                  {filteredEncounters.map((enc) => {
+                    const statusColor = 
+                      enc.status === "Consultation Completed" || enc.status === "OP Completed"
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : enc.status === "Under Consultation"
+                        ? "bg-blue-50 text-blue-800 border-blue-300"
+                        : "bg-amber-50 text-amber-800 border-amber-300";
 
-                        {onSelect && (
+                    return (
+                      <div key={enc.id} className="p-4 hover:bg-[#F8FAFC] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        
+                        {/* Patient & Doctor Details */}
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-[14px] text-gray-900">{enc.patientName}</span>
+                            <span className="text-[11.5px] text-[#64748B]">({enc.age} yrs · {enc.sex})</span>
+                            <span className="font-mono text-[11px] font-bold bg-blue-50 text-[#1B4FD8] px-2 py-0.5 rounded-none border border-blue-200">
+                              {enc.umr}
+                            </span>
+                            <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-none border ${statusColor}`}>
+                              {enc.status}
+                            </span>
+                          </div>
+
+                          <div className="text-[12px] text-[#64748B] flex items-center gap-2 flex-wrap">
+                            {/* Height-matched unified Specialty and Room badge */}
+                            <span className="bg-[#0F172A] text-white px-2 py-0.5 rounded-none text-[10.5px] font-bold uppercase tracking-wide h-5 flex items-center leading-none">
+                              {(enc.dept || "CARDIOLOGY").toUpperCase()} | {enc.room || "ROOM 107"}
+                            </span>
+                            <span className="font-semibold text-gray-900">{enc.assignedDoctor || "Dr. Arjun Mehta"}</span>
+                            <span>·</span>
+                            <span>Reg: <strong className="font-mono text-gray-800">{enc.registrationTime}</strong></span>
+                          </div>
+
+                          {enc.chiefComplaint && (
+                            <div className="text-[11.5px] text-gray-700 bg-gray-50 p-2 rounded-none border border-gray-200">
+                              <strong>Complaint:</strong> "{enc.chiefComplaint}"
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0">
+                          {/* Complete Outpatient Clinical Journey & History Trigger */}
                           <button
-                            onClick={onSelect}
-                            className="text-[11.5px] text-[#1B4FD8] font-semibold hover:underline cursor-pointer"
+                            type="button"
+                            onClick={() => setSelectedJourneyEncounter(enc)}
+                            className="px-3.5 py-1.5 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#1B4FD8] border border-[#BFDBFE] text-[12px] font-bold rounded-none transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                            title="View Outpatient Clinical Journey & Previous Consultation History"
                           >
-                            View Chart →
+                            <span>✨</span> View OP Chart & Journey →
                           </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
 
-            {/* Doctor Roster Quick Summary */}
-            <div className="space-y-4">
-              <Card title="Active Doctor Master Roster">
-                <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                  {getDoctorMaster().filter(d => d.verified).map(doc => (
-                    <div key={doc.id} className="p-2.5 border border-[#E2E8F0] rounded bg-white text-[12px]">
-                      <div className="font-bold text-[#0F172A] flex items-center justify-between">
-                        <span>{doc.name}</span>
-                        <span className="text-[10px] font-mono text-[#1B4FD8]">{doc.room}</span>
+                          {onGoToBilling && (
+                            <button
+                              type="button"
+                              onClick={onGoToBilling}
+                              className="px-2.5 py-1.5 bg-white hover:bg-gray-100 border border-[#CBD5E1] text-gray-800 text-[11.5px] font-bold rounded-none cursor-pointer"
+                            >
+                              💳 Fee
+                            </button>
+                          )}
+                        </div>
+
                       </div>
-                      <div className="text-[11px] text-[#64748B] mt-0.5">
-                        {doc.specialty} • {doc.qualification}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </Card>
+              )}
             </div>
           </div>
-        )}
+
+          {/* Doctor Master Sidebar Roster */}
+          <div className="space-y-4">
+            <div className="bg-white border-2 border-[#CBD5E1] rounded-none shadow-2xs overflow-hidden">
+              <div className="px-4 py-3 bg-[#F8FAFC] border-b border-[#DDE2EC] flex items-center justify-between">
+                <h3 className="text-[13px] font-bold text-gray-900 flex items-center gap-1.5">
+                  <span>👨‍⚕️</span> Active Doctor Master ({activeDoctorsCount})
+                </h3>
+                <span className="text-[10.5px] font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-none border border-emerald-200">
+                  LIVE ROSTER
+                </span>
+              </div>
+
+              <div className="p-3 space-y-2 max-h-[550px] overflow-y-auto">
+                {getDoctorMaster().filter(d => d.verified).map(doc => (
+                  <div key={doc.id} className="p-3 border border-[#E2E8F0] rounded-none bg-[#F8FAFC] text-[12px] hover:border-blue-300 transition-colors">
+                    <div className="font-bold text-[#0F172A] flex items-center justify-between">
+                      <span>{doc.name}</span>
+                      <span className="text-[10px] font-mono font-bold text-[#1B4FD8] bg-blue-50 px-2 py-0.5 rounded-none border border-blue-200">{doc.room}</span>
+                    </div>
+                    <div className="text-[11px] text-[#64748B] mt-0.5 flex items-center justify-between">
+                      <span>{doc.specialty} • {doc.qualification}</span>
+                      <span className="text-[10px] text-emerald-700 font-bold">Available</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+        </div>
+
       </div>
+
     </div>
   );
 }

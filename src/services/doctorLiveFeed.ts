@@ -19,6 +19,7 @@
  */
 
 import { db, DBOPEncounter } from "./db";
+import { notifyPatientCalled } from "./patientNotifications";
 import { LabOrder, LabOrderDatabase } from "./labOrdersDb";
 import { AppPrescription, PharmacyDatabase } from "./pharmacyDb";
 import { DoctorAccount, DoctorPortalDatabase, isFirstVisit } from "./doctorPortalDb";
@@ -413,9 +414,15 @@ export function buildDoctorLiveBoard(doctor: DoctorAccount, now: number = Date.n
 // ── Actions the doctor can take straight off the board ───────────────────────
 
 /** Calls a waiting patient in: they become the doctor's active consultation. */
-export function callPatientIn(encounterId: string): DBOPEncounter | undefined {
+export function callPatientIn(encounterId: string, doctorName?: string): DBOPEncounter | undefined {
   const encounter = db.getEncounterById(encounterId);
   if (!encounter) return undefined;
+
+  // Calling a patient in is the moment two other people need to know: the
+  // patient, on their own phone, and the OP floor, so the sister can walk them
+  // through. Queued rather than sent -- see `patientNotifications.ts`.
+  notifyPatientCalled(encounter, doctorName || encounter.assignedDoctor || "Your doctor");
+
   return db.updateEncounter(encounterId, {
     status: "Under Consultation",
     timestamps: {

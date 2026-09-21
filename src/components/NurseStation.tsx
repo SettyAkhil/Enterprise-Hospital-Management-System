@@ -1,24 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Btn } from "./shared";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db, DBOPEncounter } from "../services/db";
 import { useStickyState } from "../hooks/useStickyState";
+import { Icon } from "./icons";
+import {
+  getFloorAlerts,
+  markFloorAlertsRead,
+  subscribe as subscribeNotifications,
+  type PatientNotification,
+} from "../services/patientNotifications";
 
-/**
- * OP nurse station -- the step between reception and the consulting room.
- *
- * The outpatient flow is: reception registers the patient, books the
- * appointment (symptom triage picks the doctor), and sends them to billing.
- * The patient then arrives in the OP department, where the nurse takes baseline
- * observations and only then hands them to the doctor.
- *
- * That middle step had no screen. Booking put the visit straight into the
- * doctor's queue, so doctors were called to patients nobody had weighed or taken
- * a blood pressure from, and the vitals panel on the admit card was always
- * blank. Booking now stops at "Doctor Assigned" and `db.recordVitals` is the
- * only thing that moves a patient to "In Queue".
- */
-
-/** Waiting for the nurse. */
+/** Statuses considered awaiting triage at Nurse Station */
 const AWAITING_VITALS: DBOPEncounter["status"][] = [
   "Registered",
   "Symptoms Captured",
@@ -28,66 +19,148 @@ const AWAITING_VITALS: DBOPEncounter["status"][] = [
 ];
 
 const EMPTY_VITALS: DBOPEncounter["vitals"] = {
-  bp: "", pulse: "", temp: "", spo2: "", weight: "", notes: "",
+  bp: "",
+  pulse: "",
+  temp: "",
+  spo2: "",
+  weight: "",
+  notes: "",
 };
 
-type Field = { key: keyof DBOPEncounter["vitals"]; label: string; unit: string; placeholder: string };
+type Field = { key: keyof DBOPEncounter["vitals"]; label: string; unit: string; placeholder: string; icon: string };
 
 const FIELDS: Field[] = [
-  { key: "bp", label: "Blood pressure", unit: "mmHg", placeholder: "120/80" },
-  { key: "pulse", label: "Pulse", unit: "bpm", placeholder: "78" },
-  { key: "temp", label: "Temperature", unit: "°F", placeholder: "98.6" },
-  { key: "spo2", label: "SpO₂", unit: "%", placeholder: "98" },
-  { key: "weight", label: "Weight", unit: "kg", placeholder: "70" },
+  { key: "bp", label: "Blood Pressure", unit: "mmHg", placeholder: "120/80", icon: "🩺" },
+  { key: "pulse", label: "Pulse Rate", unit: "bpm", placeholder: "72", icon: "❤️" },
+  { key: "temp", label: "Temperature", unit: "°F", placeholder: "98.6", icon: "🌡️" },
+  { key: "spo2", label: "Oxygen SpO₂", unit: "%", placeholder: "98", icon: "🫁" },
+  { key: "weight", label: "Body Weight", unit: "kg", placeholder: "70", icon: "⚖️" },
 ];
 
-/**
- * Ranges that make a reading worth a second look. Deliberately wide -- this
- * flags for the nurse's attention, it does not diagnose, and nothing here
- * blocks sending the patient through.
- */
-function flagFor(key: keyof DBOPEncounter["vitals"], raw: string): string | null {
+/** Ranges that flag for nurse attention */
+function flagFor(key: keyof DBOPEncounter["vitals"], raw: string): { label: string; level: "warn" | "danger" } | null {
   const n = parseFloat(raw);
   if (!raw.trim() || Number.isNaN(n)) return null;
   switch (key) {
-    case "pulse": return n < 50 ? "Low" : n > 120 ? "High" : null;
-    case "temp": return n >= 100.4 ? "Febrile" : n < 95 ? "Low" : null;
-    case "spo2": return n < 92 ? "Low" : null;
+    case "pulse":
+      if (n < 50) return { label: "Bradycardia (<50)", level: "danger" };
+      if (n > 120) return { label: "Tachycardia (>120)", level: "danger" };
+      if (n > 100) return { label: "Elevated Pulse (>100)", level: "warn" };
+      return null;
+    case "temp":
+      if (n >= 102.2) return { label: "High Fever (≥102.2°F)", level: "danger" };
+      if (n >= 100.4) return { label: "Febrile (≥100.4°F)", level: "warn" };
+      if (n < 95) return { label: "Hypothermia (<95°F)", level: "danger" };
+      return null;
+    case "spo2":
+      if (n < 92) return { label: "Severe Hypoxia (<92%)", level: "danger" };
+      if (n < 95) return { label: "Low Oxygen (<95%)", level: "warn" };
+      return null;
     case "bp": {
       const sys = parseFloat(raw.split("/")[0]);
       if (Number.isNaN(sys)) return null;
-      return sys >= 140 ? "High" : sys < 90 ? "Low" : null;
+      if (sys >= 160) return { label: "Stage 2 HTN (≥160)", level: "danger" };
+      if (sys >= 140) return { label: "High BP (≥140)", level: "warn" };
+      if (sys < 90) return { label: "Hypotension (<90)", level: "danger" };
+      return null;
     }
-    default: return null;
+    default:
+      return null;
   }
 }
 
-export default function NurseStation({ nurseName = "OP Nurse" }: { nurseName?: string }) {
+/** Calculate NEWS2 warnings */
+function calcNEWS2(v: DBOPEncounter["vitals"]): { score: number; risk: "Low" | "Medium" | "High"; color: string } {
+  let score = 0;
+  if (!v) return { score: 0, risk: "Low", color: "bg-emerald-100 text-emerald-800 border-emerald-300" };
+
+  const pulse = parseInt(v.pulse || "72");
+  if (!isNaN(pulse)) {
+    if (pulse <= 40 || pulse >= 131) score += 3;
+    else if (pulse >= 111) score += 2;
+    else if (pulse <= 50 || pulse >= 91) score += 1;
+  }
+
+  const tempF = parseFloat(v.temp || "98.6");
+  if (!isNaN(tempF)) {
+    if (tempF < 95.0) score += 3;
+    else if (tempF >= 102.2) score += 2;
+    else if (tempF <= 96.8 || tempF >= 100.4) score += 1;
+  }
+
+  const spo2 = parseInt(v.spo2 || "98");
+  if (!isNaN(spo2)) {
+    if (spo2 <= 91) score += 3;
+    else if (spo2 <= 93) score += 2;
+    else if (spo2 <= 95) score += 1;
+  }
+
+  const sys = parseFloat((v.bp || "").split("/")[0]);
+  if (!isNaN(sys)) {
+    if (sys <= 90 || sys >= 220) score += 3;
+    else if (sys <= 100) score += 2;
+    else if (sys <= 110) score += 1;
+  }
+
+  if (score >= 5) return { score, risk: "High", color: "bg-red-100 text-red-900 border-red-300" };
+  if (score >= 3) return { score, risk: "Medium", color: "bg-amber-100 text-amber-900 border-amber-300" };
+  return { score, risk: "Low", color: "bg-emerald-100 text-emerald-900 border-emerald-300" };
+}
+
+export default function NurseStation({
+  nurseName = "OP Nurse",
+  onOpenQueue,
+}: {
+  nurseName?: string;
+  onOpenQueue?: () => void;
+}) {
   const [encounters, setEncounters] = useState<DBOPEncounter[]>(() => db.getEncounters());
-  // Draft-backed: the screen unmounts when the nurse navigates away, and a set of
-  // half-entered observations is not something to retype from memory.
   const [selectedId, setSelectedId] = useStickyState<string | null>("nurse_selected", null);
   const [vitals, setVitals, clearVitalsDraft] = useStickyState<DBOPEncounter["vitals"]>("nurse_vitals", EMPTY_VITALS);
   const [sent, setSent] = useState<{ name: string; doctor: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const unsub = db.subscribe(() => setEncounters(db.getEncounters()));
     return () => { unsub(); };
   }, []);
 
+  const [floorAlerts, setFloorAlerts] = useState<PatientNotification[]>(() => getFloorAlerts());
+  useEffect(() => {
+    const unsub = subscribeNotifications(() => setFloorAlerts(getFloorAlerts()));
+    return () => { unsub(); };
+  }, []);
+
   const waiting = useMemo(
-    () => encounters
-      .filter(e => AWAITING_VITALS.includes(e.status))
-      .sort((a, b) => (a.timestamps?.arrival || "").localeCompare(b.timestamps?.arrival || "")),
-    [encounters],
+    () =>
+      encounters
+        .filter((e) => AWAITING_VITALS.includes(e.status))
+        .sort((a, b) => {
+          const ac = a.timestamps?.calledToNurse ? 0 : 1;
+          const bc = b.timestamps?.calledToNurse ? 0 : 1;
+          if (ac !== bc) return ac - bc;
+          return (a.timestamps?.arrival || "").localeCompare(b.timestamps?.arrival || "");
+        }),
+    [encounters]
   );
 
-  const readyForDoctor = useMemo(
-    () => encounters.filter(e => e.status === "In Queue"),
-    [encounters],
-  );
+  const filteredWaiting = useMemo(() => {
+    if (!searchQuery.trim()) return waiting;
+    const q = searchQuery.toLowerCase().trim();
+    return waiting.filter(
+      (e) =>
+        e.patientName.toLowerCase().includes(q) ||
+        e.umr.toLowerCase().includes(q) ||
+        e.opNumber.toLowerCase().includes(q) ||
+        (e.assignedDoctor || "").toLowerCase().includes(q)
+    );
+  }, [waiting, searchQuery]);
 
-  // Ticks so the wait times on screen stay honest without a reload.
+  const readyForDoctor = useMemo(() => encounters.filter((e) => e.status === "In Queue"), [encounters]);
+
+  const withDoctor = useMemo(() => readyForDoctor.filter((e) => (e.assignedDoctor || "").trim()), [readyForDoctor]);
+  const stuck = useMemo(() => readyForDoctor.filter((e) => !(e.assignedDoctor || "").trim()), [readyForDoctor]);
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
@@ -100,34 +173,30 @@ export default function NurseStation({ nurseName = "OP Nurse" }: { nurseName?: s
   };
   const longestWait = waiting.reduce((m, e) => Math.max(m, waitMinutes(e)), 0);
 
-  const selected = waiting.find(e => e.id === selectedId) || null;
+  const selected = waiting.find((e) => e.id === selectedId) || null;
 
-  // Patients booked since this screen was opened. Reception triages and
-  // allocates the doctor, then sends the patient over -- this is the OP
-  // department's side of that handover, so the nurse is not relying on
-  // noticing a new row appear.
   const seenRef = useRef<Set<string> | null>(null);
   const [arrivals, setArrivals] = useState<DBOPEncounter[]>([]);
   useEffect(() => {
     if (seenRef.current === null) {
-      seenRef.current = new Set(waiting.map(e => e.id));
+      seenRef.current = new Set(waiting.map((e) => e.id));
       return;
     }
-    const fresh = waiting.filter(e => !seenRef.current!.has(e.id));
+    const fresh = waiting.filter((e) => !seenRef.current!.has(e.id));
     if (fresh.length) {
-      fresh.forEach(e => seenRef.current!.add(e.id));
-      setArrivals(prev => [...fresh, ...prev].slice(0, 4));
+      fresh.forEach((e) => seenRef.current!.add(e.id));
+      setArrivals((prev) => [...fresh, ...prev].slice(0, 4));
     }
   }, [waiting]);
 
   const select = (e: DBOPEncounter) => {
     setSelectedId(e.id);
     setSent(null);
-    // Pre-fill anything already on record so a correction is an edit, not a retype.
     setVitals({ ...EMPTY_VITALS, ...(e.vitals ?? {}) });
   };
 
-  const anyRecorded = FIELDS.some(f => vitals[f.key]?.trim());
+  const anyRecorded = FIELDS.some((f) => vitals[f.key]?.trim());
+  const news2Analysis = calcNEWS2(vitals);
 
   const sendToDoctor = () => {
     if (!selected) return;
@@ -138,165 +207,331 @@ export default function NurseStation({ nurseName = "OP Nurse" }: { nurseName?: s
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#F0F2F5]">
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-base font-semibold text-gray-900">OP Nurse Station</h1>
-          <p className="text-[11.5px] text-[#64748B]">
-            Take baseline vitals, then send the patient in to their doctor.
-          </p>
+    <div className="flex-1 flex flex-col min-h-0 bg-[#F1F5F9] text-slate-800 font-sans">
+      {/* ── HEADER BAR ── */}
+      <div className="bg-white border-b border-[#CBD5E1] px-6 py-3 flex flex-wrap items-center justify-between gap-4 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-amber-500 text-white font-bold flex items-center justify-center text-base rounded-none shadow-xs">
+            🩺
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              OP Nurse Station
+              <span className="text-[10.5px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-none font-mono uppercase font-bold">
+                Triage &amp; Vitals Baseline
+              </span>
+            </h1>
+            <p className="text-[11.5px] text-slate-500">
+              Record baseline observations, check NEWS2 risk factors, and dispatch patients to doctor chambers.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {[
-            { label: "Waiting", value: waiting.length, tone: "text-[#B45309]", bg: "bg-[#FFFBEB] border-[#FDE68A]" },
-            { label: "Longest wait", value: longestWait, tone: "text-[#B91C1C]", bg: "bg-white border-[#DDE2EC]", suffix: "m" },
-            { label: "Sent in today", value: readyForDoctor.length, tone: "text-[#15803D]", bg: "bg-[#F0FDF4] border-[#BBF7D0]" },
-          ].map(st => (
-            <div key={st.label} className={`px-3.5 py-1.5 rounded border ${st.bg} text-center min-w-[92px]`}>
-              <p className="text-[9.5px] font-bold uppercase tracking-wide text-[#64748B]">{st.label}</p>
-              <p className={`text-[17px] font-black font-mono leading-tight ${st.tone}`}>
-                {st.value}{st.suffix || ""}
-              </p>
-            </div>
-          ))}
+
+        {/* Top KPI Color Cards */}
+        <div className="flex items-stretch gap-2.5">
+          <div className="bg-amber-50/80 border border-amber-200 border-l-4 border-l-amber-500 rounded-none px-3.5 py-1.5 shadow-2xs min-w-[110px]">
+            <p className="text-[9.5px] font-bold uppercase tracking-wider text-amber-900">Awaiting Vitals</p>
+            <p className="text-xl font-bold font-mono text-amber-950 leading-tight mt-0.5">{waiting.length}</p>
+            <p className="text-[10px] text-amber-800 font-semibold mt-0.5">Patients queued</p>
+          </div>
+
+          <div
+            className={`border border-l-4 rounded-none px-3.5 py-1.5 shadow-2xs min-w-[110px] ${
+              longestWait >= 30
+                ? "bg-rose-50/80 border-rose-200 border-l-rose-600"
+                : "bg-blue-50/80 border-blue-200 border-l-blue-600"
+            }`}
+          >
+            <p className={`text-[9.5px] font-bold uppercase tracking-wider ${longestWait >= 30 ? "text-rose-900" : "text-blue-900"}`}>
+              Longest Wait
+            </p>
+            <p className={`text-xl font-bold font-mono leading-tight mt-0.5 ${longestWait >= 30 ? "text-rose-950" : "text-blue-950"}`}>
+              {longestWait}m
+            </p>
+            <p className={`text-[10px] font-semibold mt-0.5 ${longestWait >= 30 ? "text-rose-800" : "text-blue-800"}`}>
+              {longestWait >= 30 ? "Needs triage!" : "In queue"}
+            </p>
+          </div>
+
+          <div className="bg-emerald-50/80 border border-emerald-200 border-l-4 border-l-emerald-600 rounded-none px-3.5 py-1.5 shadow-2xs min-w-[110px]">
+            <p className="text-[9.5px] font-bold uppercase tracking-wider text-emerald-900">Sent to Doctor</p>
+            <p className="text-xl font-bold font-mono text-emerald-950 leading-tight mt-0.5">{readyForDoctor.length}</p>
+            <p className="text-[10px] text-emerald-800 font-semibold mt-0.5">Vitals recorded</p>
+          </div>
         </div>
       </div>
 
-      {sent && (
-        <div className="mx-6 mt-4 px-4 py-2.5 rounded bg-[#DCFCE7] border border-[#BBF7D0] flex items-center justify-between">
-          <p className="text-[12.5px] text-[#15803D]">
-            <strong>{sent.name}</strong> sent in to <strong>{sent.doctor}</strong>. They are now in that doctor's queue.
-          </p>
-          <button onClick={() => setSent(null)} className="text-[11px] font-semibold text-[#15803D]">Dismiss</button>
+      {/* ── NOTIFICATIONS & ALERTS ── */}
+      {floorAlerts.length > 0 && (
+        <div className="mx-6 mt-4 rounded-none border border-blue-300 bg-blue-50 px-4 py-2.5 shadow-2xs">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[12px] font-bold uppercase tracking-wide text-blue-900 flex items-center gap-1.5">
+              <span>📢 Doctor Calling Patient ({floorAlerts.length})</span>
+            </p>
+            <button
+              onClick={() => markFloorAlertsRead(floorAlerts.map((a) => a.id))}
+              className="text-[11px] font-bold text-blue-700 hover:text-blue-900 hover:underline cursor-pointer"
+            >
+              Acknowledge All
+            </button>
+          </div>
+          <ul className="mt-1.5 space-y-1">
+            {floorAlerts.slice(0, 4).map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-3 text-xs bg-white border border-blue-200 p-2 rounded-none">
+                <span className="font-semibold text-slate-800">{a.message}</span>
+                <button
+                  onClick={() => markFloorAlertsRead([a.id])}
+                  className="text-[11px] font-bold text-blue-700 hover:underline whitespace-nowrap bg-blue-50 px-2 py-0.5 border border-blue-200"
+                >
+                  Walked Through ✓
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
+      {/* Dispatch Confirmation Banner */}
+      {sent && (
+        <div className="mx-6 mt-4 px-4 py-3 rounded-none bg-emerald-50 border border-emerald-300 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+          <p className="text-[13px] text-emerald-900 font-medium">
+            ✅ Patient <strong>{sent.name}</strong> sent in to <strong>{sent.doctor}</strong>. Vitals recorded and queued.
+          </p>
+          <div className="flex items-center gap-2">
+            {waiting.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  select(waiting[0]);
+                  setSent(null);
+                }}
+                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-none cursor-pointer transition-colors shadow-xs"
+              >
+                Next Patient: {waiting[0].patientName} →
+              </button>
+            )}
+            {waiting.length === 0 && onOpenQueue && (
+              <button
+                type="button"
+                onClick={onOpenQueue}
+                className="px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-none cursor-pointer transition-colors shadow-xs"
+              >
+                View Live Queue →
+              </button>
+            )}
+            <button onClick={() => setSent(null)} className="text-[11px] font-bold text-emerald-800 hover:underline">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Fresh Arrivals Banner */}
       {arrivals.length > 0 && (
-        <div className="mx-6 mt-4 space-y-2">
-          {arrivals.map(a => (
-            <div key={a.id} className="px-4 py-2.5 rounded bg-[#E8EDF5] border border-[#BFD3F2] flex items-center justify-between gap-3">
-              <p className="text-[12.5px] text-[#1E3A6E]">
-                <strong>{a.patientName}</strong> sent over from reception
+        <div className="mx-6 mt-4 space-y-1.5">
+          {arrivals.map((a) => (
+            <div key={a.id} className="px-4 py-2 rounded-none bg-sky-50 border border-sky-300 flex items-center justify-between gap-3 text-xs shadow-2xs">
+              <p className="text-sky-950 font-medium">
+                🆕 <strong>{a.patientName}</strong> just arrived from Reception
                 {a.assignedDoctor ? <> for <strong>{a.assignedDoctor}</strong></> : null}
-                {a.dept ? <> · {a.dept}</> : null} — vitals needed
+                {a.dept ? <> ({a.dept})</> : null} — Vitals needed
               </p>
               <button
-                onClick={() => { select(a); setArrivals(p => p.filter(x => x.id !== a.id)); }}
-                className="text-[11.5px] font-semibold text-[#1B4FD8] whitespace-nowrap"
+                onClick={() => {
+                  select(a);
+                  setArrivals((p) => p.filter((x) => x.id !== a.id));
+                }}
+                className="text-[11px] font-bold text-sky-800 bg-white hover:bg-sky-100 border border-sky-300 px-2.5 py-0.5 rounded-none whitespace-nowrap cursor-pointer"
               >
-                Take vitals →
+                Take Vitals Now →
               </button>
             </div>
           ))}
         </div>
       )}
 
+      {/* ── MAIN TWO-COLUMN WORKSPACE ── */}
       <div className="flex-1 flex min-h-0 gap-4 p-6 pt-4">
-        {/* Waiting list */}
-        <aside className="w-[340px] flex-shrink-0 bg-white border border-[#DDE2EC] rounded flex flex-col min-h-0">
-          <div className="px-4 py-2.5 border-b border-[#DDE2EC]">
-            <h2 className="text-[12.5px] font-bold text-gray-900">Waiting for vitals ({waiting.length})</h2>
+        {/* SIDEBAR: WAITING PATIENTS LIST */}
+        <aside className="w-[350px] flex-shrink-0 bg-white border border-[#CBD5E1] rounded-none flex flex-col min-h-0 shadow-2xs">
+          <div className="p-3 border-b border-[#CBD5E1] bg-slate-100 space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[13px] font-bold text-slate-900 flex items-center gap-1.5">
+                <span>📋 Waiting for Vitals</span>
+              </h2>
+              <span className="text-[11px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-none">
+                {filteredWaiting.length} Patients
+              </span>
+            </div>
+
+            {/* Quick Search */}
+            <div className="relative">
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search name, UMR, token..."
+                className="w-full pl-7 pr-2 py-1 text-xs border border-slate-300 rounded-none bg-white focus:outline-none focus:border-blue-600 font-medium"
+              />
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400">
+                <Icon.Search size={12} />
+              </span>
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
-            {waiting.length === 0 ? (
-              <div className="p-6 text-center">
-                <div className="text-2xl mb-2">🩺</div>
-                <p className="text-[12.5px] font-semibold text-[#334155]">Nobody waiting</p>
-                <p className="text-[11.5px] text-[#94A3B8] mt-1">
-                  Patients appear here once reception has booked their appointment.
-                </p>
+
+          <div className="flex-1 overflow-y-auto divide-y divide-[#E2E8F0]">
+            {filteredWaiting.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500 font-medium">
+                {waiting.length === 0 ? "No patients currently waiting for triage." : "No patient matches your search."}
               </div>
-            ) : waiting.map(e => {
-              const active = e.id === selectedId;
-              return (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => select(e)}
-                  className={`w-full text-left px-4 py-3 border-b border-[#F1F5F9] transition-colors border-l-[3px] ${
-                    active ? "bg-[#E8EDF5] border-l-[#1B4FD8]" : "hover:bg-[#F8FAFC] border-l-transparent"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-[13px] text-gray-900 truncate">{e.patientName}</span>
-                    <span
-                      className={`text-[10.5px] font-mono font-semibold flex-shrink-0 ${
-                        waitMinutes(e) >= 30 ? "text-[#B91C1C]" : waitMinutes(e) >= 15 ? "text-[#B45309]" : "text-[#94A3B8]"
-                      }`}
-                    >
-                      {waitMinutes(e)}m
-                    </span>
-                  </div>
-                  <div className="text-[11px] font-mono text-[#64748B] mt-0.5">
-                    {e.umr} · {e.opNumber} · {e.age}{e.sex?.[0]}
-                  </div>
-                  <p className="text-[11.5px] text-[#475569] mt-1 line-clamp-2">
-                    {e.chiefComplaint || "No chief complaint recorded"}
-                  </p>
-                  <div className="mt-1.5 text-[11px]">
-                    {e.assignedDoctor ? (
-                      <span className="text-[#1B4FD8] font-medium">→ {e.assignedDoctor}</span>
-                    ) : (
-                      <span className="text-[#B45309]">No doctor booked yet</span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+            ) : (
+              filteredWaiting.map((e) => {
+                const active = e.id === selectedId;
+                const waitMins = waitMinutes(e);
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => select(e)}
+                    className={`w-full text-left p-3 transition-colors border-l-4 cursor-pointer ${
+                      active
+                        ? "bg-blue-50/90 border-l-blue-600 shadow-2xs"
+                        : "hover:bg-slate-50 border-l-transparent"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-bold text-[13px] text-slate-900 truncate">{e.patientName}</span>
+                      <span
+                        className={`text-[10.5px] font-mono font-bold px-1.5 py-0.5 rounded-none border ${
+                          waitMins >= 30
+                            ? "bg-red-100 text-red-800 border-red-300"
+                            : waitMins >= 15
+                            ? "bg-amber-100 text-amber-800 border-amber-300"
+                            : "bg-slate-100 text-slate-700 border-slate-300"
+                        }`}
+                      >
+                        ⏱️ {waitMins}m
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold text-blue-900 mt-1">
+                      <span className="bg-blue-100 px-1.5 py-0.2 border border-blue-200">{e.opNumber}</span>
+                      <span className="text-slate-500">UMR: {e.umr}</span>
+                      <span className="text-slate-500">· {e.age}y ({e.sex})</span>
+                    </div>
+
+                    <p className="text-[11.5px] text-slate-600 mt-1 line-clamp-1 font-medium">
+                      💬 {e.chiefComplaint || "General Evaluation"}
+                    </p>
+
+                    <div className="mt-2 flex items-center justify-between text-[11px]">
+                      {e.assignedDoctor ? (
+                        <span className="text-blue-800 font-bold flex items-center gap-1">
+                          👨‍⚕️ {e.assignedDoctor}
+                        </span>
+                      ) : (
+                        <span className="text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 border border-amber-200">
+                          ⚠️ No doctor assigned
+                        </span>
+                      )}
+
+                      {e.timestamps?.calledToNurse ? (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-none bg-emerald-100 text-emerald-900 border border-emerald-300">
+                          📢 Called {e.timestamps.calledToNurse}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium text-slate-400">
+                          Room {e.room || "101"}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </div>
         </aside>
 
-        {/* Vitals form */}
-        <section className="flex-1 min-w-0 overflow-y-auto">
+        {/* MAIN PANEL: VITALS ENTRY & PATIENT OVERVIEW */}
+        <section className="flex-1 min-w-0 overflow-y-auto space-y-4">
           {!selected ? (
             <div className="space-y-4">
-              <div className="bg-white border border-[#DDE2EC] rounded p-6 text-center">
-                <div className="text-3xl mb-2">👩‍⚕️</div>
-                <h3 className="text-[14px] font-bold text-gray-900">
-                  {waiting.length > 0 ? "Pick a patient to start" : "Nobody is waiting"}
+              {/* Empty State Banner */}
+              <div className="bg-white border border-[#CBD5E1] rounded-none p-8 text-center shadow-2xs">
+                <div className="text-4xl mb-3">👩‍⚕️</div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {waiting.length > 0 ? "Select a Patient to Record Vitals" : "Nurse Station Queue Clear"}
                 </h3>
-                <p className="text-[12.5px] text-[#64748B] mt-1.5 max-w-md mx-auto">
+                <p className="text-[12.5px] text-slate-600 mt-1.5 max-w-md mx-auto">
                   {waiting.length > 0
-                    ? "Choose someone from the waiting list to record their observations and send them in to their doctor."
-                    : "Patients appear on the left the moment reception books their appointment."}
+                    ? "Select a patient from the left waiting list to capture baseline observations, calculate NEWS2 warning score, and dispatch to their consulting room."
+                    : "No patients are currently waiting for baseline vitals."}
                 </p>
                 {waiting.length > 0 && (
                   <button
                     type="button"
                     onClick={() => select(waiting[0])}
-                    className="mt-4 px-4 py-2 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12.5px] font-semibold rounded transition-colors cursor-pointer"
+                    className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-none transition-colors cursor-pointer shadow-xs"
                   >
-                    Start with {waiting[0].patientName} ({waitMinutes(waiting[0])}m waiting) →
+                    Triage First Patient: {waiting[0].patientName} ({waitMinutes(waiting[0])}m wait) →
                   </button>
                 )}
               </div>
 
-              {/* Already handed over -- so the nurse can see her own work and spot
-                  anyone she sent in who is still sitting in the waiting room. */}
-              <div className="bg-white border border-[#DDE2EC] rounded">
-                <div className="px-4 py-2.5 border-b border-[#DDE2EC]">
-                  <h3 className="text-[12.5px] font-bold text-gray-900">
-                    Sent in to a doctor ({readyForDoctor.length})
-                  </h3>
-                </div>
-                {readyForDoctor.length === 0 ? (
-                  <p className="p-5 text-center text-[12px] text-[#94A3B8]">Nobody sent in yet.</p>
-                ) : (
-                  <div className="max-h-72 overflow-y-auto">
-                    {readyForDoctor.map(e => (
-                      <div key={e.id} className="px-4 py-2.5 border-b border-[#F1F5F9] last:border-b-0 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-[12.5px] font-semibold text-gray-900 truncate">{e.patientName}</p>
-                          <p className="text-[11px] font-mono text-[#64748B]">
-                            {e.umr} · {e.assignedDoctor || "No doctor"} · {e.room || "—"}
-                          </p>
+              {/* Unallocated Patients Warning */}
+              {stuck.length > 0 && (
+                <div className="bg-amber-50 border border-amber-300 rounded-none p-4 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                      <span>⚠️ Pending Doctor Allocation ({stuck.length})</span>
+                    </h3>
+                    <span className="text-[11px] font-mono font-bold text-amber-800">Requires Reception Action</span>
+                  </div>
+                  <p className="text-[11.5px] text-amber-900 mt-1">
+                    Vitals are recorded for these patients, but no doctor was assigned during booking.
+                  </p>
+                  <div className="mt-3 space-y-1.5 max-h-48 overflow-y-auto">
+                    {stuck.map((e) => (
+                      <div key={e.id} className="p-2.5 bg-white border border-amber-200 rounded-none flex items-center justify-between text-xs">
+                        <div>
+                          <span className="font-bold text-slate-900">{e.patientName}</span>
+                          <span className="text-slate-500 font-mono text-[11px] ml-2">UMR: {e.umr} · Dept: {e.dept || "General"}</span>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-[11px] font-mono text-[#15803D]">
-                            {e.vitals?.bp || "--"} · {e.vitals?.pulse || "--"}
-                          </p>
-                          <p className="text-[10px] text-[#94A3B8]">
-                            {e.timestamps?.vitalsRecorded ? `sent ${e.timestamps.vitalsRecorded}` : "vitals on file"}
+                        <span className="text-[10.5px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 font-bold">
+                          Awaiting Allocation
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Patients Already Sent to Doctor */}
+              <div className="bg-white border border-[#CBD5E1] rounded-none shadow-2xs overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#CBD5E1] bg-slate-100 flex items-center justify-between">
+                  <h3 className="text-[13.5px] font-bold text-slate-900 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 bg-emerald-600 inline-block"></span>
+                    Dispatched to Doctor Queue ({withDoctor.length})
+                  </h3>
+                  <span className="text-xs text-slate-500 font-mono font-bold">Today's Handover History</span>
+                </div>
+                {withDoctor.length === 0 ? (
+                  <p className="p-6 text-center text-xs text-slate-500 font-medium">No patients dispatched yet today.</p>
+                ) : (
+                  <div className="divide-y divide-[#E2E8F0] max-h-72 overflow-y-auto">
+                    {withDoctor.map((e) => (
+                      <div key={e.id} className="p-3 hover:bg-slate-50 transition-colors flex items-center justify-between text-xs">
+                        <div>
+                          <div className="font-bold text-slate-900 text-[13px]">{e.patientName}</div>
+                          <div className="text-[11px] text-slate-600 font-medium">
+                            UMR: {e.umr} · Doctor: <strong>{e.assignedDoctor}</strong> · Room: {e.room || "101"}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[11px] font-mono font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5">
+                            BP: {e.vitals?.bp || "--"} · HR: {e.vitals?.pulse || "--"}
+                          </span>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {e.timestamps?.vitalsRecorded ? `Recorded ${e.timestamps.vitalsRecorded}` : "Vitals on file"}
                           </p>
                         </div>
                       </div>
@@ -306,80 +541,141 @@ export default function NurseStation({ nurseName = "OP Nurse" }: { nurseName?: s
               </div>
             </div>
           ) : (
+            /* ACTIVE VITALS FORM FOR SELECTED PATIENT */
             <div className="space-y-4">
-              <div className="bg-white border border-[#DDE2EC] rounded p-4">
-                <div className="flex items-start justify-between gap-4">
+              {/* Selected Patient Banner */}
+              <div className="bg-white border border-[#CBD5E1] rounded-none p-4 shadow-2xs">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-[15px] font-bold text-gray-900">{selected.patientName}</h3>
-                    <p className="text-[11.5px] font-mono text-[#64748B] mt-0.5">
-                      {selected.umr} · {selected.opNumber} · {selected.age} yrs {selected.sex} · {selected.dept}
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-slate-900">{selected.patientName}</h3>
+                      <span className="font-mono text-xs font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5">
+                        Token {selected.opNumber}
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] font-mono text-slate-600 font-bold mt-1">
+                      UMR: {selected.umr} · {selected.age} yrs ({selected.sex}) · {selected.phone} · {selected.dept}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[11px] text-[#64748B]">Booked with</p>
-                    <p className="text-[12.5px] font-semibold text-[#1B4FD8]">
-                      {selected.assignedDoctor || "Not assigned"}
+                  <div className="text-right bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-none">
+                    <p className="text-[10.5px] uppercase font-bold text-blue-900">Booked Doctor</p>
+                    <p className="text-[13px] font-bold text-blue-900">
+                      👨‍⚕️ {selected.assignedDoctor || "Not assigned"}
                     </p>
-                    {selected.room && <p className="text-[11px] font-mono text-[#94A3B8]">{selected.room}</p>}
+                    <p className="text-[11px] font-mono font-bold text-slate-700">Chamber: {selected.room || "101"}</p>
                   </div>
                 </div>
-                <p className="text-[12.5px] text-[#334155] mt-3 pt-3 border-t border-[#F1F5F9]">
-                  <span className="text-[#64748B]">Complaint: </span>
-                  {selected.chiefComplaint || "None recorded"}
-                </p>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-bold text-slate-700">Chief Complaint: </span>
+                    <span className="text-slate-900 font-medium">{selected.chiefComplaint || "General Outpatient Checkup"}</span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-mono font-bold">
+                    Waiting: {waitMinutes(selected)} mins
+                  </span>
+                </div>
               </div>
 
-              <div className="bg-white border border-[#DDE2EC] rounded">
-                <div className="px-4 py-3 border-b border-[#DDE2EC]">
-                  <h3 className="text-[13px] font-bold text-gray-900">Baseline observations</h3>
-                  <p className="text-[11.5px] text-[#64748B] mt-0.5">
-                    Leave anything you did not measure blank -- a blank reading is recorded as not taken, never as normal.
-                  </p>
+              {/* Vitals Recording Card */}
+              <div className="bg-white border border-[#CBD5E1] rounded-none shadow-2xs overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#CBD5E1] bg-slate-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[13.5px] font-bold text-slate-900 flex items-center gap-2">
+                      <span>🩺 Clinical Baseline Observations</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Enter measured readings. Leave unmeasured values blank.
+                    </p>
+                  </div>
+
+                  {/* Dynamic NEWS2 Risk Score Preview */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">NEWS2 Score:</span>
+                    <span className={`px-2.5 py-1 text-xs font-bold border rounded-none font-mono ${news2Analysis.color}`}>
+                      {news2Analysis.score} ({news2Analysis.risk} Risk)
+                    </span>
+                  </div>
                 </div>
-                <div className="p-4 grid grid-cols-2 lg:grid-cols-3 gap-3">
-                  {FIELDS.map(f => {
+
+                {/* Field Inputs Grid */}
+                <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {FIELDS.map((f) => {
                     const flag = flagFor(f.key, vitals[f.key] || "");
                     return (
-                      <label key={f.key} className="block">
-                        <span className="flex items-center justify-between text-[11px] font-semibold text-[#475569] mb-1">
-                          {f.label} <span className="font-normal text-[#94A3B8]">{f.unit}</span>
-                        </span>
-                        <input
-                          value={vitals[f.key] || ""}
-                          placeholder={f.placeholder}
-                          onChange={e => setVitals(v => ({ ...v, [f.key]: e.target.value }))}
-                          className={`w-full border rounded px-2.5 py-1.5 text-[13px] ${
-                            flag ? "border-[#FCA5A5] bg-[#FEF2F2]" : "border-[#DDE2EC]"
-                          }`}
-                        />
-                        {flag && <span className="text-[10.5px] text-[#B91C1C] mt-0.5 inline-block">{flag} — check</span>}
-                      </label>
+                      <div key={f.key} className="space-y-1">
+                        <label className="flex items-center justify-between text-xs font-bold text-slate-700">
+                          <span className="flex items-center gap-1.5">
+                            <span>{f.icon}</span>
+                            <span>{f.label}</span>
+                          </span>
+                          <span className="font-mono text-slate-500 text-[11px] font-semibold">{f.unit}</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            value={vitals[f.key] || ""}
+                            placeholder={f.placeholder}
+                            onChange={(e) => setVitals((v) => ({ ...v, [f.key]: e.target.value }))}
+                            className={`w-full border rounded-none px-3 py-2 text-sm font-mono font-bold focus:outline-none ${
+                              flag
+                                ? flag.level === "danger"
+                                  ? "border-red-400 bg-red-50 text-red-950 focus:border-red-600"
+                                  : "border-amber-400 bg-amber-50 text-amber-950 focus:border-amber-600"
+                                : "border-slate-300 bg-white focus:border-blue-600 text-slate-900"
+                            }`}
+                          />
+                        </div>
+                        {flag && (
+                          <span
+                            className={`text-[10.5px] font-bold px-1.5 py-0.5 border rounded-none inline-block mt-1 ${
+                              flag.level === "danger" ? "bg-red-100 text-red-900 border-red-300" : "bg-amber-100 text-amber-900 border-amber-300"
+                            }`}
+                          >
+                            ⚠️ {flag.label}
+                          </span>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
-                <div className="px-4 pb-4">
-                  <label className="block">
-                    <span className="block text-[11px] font-semibold text-[#475569] mb-1">Nurse note</span>
+
+                {/* Nurse Notes Section */}
+                <div className="px-5 pb-5">
+                  <label className="block space-y-1">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>📝 Nurse Triage Notes</span>
+                    </span>
                     <textarea
                       rows={2}
                       value={vitals.notes || ""}
-                      placeholder="Anything the doctor should know before seeing the patient"
-                      onChange={e => setVitals(v => ({ ...v, notes: e.target.value }))}
-                      className="w-full border border-[#DDE2EC] rounded px-2.5 py-1.5 text-[13px]"
+                      placeholder="Add observations, symptoms, allergies, or instructions for the doctor..."
+                      onChange={(e) => setVitals((v) => ({ ...v, notes: e.target.value }))}
+                      className="w-full border border-slate-300 rounded-none px-3 py-2 text-xs font-medium focus:outline-none focus:border-blue-600 bg-white"
                     />
                   </label>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <p className="text-[11.5px] text-[#64748B]">
-                  {anyRecorded
-                    ? `Recorded by ${nurseName}`
-                    : "No readings entered yet — you can still send the patient in."}
-                </p>
-                <Btn variant="primary" size="sm" onClick={sendToDoctor}>
-                  Send in to {selected.assignedDoctor || "doctor"} →
-                </Btn>
+                {/* Action Bar */}
+                <div className="px-5 py-3 border-t border-[#CBD5E1] bg-slate-50 flex items-center justify-between">
+                  <div className="text-xs font-semibold text-slate-600">
+                    {anyRecorded ? (
+                      <span className="text-emerald-700 font-bold flex items-center gap-1">
+                        ✓ Recorded by {nurseName}
+                      </span>
+                    ) : (
+                      <span>No readings entered — patient will be sent with unrecorded vitals.</span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={sendToDoctor}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-none cursor-pointer shadow-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <span>Send in to {selected.assignedDoctor || "Doctor"}</span>
+                    <span>→</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -103,7 +103,6 @@ export interface DBOPEncounter {
   }[];
 
   advice: string;
-
   vitals: {
     bp: string;
     pulse: string;
@@ -122,8 +121,22 @@ export interface DBOPEncounter {
   };
 
   furtherAction:
-    "None" | "Laboratory" | "Pharmacy" | "Radiology" | "Admission" | "Referral";
+    | "None"
+    | "Laboratory"
+    | "Pharmacy"
+    | "Radiology"
+    | "Admission"
+    | "Referral";
 
+  priorityTag?: "Urgent" | "Senior" | "Wheelchair" | "Pediatric" | "Standard";
+  visitType?: "New Visit" | "Follow-up" | "Review";
+  news2Score?: number;
+  news2Risk?: "Low" | "Medium" | "High";
+  opdProcedures?: {
+    name: string;
+    status: "Ordered" | "In Progress" | "Completed";
+    timestamp: string;
+  }[];
   status:
     | "Registered"
     | "Symptoms Captured"
@@ -131,6 +144,8 @@ export interface DBOPEncounter {
     | "Awaiting Doctor"
     | "Doctor Assigned"
     | "In Queue"
+    | "Vitals Recorded"
+    | "Awaiting Consultation"
     | "Under Consultation"
     | "Consultation Completed"
     | "Post-Consultation"
@@ -147,7 +162,9 @@ export interface DBOPEncounter {
     symptoms?: string;
 
     doctorAssigned?: string;
-
+    /** When the OP desk called the patient through to the nurse station. */
+    calledToNurse?: string;
+    calledToNurseBy?: string;
     /** When the OP nurse took baseline observations, and who took them. */
 
     vitalsRecorded?: string;
@@ -2096,6 +2113,26 @@ class HospitalDatabase {
    * patients nobody had seen yet, and the vitals panel on the admit card was
    * permanently blank.
    */
+  /**
+   * The OP desk calling a patient through to the nurse station.
+   *
+   * Step three of the outpatient flow: reception books, the appointment lands on
+   * the OP hub, and somebody has to actually call the patient from the waiting
+   * room before the nurse can take vitals. Nothing recorded that, so the nurse's
+   * list could not tell a patient who had been called from one still sitting
+   * outside unaware.
+   *
+   * The status is untouched -- being called is not a clinical stage, it is a
+   * fact about the waiting room. Vitals are still what moves the visit on.
+   */
+  public callToNurseStation(id: string, calledBy: string): DBOPEncounter | undefined {
+    const existing = this.getEncounters().find((e) => e.id === id);
+    if (!existing) return undefined;
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return this.updateEncounter(id, {
+      timestamps: { ...existing.timestamps, calledToNurse: now, calledToNurseBy: calledBy },
+    });
+  }
 
   public recordVitals(
     id: string,

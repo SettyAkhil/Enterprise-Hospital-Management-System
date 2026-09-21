@@ -153,7 +153,7 @@ export default function Discharge({ setNotice, onComplete }: { setNotice?: (n: N
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-3 flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-gray-900">Discharge Workflow</h1>
-          <p className="text-[11.5px] text-[#64748B]">Guided discharge -- real billing/prescription checklist, real bed release, auto-generated discharge summary.</p>
+          <p className="text-[11.5px] text-[#64748B]">Guided discharge — real billing/prescription checklist, real bed release, auto-generated discharge summary.</p>
         </div>
         <Btn variant="ghost" size="sm" onClick={onComplete}>Close</Btn>
       </div>
@@ -204,7 +204,7 @@ export default function Discharge({ setNotice, onComplete }: { setNotice?: (n: N
 
         {step === 1 && selectedBed && (
           <div className="bg-white border border-[#DDE2EC] rounded p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-1">Discharge Checklist -- {occupantName(selectedBed)}</h2>
+            <h2 className="text-sm font-semibold text-gray-900 mb-1">Discharge Checklist · {occupantName(selectedBed)}</h2>
             <p className="text-[11.5px] text-[#64748B] mb-4">{selectedBed.ward} · Room {selectedBed.room_no} · Bed {selectedBed.bed_no}</p>
 
             {checklistLoading ? (
@@ -262,7 +262,7 @@ export default function Discharge({ setNotice, onComplete }: { setNotice?: (n: N
                     <label className="text-[11px] font-medium text-[#64748B] block mb-1">Reason for discharging with pending items</label>
                     <input
                       className="w-full border border-[#DDE2EC] p-2 rounded text-[12.5px]"
-                      placeholder="e.g. LAMA -- patient insisted, dues to be settled later"
+                      placeholder="e.g. LAMA — patient insisted, dues to be settled later"
                       value={dischargeReason}
                       onChange={(e) => setDischargeReason(e.target.value)}
                     />
@@ -291,7 +291,7 @@ export default function Discharge({ setNotice, onComplete }: { setNotice?: (n: N
                 <div className="text-[12px] text-[#16A34A]">
                   Bed {selectedBed.bed_no} released and room charges billed.
                   {summaryFailed
-                    ? " Discharge summary could not be generated automatically -- add it manually from the patient's chart."
+                    ? " Discharge summary could not be generated automatically — add it manually from the patient's chart."
                     : " A discharge summary was generated and saved to the patient's chart (Documents tab)."}
                 </div>
               </div>

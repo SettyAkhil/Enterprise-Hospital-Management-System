@@ -9,7 +9,6 @@ import StatusBadge from "../components/StatusBadge";
 const quickActions = [
   { label: "New Sale", icon: ShoppingCart, color: "#1B4FD8", page: "dispensing" },
   { label: "Prescription Queue", icon: ClipboardList, color: "#16a34a", page: "prescriptions" },
-  { label: "Verify Prescription", icon: Zap, color: "#7c3aed", page: "ocr" },
   { label: "Receive Stock", icon: Package, color: "#d906", page: "grn" },
   { label: "Check Stock", icon: AlertTriangle, color: "#dc2626", page: "expiry-low-stock" },
   { label: "Generate Report", icon: BarChart3, color: "#0284c7", page: "reports" },
