@@ -134,6 +134,12 @@ export default function OpReportsPage({
   }, [activeRole])
 
   // ── 2. Filters State ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const mainEl = document.querySelector("main");
+    if (mainEl) mainEl.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }, []);
+
   const [filters, setFilters] = useState<OpReportFilters>({
     dateRangePreset: "last30",
     department: "All",

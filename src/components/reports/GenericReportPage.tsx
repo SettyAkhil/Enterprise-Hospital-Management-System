@@ -361,6 +361,13 @@ export default function GenericReportPage({
 }: GenericReportPageProps) {
   const config = REPORT_CONFIGS[reportType] || REPORT_CONFIGS.reports_patients;
 
+  // Always scroll to top whenever a new report is opened / switched
+  useEffect(() => {
+    const mainEl = document.querySelector("main");
+    if (mainEl) mainEl.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }, [reportType]);
+
   // Live clinic revision: automatically re-fetches report data whenever any patient, bed, or order is updated
   const { revision } = useLiveClinic();
 

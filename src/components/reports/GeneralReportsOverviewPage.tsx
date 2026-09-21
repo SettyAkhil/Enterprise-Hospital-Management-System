@@ -15,7 +15,7 @@
  * - Recent Hospital Activity Table with quick navigation into individual report modules
  */
 
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useEffect } from "react"
 import {
   LineChart,
   Line,
@@ -395,6 +395,13 @@ function resolvePatientClinicalDetails(
 export default function GeneralReportsOverviewPage({
   onNavigate,
 }: GeneralReportsOverviewPageProps) {
+  // Always scroll to top when opening Overview
+  useEffect(() => {
+    const mainEl = document.querySelector("main")
+    if (mainEl) mainEl.scrollTop = 0
+    window.scrollTo(0, 0)
+  }, [])
+
   // Live clinic revision: automatically re-evaluates overview whenever a new patient is added or data changes
   const { revision } = useLiveClinic()
 
@@ -1032,106 +1039,6 @@ export default function GeneralReportsOverviewPage({
               </div>
             )
           })}
-        </div>
-
-        {/* ── FINANCIAL REPORTS LAUNCHPAD ─────────────────────────────────── */}
-        <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white rounded-xl p-4 shadow-sm border border-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2 border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                <CreditCard className="w-4 h-4" />
-              </span>
-              <div>
-                <h2 className="text-xs sm:text-sm font-bold tracking-tight text-white flex items-center gap-2">
-                  <span>Financial Reports Suite</span>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                    Real-time Ledgers
-                  </span>
-                </h2>
-                <p className="text-[11px] text-slate-300">
-                  Strictly separated revenue accounting, damaged stock loss
-                  valuations, and vendor debit note ledgers.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Card 1: Revenue Reports */}
-            <div
-              onClick={() => onNavigate?.("revenue_reports")}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-emerald-400/40 rounded-xl p-3.5 transition duration-200 cursor-pointer group flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
-                    Revenue Reports
-                  </span>
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-400 transition" />
-                </div>
-                <p className="text-[11.5px] text-slate-300 mb-2">
-                  Recognized departmental revenue, realized cash/UPI
-                  collections, and payment breakdown.
-                </p>
-              </div>
-              <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400">Ledger Domain:</span>
-                <span className="font-semibold text-white group-hover:text-emerald-300">
-                  Central Revenue
-                </span>
-              </div>
-            </div>
-
-            {/* Card 2: Pharmacy Damaged Stock */}
-            <div
-              onClick={() => onNavigate?.("reports_pharmacy_damaged")}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-rose-400/40 rounded-xl p-3.5 transition duration-200 cursor-pointer group flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider">
-                    Pharmacy Damaged Stock
-                  </span>
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-400 transition" />
-                </div>
-                <p className="text-[11.5px] text-slate-300 mb-2">
-                  Itemized pharmaceutical loss register, cold-chain damage, and
-                  biohazard disposal certificates.
-                </p>
-              </div>
-              <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400">Ledger Domain:</span>
-                <span className="font-semibold text-white group-hover:text-rose-300">
-                  Inventory Loss
-                </span>
-              </div>
-            </div>
-
-            {/* Card 3: Supplier Return Ledger */}
-            <div
-              onClick={() => onNavigate?.("reports_supplier_returns")}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-blue-400/40 rounded-xl p-3.5 transition duration-200 cursor-pointer group flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">
-                    Supplier Return Ledger
-                  </span>
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-400 transition" />
-                </div>
-                <p className="text-[11.5px] text-slate-300 mb-2">
-                  Vendor returns, official debit note issuances, and supplier
-                  credit adjustments.
-                </p>
-              </div>
-              <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400">Ledger Domain:</span>
-                <span className="font-semibold text-white group-hover:text-blue-300">
-                  Vendor Debits
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* ── 4. VISUAL ANALYTICS (6 PANELS) ───────────────────────────────── */}
