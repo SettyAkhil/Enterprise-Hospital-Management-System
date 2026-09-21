@@ -63,6 +63,7 @@ import {
   Gauge,
   Sparkles,
   ExternalLink,
+  ChevronRight,
 } from "lucide-react"
 import {
   GeneralReportsService,
@@ -1008,13 +1009,17 @@ export default function GeneralReportsOverviewPage({
           {/* 5-Stage Interactive Flow Stepper */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 relative">
             {/* Stage 1: Intake & Triage */}
-            <div className="relative group bg-slate-50/70 hover:bg-blue-50/50 border border-slate-200/80 hover:border-blue-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+            <div
+              onClick={() => onNavigate?.("reports_patients")}
+              className="relative group bg-slate-50/70 hover:bg-blue-50/70 border border-slate-200/80 hover:border-blue-400 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm"
+              title="Click to view Patient Reports"
+            >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-100/60 px-1.5 py-0.5 rounded">
                     01 · Intake & Triage
                   </span>
-                  <div className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                  <div className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs group-hover:scale-110 transition">
                     <Users className="w-3 h-3" />
                   </div>
                 </div>
@@ -1030,18 +1035,27 @@ export default function GeneralReportsOverviewPage({
               </div>
               <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
                 <span className="text-slate-500">Registration</span>
-                <span className="font-bold text-blue-700">100% Inflow</span>
+                <span className="font-bold text-blue-700 group-hover:translate-x-0.5 transition flex items-center">
+                  100% Inflow →
+                </span>
+              </div>
+              <div className="hidden md:flex absolute -right-2.5 top-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded-full bg-white border border-slate-300 items-center justify-center shadow-xs">
+                <ChevronRight className="w-3 h-3 text-slate-500" />
               </div>
             </div>
 
             {/* Stage 2: Clinical Consultations */}
-            <div className="relative group bg-slate-50/70 hover:bg-indigo-50/50 border border-slate-200/80 hover:border-indigo-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+            <div
+              onClick={() => onNavigate?.("reports_appointments")}
+              className="relative group bg-slate-50/70 hover:bg-indigo-50/70 border border-slate-200/80 hover:border-indigo-400 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm"
+              title="Click to view Appointment & Doctor Reports"
+            >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-100/60 px-1.5 py-0.5 rounded">
                     02 · Consultations
                   </span>
-                  <div className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                  <div className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs group-hover:scale-110 transition">
                     <Stethoscope className="w-3 h-3" />
                   </div>
                 </div>
@@ -1057,18 +1071,27 @@ export default function GeneralReportsOverviewPage({
               </div>
               <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
                 <span className="text-slate-500">Evaluation</span>
-                <span className="font-bold text-indigo-700">Clinical Review</span>
+                <span className="font-bold text-indigo-700 group-hover:translate-x-0.5 transition flex items-center">
+                  Clinical Review →
+                </span>
+              </div>
+              <div className="hidden md:flex absolute -right-2.5 top-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded-full bg-white border border-slate-300 items-center justify-center shadow-xs">
+                <ChevronRight className="w-3 h-3 text-slate-500" />
               </div>
             </div>
 
             {/* Stage 3: Diagnostics & Labs */}
-            <div className="relative group bg-slate-50/70 hover:bg-purple-50/50 border border-slate-200/80 hover:border-purple-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+            <div
+              onClick={() => onNavigate?.("reports_laboratory")}
+              className="relative group bg-slate-50/70 hover:bg-purple-50/70 border border-slate-200/80 hover:border-purple-400 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm"
+              title="Click to view Laboratory & Radiology Reports"
+            >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-600 bg-purple-100/60 px-1.5 py-0.5 rounded">
                     03 · Diagnostics
                   </span>
-                  <div className="w-5 h-5 rounded-full bg-purple-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                  <div className="w-5 h-5 rounded-full bg-purple-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs group-hover:scale-110 transition">
                     <TestTube className="w-3 h-3" />
                   </div>
                 </div>
@@ -1081,18 +1104,27 @@ export default function GeneralReportsOverviewPage({
               </div>
               <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
                 <span className="text-slate-500">Processing</span>
-                <span className="font-bold text-purple-700">Lab Orders</span>
+                <span className="font-bold text-purple-700 group-hover:translate-x-0.5 transition flex items-center">
+                  Lab Orders →
+                </span>
+              </div>
+              <div className="hidden md:flex absolute -right-2.5 top-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded-full bg-white border border-slate-300 items-center justify-center shadow-xs">
+                <ChevronRight className="w-3 h-3 text-slate-500" />
               </div>
             </div>
 
             {/* Stage 4: Inpatient & ICU */}
-            <div className="relative group bg-slate-50/70 hover:bg-amber-50/50 border border-slate-200/80 hover:border-amber-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+            <div
+              onClick={() => onNavigate?.("reports_inpatient")}
+              className="relative group bg-slate-50/70 hover:bg-amber-50/70 border border-slate-200/80 hover:border-amber-400 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm"
+              title="Click to view Inpatient & Bed Reports"
+            >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-600 bg-amber-100/60 px-1.5 py-0.5 rounded">
                     04 · Inpatient Care
                   </span>
-                  <div className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                  <div className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs group-hover:scale-110 transition">
                     <Bed className="w-3 h-3" />
                   </div>
                 </div>
@@ -1105,18 +1137,27 @@ export default function GeneralReportsOverviewPage({
               </div>
               <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
                 <span className="text-slate-500">Admissions</span>
-                <span className="font-bold text-amber-700">Ward & ICU</span>
+                <span className="font-bold text-amber-700 group-hover:translate-x-0.5 transition flex items-center">
+                  Ward & ICU →
+                </span>
+              </div>
+              <div className="hidden md:flex absolute -right-2.5 top-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded-full bg-white border border-slate-300 items-center justify-center shadow-xs">
+                <ChevronRight className="w-3 h-3 text-slate-500" />
               </div>
             </div>
 
             {/* Stage 5: Discharge & Recovery */}
-            <div className="relative group bg-slate-50/70 hover:bg-emerald-50/50 border border-slate-200/80 hover:border-emerald-300 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm">
+            <div
+              onClick={() => onNavigate?.("reports_discharges")}
+              className="relative group bg-slate-50/70 hover:bg-emerald-50/70 border border-slate-200/80 hover:border-emerald-400 rounded-xl p-3 transition duration-200 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-sm"
+              title="Click to view Discharge & Revenue Reports"
+            >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 bg-emerald-100/60 px-1.5 py-0.5 rounded">
                     05 · Clearances
                   </span>
-                  <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                  <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs group-hover:scale-110 transition">
                     <CheckCircle2 className="w-3 h-3" />
                   </div>
                 </div>
@@ -1129,7 +1170,9 @@ export default function GeneralReportsOverviewPage({
               </div>
               <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
                 <span className="text-slate-500">Resolution</span>
-                <span className="font-bold text-emerald-700">Cleared</span>
+                <span className="font-bold text-emerald-700 group-hover:translate-x-0.5 transition flex items-center">
+                  Cleared →
+                </span>
               </div>
             </div>
           </div>

@@ -39,6 +39,20 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  Activity,
+  Users,
+  Stethoscope,
+  Bed,
+  TestTube,
+  CheckCircle2,
+  ShieldCheck,
+  Clock,
+  Pill,
+  Building2,
+  CreditCard,
+  HeartPulse,
+  UserPlus,
+  Zap,
 } from "lucide-react";
 import {
   GeneralReportsService,
@@ -585,6 +599,274 @@ export default function GenericReportPage({
     printGenericReport(prepareExportData());
   };
 
+  // ── Department Operational Lifecycle Pipeline Flow ──────────────────────
+  const getDepartmentFlowStages = () => {
+    switch (reportType) {
+      case "reports_patients":
+        return {
+          title: "Patient Care Journey Pipeline",
+          flowSubtitle: "Outpatient and registration operational lifecycle from reception to clinical continuity",
+          stages: [
+            { step: "01", label: "Registration", desc: "Patient Reception", metric: data?.summary?.totalRegistrations ? `${data.summary.totalRegistrations.toLocaleString()} Registered` : `${data?.pagination?.total || 0} Total`, badge: "100% Inflow", color: "blue" },
+            { step: "02", label: "Triage & Vitals", desc: "Nursing Station", metric: "Initial Vitals Logged", badge: "Verified", color: "indigo" },
+            { step: "03", label: "Consultation", desc: "Specialty Clinic", metric: "Active Clinical Care", badge: "In Progress", color: "purple" },
+            { step: "04", label: "Care Completed", desc: "Dispatched & Follow-up", metric: "Record Synced", badge: "Completed", color: "emerald" },
+          ],
+        };
+      case "reports_er":
+        return {
+          title: "Emergency Response & Triage Flow",
+          flowSubtitle: "Trauma velocity, acuity staging (ESI 1-5), and acute stabilization pipeline",
+          stages: [
+            { step: "01", label: "Arrival & Triage", desc: "Walk-in & EMS", metric: `${data?.pagination?.total || 0} Cases`, badge: "100% Inflow", color: "rose" },
+            { step: "02", label: "Resuscitation", desc: "Trauma Bay Assessment", metric: "Immediate Acuity", badge: "High Priority", color: "amber" },
+            { step: "03", label: "Stabilization", desc: "Clinical Management", metric: "Observation & Care", badge: "Monitored", color: "blue" },
+            { step: "04", label: "Disposition", desc: "Admit to IP / Cleared", metric: "Outcome Resolved", badge: "Cleared", color: "emerald" },
+          ],
+        };
+      case "reports_inpatient":
+        return {
+          title: "Inpatient Ward & Bed Progression",
+          flowSubtitle: "Daily inpatient census, clinical monitoring, and recovery discharge trajectory",
+          stages: [
+            { step: "01", label: "Admission Order", desc: "From OP / ER", metric: `${data?.kpis?.[1]?.value || "Daily Intake"}`, badge: "Admitted", color: "blue" },
+            { step: "02", label: "Bed Allocation", desc: "Ward & Unit Placement", metric: "Beds Assigned", badge: "Secured", color: "indigo" },
+            { step: "03", label: "Clinical Rounds", desc: "Specialist Inpatient Care", metric: "Active Census", badge: "In Treatment", color: "purple" },
+            { step: "04", label: "Discharge Ready", desc: "Recovery & Settled", metric: `${data?.kpis?.[2]?.value || "Discharges"}`, badge: "Cleared", color: "emerald" },
+          ],
+        };
+      case "reports_appointments":
+        return {
+          title: "Outpatient Booking & Scheduling Lifecycle",
+          flowSubtitle: "Consultation queue demand, scheduling velocity, and doctor fulfillment",
+          stages: [
+            { step: "01", label: "Booking Request", desc: "Reception & Online", metric: `${data?.pagination?.total || 0} Appointments`, badge: "Booked", color: "blue" },
+            { step: "02", label: "Slot Confirmed", desc: "Physician Calendar", metric: "Confirmed Schedule", badge: "Scheduled", color: "indigo" },
+            { step: "03", label: "Check-in & Queue", desc: "Waiting Lounge", metric: "Arrived & Queueing", badge: "Active", color: "purple" },
+            { step: "04", label: "Encounter Fulfilled", desc: "Consultation Closed", metric: "Encounter Complete", badge: "Fulfilled", color: "emerald" },
+          ],
+        };
+      case "reports_doctors":
+        return {
+          title: "Clinical Productivity & Case Trajectory",
+          flowSubtitle: "Physician workload throughput, diagnostic dispatches, and care sign-offs",
+          stages: [
+            { step: "01", label: "Clinic Duty", desc: "Physician On-Call", metric: "Specialists Active", badge: "On Duty", color: "blue" },
+            { step: "02", label: "Consultations", desc: "OP & Emergency Cases", metric: `${data?.summary?.totalConsultations || data?.kpis?.[0]?.value || "Workload"} Cases`, badge: "In Progress", color: "indigo" },
+            { step: "03", label: "Orders Dispatched", desc: "Prescriptions & Labs", metric: "Orders Routed", badge: "Dispatched", color: "purple" },
+            { step: "04", label: "Care Plan Finalized", desc: "Clinical Sign-off", metric: "Chart Signed", badge: "Completed", color: "emerald" },
+          ],
+        };
+      case "reports_pharmacy":
+        return {
+          title: "Prescription Dispensing & Fulfillment Pipeline",
+          flowSubtitle: "Prescription intake, pharmacist safety verification, packaging, and dispense clearance",
+          stages: [
+            { step: "01", label: "Rx Order Intake", desc: "EHR Routing", metric: `${data?.pagination?.total || 0} Orders`, badge: "Routed", color: "blue" },
+            { step: "02", label: "Verification", desc: "Pharmacist Audit", metric: "Safety Checks Passed", badge: "Approved", color: "indigo" },
+            { step: "03", label: "Packaging & Prep", desc: "Inventory Allocation", metric: "Stock Allocated", badge: "Dispensing", color: "purple" },
+            { step: "04", label: "Dispense Clearance", desc: "Patient Handover", metric: "Handed Over", badge: "Cleared", color: "emerald" },
+          ],
+        };
+      case "reports_laboratory":
+        return {
+          title: "Diagnostic Testing & Pathology Pipeline",
+          flowSubtitle: "Requisition requisition, specimen collection, analyzer testing, and pathologist validation",
+          stages: [
+            { step: "01", label: "Lab Requisition", desc: "Physician Order", metric: `${data?.pagination?.total || 0} Orders`, badge: "Ordered", color: "blue" },
+            { step: "02", label: "Phlebotomy / Sample", desc: "Collection & Barcode", metric: "Specimens Collected", badge: "Collected", color: "indigo" },
+            { step: "03", label: "Analyzer Testing", desc: "Diagnostic Processing", metric: "In Processing", badge: "Processing", color: "purple" },
+            { step: "04", label: "Result Verified", desc: "Pathologist Sign-off", metric: "Results Delivered", badge: "Verified", color: "emerald" },
+          ],
+        };
+      case "reports_radiology":
+        return {
+          title: "Medical Imaging & Radiology Flow",
+          flowSubtitle: "Imaging requisition, radiological scan execution, PACS review, and certified report delivery",
+          stages: [
+            { step: "01", label: "Requisition Logged", desc: "X-Ray, CT, MRI, USG", metric: `${data?.pagination?.total || 0} Studies`, badge: "Logged", color: "blue" },
+            { step: "02", label: "Scan Executed", desc: "Radiology Suite", metric: "Scans Acquired", badge: "Acquired", color: "indigo" },
+            { step: "03", label: "Diagnostic Read", desc: "PACS Radiologist Review", metric: "Under Reading", badge: "Reading", color: "purple" },
+            { step: "04", label: "Certified Report", desc: "Report Dispatched", metric: "EHR Integrated", badge: "Delivered", color: "emerald" },
+          ],
+        };
+      case "reports_beds":
+        return {
+          title: "Hospital Bed Utilization & Census Flow",
+          flowSubtitle: "Ward capacity tracking, inpatient allocation, occupancy velocity, and sanitation turnover",
+          stages: [
+            { step: "01", label: "Total Capacity", desc: "Wards & Special Units", metric: `${data?.kpis?.[0]?.value || "120"} Total Beds`, badge: "Inventory", color: "blue" },
+            { step: "02", label: "Occupied Beds", desc: "Inpatient Census", metric: `${data?.kpis?.[1]?.value || "Occupied"} Beds`, badge: "Occupied", color: "indigo" },
+            { step: "03", label: "Vacant & Ready", desc: "Available for Admit", metric: `${data?.kpis?.[2]?.value || "Available"} Ready`, badge: "Available", color: "emerald" },
+            { step: "04", label: "Turnover Cycle", desc: "Sanitization & Ready", metric: "Rapid Turnover", badge: "Maintained", color: "purple" },
+          ],
+        };
+      case "reports_admissions":
+        return {
+          title: "Inpatient Admission Processing Pipeline",
+          flowSubtitle: "Clinical recommendation, financial counseling, bed reservation, and inpatient onboarding",
+          stages: [
+            { step: "01", label: "Admit Recommendation", desc: "Physician Order", metric: `${data?.pagination?.total || 0} Admissions`, badge: "Recommended", color: "blue" },
+            { step: "02", label: "Bed Assignment", desc: "Ward Allocation", metric: "Bed Secured", badge: "Allocated", color: "indigo" },
+            { step: "03", label: "Clinical Intake", desc: "Inpatient Chart Opened", metric: "Vitals & Regimen", badge: "Active", color: "purple" },
+            { step: "04", label: "Admitted & Settled", desc: "Care Plan Initiated", metric: "Ward Onboarded", badge: "Settled", color: "emerald" },
+          ],
+        };
+      case "reports_discharges":
+        return {
+          title: "Patient Discharge & Recovery Clearance Flow",
+          flowSubtitle: "Physician summary completion, pharmacy reconciliation, billing settlement, and departure",
+          stages: [
+            { step: "01", label: "Discharge Advised", desc: "Physician Sign-off", metric: `${data?.pagination?.total || 0} Discharges`, badge: "Advised", color: "blue" },
+            { step: "02", label: "Clinical Clearance", desc: "Pharmacy & Lab Check", metric: "Medication Verified", badge: "Cleared", color: "indigo" },
+            { step: "03", label: "Billing Settlement", desc: "Invoice Finalized", metric: "Settled & Paid", badge: "Billed", color: "purple" },
+            { step: "04", label: "Bed Released", desc: "Departure & Turnover", metric: "Bed Freed", badge: "Completed", color: "emerald" },
+          ],
+        };
+      case "reports_staff":
+        return {
+          title: "Healthcare Workforce Operational Flow",
+          flowSubtitle: "Staff duty schedules, shift check-ins, ward allocation, and clinical rotation turnover",
+          stages: [
+            { step: "01", label: "Scheduled Roster", desc: "Department Schedule", metric: `${data?.pagination?.total || 0} Staff`, badge: "Rostered", color: "blue" },
+            { step: "02", label: "Shift Checked In", desc: "Biometric & Attendance", metric: "On Active Shift", badge: "Present", color: "indigo" },
+            { step: "03", label: "Clinical Rotation", desc: "Ward & Department Care", metric: "Duty Deployed", badge: "Active", color: "purple" },
+            { step: "04", label: "Shift Handover", desc: "Continuity Handover", metric: "Handover Closed", badge: "Complete", color: "emerald" },
+          ],
+        };
+      case "revenue_reports":
+        return {
+          title: "Revenue Cycle & Financial Realization Pipeline",
+          flowSubtitle: "Clinical charge capture, insurance/digital settlement, realization, and reconciliation",
+          stages: [
+            { step: "01", label: "Charges Incurred", desc: "Services Rendered", metric: "Charges Billed", badge: "Incurred", color: "blue" },
+            { step: "02", label: "Billing Generation", desc: "Invoices & Claims", metric: "Invoices Generated", badge: "Generated", color: "indigo" },
+            { step: "03", label: "Settlement Process", desc: "Cash & Gateway", metric: "Receipts Settled", badge: "Settled", color: "purple" },
+            { step: "04", label: "Revenue Realized", desc: "Hospital Collections", metric: `${data?.kpis?.[0]?.value || "Revenue"} Realized`, badge: "Realized", color: "emerald" },
+          ],
+        };
+      case "reports_pharmacy_damaged":
+        return {
+          title: "Quarantine & Damaged Stock Audit Flow",
+          flowSubtitle: "Stock discrepancy detection, pharmacist audit, quarantine isolation, and ledger write-off",
+          stages: [
+            { step: "01", label: "Item Flagged", desc: "Damaged / Expired", metric: `${data?.pagination?.total || 0} Incidents`, badge: "Flagged", color: "amber" },
+            { step: "02", label: "Pharmacist Audit", desc: "Batch & Expiry Audit", metric: "Audited & Verified", badge: "Audited", color: "indigo" },
+            { step: "03", label: "Quarantine", desc: "Removed from Stock", metric: "Quarantined", badge: "Isolated", color: "rose" },
+            { step: "04", label: "Write-off Resolved", desc: "Ledger Adjusted", metric: "Write-off Complete", badge: "Resolved", color: "emerald" },
+          ],
+        };
+      case "reports_supplier_returns":
+        return {
+          title: "Vendor Return & Credit Settlement Flow",
+          flowSubtitle: "Discrepancy identification, debit note generation, vendor dispatch, and credit note realization",
+          stages: [
+            { step: "01", label: "Return Initiated", desc: "Damaged / Excess Stock", metric: `${data?.pagination?.total || 0} Return Orders`, badge: "Initiated", color: "blue" },
+            { step: "02", label: "Debit Note Issued", desc: "Documentation Prepared", metric: "Debit Note Active", badge: "Issued", color: "indigo" },
+            { step: "03", label: "Vendor Dispatch", desc: "Logistics Handover", metric: "In Transit", badge: "Dispatched", color: "purple" },
+            { step: "04", label: "Credit Settled", desc: "Credit Realized", metric: "Settlement Reconciled", badge: "Reconciled", color: "emerald" },
+          ],
+        };
+      default:
+        return {
+          title: "Operational Workflow Flow",
+          flowSubtitle: "Department operational lifecycle from intake to completion",
+          stages: [
+            { step: "01", label: "Intake", desc: "Record Intake", metric: "Logged", badge: "Inflow", color: "blue" },
+            { step: "02", label: "Verification", desc: "Clinical Review", metric: "Verified", badge: "Verified", color: "indigo" },
+            { step: "03", label: "Processing", desc: "Care Regimen", metric: "Active", badge: "In Progress", color: "purple" },
+            { step: "04", label: "Completion", desc: "Care Completed", metric: "Resolved", badge: "Complete", color: "emerald" },
+          ],
+        };
+    }
+  };
+
+  const renderDepartmentFlow = () => {
+    const flow = getDepartmentFlowStages();
+    return (
+      <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs mb-3 animate-flow-in">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center font-bold shadow-xs">
+              <Activity className="w-4 h-4 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">
+                  {flow.title}
+                </h2>
+                <span className="text-[9.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                  Live Operational Flow
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {flow.flowSubtitle}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60">
+            <span className="w-2 h-2 rounded-full bg-[#1B4FD8] animate-pulse-glow" />
+            <span>Continuous Throughput Sync</span>
+          </div>
+        </div>
+
+        {/* 4-Stage Connected Workflow */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 relative">
+          {flow.stages.map((stage: any, sIdx: number) => {
+            const badgeClasses = {
+              blue: "bg-blue-100 text-blue-700",
+              indigo: "bg-indigo-100 text-indigo-700",
+              purple: "bg-purple-100 text-purple-700",
+              emerald: "bg-emerald-100 text-emerald-700",
+              amber: "bg-amber-100 text-amber-700",
+              rose: "bg-rose-100 text-rose-700",
+            }[stage.color as "blue"] || "bg-blue-100 text-blue-700";
+
+            return (
+              <div
+                key={stage.step}
+                className="relative bg-slate-50/70 hover:bg-white border border-slate-200/80 hover:border-blue-300 rounded-xl p-3 transition-all duration-200 shadow-2xs hover:shadow-sm flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded ${badgeClasses}`}>
+                      {stage.step} · {stage.label}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 group-hover:text-[#1B4FD8] transition">
+                      {stage.badge}
+                    </span>
+                  </div>
+                  <div className="text-sm sm:text-base font-black text-slate-900 tracking-tight mt-1">
+                    {stage.metric}
+                  </div>
+                  <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    {stage.desc}
+                  </div>
+                </div>
+
+                <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
+                  <span className="text-slate-400">Status</span>
+                  <span className="font-semibold text-slate-700 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Active Pipeline
+                  </span>
+                </div>
+
+                {sIdx < flow.stages.length - 1 && (
+                  <div className="hidden lg:flex absolute -right-2.5 top-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded-full bg-white border border-slate-300 items-center justify-center shadow-xs">
+                    <ChevronRight className="w-3 h-3 text-slate-500" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+
   // ── Render Charts Specific to Current Report Type ────────────────────────
   const renderVisualizations = () => {
     if (!data || !data.charts) {
@@ -616,7 +898,7 @@ export default function GenericReportPage({
                   Daily intake of new vs returning patients
                 </p>
                 <div className="h-40 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_1`} width="100%" height="100%">
                     <LineChart data={regTrend}>
                       <CartesianGrid
                         strokeDasharray="3 3"
@@ -646,7 +928,7 @@ export default function GenericReportPage({
                         iconType="circle"
                         wrapperStyle={{ fontSize: 10, paddingTop: 3 }}
                       />
-                      <Line
+                      <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                         type="monotone"
                         dataKey="newPatients"
                         name="New Patients"
@@ -655,7 +937,7 @@ export default function GenericReportPage({
                         dot={{ r: 2.5 }}
                         activeDot={{ r: 4 }}
                       />
-                      <Line
+                      <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                         type="monotone"
                         dataKey="returning"
                         name="Returning Patients"
@@ -678,7 +960,7 @@ export default function GenericReportPage({
                   Patient volume across hospital departments
                 </p>
                 <div className="h-40 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_2`} width="100%" height="100%">
                     <BarChart data={deptPts}>
                       <CartesianGrid
                         strokeDasharray="3 3"
@@ -704,7 +986,7 @@ export default function GenericReportPage({
                           border: "1px solid #E2E8F0",
                         }}
                       />
-                      <Bar
+                      <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                         dataKey="count"
                         name="Patients"
                         fill="#1B4FD8"
@@ -727,9 +1009,9 @@ export default function GenericReportPage({
                   Patient breakdown by gender
                 </p>
                 <div className="h-36 w-full flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_3`} width="100%" height="100%">
                     <PieChart>
-                      <Pie
+                      <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                         data={genderDist}
                         cx="50%"
                         cy="50%"
@@ -769,7 +1051,7 @@ export default function GenericReportPage({
                   Patient volume grouped by age brackets
                 </p>
                 <div className="h-36 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_4`} width="100%" height="100%">
                     <BarChart data={ageDist}>
                       <CartesianGrid
                         strokeDasharray="3 3"
@@ -795,7 +1077,7 @@ export default function GenericReportPage({
                           border: "1px solid #E2E8F0",
                         }}
                       />
-                      <Bar
+                      <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                         dataKey="count"
                         name="Patients"
                         fill="#0284C7"
@@ -827,7 +1109,7 @@ export default function GenericReportPage({
                 Emergency case arrivals over the period
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_5`} width="100%" height="100%">
                   <LineChart data={visitTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -853,7 +1135,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="visits"
                       name="ER Visits"
@@ -875,9 +1157,9 @@ export default function GenericReportPage({
                 Acuity levels across triage categories
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_6`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={priorityDist}
                       cx="50%"
                       cy="50%"
@@ -917,9 +1199,9 @@ export default function GenericReportPage({
                 Patient discharge and admission outcomes
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_7`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={dispDist}
                       cx="50%"
                       cy="50%"
@@ -959,7 +1241,7 @@ export default function GenericReportPage({
                 Resuscitation and trauma bay demand
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_8`} width="100%" height="100%">
                   <BarChart data={bedUtil}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -985,7 +1267,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="utilization"
                       name="Cases Handled"
                       fill="#EA580C"
@@ -1016,7 +1298,7 @@ export default function GenericReportPage({
                 Daily inpatient admissions
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_9`} width="100%" height="100%">
                   <LineChart data={admTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1042,7 +1324,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="admissions"
                       name="Admissions"
@@ -1064,7 +1346,7 @@ export default function GenericReportPage({
                 Daily patient recovery discharges
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_10`} width="100%" height="100%">
                   <LineChart data={disTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1090,7 +1372,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="discharges"
                       name="Discharges"
@@ -1112,7 +1394,7 @@ export default function GenericReportPage({
                 Census across inpatient wards and units
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_11`} width="100%" height="100%">
                   <BarChart data={wardOcc}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1138,7 +1420,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="occupied"
                       name="Occupied Beds"
                       fill="#1B4FD8"
@@ -1158,7 +1440,7 @@ export default function GenericReportPage({
                 Admissions partitioned by primary clinical service
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_12`} width="100%" height="100%">
                   <BarChart data={deptAdm}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1184,7 +1466,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="admissions"
                       name="Admissions"
                       fill="#0284C7"
@@ -1215,7 +1497,7 @@ export default function GenericReportPage({
                 Daily booking volume over time
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_13`} width="100%" height="100%">
                   <LineChart data={trend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1241,7 +1523,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="appointments"
                       name="Appointments"
@@ -1263,7 +1545,7 @@ export default function GenericReportPage({
                 Patient bookings by physician
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_14`} width="100%" height="100%">
                   <BarChart data={docAppts.slice(0, 7)}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1289,7 +1571,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="appointments"
                       name="Appointments"
                       fill="#0284C7"
@@ -1309,7 +1591,7 @@ export default function GenericReportPage({
                 Specialty consultation demand
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_15`} width="100%" height="100%">
                   <BarChart data={deptAppts}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1335,7 +1617,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="appointments"
                       name="Appointments"
                       fill="#1B4FD8"
@@ -1355,9 +1637,9 @@ export default function GenericReportPage({
                 Completed, pending, cancelled and no-show shares
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_16`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={statusDist}
                       cx="50%"
                       cy="50%"
@@ -1407,7 +1689,7 @@ export default function GenericReportPage({
                 Clinical consultation throughput across top physicians
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_17`} width="100%" height="100%">
                   <BarChart data={docVisits}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1433,7 +1715,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="visits"
                       name="Consultations"
                       fill="#1B4FD8"
@@ -1453,7 +1735,7 @@ export default function GenericReportPage({
                 Aggregate doctor consultations over time
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_18`} width="100%" height="100%">
                   <LineChart data={consultTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1479,7 +1761,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="consultations"
                       name="Consultations"
@@ -1501,7 +1783,7 @@ export default function GenericReportPage({
                 Total consultations aggregated by medical specialty
               </p>
               <div className="h-36 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_19`} width="100%" height="100%">
                   <BarChart data={deptDoc}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1527,7 +1809,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="activity"
                       name="Activity Score"
                       fill="#10B981"
@@ -1558,7 +1840,7 @@ export default function GenericReportPage({
                 Prescription intake over the selected timeframe
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_20`} width="100%" height="100%">
                   <LineChart data={rxTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1584,7 +1866,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="prescriptions"
                       name="Prescriptions"
@@ -1606,7 +1888,7 @@ export default function GenericReportPage({
                 Top dispensed pharmaceuticals
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_21`} width="100%" height="100%">
                   <BarChart data={medCons}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1632,7 +1914,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="consumption"
                       name="Units Dispensed"
                       fill="#10B981"
@@ -1652,7 +1934,7 @@ export default function GenericReportPage({
                 Drug utilization by referring clinic
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_22`} width="100%" height="100%">
                   <BarChart data={deptUsage}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1678,7 +1960,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="usage"
                       name="Prescriptions"
                       fill="#0284C7"
@@ -1698,9 +1980,9 @@ export default function GenericReportPage({
                 Dispensed, preparing, pending verification shares
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_23`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={rxStatus}
                       cx="50%"
                       cy="50%"
@@ -1751,7 +2033,7 @@ export default function GenericReportPage({
                 Daily diagnostic pathology requests
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_24`} width="100%" height="100%">
                   <LineChart data={labTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1777,7 +2059,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="orders"
                       name="Lab Orders"
@@ -1799,7 +2081,7 @@ export default function GenericReportPage({
                 Highest volume ordered diagnostic assays
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_25`} width="100%" height="100%">
                   <BarChart data={testVol}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1825,7 +2107,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="volume"
                       name="Tests Run"
                       fill="#0284C7"
@@ -1845,7 +2127,7 @@ export default function GenericReportPage({
                 Test orders originating from clinical services
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_26`} width="100%" height="100%">
                   <BarChart data={deptLab}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1871,7 +2153,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="orders"
                       name="Orders"
                       fill="#1B4FD8"
@@ -1891,9 +2173,9 @@ export default function GenericReportPage({
                 Verified results vs pending and sample collection
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_27`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={resDist}
                       cx="50%"
                       cy="50%"
@@ -1944,7 +2226,7 @@ export default function GenericReportPage({
                 Diagnostic imaging orders over time
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_28`} width="100%" height="100%">
                   <LineChart data={radTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -1970,7 +2252,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="orders"
                       name="Radiology Scans"
@@ -1992,9 +2274,9 @@ export default function GenericReportPage({
                 X-Ray, CT, MRI, and Ultrasound proportions
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_29`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={modDist}
                       cx="50%"
                       cy="50%"
@@ -2034,7 +2316,7 @@ export default function GenericReportPage({
                 Volume grouped by anatomical examination
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_30`} width="100%" height="100%">
                   <BarChart data={scanDist.slice(0, 6)}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2060,7 +2342,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="value"
                       name="Scans"
                       fill="#1B4FD8"
@@ -2080,7 +2362,7 @@ export default function GenericReportPage({
                 Imaging requests per clinical department
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_31`} width="100%" height="100%">
                   <BarChart data={deptRad}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2106,7 +2388,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="orders"
                       name="Orders"
                       fill="#0284C7"
@@ -2136,7 +2418,7 @@ export default function GenericReportPage({
                 Census occupancy percentage over time
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_32`} width="100%" height="100%">
                   <LineChart data={occTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2162,7 +2444,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="occupancyRate"
                       name="Occupancy %"
@@ -2184,9 +2466,9 @@ export default function GenericReportPage({
                 General, semi-private, private and ICU beds
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_33`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={bedTypeDist}
                       cx="50%"
                       cy="50%"
@@ -2226,7 +2508,7 @@ export default function GenericReportPage({
                 Occupied beds count across individual wards
               </p>
               <div className="h-36 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_34`} width="100%" height="100%">
                   <BarChart data={wardOcc}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2252,7 +2534,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="occupied"
                       name="Occupied Beds"
                       fill="#0284C7"
@@ -2283,7 +2565,7 @@ export default function GenericReportPage({
                 Daily patient admission flow
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_35`} width="100%" height="100%">
                   <LineChart data={admTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2309,7 +2591,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="admissions"
                       name="Admissions"
@@ -2331,9 +2613,9 @@ export default function GenericReportPage({
                 Emergency, planned, and direct ICU admissions
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_36`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={admTypeDist}
                       cx="50%"
                       cy="50%"
@@ -2373,7 +2655,7 @@ export default function GenericReportPage({
                 Admissions per admitting specialty
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_37`} width="100%" height="100%">
                   <BarChart data={deptAdm}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2399,7 +2681,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="admissions"
                       name="Admissions"
                       fill="#0284C7"
@@ -2419,7 +2701,7 @@ export default function GenericReportPage({
                 Bed placement distribution across wards
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_38`} width="100%" height="100%">
                   <BarChart data={wardAdm}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2445,7 +2727,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="admissions"
                       name="Admissions"
                       fill="#10B981"
@@ -2475,7 +2757,7 @@ export default function GenericReportPage({
                 Patient discharge clearance volume over time
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_39`} width="100%" height="100%">
                   <LineChart data={disTrend}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2501,7 +2783,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Line
+                    <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                       type="monotone"
                       dataKey="discharges"
                       name="Discharges"
@@ -2523,9 +2805,9 @@ export default function GenericReportPage({
                 Routine, transfers, and LAMA dispositions
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_40`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={disTypeDist}
                       cx="50%"
                       cy="50%"
@@ -2565,7 +2847,7 @@ export default function GenericReportPage({
                 Patient recovery clearances by ward
               </p>
               <div className="h-36 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_41`} width="100%" height="100%">
                   <BarChart data={deptDis}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2591,7 +2873,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="discharges"
                       name="Discharges"
                       fill="#1B4FD8"
@@ -2621,7 +2903,7 @@ export default function GenericReportPage({
                 Personnel headcount across hospital units
               </p>
               <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_42`} width="100%" height="100%">
                   <BarChart data={deptStaff}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2647,7 +2929,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="staff"
                       name="Headcount"
                       fill="#1B4FD8"
@@ -2667,9 +2949,9 @@ export default function GenericReportPage({
                 Doctors, nurses, pharmacy and lab specialists
               </p>
               <div className="h-40 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_43`} width="100%" height="100%">
                   <PieChart>
-                    <Pie
+                    <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                       data={staffDist}
                       cx="50%"
                       cy="50%"
@@ -2709,7 +2991,7 @@ export default function GenericReportPage({
                 Duty roster distribution across 24-hour shifts
               </p>
               <div className="h-36 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_44`} width="100%" height="100%">
                   <BarChart data={staffActivity}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -2735,7 +3017,7 @@ export default function GenericReportPage({
                         border: "1px solid #E2E8F0",
                       }}
                     />
-                    <Bar
+                    <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                       dataKey="activity"
                       name="Staff on Shift"
                       fill="#0284C7"
@@ -2813,7 +3095,7 @@ export default function GenericReportPage({
                   Recognized billed revenue vs settled cash/digital collections
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_45`} width="100%" height="100%">
                     <LineChart
                       data={trend}
                       margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -2852,7 +3134,7 @@ export default function GenericReportPage({
                         iconType="circle"
                         wrapperStyle={{ fontSize: 10, paddingTop: 6 }}
                       />
-                      <Line
+                      <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                         type="monotone"
                         dataKey="revenue"
                         name="Recognized Revenue"
@@ -2861,7 +3143,7 @@ export default function GenericReportPage({
                         dot={{ r: 3 }}
                         activeDot={{ r: 5 }}
                       />
-                      <Line
+                      <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                         type="monotone"
                         dataKey="collections"
                         name="Settled Collections"
@@ -2889,7 +3171,7 @@ export default function GenericReportPage({
                   Total collection contribution across hospital clinical units
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_46`} width="100%" height="100%">
                     <BarChart
                       data={deptRev}
                       margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -2928,7 +3210,7 @@ export default function GenericReportPage({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                         }}
                       />
-                      <Bar
+                      <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                         dataKey="revenue"
                         name="Revenue"
                         fill="#1B4FD8"
@@ -2958,9 +3240,9 @@ export default function GenericReportPage({
                 </p>
                 <div className="h-44 w-full flex items-center justify-center">
                   {payDist.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_47`} width="100%" height="100%">
                       <PieChart>
-                        <Pie
+                        <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                           data={payDist}
                           cx="50%"
                           cy="50%"
@@ -3016,7 +3298,7 @@ export default function GenericReportPage({
                   Revenue generated by clinical service category
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_48`} width="100%" height="100%">
                     <BarChart
                       data={serviceLines}
                       margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -3057,7 +3339,7 @@ export default function GenericReportPage({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                         }}
                       />
-                      <Bar
+                      <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                         dataKey="revenue"
                         name="Service Revenue"
                         fill="#059669"
@@ -3111,7 +3393,7 @@ export default function GenericReportPage({
                   Write-off loss valuation over the reporting period
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_49`} width="100%" height="100%">
                     <LineChart
                       data={dTrend}
                       margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -3146,7 +3428,7 @@ export default function GenericReportPage({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                         }}
                       />
-                      <Line
+                      <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                         type="monotone"
                         dataKey="lossValue"
                         name="Loss Valuation"
@@ -3174,7 +3456,7 @@ export default function GenericReportPage({
                   Medicines with greatest cumulative write-off valuation
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_50`} width="100%" height="100%">
                     <BarChart
                       data={topProducts}
                       margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -3213,7 +3495,7 @@ export default function GenericReportPage({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                         }}
                       />
-                      <Bar
+                      <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                         dataKey="lossValue"
                         name="Loss Value"
                         fill="#DC2626"
@@ -3242,7 +3524,7 @@ export default function GenericReportPage({
                   packaging
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_51`} width="100%" height="100%">
                     <BarChart
                       data={lossReasons}
                       layout="vertical"
@@ -3281,7 +3563,7 @@ export default function GenericReportPage({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                         }}
                       />
-                      <Bar
+                      <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                         dataKey="lossValue"
                         name="Loss Value"
                         fill="#EA580C"
@@ -3307,7 +3589,7 @@ export default function GenericReportPage({
                   Category-level distribution of inventory write-offs
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_52`} width="100%" height="100%">
                     <BarChart
                       data={catLoss}
                       margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -3346,7 +3628,7 @@ export default function GenericReportPage({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                         }}
                       />
-                      <Bar
+                      <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                         dataKey="lossValue"
                         name="Category Loss"
                         fill="#7C3AED"
@@ -3418,7 +3700,7 @@ export default function GenericReportPage({
                   Debit notes issued to pharmaceutical vendors over time
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_53`} width="100%" height="100%">
                     <LineChart
                       data={rTrend}
                       margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -3453,7 +3735,7 @@ export default function GenericReportPage({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                         }}
                       />
-                      <Line
+                      <Line isAnimationActive={true} animationDuration={1400} animationEasing="ease-out" animationBegin={150}
                         type="monotone"
                         dataKey="returnAmount"
                         name="Debit Note Value"
@@ -3481,7 +3763,7 @@ export default function GenericReportPage({
                   Claimable return values by pharmaceutical supplier
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_54`} width="100%" height="100%">
                     <BarChart
                       data={supReturns}
                       margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -3520,7 +3802,7 @@ export default function GenericReportPage({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                         }}
                       />
-                      <Bar
+                      <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                         dataKey="returnAmount"
                         name="Debit Value"
                         fill="#2563EB"
@@ -3549,7 +3831,7 @@ export default function GenericReportPage({
                   orders
                 </p>
                 <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_55`} width="100%" height="100%">
                     <BarChart
                       data={rReasons}
                       layout="vertical"
@@ -3590,7 +3872,7 @@ export default function GenericReportPage({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                         }}
                       />
-                      <Bar
+                      <Bar isAnimationActive={true} animationDuration={1300} animationEasing="ease-out" animationBegin={200}
                         dataKey="returnAmount"
                         name="Debit Value"
                         fill="#0891B2"
@@ -3617,9 +3899,9 @@ export default function GenericReportPage({
                 </p>
                 <div className="h-44 w-full flex items-center justify-center">
                   {rStatuses.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer key={`rc_${reportType}_${dateRange}_${selectedDept}_${selectedDoctor}_${selectedStatus}_56`} width="100%" height="100%">
                       <PieChart>
-                        <Pie
+                        <Pie isAnimationActive={true} animationDuration={1200} animationEasing="ease-out" animationBegin={250}
                           data={rStatuses}
                           cx="50%"
                           cy="50%"
@@ -4219,6 +4501,9 @@ export default function GenericReportPage({
         {/* Main Content when loaded */}
         {!loading && !error && data && (
           <>
+            {/* ── 2. DEPARTMENT OPERATIONAL FLOW PIPELINE ───────────────────── */}
+            {renderDepartmentFlow()}
+
             {/* ── 3. KPI SUMMARY CARDS ────────────────────────────────────────── */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 animate-flow-in delay-75">
               {data.kpis.map((kpi) => {
@@ -4341,7 +4626,7 @@ export default function GenericReportPage({
                     ) : (
                       data.records.map((row, idx) => (
                         <tr
-                          key={row.id || idx}
+                          key={`${row.id || "rec"}_${idx}`}
                           className="hover:bg-slate-50/80 transition duration-150"
                         >
                           {config.tableColumns.map((col) => {
