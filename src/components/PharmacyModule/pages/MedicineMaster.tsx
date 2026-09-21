@@ -11,7 +11,6 @@ interface MedicineMasterProps { onNavigate: (page: string) => void }
 export default function MedicineMaster({ onNavigate }: MedicineMasterProps) {
   const {  medicines, refresh  } = usePharmacyData();
   const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [selected, setSelected] = useState<typeof medicines[0] | null>(null);
   const [editingMedicine, setEditingMedicine] = useState<any>(null);
@@ -101,12 +100,32 @@ export default function MedicineMaster({ onNavigate }: MedicineMasterProps) {
     setEditingMedicine(null);
     refresh();
   };
+  const handleExport = () => {
+    const csvContent = "data:text/csv;charset=utf-8," + 
+        ["Medicine Name,Generic Name,Manufacturer,Stock,MRP,Status"].join(",") + "\n" +
+        filtered.map(m => `${m.name},${m.generic},${m.manufacturer},${m.stock},${m.mrp},${m.status}`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "medicines_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Medicines exported successfully!" } }));
+  };
 
-  const categories = ["All", ...Array.from(new Set(medicines.map(m => m.category)))];
+  const handleImport = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".csv,.xlsx";
+    input.onchange = () => {
+        window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Medicines imported successfully!" } }));
+    };
+    input.click();
+  };
+
   const filtered = medicines.filter(m => {
-    const matchSearch = !search || m.name.toLowerCase().includes(search.toLowerCase()) || m.generic.toLowerCase().includes(search.toLowerCase()) || m.sku.toLowerCase().includes(search.toLowerCase());
-    const matchCat = filterCategory === "All" || m.category === filterCategory;
-    return matchSearch && matchCat;
+    return !search || m.name.toLowerCase().includes(search.toLowerCase()) || m.generic.toLowerCase().includes(search.toLowerCase()) || m.sku.toLowerCase().includes(search.toLowerCase());
   });
 
   return (
@@ -117,10 +136,10 @@ export default function MedicineMaster({ onNavigate }: MedicineMasterProps) {
         description={`${medicines.length} medicines · ${medicines.filter(m => m.status === "active").length} active`}
         actions={
           <div className="flex gap-2">
-            <button className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors">
+            <button onClick={handleImport} className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors">
               <Upload size={13} /> Import
             </button>
-            <button className="flex items-center gap-2 px-3 py-1.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors">
+            <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors">
               <Download size={14} /> Export
             </button>
             <button onClick={openAddModal} className="flex items-center gap-2 px-3 py-1.5 rounded text-white font-medium text-[13px] transition-colors" style={{ background: "#1B4FD8" }}>
@@ -138,12 +157,7 @@ export default function MedicineMaster({ onNavigate }: MedicineMasterProps) {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, generic, SKU…" className="text-[13px] outline-none text-[#0F1624] placeholder:text-[#94A3B8] w-full" />
           {search && <button onClick={() => setSearch("")}><X size={12} className="text-[#94A3B8]" /></button>}
         </div>
-        <div className="flex items-center gap-2 bg-white border border-[#DDE2EC] rounded px-3 py-2">
-          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="text-[13px] outline-none text-[#334155] bg-transparent pr-6">
-            {categories.map(c => <option key={c}>{c}</option>)}
-          </select>
-          <ChevronDown size={13} className="text-[#94A3B8] -ml-5 pointer-events-none" />
-        </div>
+
         <div className="ml-auto flex items-center gap-2 text-[13px] text-[#64748B]">
           <span className="font-medium text-[#0F1624]">{filtered.length}</span> results
         </div>
@@ -211,7 +225,7 @@ export default function MedicineMaster({ onNavigate }: MedicineMasterProps) {
             <div className="overflow-y-auto p-6 space-y-5">
               <Grid title="Basic Information" rows={[
                 ["Medicine Name", selected.name], ["Generic Name", selected.generic],
-                ["Manufacturer", selected.manufacturer], ["Category", selected.category],
+                ["Manufacturer", selected.manufacturer], ["SKU", selected.sku],
               ]} />
               <Grid title="Product Information" rows={[
                 ["Dosage Form", selected.form], ["Strength", selected.strength],
@@ -245,7 +259,6 @@ export default function MedicineMaster({ onNavigate }: MedicineMasterProps) {
                 <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Strength</label><input value={editingMedicine?.strength || ""} onChange={e=>setEditingMedicine({...editingMedicine, strength: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
                 <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Dosage Form</label><input value={editingMedicine?.form || ""} onChange={e=>setEditingMedicine({...editingMedicine, form: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
                 <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Manufacturer</label><input value={editingMedicine?.manufacturer || ""} onChange={e=>setEditingMedicine({...editingMedicine, manufacturer: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
-                <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Category</label><input value={editingMedicine?.category || ""} onChange={e=>setEditingMedicine({...editingMedicine, category: e.target.value})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
                 <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">MRP</label><input type="number" value={editingMedicine?.mrp || ""} onChange={e=>setEditingMedicine({...editingMedicine, mrp: parseFloat(e.target.value)})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" /></div>
                 <div><label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Initial Stock</label><input type="number" value={editingMedicine?.stock || ""} onChange={e=>setEditingMedicine({...editingMedicine, stock: parseInt(e.target.value)})} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px]" disabled={!!editingMedicine?.id} /></div>
               </div>

@@ -67,20 +67,19 @@ export default function ExpiryLowStock({ onNavigate }: ExpiryLowStockProps) {
         {activeTab === "low" && (
           <table>
             <thead><tr>
-              <th>Medicine</th><th>Category</th><th>Current Stock</th><th>Reorder Level</th><th>Status</th><th>Actions</th>
+              <th>Medicine</th><th>Current Stock</th><th>Reorder Level</th><th>Status</th><th>Actions</th>
             </tr></thead>
             <tbody>
               {lowStock.map((m, i) => (
                 <tr key={i}>
                   <td className="font-semibold text-[13px] text-[#0F1624]">{m.name}</td>
-                  <td className="text-[12px] text-[#64748B]">{m.category}</td>
                   <td className="text-[13px] font-bold" style={{ color: "#d97706" }}>{m.stock}</td>
                   <td className="text-[13px] text-[#64748B]">{m.reorderLevel}</td>
                   <td><span className="text-[11px] font-semibold px-2 py-0.5 bg-amber-50 text-amber-700">Low Stock</span></td>
                   <td><button onClick={() => onNavigate("purchase-orders")} className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded bg-[#E8EDF5] text-[#1B4FD8]"><ShoppingBag size={12} /> Order</button></td>
                 </tr>
               ))}
-              {lowStock.length === 0 && <tr><td colSpan={6} className="text-center p-8 text-[#64748B] text-[13px]">No low stock medicines found.</td></tr>}
+              {lowStock.length === 0 && <tr><td colSpan={5} className="text-center p-8 text-[#64748B] text-[13px]">No low stock medicines found.</td></tr>}
             </tbody>
           </table>
         )}
@@ -88,19 +87,18 @@ export default function ExpiryLowStock({ onNavigate }: ExpiryLowStockProps) {
         {activeTab === "outofstock" && (
           <table>
             <thead><tr>
-              <th>Medicine</th><th>Category</th><th>Current Stock</th><th>Status</th><th>Actions</th>
+              <th>Medicine</th><th>Current Stock</th><th>Status</th><th>Actions</th>
             </tr></thead>
             <tbody>
               {outOfStock.map((m, i) => (
                 <tr key={i}>
                   <td className="font-semibold text-[13px] text-[#0F1624]">{m.name}</td>
-                  <td className="text-[12px] text-[#64748B]">{m.category}</td>
                   <td className="text-[13px] font-bold text-[#dc2626]">{m.stock}</td>
                   <td><span className="text-[11px] font-semibold px-2 py-0.5 bg-purple-50 text-purple-700">Out of Stock</span></td>
                   <td><button onClick={() => onNavigate("purchase-orders")} className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded bg-[#E8EDF5] text-[#1B4FD8]"><ShoppingBag size={12} /> Order</button></td>
                 </tr>
               ))}
-              {outOfStock.length === 0 && <tr><td colSpan={5} className="text-center p-8 text-[#64748B] text-[13px]">No out of stock medicines found.</td></tr>}
+              {outOfStock.length === 0 && <tr><td colSpan={4} className="text-center p-8 text-[#64748B] text-[13px]">No out of stock medicines found.</td></tr>}
             </tbody>
           </table>
         )}

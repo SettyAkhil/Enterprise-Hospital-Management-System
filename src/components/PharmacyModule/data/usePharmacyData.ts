@@ -202,7 +202,7 @@ export function usePharmacyData() {
 
       prescription: m.controlledSubstanceFlag || false,
 
-      category: m.categoryId || "General",
+      category: (m as any).categoryId || "General",
 
       reorderLevel: m.reorderLevel || 10,
     }
@@ -344,7 +344,7 @@ export function usePharmacyData() {
       (sup) => sup.id === (a.supplierId || b?.supplierId),
     )
 
-    const cat = categories.find((c) => c.id === m?.categoryId)
+    const cat = categories.find((c) => c.id === (m as any)?.categoryId)
 
     const quantity =
       a.quantity ??
@@ -499,7 +499,7 @@ export function usePharmacyData() {
 
       description: c.description,
 
-      medicines: medicines.filter((m) => m.categoryId === c.id).length,
+      medicines: medicines.filter((m) => (m as any).categoryId === c.id).length,
 
       status: c.status === "Active" ? "active" : "inactive",
 

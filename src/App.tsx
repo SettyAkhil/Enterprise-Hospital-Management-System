@@ -326,19 +326,10 @@ const NAV: NavItem[] = [
         group: "Sales & Dispensing",
       },
       { key: "pharmacy_medicine", label: "Medicine Master", group: "Catalog" },
-      { key: "pharmacy_category", label: "Category Master", group: "Catalog" },
-
-      { key: "pharmacy_suppliers", label: "Suppliers", group: "Procurement" },
-
+      { key: "pharmacy_suppliers", label: "Suppliers", group: "Inventory Management" },
       { key: "pharmacy_supplier_returns", label: "Supplier Returns", group: "Inventory Management" },
-
-      { key: "pharmacy_po", label: "Purchase Orders", group: "Procurement" },
-
-      {
-        key: "pharmacy_grn",
-        label: "Scan Invoice (GRN)",
-        group: "Procurement",
-      },
+      { key: "pharmacy_po", label: "Purchase Orders", group: "Procurement & Receiving" },
+      { key: "pharmacy_grn", label: "Scan Invoice (GRN)", group: "Procurement & Receiving" },
       { key: "pharmacy_ledger", label: "Inventory Ledger", group: "Inventory" },
 
       {
@@ -504,8 +495,6 @@ const NAV: NavItem[] = [
       },
     ],
   },
-
-  { key: "analytics", label: "Analytics", Icon: Icon.Analytics },
 
   { key: "admin", label: "Administration", Icon: Icon.Admin },
 ];

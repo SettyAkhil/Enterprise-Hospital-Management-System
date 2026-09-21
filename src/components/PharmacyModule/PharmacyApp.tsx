@@ -7,7 +7,6 @@ import Dashboard from "./pages/Dashboard";
 import Dispensing from "./pages/Dispensing";
 import PrescriptionQueue from "./pages/PrescriptionQueue";
 import MedicineMaster from "./pages/MedicineMaster";
-import CategoryMaster from "./pages/CategoryMaster";
 import Suppliers from "./pages/Suppliers";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import InvoiceOCR from "./pages/InvoiceOCR";
@@ -26,7 +25,6 @@ const pages: Record<string, React.ComponentType<{ onNavigate: (page: string) => 
   dispensing: Dispensing,
   prescriptions: PrescriptionQueue,
   medicines: MedicineMaster,
-  categories: CategoryMaster,
   suppliers: Suppliers,
   "purchase-orders": PurchaseOrders,
   grn: InvoiceOCR,

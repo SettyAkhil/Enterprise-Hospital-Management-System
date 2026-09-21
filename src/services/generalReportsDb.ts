@@ -5700,7 +5700,7 @@ export class GeneralReportsService {
       const s = suppliers.find(
         (sup) => sup.id === (a.supplierId || b?.supplierId),
       );
-      const cat = categories.find((c) => c.id === m?.categoryId);
+      const cat = categories.find((c) => c.id === (m as any)?.categoryId);
       const quantity =
         a.quantity ??
         (a.difference < 0

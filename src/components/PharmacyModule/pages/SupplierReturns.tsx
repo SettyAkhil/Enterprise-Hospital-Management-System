@@ -112,7 +112,7 @@ export default function SupplierReturns({ onNavigate }: { onNavigate: (page: str
 
       const newMedicines = PharmacyDatabase.getMedicines();
       newMedicines.push({
-        id: mId, medicineName: "DemoAmoxicillin 500mg", genericName: "Amoxicillin", categoryId: "CAT-1", manufacturer: "Apollo Demo Pharma", reorderLevel: 20, activeStatus: "Active", createdAt: new Date().toISOString(),
+        id: mId, medicineName: "DemoAmoxicillin 500mg", genericName: "Amoxicillin",  manufacturer: "Apollo Demo Pharma", reorderLevel: 20, activeStatus: "Active", createdAt: new Date().toISOString(),
         brandName: "Amox", dosageForm: "Tablet", strength: "500mg", unit: "Strip", barcode: "12345", taxPercentage: 12, hsnCode: "3004", scheduleType: "H", storageCondition: "Room Temperature", controlledSubstanceFlag: false
       });
       PharmacyDatabase.saveMedicines(newMedicines);

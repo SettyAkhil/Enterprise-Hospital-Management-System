@@ -422,10 +422,20 @@ const completeTransaction = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-[#E2E8F0] overflow-hidden flex flex-col">
               <div className="p-4 border-b border-[#E2E8F0] flex justify-between items-center bg-[#F8FAFC]">
                 <h3 className="font-bold text-[15px] text-[#0F1624]">Completed Transactions</h3>
-                <div className="flex items-center gap-2 bg-white border border-[#DDE2EC] rounded px-3 py-1.5 w-64">
-                  <Search size={14} className="text-[#94A3B8]" />
-                  <input value={historySearch} onChange={e => setHistorySearch(e.target.value)} placeholder="Search bill no or patient..." className="text-[13px] outline-none text-[#0F1624] placeholder:text-[#94A3B8] flex-1" />
+                <div className="flex items-center gap-3">
+                  <button onClick={() => window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Customer Add modal opened!" } }))} className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#DDE2EC] text-[12px] font-medium text-[#334155] hover:bg-[#F5F7FA]">
+                    <Plus size={14} /> Add Customer
+                  </button>
+                  <div className="flex items-center gap-2 bg-white border border-[#DDE2EC] rounded px-3 py-1.5 w-64">
+                    <Search size={14} className="text-[#94A3B8]" />
+                    <input value={historySearch} onChange={e => setHistorySearch(e.target.value)} placeholder="Search bill no or patient..." className="text-[13px] outline-none text-[#0F1624] placeholder:text-[#94A3B8] flex-1" />
+                  </div>
                 </div>
+              </div>
+              <div className="p-4 bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                <button onClick={() => { setActiveTab('new_sale'); closeInvoice(); }} className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded text-[13px] font-semibold text-[#1B4FD8] bg-[#E8EDF5] hover:bg-[#dbeafe] transition-colors">
+                  <Plus size={14} /> New Sale
+                </button>
               </div>
               <div className="flex-1 overflow-auto">
                 <table className="w-full text-left">
