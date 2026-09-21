@@ -7,6 +7,7 @@ interface QueueManagementProps {
   onNavigateToOPWorkflow?: (encId: string, step?: number) => void;
   onNavigateToDoctorWorkflow?: (encId: string) => void;
   onNavigateToOPRegistration?: () => void;
+  onNavigateToNurseStation?: () => void;
 }
 
 const DEPARTMENTS = [
@@ -492,11 +493,23 @@ export default function QueueManagement({
     }
   };
 
+  // Helper for specialty color pill styles
+  const getSpecialtyBadgeStyle = (dept: string) => {
+    const d = (dept || "").toLowerCase();
+    if (d.includes("cardio")) return "bg-rose-50 text-rose-800 border-rose-200";
+    if (d.includes("ortho")) return "bg-amber-50 text-amber-800 border-amber-200";
+    if (d.includes("neuro")) return "bg-purple-50 text-purple-800 border-purple-200";
+    if (d.includes("pediat")) return "bg-teal-50 text-teal-800 border-teal-200";
+    if (d.includes("ent") || d.includes("ophthal")) return "bg-sky-50 text-sky-800 border-sky-200";
+    if (d.includes("gynaec") || d.includes("obg")) return "bg-pink-50 text-pink-800 border-pink-200";
+    return "bg-blue-50 text-blue-800 border-blue-200";
+  };
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#F0F2F5] overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-[#F1F5F9] text-slate-800 font-sans overflow-hidden">
       {/* ── NOTIFICATION TOAST ── */}
       {notificationToast && (
-        <div className="fixed top-4 right-4 z-50 bg-[#1E293B] text-white border border-slate-700 rounded p-3.5 shadow-2xl flex items-start gap-3 max-w-sm animate-in slide-in-from-top-3">
+        <div className="fixed top-4 right-4 z-50 bg-slate-900 text-white border border-slate-700 rounded-none p-3.5 shadow-2xl flex items-start gap-3 max-w-sm animate-in slide-in-from-top-3">
           <span className="text-lg">📢</span>
           <div className="flex-1">
             <div className="text-[13px] font-bold text-sky-400">{notificationToast.title}</div>
@@ -512,25 +525,30 @@ export default function QueueManagement({
         </div>
       )}
 
-      {/* ── TOP HEADER ── */}
-      <div className="bg-white border-b border-[#DDE2EC] px-5 py-3 flex items-center justify-between gap-3 flex-shrink-0">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-[16px] font-bold text-gray-900">Outpatient Queue Management</h1>
-            <span className="text-[11px] font-mono font-bold bg-blue-50 text-[#1B4FD8] border border-blue-200 px-2 py-0.5 rounded">
-              {filteredQueue.length} Active Records
-            </span>
+      {/* ── MINIMALIST COLORFUL HEADER ── */}
+      <div className="bg-white border-b border-[#CBD5E1] px-6 py-3 flex items-center justify-between gap-3 flex-shrink-0 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-blue-600 text-white font-bold flex items-center justify-center text-base rounded-none shadow-xs">
+            📢
           </div>
-          <p className="text-[11.5px] text-[#64748B] mt-0.5">
-            Real-time outpatient patient flow, doctor queue allocations, room assignments, and live waiting room broadcasts.
-          </p>
+          <div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              Outpatient Live Queue Board
+              <span className="text-[10.5px] bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded-none font-mono uppercase font-bold">
+                {filteredQueue.length} Active Records
+              </span>
+            </h1>
+            <p className="text-[11.5px] text-slate-500">
+              Real-time outpatient patient flow, doctor queue allocations, room assignments, and live waiting room broadcasts.
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             type="button"
             onClick={() => setIsTvKioskMode(true)}
-            className="px-3 py-1.5 bg-[#0F172A] hover:bg-[#1E293B] text-white text-[12px] font-bold rounded transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-bold rounded-none transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
             title="Open Waiting Room Kiosk TV Mode"
           >
             <span>📺</span> TV Display Mode
@@ -539,7 +557,7 @@ export default function QueueManagement({
           <button 
             type="button"
             onClick={() => setIsIssueTokenOpen(true)}
-            className="px-3.5 py-1.5 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[12px] font-bold rounded transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-bold rounded-none transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <Icon.Plus /> Issue Queue Token
           </button>
@@ -547,8 +565,8 @@ export default function QueueManagement({
       </div>
 
       {/* ── DEPARTMENT PILL TABS BAR ── */}
-      <div className="bg-white border-b border-[#E2E8F0] px-5 py-2 flex items-center gap-1.5 overflow-x-auto flex-shrink-0 no-scrollbar">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-[#64748B] mr-1 flex items-center gap-1 flex-shrink-0">
+      <div className="bg-white border-b border-[#CBD5E1] px-6 py-2 flex items-center gap-1.5 overflow-x-auto flex-shrink-0 no-scrollbar">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mr-1 flex items-center gap-1 flex-shrink-0">
           <span>🏥</span> Dept:
         </span>
         {DEPARTMENTS.filter(dept =>
@@ -561,15 +579,15 @@ export default function QueueManagement({
               key={dept}
               type="button"
               onClick={() => setSelectedDept(dept)}
-              className={`px-2.5 py-1 text-[11.5px] font-semibold rounded whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 border flex-shrink-0 ${
+              className={`px-3 py-1 text-[11.5px] font-bold rounded-none whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border flex-shrink-0 ${
                 isSelected
-                  ? "bg-[#1B4FD8] text-white border-[#1B4FD8] shadow-2xs"
-                  : "bg-white text-gray-700 border-[#DDE2EC] hover:bg-[#F8FAFC]"
+                  ? "bg-blue-600 text-white border-blue-700 shadow-xs"
+                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
               }`}
             >
               <span>{dept}</span>
-              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
-                isSelected ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
+              <span className={`text-[10.5px] font-mono font-bold px-1.5 py-0.2 rounded-none ${
+                isSelected ? "bg-white text-blue-900" : "bg-blue-100 text-blue-900 border border-blue-200"
               }`}>
                 {count}
               </span>
@@ -579,90 +597,91 @@ export default function QueueManagement({
       </div>
 
       {/* ── MAIN WORKSPACE ── */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col lg:flex-row gap-4 w-full">
+      <div className="flex-1 overflow-y-auto p-5 flex flex-col lg:flex-row gap-4 w-full">
         {/* Left Side: Active Queue & Department Metrics */}
         <div className="flex-1 flex flex-col gap-4 min-w-0">
           
           {/* Department KPI Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-white border border-[#DDE2EC] p-3 rounded hover:border-[#1B4FD8] transition-colors shadow-2xs">
-              <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5 flex items-center justify-between">
+            <div className="bg-amber-50/80 border border-amber-200 border-l-4 border-l-amber-500 rounded-none p-3 shadow-2xs">
+              <div className="text-[10.5px] font-bold text-amber-900 uppercase tracking-wider mb-0.5 flex items-center justify-between">
                 <span>Waiting</span>
-                <span className="text-amber-500">⏳</span>
+                <span className="text-amber-600">⏳</span>
               </div>
-              <div className="text-xl font-bold text-gray-900">{metrics.waiting}</div>
-              <div className="text-[10px] text-[#64748B]">Patients in waiting room</div>
+              <div className="text-2xl font-bold font-mono text-amber-950 mt-1">{metrics.waiting}</div>
+              <div className="text-[11px] text-amber-800 font-semibold mt-0.5">In waiting room</div>
             </div>
 
-            <div className="bg-white border border-[#DDE2EC] p-3 rounded hover:border-[#1B4FD8] transition-colors shadow-2xs">
-              <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5 flex items-center justify-between">
+            <div className="bg-blue-50/80 border border-blue-200 border-l-4 border-l-blue-600 rounded-none p-3 shadow-2xs">
+              <div className="text-[10.5px] font-bold text-blue-900 uppercase tracking-wider mb-0.5 flex items-center justify-between">
                 <span>In Consult</span>
-                <span className="text-blue-500">🩺</span>
+                <span className="text-blue-600">🩺</span>
               </div>
-              <div className="text-xl font-bold text-[#1B4FD8]">{metrics.inConsult}</div>
-              <div className="text-[10px] text-[#64748B]">With doctor in chamber</div>
+              <div className="text-2xl font-bold font-mono text-blue-950 mt-1">{metrics.inConsult}</div>
+              <div className="text-[11px] text-blue-800 font-semibold mt-0.5">With doctor in chamber</div>
             </div>
 
-            <div className="bg-white border border-[#DDE2EC] p-3 rounded hover:border-[#1B4FD8] transition-colors shadow-2xs">
-              <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5 flex items-center justify-between">
+            <div className="bg-purple-50/80 border border-purple-200 border-l-4 border-l-purple-600 rounded-none p-3 shadow-2xs">
+              <div className="text-[10.5px] font-bold text-purple-900 uppercase tracking-wider mb-0.5 flex items-center justify-between">
                 <span>Avg Wait Time</span>
-                <span className="text-purple-500">⏱️</span>
+                <span className="text-purple-600">⏱️</span>
               </div>
-              <div className="text-xl font-bold text-gray-900">{metrics.avgWait}</div>
-              <div className="text-[10px] text-[#64748B]">Reg to consultation</div>
+              <div className="text-2xl font-bold font-mono text-purple-950 mt-1">{metrics.avgWait}</div>
+              <div className="text-[11px] text-purple-800 font-semibold mt-0.5 font-mono">Reg to consultation</div>
             </div>
 
-            <div className="bg-white border border-[#DDE2EC] p-3 rounded hover:border-[#1B4FD8] transition-colors shadow-2xs">
-              <div className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5 flex items-center justify-between">
+            <div className="bg-emerald-50/80 border border-emerald-200 border-l-4 border-l-emerald-600 rounded-none p-3 shadow-2xs">
+              <div className="text-[10.5px] font-bold text-emerald-900 uppercase tracking-wider mb-0.5 flex items-center justify-between">
                 <span>Completed</span>
-                <span className="text-green-500">✓</span>
+                <span className="text-emerald-600">✓</span>
               </div>
-              <div className="text-xl font-bold text-[#15803D]">{metrics.completed}</div>
-              <div className="text-[10px] text-[#64748B]">Finished today</div>
+              <div className="text-2xl font-bold font-mono text-emerald-950 mt-1">{metrics.completed}</div>
+              <div className="text-[11px] text-emerald-800 font-semibold mt-0.5">Finished today</div>
             </div>
           </div>
 
           {/* Department Queue Table Container */}
-          <div className="bg-white border border-[#DDE2EC] rounded shadow-xs overflow-hidden flex-1 flex flex-col min-h-[360px]">
+          <div className="bg-white border border-[#CBD5E1] rounded-none shadow-2xs overflow-hidden flex-1 flex flex-col min-h-[360px]">
             {/* Header & Filter Controls */}
-            <div className="px-4 py-2.5 border-b border-[#DDE2EC] bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="px-5 py-3 border-b border-[#CBD5E1] bg-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2 min-w-0">
-                <h2 className="text-[13px] font-bold text-gray-900 truncate">
+                <h2 className="text-[13.5px] font-bold text-slate-900 truncate flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 bg-blue-600 inline-block"></span>
                   Live Queue — {selectedDept}
                 </h2>
-                <span className="text-[10.5px] font-mono bg-blue-100 text-[#1B4FD8] px-2 py-0.5 rounded font-bold whitespace-nowrap">
+                <span className="text-[11px] font-mono bg-blue-100 text-blue-900 border border-blue-300 px-2 py-0.5 rounded-none font-bold whitespace-nowrap">
                   {filteredQueue.length} Patients
                 </span>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                 {/* Status Filter Tabs */}
-                <div className="flex items-center bg-white border border-[#CBD5E1] rounded p-0.5 text-[11px] font-semibold">
+                <div className="flex items-center bg-slate-200/70 border border-slate-300 rounded-none p-0.5 text-[11px] font-bold">
                   <button
                     type="button"
                     onClick={() => setStatusFilter("ALL")}
-                    className={`px-2 py-0.5 rounded transition-colors ${statusFilter === "ALL" ? "bg-[#1B4FD8] text-white" : "text-gray-600 hover:text-gray-900"}`}
+                    className={`px-2.5 py-1 rounded-none transition-colors cursor-pointer ${statusFilter === "ALL" ? "bg-blue-600 text-white shadow-xs" : "text-slate-700 hover:text-slate-900"}`}
                   >
                     All
                   </button>
                   <button
                     type="button"
                     onClick={() => setStatusFilter("WAITING")}
-                    className={`px-2 py-0.5 rounded transition-colors ${statusFilter === "WAITING" ? "bg-[#1B4FD8] text-white" : "text-gray-600 hover:text-gray-900"}`}
+                    className={`px-2.5 py-1 rounded-none transition-colors cursor-pointer ${statusFilter === "WAITING" ? "bg-blue-600 text-white shadow-xs" : "text-slate-700 hover:text-slate-900"}`}
                   >
                     Waiting
                   </button>
                   <button
                     type="button"
                     onClick={() => setStatusFilter("CONSULTING")}
-                    className={`px-2 py-0.5 rounded transition-colors ${statusFilter === "CONSULTING" ? "bg-[#1B4FD8] text-white" : "text-gray-600 hover:text-gray-900"}`}
+                    className={`px-2.5 py-1 rounded-none transition-colors cursor-pointer ${statusFilter === "CONSULTING" ? "bg-blue-600 text-white shadow-xs" : "text-slate-700 hover:text-slate-900"}`}
                   >
                     In Consult
                   </button>
                   <button
                     type="button"
                     onClick={() => setStatusFilter("COMPLETED")}
-                    className={`px-2 py-0.5 rounded transition-colors ${statusFilter === "COMPLETED" ? "bg-[#1B4FD8] text-white" : "text-gray-600 hover:text-gray-900"}`}
+                    className={`px-2.5 py-1 rounded-none transition-colors cursor-pointer ${statusFilter === "COMPLETED" ? "bg-blue-600 text-white shadow-xs" : "text-slate-700 hover:text-slate-900"}`}
                   >
                     Completed
                   </button>
@@ -674,9 +693,9 @@ export default function QueueManagement({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search patient, token, doctor..." 
-                    className="pl-7 pr-3 py-1 text-[11.5px] border border-[#CBD5E1] rounded bg-white focus:outline-none focus:border-[#1B4FD8] w-40 sm:w-52" 
+                    className="pl-7 pr-3 py-1 text-[11.5px] border border-[#CBD5E1] rounded-none bg-white focus:outline-none focus:border-blue-600 w-40 sm:w-52 font-medium" 
                   />
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[#94A3B8] text-xs"><Icon.Search /></span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs"><Icon.Search /></span>
                 </div>
               </div>
             </div>
@@ -684,10 +703,10 @@ export default function QueueManagement({
             {/* Queue Table */}
             <div className="flex-1 overflow-x-auto overflow-y-auto">
               {filteredQueue.length === 0 ? (
-                <div className="p-10 text-center text-gray-500 space-y-2.5">
+                <div className="p-10 text-center text-slate-500 space-y-2.5 font-medium">
                   <div className="text-3xl">🏥</div>
-                  <div className="text-[13.5px] font-bold text-gray-800">No Patients in {selectedDept} Queue</div>
-                  <p className="text-[11.5px] text-[#64748B] max-w-sm mx-auto">
+                  <div className="text-[13.5px] font-bold text-slate-800">No Patients in {selectedDept} Queue</div>
+                  <p className="text-[11.5px] text-slate-500 max-w-sm mx-auto">
                     {searchQuery ? "No queue entries matched your search query." : `There are currently no active patients in ${selectedDept}. Click "+ Issue Queue Token" or register a new patient.`}
                   </p>
                   <div className="flex justify-center gap-2 pt-1">
@@ -695,7 +714,7 @@ export default function QueueManagement({
                       <button
                         type="button"
                         onClick={() => setSearchQuery("")}
-                        className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11.5px] font-semibold rounded cursor-pointer"
+                        className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11.5px] font-bold rounded-none cursor-pointer border border-slate-300"
                       >
                         Clear Search
                       </button>
@@ -703,7 +722,7 @@ export default function QueueManagement({
                     <button
                       type="button"
                       onClick={() => setIsIssueTokenOpen(true)}
-                      className="px-3.5 py-1 bg-[#1B4FD8] hover:bg-[#1740B4] text-white text-[11.5px] font-bold rounded cursor-pointer"
+                      className="px-3.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11.5px] font-bold rounded-none cursor-pointer shadow-xs"
                     >
                       + Issue Token for {selectedDept === "All Departments" ? "Patient" : selectedDept}
                     </button>
@@ -711,18 +730,17 @@ export default function QueueManagement({
                 </div>
               ) : (
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-[#FAFAFA] border-b border-[#DDE2EC] sticky top-0 z-10">
+                  <thead className="bg-slate-100 border-b border-slate-300 sticky top-0 z-10 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                     <tr>
-                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Token / OP</th>
-                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider">Patient Info</th>
-                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Department &amp; Doctor</th>
-                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Room</th>
-                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Reg Time</th>
-                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider whitespace-nowrap">Status</th>
-                      <th className="px-3 py-2 text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider text-right whitespace-nowrap sticky right-0 bg-[#FAFAFA] shadow-[-6px_0_6px_-6px_rgba(15,22,36,0.18)]">Actions</th>
+                      <th className="px-4 py-3 whitespace-nowrap">Token &amp; UMR</th>
+                      <th className="px-4 py-3">Patient Details</th>
+                      <th className="px-4 py-3 whitespace-nowrap">Specialty &amp; Doctor</th>
+                      <th className="px-4 py-3 whitespace-nowrap">Reg Time</th>
+                      <th className="px-4 py-3 whitespace-nowrap">Status</th>
+                      <th className="px-4 py-3 text-right whitespace-nowrap sticky right-0 bg-slate-100 shadow-[-6px_0_6px_-6px_rgba(15,22,36,0.18)]">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#F1F5F9] text-[12px]">
+                  <tbody className="divide-y divide-[#E2E8F0] text-[12px]">
                     {filteredQueue.map((enc, idx) => {
                       const token = enc.queueToken || enc.opNumber;
                       const isCallingThis = nowCalling?.token === token;
@@ -732,66 +750,65 @@ export default function QueueManagement({
                       return (
                         <tr 
                           key={enc.id} 
-                          className={`hover:bg-[#F8FAFC] transition-colors ${isCallingThis ? "bg-amber-50/50" : ""}`}
+                          className={`hover:bg-blue-50/40 transition-colors ${isCallingThis ? "bg-amber-50/80" : ""}`}
                         >
-                          {/* Token & Index */}
-                          <td className="px-3 py-2.5 whitespace-nowrap">
+                          {/* Token & UMR */}
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-mono text-gray-400 font-bold">#{idx + 1}</span>
-                              <span className="font-mono font-bold text-[12px] text-[#1B4FD8] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 whitespace-nowrap">
+                              <span className="text-[10.5px] font-mono text-slate-400 font-bold">#{idx + 1}</span>
+                              <span className="font-mono font-bold text-xs text-blue-900 bg-blue-100 px-2.5 py-1 rounded-none border border-blue-300 inline-block shadow-2xs">
                                 {token}
                               </span>
                             </div>
-                            <div className="text-[10px] font-mono text-gray-500 mt-0.5">UMR: {enc.umr}</div>
+                            <div className="text-[10.5px] font-mono text-slate-600 font-bold mt-1">UMR: {enc.umr}</div>
                           </td>
 
                           {/* Patient Info */}
-                          <td className="px-3 py-2.5 min-w-[170px] max-w-[260px]">
-                            <div className="font-bold text-gray-900">{enc.patientName}</div>
-                            <div className="text-[10.5px] text-[#64748B] flex items-center gap-1 mt-0.5">
+                          <td className="px-4 py-3 min-w-[170px] max-w-[260px]">
+                            <div className="font-bold text-slate-900 text-[13px]">{enc.patientName}</div>
+                            <div className="text-[11px] text-slate-600 font-medium flex items-center gap-1 mt-0.5">
                               <span>{enc.age} yrs, {enc.sex}</span>
                               <span>•</span>
                               <span>{enc.phone}</span>
                             </div>
-                            <div className="text-[10px] text-gray-500 truncate max-w-[200px] mt-0.5" title={enc.chiefComplaint || enc.symptoms.join(", ")}>
-                              {enc.chiefComplaint || enc.symptoms.join(", ") || "OP Consultation"}
+                            <div className="text-[10.5px] text-slate-500 truncate max-w-[200px] mt-0.5 font-medium" title={enc.chiefComplaint || enc.symptoms.join(", ")}>
+                              💬 {enc.chiefComplaint || enc.symptoms.join(", ") || "OP Consultation"}
                             </div>
                           </td>
 
-                          {/* Department & Doctor */}
-                          <td className="px-3 py-2.5 whitespace-nowrap">
-                            <span className="font-semibold text-gray-800 bg-gray-100 px-1.5 py-0.5 rounded text-[10.5px] inline-block mb-0.5">
-                              {enc.dept}
-                            </span>
-                            <div className="text-[11px] text-gray-700 font-medium flex items-center gap-1">
-                              <span>👨‍⚕️</span> {enc.assignedDoctor || "Awaiting Doctor Allocation"}
+                          {/* Dept & Doctor (MINIMALIST UNIFIED ALIGNED BADGE) */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center mb-1">
+                              <span className={`px-2.5 py-0.5 text-[11px] font-bold uppercase border ${getSpecialtyBadgeStyle(enc.dept)} rounded-none inline-flex items-center gap-1.5 h-5 leading-none shadow-2xs`}>
+                                <span>{enc.dept || "General Medicine"}</span>
+                                <span className="opacity-40 font-normal">|</span>
+                                <span className="font-mono text-slate-800 text-[10.5px] font-bold">{enc.room || "Room 101"}</span>
+                              </span>
                             </div>
-                          </td>
-
-                          {/* Room */}
-                          <td className="px-3 py-2.5 font-mono font-bold text-gray-800 whitespace-nowrap">
-                            {enc.room || "Room 101"}
+                            <div className="text-[11.5px] text-slate-900 font-bold flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full shrink-0"></span>
+                              <span>{enc.assignedDoctor || "Awaiting Doctor Allocation"}</span>
+                            </div>
                           </td>
 
                           {/* Reg Time */}
-                          <td className="px-3 py-2.5 text-[#64748B] font-mono text-[11.5px] whitespace-nowrap">
-                            {enc.registrationTime || enc.timestamps.arrival || "10:00 AM"}
+                          <td className="px-4 py-3 text-slate-700 font-mono text-[11.5px] font-semibold whitespace-nowrap">
+                            {enc.registrationTime || enc.timestamps?.arrival || "10:00 AM"}
                           </td>
 
                           {/* Status Badge */}
-                          <td className="px-3 py-2.5 whitespace-nowrap">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             {getStatusBadge(enc.status)}
                           </td>
 
-                          {/* Action Buttons -- pinned so they stay reachable
-                              however wide the patient/doctor columns get. */}
-                          <td className="px-3 py-2.5 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-inherit shadow-[-6px_0_6px_-6px_rgba(15,22,36,0.18)]">
-                            <div className="flex items-center justify-end gap-1">
+                          {/* Action Buttons */}
+                          <td className="px-4 py-3 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-inherit shadow-[-6px_0_6px_-6px_rgba(15,22,36,0.18)]">
+                            <div className="flex items-center justify-end gap-1.5">
                               {!isCompleted && !isInConsult && (
                                 <button
                                   type="button"
                                   onClick={() => handleCallPatient(enc)}
-                                  className="px-2 py-0.8 text-[11px] font-bold text-white bg-[#1B4FD8] hover:bg-[#1740B4] rounded transition-colors flex items-center gap-1 shadow-2xs cursor-pointer whitespace-nowrap"
+                                  className="px-2.5 py-1 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-none transition-colors flex items-center gap-1 shadow-xs cursor-pointer whitespace-nowrap"
                                   title="Call Patient to Chamber"
                                 >
                                   <span>📢</span> Call
@@ -802,7 +819,7 @@ export default function QueueManagement({
                                 <button
                                   type="button"
                                   onClick={() => handleCompleteConsultation(enc)}
-                                  className="px-2 py-0.8 text-[11px] font-bold text-white bg-[#16A34A] hover:bg-[#15803D] rounded transition-colors flex items-center gap-1 shadow-2xs cursor-pointer whitespace-nowrap"
+                                  className="px-2.5 py-1 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-none transition-colors flex items-center gap-1 shadow-xs cursor-pointer whitespace-nowrap"
                                   title="Complete Consultation"
                                 >
                                   <span>✓</span> Done
@@ -812,7 +829,7 @@ export default function QueueManagement({
                               <button
                                 type="button"
                                 onClick={() => handleOpenTransfer(enc)}
-                                className="px-1.5 py-0.8 text-[10.5px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-[#CBD5E1] rounded transition-colors cursor-pointer whitespace-nowrap"
+                                className="px-2 py-1 text-[11px] font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-none transition-colors cursor-pointer whitespace-nowrap shadow-xs"
                                 title="Transfer department / doctor"
                               >
                                 Transfer
@@ -822,21 +839,21 @@ export default function QueueManagement({
                                 <button
                                   type="button"
                                   onClick={() => onNavigateToDoctorWorkflow(enc.id)}
-                                  className="px-1.5 py-0.8 text-[10.5px] font-semibold text-[#1B4FD8] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors cursor-pointer whitespace-nowrap"
+                                  className="px-2 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-none transition-colors cursor-pointer whitespace-nowrap shadow-xs"
                                   title="Open Doctor Consultation Workspace"
                                 >
                                   Doctor
                                 </button>
                               )}
 
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedJourneyEncounter(enc)}
-                                  className="px-2 py-0.8 text-[10.5px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded transition-colors cursor-pointer whitespace-nowrap"
-                                  title="View Complete Outpatient Clinical Journey Timeline"
-                                >
-                                  Journey →
-                                </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedJourneyEncounter(enc)}
+                                className="px-2 py-1 text-[11px] font-bold text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-none transition-colors cursor-pointer whitespace-nowrap shadow-xs"
+                                title="View Complete Outpatient Clinical Journey Timeline"
+                              >
+                                Journey →
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -853,8 +870,8 @@ export default function QueueManagement({
         <div className="w-full lg:w-72 flex flex-col gap-4 flex-shrink-0">
           
           {/* Waiting Room TV / Kiosk Display Card */}
-          <div className="bg-[#0F172A] rounded shadow-md overflow-hidden flex flex-col border border-slate-800">
-            <div className="bg-[#1E293B] p-2.5 text-center border-b border-white/10 flex justify-between items-center px-3.5">
+          <div className="bg-slate-900 rounded-none shadow-md overflow-hidden flex flex-col border border-slate-800">
+            <div className="bg-slate-800 p-2.5 text-center border-b border-white/10 flex justify-between items-center px-3.5">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                 <h3 className="text-white text-[11px] font-bold tracking-widest uppercase">Waiting Room Kiosk</h3>
@@ -862,7 +879,7 @@ export default function QueueManagement({
               <button
                 type="button"
                 onClick={() => setIsTvKioskMode(true)}
-                className="text-[10px] font-mono text-sky-400 hover:text-sky-300 font-bold cursor-pointer"
+                className="text-[10.5px] font-mono text-sky-400 hover:text-sky-300 font-bold cursor-pointer bg-slate-900 px-2 py-0.5 border border-slate-700 rounded-none"
               >
                 TV Mode ↗
               </button>
@@ -871,26 +888,26 @@ export default function QueueManagement({
             <div className="p-4 text-center text-white space-y-3">
               {nowCalling ? (
                 <div>
-                  <div className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-widest mb-1 flex items-center justify-center gap-1">
+                  <div className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1 flex items-center justify-center gap-1">
                     <span className="text-amber-400 animate-bounce">📢</span> NOW CALLING
                   </div>
-                  <div className="text-3xl font-mono font-extrabold text-[#38BDF8] tracking-tight bg-slate-900/80 py-1.5 rounded border border-sky-500/30">
+                  <div className="text-3xl font-mono font-extrabold text-[#38BDF8] tracking-tight bg-slate-950 py-1.5 rounded-none border border-sky-500/30">
                     {nowCalling.token}
                   </div>
                   <div className="text-[14px] font-bold text-white mt-1.5 truncate">
                     {nowCalling.patientName}
                   </div>
-                  <div className="text-[12px] font-semibold text-[#86EFAC] mt-1 bg-green-900/30 py-0.5 px-2.5 rounded border border-green-500/30 inline-block">
+                  <div className="text-[12px] font-bold text-emerald-300 mt-1 bg-emerald-950/60 py-0.5 px-2.5 rounded-none border border-emerald-500/30 inline-block">
                     Proceed to {nowCalling.room}
                   </div>
-                  <div className="text-[10.5px] text-slate-400 mt-1 truncate">
+                  <div className="text-[10.5px] text-slate-400 mt-1 truncate font-medium">
                     {nowCalling.doctor} ({nowCalling.dept})
                   </div>
                 </div>
               ) : (
                 <div className="py-3 text-slate-400">
                   <div className="text-xl mb-0.5">☕</div>
-                  <div className="text-[12px] font-semibold">Queue In Standby</div>
+                  <div className="text-[12px] font-bold text-white">Queue In Standby</div>
                   <div className="text-[10.5px]">Click "Call" on any patient row</div>
                 </div>
               )}
@@ -901,12 +918,12 @@ export default function QueueManagement({
                   Recently Called
                 </div>
                 {callHistory.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center bg-slate-800/60 px-2 py-1 rounded text-[11px]">
+                  <div key={idx} className="flex justify-between items-center bg-slate-800/80 px-2 py-1 rounded-none text-[11px] border border-slate-700/50">
                     <div className="truncate mr-2">
                       <span className="font-mono font-bold text-sky-300">{item.token}</span>
-                      <span className="text-slate-300 ml-1.5">{item.patientName}</span>
+                      <span className="text-slate-200 ml-1.5 font-medium">{item.patientName}</span>
                     </div>
-                    <span className="font-mono text-emerald-300 font-semibold whitespace-nowrap text-[10.5px]">{item.room}</span>
+                    <span className="font-mono text-emerald-300 font-bold whitespace-nowrap text-[10.5px]">{item.room}</span>
                   </div>
                 ))}
               </div>
@@ -914,15 +931,15 @@ export default function QueueManagement({
           </div>
 
           {/* Quick Actions Panel */}
-          <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-xs space-y-2">
-            <h3 className="text-[12px] font-bold text-gray-900 flex items-center gap-1">
+          <div className="bg-white border border-[#CBD5E1] rounded-none p-3.5 shadow-2xs space-y-2">
+            <h3 className="text-[12px] font-bold text-slate-900 flex items-center gap-1.5">
               <span>⚡</span> Quick Queue Actions
             </h3>
             <div className="space-y-1.5">
               <button 
                 type="button"
                 onClick={() => setIsIssueTokenOpen(true)}
-                className="w-full text-left px-2.5 py-1.5 text-[11.5px] font-semibold text-[#1B4FD8] hover:bg-blue-50 border border-blue-200 rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full text-left px-2.5 py-1.5 text-[11.5px] font-bold text-blue-800 hover:bg-blue-50 border border-blue-300 rounded-none flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Icon.Plus /> Issue Walk-In Queue Token
               </button>
@@ -931,7 +948,7 @@ export default function QueueManagement({
                 <button 
                   type="button"
                   onClick={onNavigateToOPRegistration}
-                  className="w-full text-left px-2.5 py-1.5 text-[11.5px] font-semibold text-gray-700 hover:bg-[#F8FAFC] border border-[#DDE2EC] rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="w-full text-left px-2.5 py-1.5 text-[11.5px] font-bold text-slate-800 hover:bg-slate-50 border border-slate-300 rounded-none flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Icon.Patients /> Open OP Registration Desk
                 </button>
@@ -944,7 +961,7 @@ export default function QueueManagement({
                   speakAnnouncement("Attention all patients: please ensure you have completed vitals triage at nurse station 3 before entering consultation rooms.");
                   triggerToast("Announcement Broadcasted", "Voice broadcast played across waiting areas.");
                 }}
-                className="w-full text-left px-2.5 py-1.5 text-[11.5px] font-semibold text-gray-700 hover:bg-[#F8FAFC] border border-[#DDE2EC] rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full text-left px-2.5 py-1.5 text-[11.5px] font-bold text-slate-800 hover:bg-slate-50 border border-slate-300 rounded-none flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Icon.Cmd /> Broadcast Announcement
               </button>
@@ -952,7 +969,7 @@ export default function QueueManagement({
               <button 
                 type="button"
                 onClick={() => window.print()}
-                className="w-full text-left px-2.5 py-1.5 text-[11.5px] font-semibold text-gray-700 hover:bg-[#F8FAFC] border border-[#DDE2EC] rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full text-left px-2.5 py-1.5 text-[11.5px] font-bold text-slate-800 hover:bg-slate-50 border border-slate-300 rounded-none flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Icon.Download /> Print Queue Roster
               </button>
@@ -1698,7 +1715,7 @@ export default function QueueManagement({
                     }}
                     className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#1B4FD8] border border-blue-200 text-[12px] font-bold rounded transition-colors cursor-pointer"
                   >
-                    Open Doctor Portal →
+                    Open Doctor Workspace →
                   </button>
                 )}
 

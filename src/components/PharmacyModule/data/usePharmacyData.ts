@@ -74,6 +74,7 @@ export function usePharmacyData() {
   const [auditLogs, setAuditLogs] = useState(() => PharmacyDatabase.getAuditLogs());
   const [stockTransfers, setStockTransfers] = useState(() => PharmacyDatabase.getTransfers());
   const [stockTransactions, setStockTransactions] = useState(() => PharmacyDatabase.getStockTransactions());
+  const [supplierReturns, setSupplierReturns] = useState(() => PharmacyDatabase.getSupplierReturns());
   const [grns, setGrns] = useState(() => PharmacyDatabase.getGRNs());
 
   const mappedMedicines = medicines.map(m => {
@@ -137,9 +138,9 @@ export function usePharmacyData() {
   }));
 
   const salesData = last7Days.map(dateStr => {
-    // Only original bills (not MOD- bills) count toward orders and gross sales
+    // Only original bills (not modified return bills) count toward orders and gross sales
     const dayBills = mappedBills.filter(
-      b => (b.billDate || "").startsWith(dateStr) && !b.billNumber.startsWith("MOD-") && !b.isModifiedReturnBill
+      b => (b.billDate || "").startsWith(dateStr) && !b.isModifiedReturnBill
     );
     const dayReturns = PharmacyDatabase.getReturns().filter(
       r => (r.createdAt || "").startsWith(dateStr)
@@ -151,6 +152,8 @@ export function usePharmacyData() {
     return {
       date: new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short' }),
       revenue: dayNetRevenue,
+      gross: dayGross,
+      refunds: dayRefunds,
       orders: dayBills.length
     };
   });
@@ -168,6 +171,7 @@ export function usePharmacyData() {
     setAuditLogs(PharmacyDatabase.getAuditLogs());
     setStockTransfers(PharmacyDatabase.getTransfers());
     setStockTransactions(PharmacyDatabase.getStockTransactions());
+    setSupplierReturns(PharmacyDatabase.getSupplierReturns());
     setGrns(PharmacyDatabase.getGRNs());
   };
 
@@ -255,6 +259,7 @@ export function usePharmacyData() {
       created: c.createdAt,
     })),
     stockTransactions,
+    supplierReturns,
     grns,
     refresh
   };

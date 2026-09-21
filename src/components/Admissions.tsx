@@ -77,10 +77,10 @@ export default function Admissions({ setNotice, navigate }: Props) {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F0F2F5]">
-      <div className="bg-white border-b border-[#DDE2EC] px-6 py-4 flex items-center justify-between flex-shrink-0">
-        <div>
-          <h1 className="text-lg font-semibold text-gray-900">Inpatient Admissions</h1>
-          <p className="text-[12.5px] text-[#64748B]">Live admission requests and today's admissions -- assign beds from Bed Management.</p>
+      <div className="bg-white border-b border-[#DDE2EC] px-6 py-4 flex items-center justify-between gap-4 flex-shrink-0">
+        <div className="min-w-0">
+          <h1 className="text-base font-semibold text-gray-900 leading-tight">Inpatient Admissions</h1>
+          <p className="text-[11.5px] text-[#64748B] mt-0.5">Live admission requests and today's admissions &mdash; assign beds from Bed Management.</p>
         </div>
         <button
           onClick={goToBedManagement}
@@ -90,28 +90,29 @@ export default function Admissions({ setNotice, navigate }: Props) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 flex max-w-7xl mx-auto w-full flex-col gap-6">
-        {/* Key Metrics */}
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded-xl shadow-sm">
-            <div className="text-[11.5px] font-semibold text-[#64748B] mb-1">Pending Requests</div>
-            <div className="text-2xl font-bold text-[#D97706]">{loading ? "—" : requests.length}</div>
-          </div>
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded-xl shadow-sm">
-            <div className="text-[11.5px] font-semibold text-[#64748B] mb-1">Admitted Today</div>
-            <div className="text-2xl font-bold text-[#16A34A]">{loading ? "—" : admittedToday.length}</div>
-          </div>
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded-xl shadow-sm">
-            <div className="text-[11.5px] font-semibold text-[#64748B] mb-1">Available Beds (Gen)</div>
-            <div className="text-2xl font-bold text-gray-900">{loading ? "—" : availableGeneral}</div>
-          </div>
-          <div className="bg-white border border-[#DDE2EC] p-4 rounded-xl shadow-sm">
-            <div className="text-[11.5px] font-semibold text-[#64748B] mb-1">Available Beds (ICU)</div>
-            <div className="text-2xl font-bold text-[#DC2626]">{loading ? "—" : availableIcu}</div>
-          </div>
+      <div className="flex-1 overflow-auto px-6 py-5 flex w-full flex-col gap-5">
+        {/* Key Metrics -- same px-6 gutter as the header above, so the cards
+            line up under the title instead of being centred in their own
+            max-w-7xl column. */}
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+          {[
+            { label: "Pending requests", value: requests.length, tone: "#D97706" },
+            { label: "Admitted today", value: admittedToday.length, tone: "#16A34A" },
+            { label: "Available beds (general)", value: availableGeneral, tone: "#0F172A" },
+            // Available ICU beds are headroom, not an alarm -- this used to
+            // render in the same red as a critical metric.
+            { label: "Available beds (ICU)", value: availableIcu, tone: "#7C3AED" },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-white border border-[#DDE2EC] px-4 py-3 rounded-md">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">{stat.label}</div>
+              <div className="text-2xl font-mono font-bold leading-tight mt-1" style={{ color: stat.tone }}>
+                {loading ? "—" : stat.value}
+              </div>
+            </div>
+          ))}
         </div>
 
-        <div className="bg-white border border-[#DDE2EC] rounded-xl shadow-sm flex-1 flex flex-col overflow-hidden">
+        <div className="bg-white border border-[#DDE2EC] rounded-md flex flex-col overflow-hidden">
           <div className="border-b border-[#DDE2EC] flex px-4">
             <button
               onClick={() => setActiveTab("requests")}
@@ -127,20 +128,20 @@ export default function Admissions({ setNotice, navigate }: Props) {
             </button>
           </div>
 
-          <div className="flex-1 overflow-auto bg-[#F8FAFC]">
+          <div className="overflow-auto bg-[#F8FAFC]">
             {activeTab === "requests" && (
               <div className="p-4 space-y-3">
                 {loading ? (
                   <p className="text-[12.5px] text-[#64748B] p-4">Loading...</p>
                 ) : requests.length === 0 ? (
-                  <div className="p-12 flex flex-col items-center justify-center text-[#94A3B8]">
-                    <div className="text-5xl mb-4">📋</div>
-                    <div className="text-[14px] font-medium text-gray-700 mb-1">No Pending Requests</div>
-                    <div className="text-[12.5px]">ER admission requests awaiting a bed will appear here.</div>
+                  <div className="py-12 flex flex-col items-center justify-center text-[#94A3B8]">
+                    <div className="text-4xl mb-3">📋</div>
+                    <div className="text-[13px] font-semibold text-gray-700 mb-1">No pending requests</div>
+                    <div className="text-[12px]">ER admission requests awaiting a bed will appear here.</div>
                   </div>
                 ) : (
                   requests.map((req) => (
-                    <div key={req.id} className="bg-white border border-[#DDE2EC] rounded-none p-4 shadow-sm flex items-center justify-between">
+                    <div key={req.id} className="bg-white border border-[#DDE2EC] rounded-md p-3.5 flex items-center justify-between gap-4 hover:border-[#1B4FD8] transition-colors">
                       <div className="flex items-start gap-4">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-[14px] bg-[#1B4FD8]">
                           {requestPatientLabel(req).charAt(0)}
@@ -176,10 +177,10 @@ export default function Admissions({ setNotice, navigate }: Props) {
                 {loading ? (
                   <p className="text-[12.5px] text-[#64748B] p-4">Loading...</p>
                 ) : admittedToday.length === 0 ? (
-                  <div className="p-12 flex flex-col items-center justify-center text-[#94A3B8]">
-                    <div className="text-5xl mb-4">🛏️</div>
-                    <div className="text-[14px] font-medium text-gray-700 mb-1">No Admissions Today</div>
-                    <div className="text-[12.5px]">Patients admitted today will appear here.</div>
+                  <div className="py-12 flex flex-col items-center justify-center text-[#94A3B8]">
+                    <div className="text-4xl mb-3">🛏️</div>
+                    <div className="text-[13px] font-semibold text-gray-700 mb-1">No admissions today</div>
+                    <div className="text-[12px]">Patients admitted today will appear here.</div>
                   </div>
                 ) : (
                   <div className="bed-info-card-grid">

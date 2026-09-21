@@ -35,6 +35,7 @@ import NLFiltering from "./components/NLFiltering";
 import IntelligenceHub from "./components/IntelligenceHub";
 import QueueManagement from "./components/QueueManagement";
 import OPManagement from "./components/OPManagement";
+import OPDProcedures from "./components/OPDProcedures";
 import DoctorWorkflow from "./components/DoctorWorkflow";
 import DoctorPortal from "./components/doctor/DoctorPortal";
 import DoctorScheduling from "./components/DoctorScheduling";
@@ -56,7 +57,7 @@ type Module =
   | "dashboard" | "patients" | "appointments" | "emergency"
   | "clinical" | "inpatient" | "nursing" | "laboratory"
   | "radiology" | "pharmacy"
-  | "pharmacy_dispensing" | "pharmacy_rx" | "pharmacy_ocr" | "pharmacy_returns"
+  | "pharmacy_dispensing" | "pharmacy_rx" | "pharmacy_ocr" | "pharmacy_returns" | "pharmacy_supplier_returns"
   | "pharmacy_medicine" | "pharmacy_category" | "pharmacy_suppliers"
   | "pharmacy_po" | "pharmacy_grn" | "pharmacy_ledger"
   | "pharmacy_transfers" | "pharmacy_expiry" | "pharmacy_analytics"
@@ -66,7 +67,7 @@ type Module =
   | "reports" | "admin"
   | "chart" | "register"
   | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow"
-  | "op_nurse"
+  | "op_nurse" | "opd_procedures"
   | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing"
   | "admissions" | "readmission"
   | "payments" | "revenue_reports"
@@ -102,8 +103,9 @@ const NAV: NavItem[] = [
     key: "outpatient", label: "OP Department", Icon: Icon.Stethoscope,
     children: [
       { key: "op_management", label: "OP Management" },
+      { key: "queue", label: "Live Queue Board" },
       { key: "op_nurse", label: "Nurse Station" },
-      { key: "queue", label: "Queue Management" },
+      { key: "opd_procedures", label: "OPD Minor Procedures" },
     ]
   },
   {
@@ -139,12 +141,12 @@ const NAV: NavItem[] = [
       { key: "pharmacy", label: "Dashboard" },
       { key: "pharmacy_dispensing", label: "Dispensing & Billing", group: "Sales & Dispensing" },
       { key: "pharmacy_rx", label: "Prescription Queue", group: "Sales & Dispensing" },
-      { key: "pharmacy_ocr", label: "OCR Verification", group: "Sales & Dispensing" },
-      { key: "pharmacy_returns", label: "Returns", group: "Sales & Dispensing" },
+      { key: "pharmacy_returns", label: "Sales Returns", group: "Sales & Dispensing" },
       { key: "pharmacy_medicine", label: "Medicine Master", group: "Catalog" },
-      { key: "pharmacy_category", label: "Category Master", group: "Catalog" },
-      { key: "pharmacy_suppliers", label: "Suppliers", group: "Procurement" },
-      { key: "pharmacy_po", label: "Purchase Orders", group: "Procurement" },
+      { key: "pharmacy_category", label: "Categories", group: "Inventory Management" },
+      { key: "pharmacy_suppliers", label: "Suppliers", group: "Inventory Management" },
+      { key: "pharmacy_supplier_returns", label: "Supplier Returns", group: "Inventory Management" },
+      { key: "pharmacy_po", label: "Purchase Orders", group: "Procurement & Receiving" },
       { key: "pharmacy_grn", label: "Scan Invoice (GRN)", group: "Procurement" },
       { key: "pharmacy_ledger", label: "Inventory Ledger", group: "Inventory" },
       { key: "pharmacy_expiry", label: "Expiry Management", group: "Inventory" },
@@ -200,10 +202,9 @@ const BREADCRUMB_OVERRIDES: Record<string, string> = {
   register: "Registration",
   discharge: "Discharge Workflow",
   op_management: "OP Management",
-  // Off the menu -- every step it offered now lives in a screen that writes a
-  // real record (Registration, Appointments, Billing). Still routable because
-  // OP Management and OP Registration deep-link into it with an encounter.
   op_workflow: "OP Clinical Journey",
+  doctor_workflow: "Doctor Workspace",
+  doctor_portal: "Doctor Workspace",
   patient_exp: "Patient Experience",
   clinical_rag: "Clinical RAG",
 };
@@ -396,6 +397,7 @@ export default function App() {
     setModule("chart");
   };
   const [expanded, setExpanded] = useState<string[]>([]);
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [subBadges, setSubBadges] = useState<Record<string, number>>({});
   // Bumped whenever the doctor inbox or the lab-order queue changes, so the
   // sidebar counts move without waiting for the next navigation.
@@ -565,10 +567,7 @@ export default function App() {
         // Shared helper, not a list kept here: this badge omitted "Sent To Pharmacy"
         // -- the status the doctor portal dispatches with -- so a prescription sat
         // in the queue while the sidebar reported nothing waiting.
-        pharmacy_rx: prescriptions.filter(p => isAwaitingVerification(p.status)).length,
-        pharmacy_ocr: prescriptions.filter(
-          p => (p.sourceType === "OCR" || p.sourceType === "UPLOADED_IMAGE") && p.items.some(i => !i.medicineId)
-        ).length,
+        pharmacy_rx: prescriptions.filter(p => p.status === "Sent To Pharmacy").length,
         pharmacy_dispensing: prescriptions.filter(
           p => p.status === "Verified" || p.status === "Approved"
             || p.status === "Preparing" || p.status === "Ready For Dispensing"
@@ -893,10 +892,18 @@ export default function App() {
 
                             return (
                               <div key={`${item.key}:${group}`} className="mt-2 first:mt-1">
-                                <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748B] select-none">
-                                  {group}
+                                <div 
+                                  className="px-3 pt-1 pb-1 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors mx-1 rounded"
+                                  onClick={() => setCollapsedGroups(prev => prev.includes(`${item.key}:${group}`) ? prev.filter(g => g !== `${item.key}:${group}`) : [...prev, `${item.key}:${group}`])}
+                                >
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748B] select-none">
+                                    {group}
+                                  </span>
+                                  <span className={`text-[#64748B] transition-transform ${collapsedGroups.includes(`${item.key}:${group}`) ? "-rotate-90" : ""}`}>
+                                    <Icon.ChevronDown size={14} />
+                                  </span>
                                 </div>
-                                {groupChildren.map(child => (
+                                {!collapsedGroups.includes(`${item.key}:${group}`) && groupChildren.map(child => (
                                   <div
                                     key={`${child.key}_${child.label}`}
                                     className={`nav-item sub justify-between ${module === child.key && isActive ? "active" : ""}`}
@@ -992,7 +999,10 @@ export default function App() {
               {module === "appointments" && (
                 <Appointments
                   initialEncounterId={selectedWorkflowEncounterId}
-                  onSelect={() => setModule("chart")}
+                  onSelect={(patientId?: string) => {
+                    if (patientId) setClinicalPatientId(patientId);
+                    setModule("chart");
+                  }}
                   onGoToBilling={() => setModule("billing")}
                 />
               )}
@@ -1036,12 +1046,23 @@ export default function App() {
               {module === "insurance" && <Insurance />}
               {module === "clinical" && <PlaceholderModule title="Clinical" sub="Encounters, orders, results, and care plans" />}
               {module === "reports" && <PlaceholderModule title="Reports" sub="Operational and clinical reporting" />}
-              {module === "op_nurse" && <NurseStation nurseName={activeStaff?.name || "OP Nurse"} />}
+              {module === "op_nurse" && (
+                <NurseStation
+                  nurseName={activeStaff?.name || "OP Nurse"}
+                  onOpenQueue={userPermissions.includes("queue") ? () => setModule("queue") : undefined}
+                />
+              )}
               {module === "admin" && <Administration />}
 
-              {/* New modules */}
-              {module === "queue" && (
-                <QueueManagement
+              {/* Outpatient Department Modular Suite */}
+              {module === "op_management" && (
+                <OPManagement
+                  staffName={activeStaff?.name || "OP desk"}
+                  onNavigateToNurseStation={
+                    userPermissions.includes("op_nurse") ? () => setModule("op_nurse") : undefined
+                  }
+                  onNavigateToQueue={() => setModule("queue")}
+                  onNavigateToOPDProcedures={() => setModule("opd_procedures")}
                   onNavigateToOPWorkflow={(encId, step) => {
                     if (encId) setSelectedWorkflowEncounterId(encId);
                     if (step !== undefined) setWorkflowInitialStep(step);
@@ -1049,15 +1070,15 @@ export default function App() {
                   }}
                   onNavigateToDoctorWorkflow={!canOpenConsultation ? undefined : (encId) => {
                     if (encId) setSelectedWorkflowEncounterId(encId);
-                    setModule("doctor_workflow");
+                    setModule("doctor_portal");
                   }}
                   onNavigateToOPRegistration={() => {
                     setModule("op_registration");
                   }}
                 />
               )}
-              {module === "op_management" && (
-                <OPManagement
+              {module === "queue" && (
+                <QueueManagement
                   onNavigateToNurseStation={
                     userPermissions.includes("op_nurse") ? () => setModule("op_nurse") : undefined
                   }
@@ -1068,20 +1089,16 @@ export default function App() {
                   }}
                   onNavigateToDoctorWorkflow={!canOpenConsultation ? undefined : (encId) => {
                     if (encId) setSelectedWorkflowEncounterId(encId);
-                    setModule("doctor_workflow");
-                  }}
-                  onNavigateToQueue={() => {
-                    setModule("queue");
+                    setModule("doctor_portal");
                   }}
                   onNavigateToOPRegistration={() => {
                     setModule("op_registration");
                   }}
-                  onNavigateToPharmacy={() => {
-                    setModule("pharmacy");
-                  }}
-                  onNavigateToBilling={() => {
-                    setModule("billing");
-                  }}
+                />
+              )}
+              {module === "opd_procedures" && (
+                <OPDProcedures
+                  onNavigateToOPManagement={() => setModule("op_management")}
                 />
               )}
               {module === "op_workflow" && (
@@ -1091,21 +1108,12 @@ export default function App() {
                   onComplete={() => setModule("op_management")}
                   onOpenDoctorPortal={!canOpenConsultation ? undefined : (encId) => {
                     if (encId) setSelectedWorkflowEncounterId(encId);
-                    setModule("doctor_workflow");
+                    setModule("doctor_portal");
                   }}
                 />
               )}
               {module === "patient_exp" && <PatientExperience />}
-              {module === "doctor_workflow" && (
-                <DoctorWorkflow
-                  onNavigateToOPWorkflow={(encId) => {
-                    if (encId) setSelectedWorkflowEncounterId(encId);
-                    setWorkflowInitialStep(5);
-                    setModule("op_workflow");
-                  }}
-                />
-              )}
-              {module === "doctor_portal" && (
+              {(module === "doctor_workflow" || module === "doctor_portal") && (
                 <DoctorPortal doctor={activeDoctor || resolveDoctorAccount({ name: activeStaff.name })} />
               )}
               {module === "scheduling" && <DoctorScheduling />}

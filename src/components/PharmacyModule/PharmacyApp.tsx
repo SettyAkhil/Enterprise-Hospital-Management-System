@@ -6,7 +6,6 @@ import GlobalSearch from "./components/GlobalSearch";
 import Dashboard from "./pages/Dashboard";
 import Dispensing from "./pages/Dispensing";
 import PrescriptionQueue from "./pages/PrescriptionQueue";
-import OCRVerification from "./pages/OCRVerification";
 import MedicineMaster from "./pages/MedicineMaster";
 import CategoryMaster from "./pages/CategoryMaster";
 import Suppliers from "./pages/Suppliers";
@@ -20,11 +19,12 @@ import Reports from "./pages/Reports";
 import Notifications from "./pages/Notifications";
 import AuditLog from "./pages/AuditLog";
 
+import SupplierReturns from "./pages/SupplierReturns";
+
 const pages: Record<string, React.ComponentType<{ onNavigate: (page: string) => void }>> = {
   dashboard: Dashboard,
   dispensing: Dispensing,
   prescriptions: PrescriptionQueue,
-  ocr: OCRVerification,
   medicines: MedicineMaster,
   categories: CategoryMaster,
   suppliers: Suppliers,
@@ -34,6 +34,7 @@ const pages: Record<string, React.ComponentType<{ onNavigate: (page: string) => 
   "stock-transfers": StockTransfers,
   "expiry-low-stock": ExpiryLowStock,
   "sales-returns": SalesReturns,
+  "supplier-returns": SupplierReturns,
   reports: Reports,
   notifications: Notifications,
   "audit-log": AuditLog,
