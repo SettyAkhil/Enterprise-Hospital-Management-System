@@ -1,4 +1,6 @@
 
+
+
 export interface AppUser {
   id: string;
   name: string;
@@ -423,7 +425,417 @@ const SUPPLIER_RETURNS_KEY = "hospai_pharm_supp_returns_v4";
 const ADJUSTMENTS_KEY = "hospai_pharm_adjustments_v4";
 const CLARIFICATIONS_KEY = "hospai_pharm_clarifications_v4";
 
+/**
+ * Purges all sample, demo, test, and seed data from the Pharmacy stores.
+ * Removes mock medicines, test batches, demo purchase orders, test GRNs, demo returns,
+ * sample suppliers, and demo bills, leaving only genuine real-world records.
+ */
+export function purgeSampleData(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const SAMPLE_MED_IDS = new Set([
+      "MED-001", "MED-002", "MED-003", "MED-004", "MED-005",
+      "MED-006", "MED-007", "MED-008", "MED-009", "MED-010"
+    ]);
+    const SAMPLE_MED_NAMES = new Set([
+      "dolo 500mg", "mox 500mg", "azee 500mg", "pan 40mg", "cetizine 10mg",
+      "glycomet 500mg", "atorva 20mg", "limcee 500mg", "ascoril dx syrup", "zenflox drops",
+      "paracetamol 500mg (demo)", "amoxicillin 250mg (demo)"
+    ]);
+    const SAMPLE_BATCH_IDS = new Set([
+      "BAT-001", "BAT-002", "BAT-003", "BAT-004", "BAT-005",
+      "BAT-006", "BAT-007", "BAT-008", "BAT-009", "BAT-010"
+    ]);
+    const SAMPLE_PO_IDS = new Set([
+      "PO-2026-001", "PO-2026-002", "PO-2026-003", "PO-2026-004",
+      "PO-2026-005", "PO-2026-006", "PO-2026-007", "PO-2026-008"
+    ]);
+    const SAMPLE_GRN_IDS = new Set([
+      "GRN-2026-001", "GRN-2026-002", "GRN-2026-003", "GRN-2026-004"
+    ]);
+    const SAMPLE_RET_IDS = new Set([
+      "RET-2026-001", "RET-2026-002", "RET-2026-003", "RET-2026-004", "RET-2026-005", "RET-2026-006"
+    ]);
+    const SAMPLE_SUP_IDS = new Set([
+      "SUP-001", "SUP-002", "SUP-003", "SUP-004", "SUP-005"
+    ]);
+    const SAMPLE_SUP_NAMES = new Set([
+      "apollo pharma distributors", "sun medisource ltd", "cipla health supplies",
+      "zydus life sciences", "torrent medical solutions"
+    ]);
+    const SAMPLE_CAT_IDS = new Set([
+      "CAT-001", "CAT-002", "CAT-003", "CAT-004", "CAT-005",
+      "CAT-006", "CAT-007", "CAT-008", "CAT-009"
+    ]);
+
+    let changed = false;
+
+    // 1. Medicines
+    const storedMeds = window.localStorage.getItem(MEDICINES_KEY);
+    if (storedMeds) {
+      try {
+        const meds = JSON.parse(storedMeds);
+        const isSampleMed = (m: any) => {
+          const id = (m.id || "").toLowerCase();
+          if (SAMPLE_MED_IDS.has(m.id) || id.startsWith("med-00") || id.startsWith("med-01")) return true;
+          const name = `${m.name || ""} ${m.medicineName || ""} ${m.brandName || ""} ${m.genericName || ""} ${m.generic || ""}`.toLowerCase();
+          return (
+            name.includes("dolo") ||
+            name.includes("mox") ||
+            name.includes("azee") ||
+            name.includes("pan 40") ||
+            name.includes("cetzine") ||
+            name.includes("cetizine") ||
+            name.includes("glycomet") ||
+            name.includes("atorva") ||
+            name.includes("limcee") ||
+            name.includes("ascoril") ||
+            name.includes("zenflox") ||
+            name.includes("amoxicillin trihydrate") ||
+            name.includes("pantoprazole sodium") ||
+            name.includes("cetirizine hydrochloride") ||
+            name.includes("metformin hydrochloride")
+          );
+        };
+        const filtered = meds.filter((m: any) => !isSampleMed(m));
+        if (filtered.length !== meds.length) {
+          window.localStorage.setItem(MEDICINES_KEY, JSON.stringify(filtered));
+          changed = true;
+        }
+      } catch {}
+    }
+
+    // 2. Batches
+    const storedBatches = window.localStorage.getItem(BATCHES_KEY);
+    if (storedBatches) {
+      try {
+        const batches = JSON.parse(storedBatches);
+        let validMedIds = new Set<string>();
+        if (storedMeds) {
+          try {
+            const currentMeds = JSON.parse(window.localStorage.getItem(MEDICINES_KEY) || "[]");
+            validMedIds = new Set(currentMeds.map((m: any) => m.id));
+          } catch {}
+        }
+
+        const filtered = batches.filter((b: any) => {
+          const id = (b.id || "").toLowerCase();
+          const batchNo = (b.batchNumber || "").toLowerCase();
+          const medId = (b.medicineId || "").toLowerCase();
+          const name = `${b.name || ""} ${b.medicineName || ""} ${b.medicine || ""}`.toLowerCase();
+          if (SAMPLE_BATCH_IDS.has(b.id) || SAMPLE_MED_IDS.has(b.medicineId)) return false;
+          // Purge orphan batches if medicine catalog does not contain this medicine
+          if (validMedIds.size > 0 && !validMedIds.has(b.medicineId)) return false;
+          if (validMedIds.size === 0 && (medId.startsWith("med-") || batchNo.includes("-2026-"))) return false;
+
+          if (id.startsWith("bat-00") || id.startsWith("bat-01") || id.startsWith("bat-2026-") || id.startsWith("bat-demo")) return false;
+          if (batchNo.startsWith("bat-00") || batchNo.startsWith("bat-01") || batchNo.startsWith("bat-2026-")) return false;
+          if (
+            batchNo.startsWith("amx-") ||
+            batchNo.startsWith("pcm-") ||
+            batchNo.startsWith("azm-") ||
+            batchNo.startsWith("ctz-") ||
+            batchNo.startsWith("pan-") ||
+            batchNo.startsWith("vtc-") ||
+            batchNo.startsWith("cof-") ||
+            batchNo.startsWith("met-") ||
+            batchNo.startsWith("atv-")
+          ) return false;
+          if (
+            medId.startsWith("med-00") ||
+            medId.startsWith("med-01") ||
+            medId.startsWith("med-amx") ||
+            medId.startsWith("med-pcm") ||
+            medId.startsWith("med-azm") ||
+            medId.startsWith("med-ctz") ||
+            medId.startsWith("med-pan") ||
+            medId.startsWith("med-vtc") ||
+            medId.startsWith("med-cof") ||
+            medId.startsWith("med-met") ||
+            medId.startsWith("med-atv")
+          ) return false;
+          if (
+            name.includes("dolo") ||
+            name.includes("mox") ||
+            name.includes("azee") ||
+            name.includes("pan 40") ||
+            name.includes("cetzine") ||
+            name.includes("cetizine") ||
+            name.includes("glycomet") ||
+            name.includes("atorva") ||
+            name.includes("limcee") ||
+            name.includes("ascoril") ||
+            name.includes("zenflox") ||
+            name.includes("azithromycin") ||
+            name.includes("pantoprazole") ||
+            name.includes("paracetamol") ||
+            name.includes("amoxicillin") ||
+            name.includes("vitamin c")
+          ) return false;
+          return true;
+        });
+        if (filtered.length !== batches.length) {
+          window.localStorage.setItem(BATCHES_KEY, JSON.stringify(filtered));
+          changed = true;
+        }
+      } catch {}
+    }
+
+    // 3. Purchase Orders (both current POS_KEY and alternate legacy key)
+    const poKeys = [POS_KEY, "hospai_pharm_purchase_orders_v2"];
+    poKeys.forEach(key => {
+      const storedPOs = window.localStorage.getItem(key);
+      if (storedPOs) {
+        try {
+          const pos = JSON.parse(storedPOs);
+          const filtered = pos.filter((p: any) => {
+            const id = (p.id || "").toLowerCase();
+            const supId = (p.supplierId || "").toLowerCase();
+            if (SAMPLE_PO_IDS.has(p.id)) return false;
+            if (id.startsWith("po-2026-") || id.startsWith("po-demo") || id.startsWith("po-test")) return false;
+            if (supId.startsWith("sup-00") || supId.startsWith("sup-01") || SAMPLE_SUP_IDS.has(p.supplierId)) return false;
+            if (p.totalOrderValue === 99900) return false;
+            if (Array.isArray(p.items)) {
+              const hasSampleItem = p.items.some((item: any) => {
+                const medId = (item.medicineId || "").toLowerCase();
+                return (
+                  medId.startsWith("med-00") ||
+                  medId.startsWith("med-01") ||
+                  medId.startsWith("med-cof") ||
+                  medId.startsWith("med-vtc") ||
+                  medId.startsWith("med-met") ||
+                  medId.startsWith("med-atv") ||
+                  medId.startsWith("med-azm") ||
+                  medId.startsWith("med-pan") ||
+                  medId.startsWith("med-pcm") ||
+                  medId.startsWith("med-amx") ||
+                  medId.startsWith("med-ctz")
+                );
+              });
+              if (hasSampleItem) return false;
+            }
+            return true;
+          });
+          if (filtered.length !== pos.length) {
+            window.localStorage.setItem(key, JSON.stringify(filtered));
+            changed = true;
+          }
+        } catch {}
+      }
+    });
+
+    // 4. GRNs
+    const storedGRNs = window.localStorage.getItem(GRNS_KEY);
+    if (storedGRNs) {
+      try {
+        const grns = JSON.parse(storedGRNs);
+        const filtered = grns.filter((g: any) => {
+          const id = (g.id || "").toLowerCase();
+          const poId = (g.purchaseOrderId || "").toLowerCase();
+          const supId = (g.supplierId || "").toLowerCase();
+          if (SAMPLE_GRN_IDS.has(g.id)) return false;
+          if (id.startsWith("grn-2026-") || id.startsWith("grn-demo") || id.startsWith("grn-test")) return false;
+          if (poId.startsWith("po-2026-") || poId.startsWith("po-demo") || poId.startsWith("po-test") || SAMPLE_PO_IDS.has(g.purchaseOrderId)) return false;
+          if (supId.startsWith("sup-00") || supId.startsWith("sup-01") || SAMPLE_SUP_IDS.has(g.supplierId)) return false;
+          return true;
+        });
+        if (filtered.length !== grns.length) {
+          window.localStorage.setItem(GRNS_KEY, JSON.stringify(filtered));
+          changed = true;
+        }
+      } catch {}
+    }
+
+    // 5. Returns
+    const storedReturns = window.localStorage.getItem(RETURNS_KEY);
+    if (storedReturns) {
+      try {
+        const returns = JSON.parse(storedReturns);
+        const filtered = returns.filter((r: any) => {
+          const id = (r.id || "").toLowerCase();
+          const retNo = (r.returnNumber || "").toLowerCase();
+          const billNo = (r.originalBillNumber || "").toLowerCase();
+          const patient = (r.patientName || "").toLowerCase();
+          if (SAMPLE_RET_IDS.has(r.id) || SAMPLE_RET_IDS.has(r.returnNumber)) return false;
+          if (id.startsWith("ret-2026-") || retNo.startsWith("ret-2026-") || id.startsWith("ret-demo") || retNo.startsWith("ret-demo")) return false;
+          if (id === "ret-2026-62111" || retNo === "ret-2026-62111") return false;
+          if (billNo === "bill-2026-001245" || billNo === "inv-2026-8845" || billNo === "inv-2026-8844" || billNo.startsWith("pb-2026-00")) return false;
+          if (patient === "rahul verma" || patient === "priya sharma" || patient === "amit kumar") return false;
+          if (SAMPLE_MED_IDS.has(r.medicineId)) return false;
+          if (Array.isArray(r.items)) {
+            const hasSample = r.items.some((item: any) => {
+              const medId = (item.medicineId || "").toLowerCase();
+              const medName = (item.medicineName || "").toLowerCase();
+              return (
+                medId.startsWith("med-azm") ||
+                medId.startsWith("med-pan") ||
+                medId.startsWith("med-vtc") ||
+                medId.startsWith("med-pcm") ||
+                medId.startsWith("med-amx") ||
+                medId.startsWith("med-ctz") ||
+                medId.startsWith("med-00") ||
+                medId.startsWith("med-01") ||
+                medName.includes("azithromycin") ||
+                medName.includes("pantoprazole") ||
+                medName.includes("vitamin c") ||
+                medName.includes("amoxicillin") ||
+                medName.includes("paracetamol")
+              );
+            });
+            if (hasSample) return false;
+          }
+          return true;
+        });
+        if (filtered.length !== returns.length) {
+          window.localStorage.setItem(RETURNS_KEY, JSON.stringify(filtered));
+          changed = true;
+        }
+      } catch {}
+    }
+
+    // 6. Suppliers
+    const storedSups = window.localStorage.getItem(SUPPLIERS_KEY);
+    if (storedSups) {
+      try {
+        const sups = JSON.parse(storedSups);
+        const filtered = sups.filter((s: any) => {
+          if (SAMPLE_SUP_IDS.has(s.id)) return false;
+          const nameNorm = (s.supplierName || s.name || "").toLowerCase().trim();
+          if (SAMPLE_SUP_NAMES.has(nameNorm) && (s.id.startsWith("SUP-00") || s.id.startsWith("SUP-01"))) return false;
+          return true;
+        });
+        if (filtered.length !== sups.length) {
+          window.localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(filtered));
+          changed = true;
+        }
+      } catch {}
+    }
+
+    // 7. Categories
+    const storedCats = window.localStorage.getItem(CATEGORIES_KEY);
+    if (storedCats) {
+      try {
+        const cats = JSON.parse(storedCats);
+        const filtered = cats.filter((c: any) => {
+          if (SAMPLE_CAT_IDS.has(c.id)) return false;
+          if (typeof c.id === "string" && c.id.startsWith("CAT-00")) return false;
+          return true;
+        });
+        if (filtered.length !== cats.length) {
+          window.localStorage.setItem(CATEGORIES_KEY, JSON.stringify(filtered));
+          changed = true;
+        }
+      } catch {}
+    }
+
+    // 8. Bills
+    const storedBills = window.localStorage.getItem(BILLS_KEY);
+    if (storedBills) {
+      try {
+        const bills = JSON.parse(storedBills);
+        const filtered = bills.filter((b: any) => {
+          const id = (b.id || "").toLowerCase();
+          const billNo = (b.billNumber || "").toLowerCase();
+          const patient = (b.patientName || "").toLowerCase();
+          if (typeof b.id === "string" && b.id.startsWith("BILL-DEMO-")) return false;
+          if (typeof b.billNumber === "string" && b.billNumber.startsWith("BILL-DEMO-")) return false;
+          if (id.startsWith("pb-2026-00") || billNo === "bill-2026-001245" || billNo === "inv-2026-8845" || billNo === "inv-2026-8844") return false;
+          if (patient === "rahul verma" || patient === "priya sharma" || patient === "amit kumar") return false;
+          if (b.createdBy === "Pharmacist" && (b.totalAmount === 115 || b.totalAmount === 440 || b.totalAmount === 555)) return false;
+          if (Array.isArray(b.items)) {
+            const hasSampleItem = b.items.some((item: any) => {
+              const medId = (item.medicineId || "").toLowerCase();
+              const medName = (item.medicineName || "").toLowerCase();
+              return (
+                medId === "med-azm-500" ||
+                medId === "med-pan-40" ||
+                medId === "med-vtc-500" ||
+                medId === "med-pcm-500" ||
+                medId === "med-amx-500" ||
+                medId === "med-ctz-10" ||
+                medName.includes("azithromycin 500mg") ||
+                medName.includes("pantoprazole 40mg") ||
+                medName.includes("vitamin c 500mg") ||
+                medName.includes("amoxicillin 500mg")
+              );
+            });
+            if (hasSampleItem && (b.createdBy === "Pharmacist" || patient === "" || patient === "walk-in patient")) return false;
+          }
+          return true;
+        });
+        if (filtered.length !== bills.length) {
+          window.localStorage.setItem(BILLS_KEY, JSON.stringify(filtered));
+          changed = true;
+        }
+      } catch {}
+    }
+
+    // 9. Stock Transactions
+    const storedTxs = window.localStorage.getItem(STOCK_TXS_KEY);
+    if (storedTxs) {
+      try {
+        const txs = JSON.parse(storedTxs);
+        const filtered = txs.filter((t: any) => !SAMPLE_MED_IDS.has(t.medicineId) && !SAMPLE_BATCH_IDS.has(t.batchId));
+        if (filtered.length !== txs.length) {
+          window.localStorage.setItem(STOCK_TXS_KEY, JSON.stringify(filtered));
+          changed = true;
+        }
+      } catch {}
+    }
+
+    // 10. Supplier Returns (both current and legacy keys)
+    const suppRetKeys = [SUPPLIER_RETURNS_KEY, "hospai_pharm_supplier_returns_v2"];
+    suppRetKeys.forEach(key => {
+      const storedSRs = window.localStorage.getItem(key);
+      if (storedSRs) {
+        try {
+          const srs = JSON.parse(storedSRs);
+          const filtered = srs.filter((sr: any) => !SAMPLE_SUP_IDS.has(sr.supplierId) && !(typeof sr.id === "string" && sr.id.startsWith("SR-2026-00")));
+          if (filtered.length !== srs.length) {
+            window.localStorage.setItem(key, JSON.stringify(filtered));
+            changed = true;
+          }
+        } catch {}
+      }
+    });
+
+    if (changed) {
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"));
+    }
+    return changed;
+  } catch (e) {
+    console.error("Failed to purge sample pharmacy data:", e);
+    return false;
+  }
+}
+
+/**
+ * Resets all Pharmacy records to an empty state for a clean real-world start.
+ */
+export function clearAllPharmacyData(): void {
+  if (typeof window === "undefined") return;
+  const keys = [
+    CATEGORIES_KEY, SUPPLIERS_KEY, MEDICINES_KEY, BATCHES_KEY,
+    POS_KEY, GRNS_KEY, STOCK_TXS_KEY, PRESCRIPTIONS_KEY,
+    BILLS_KEY, RETURNS_KEY, TRANSFERS_KEY, SUPPLIER_RETURNS_KEY,
+    ADJUSTMENTS_KEY, CLARIFICATIONS_KEY, NOTIFICATIONS_KEY, AUDIT_LOGS_KEY,
+    "hospai_pharm_purchase_orders_v2", "hospai_pharm_prescriptions_v2",
+    "hospai_pharm_supplier_returns_v2", "hospai_pharm_sample_data_v1"
+  ];
+  keys.forEach(k => window.localStorage.removeItem(k));
+  window.dispatchEvent(new Event("storage"));
+  window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"));
+}
+
+// Automatically run sample data purge on module load
+if (typeof window !== "undefined") {
+  purgeSampleData();
+}
+
 export class PharmacyDatabase {
+  static purgeSampleData = purgeSampleData;
+  static clearAllPharmacyData = clearAllPharmacyData;
   // Categories
 
   static getUsers(): AppUser[] {
@@ -559,7 +971,35 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return [];
     try {
       const stored = window.localStorage.getItem(MEDICINES_KEY);
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      const list: AppMedicine[] = JSON.parse(stored);
+      const isSampleMed = (m: any) => {
+        const id = (m.id || "").toLowerCase();
+        if (id.startsWith("med-00") || id.startsWith("med-01")) return true;
+        const name = `${m.name || ""} ${m.medicineName || ""} ${m.brandName || ""} ${m.genericName || ""} ${m.generic || ""}`.toLowerCase();
+        return (
+          name.includes("dolo") ||
+          name.includes("mox") ||
+          name.includes("azee") ||
+          name.includes("pan 40") ||
+          name.includes("cetzine") ||
+          name.includes("cetizine") ||
+          name.includes("glycomet") ||
+          name.includes("atorva") ||
+          name.includes("limcee") ||
+          name.includes("ascoril") ||
+          name.includes("zenflox") ||
+          name.includes("amoxicillin trihydrate") ||
+          name.includes("pantoprazole sodium") ||
+          name.includes("cetirizine hydrochloride") ||
+          name.includes("metformin hydrochloride")
+        );
+      };
+      const cleaned = list.filter(m => !isSampleMed(m));
+      if (cleaned.length !== list.length) {
+        window.localStorage.setItem(MEDICINES_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch { return []; }
   }
   static saveMedicines(medicines: AppMedicine[]) {
@@ -591,7 +1031,71 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return [];
     try {
       const stored = window.localStorage.getItem(BATCHES_KEY);
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      const list: AppBatch[] = JSON.parse(stored);
+      const validMeds = this.getMedicines();
+      const validMedIds = new Set(validMeds.map(m => m.id));
+
+      const isSampleBatch = (b: any) => {
+        const id = (b.id || "").toLowerCase();
+        const batchNo = (b.batchNumber || "").toLowerCase();
+        const medId = (b.medicineId || "").toLowerCase();
+        const name = `${b.name || ""} ${b.medicineName || ""} ${b.medicine || ""}`.toLowerCase();
+
+        // If no medicines exist or medicine not found, it is an orphan batch
+        if (!validMedIds.has(b.medicineId)) return true;
+
+        return (
+          id.startsWith("bat-00") ||
+          id.startsWith("bat-01") ||
+          id.startsWith("bat-2026-") ||
+          id.startsWith("bat-demo") ||
+          batchNo.startsWith("bat-00") ||
+          batchNo.startsWith("bat-01") ||
+          batchNo.startsWith("bat-2026-") ||
+          batchNo.startsWith("amx-") ||
+          batchNo.startsWith("pcm-") ||
+          batchNo.startsWith("azm-") ||
+          batchNo.startsWith("ctz-") ||
+          batchNo.startsWith("pan-") ||
+          batchNo.startsWith("vtc-") ||
+          batchNo.startsWith("cof-") ||
+          batchNo.startsWith("met-") ||
+          batchNo.startsWith("atv-") ||
+          medId.startsWith("med-00") ||
+          medId.startsWith("med-01") ||
+          medId.startsWith("med-amx") ||
+          medId.startsWith("med-pcm") ||
+          medId.startsWith("med-azm") ||
+          medId.startsWith("med-ctz") ||
+          medId.startsWith("med-pan") ||
+          medId.startsWith("med-vtc") ||
+          medId.startsWith("med-cof") ||
+          medId.startsWith("med-met") ||
+          medId.startsWith("med-atv") ||
+          name.includes("dolo") ||
+          name.includes("mox") ||
+          name.includes("azee") ||
+          name.includes("pan 40") ||
+          name.includes("cetzine") ||
+          name.includes("cetizine") ||
+          name.includes("glycomet") ||
+          name.includes("atorva") ||
+          name.includes("limcee") ||
+          name.includes("ascoril") ||
+          name.includes("zenflox") ||
+          name.includes("azithromycin") ||
+          name.includes("pantoprazole") ||
+          name.includes("paracetamol") ||
+          name.includes("amoxicillin") ||
+          name.includes("vitamin c")
+        );
+      };
+      const cleaned = list.filter(b => !isSampleBatch(b));
+      if (cleaned.length !== list.length) {
+        window.localStorage.setItem(BATCHES_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch { return []; }
   }
   static saveBatches(batches: AppBatch[]) {
@@ -632,7 +1136,40 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return [];
     try {
       const stored = window.localStorage.getItem(POS_KEY);
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      const list: AppPurchaseOrder[] = JSON.parse(stored);
+      const isSamplePO = (p: any) => {
+        const id = (p.id || "").toLowerCase();
+        const supId = (p.supplierId || "").toLowerCase();
+        if (id.startsWith("po-2026-") || id.startsWith("po-demo") || id.startsWith("po-test")) return true;
+        if (supId.startsWith("sup-00") || supId.startsWith("sup-01")) return true;
+        if (p.totalOrderValue === 99900) return true;
+        if (Array.isArray(p.items)) {
+          const hasSampleItem = p.items.some((item: any) => {
+            const medId = (item.medicineId || "").toLowerCase();
+            return (
+              medId.startsWith("med-00") ||
+              medId.startsWith("med-01") ||
+              medId.startsWith("med-cof") ||
+              medId.startsWith("med-vtc") ||
+              medId.startsWith("med-met") ||
+              medId.startsWith("med-atv") ||
+              medId.startsWith("med-azm") ||
+              medId.startsWith("med-pan") ||
+              medId.startsWith("med-pcm") ||
+              medId.startsWith("med-amx") ||
+              medId.startsWith("med-ctz")
+            );
+          });
+          if (hasSampleItem) return true;
+        }
+        return false;
+      };
+      const cleaned = list.filter(p => !isSamplePO(p));
+      if (cleaned.length !== list.length) {
+        window.localStorage.setItem(POS_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch { return []; }
   }
   static savePurchaseOrders(pos: AppPurchaseOrder[]) {
@@ -659,7 +1196,22 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return [];
     try {
       const stored = window.localStorage.getItem(GRNS_KEY);
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      const list: AppGRN[] = JSON.parse(stored);
+      const isSampleGRN = (g: any) => {
+        const id = (g.id || "").toLowerCase();
+        const poId = (g.purchaseOrderId || "").toLowerCase();
+        const supId = (g.supplierId || "").toLowerCase();
+        if (id.startsWith("grn-2026-") || id.startsWith("grn-demo") || id.startsWith("grn-test")) return true;
+        if (poId.startsWith("po-2026-") || poId.startsWith("po-demo") || poId.startsWith("po-test")) return true;
+        if (supId.startsWith("sup-00") || supId.startsWith("sup-01")) return true;
+        return false;
+      };
+      const cleaned = list.filter(g => !isSampleGRN(g));
+      if (cleaned.length !== list.length) {
+        window.localStorage.setItem(GRNS_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch { return []; }
   }
   static saveGRNs(grns: AppGRN[]) {
@@ -714,7 +1266,44 @@ export class PharmacyDatabase {
       const stored = window.localStorage.getItem(BILLS_KEY);
       let bills: AppPharmacyBill[] = stored ? JSON.parse(stored) : [];
       if (!Array.isArray(bills)) bills = [];
-      return bills;
+
+      const isSampleBill = (b: any) => {
+        const id = (b.id || "").toLowerCase();
+        const billNo = (b.billNumber || "").toLowerCase();
+        const patient = (b.patientName || "").toLowerCase();
+        if (typeof b.id === "string" && b.id.startsWith("BILL-DEMO-")) return true;
+        if (typeof b.billNumber === "string" && b.billNumber.startsWith("BILL-DEMO-")) return true;
+        if (id.startsWith("pb-2026-00") || billNo === "bill-2026-001245" || billNo === "inv-2026-8845" || billNo === "inv-2026-8844") return true;
+        if (patient === "rahul verma" || patient === "priya sharma" || patient === "amit kumar") return true;
+        if (b.billNumber === "MOD-BILL-2026-001245" || (b.originalBillNumber === "BILL-2026-001245" && b.billNumber?.startsWith("MOD-"))) return true;
+        if (b.createdBy === "Pharmacist" && (b.totalAmount === 115 || b.totalAmount === 440 || b.totalAmount === 555)) return true;
+        if (Array.isArray(b.items)) {
+          const hasSampleItem = b.items.some((item: any) => {
+            const medId = (item.medicineId || "").toLowerCase();
+            const medName = (item.medicineName || "").toLowerCase();
+            return (
+              medId === "med-azm-500" ||
+              medId === "med-pan-40" ||
+              medId === "med-vtc-500" ||
+              medId === "med-pcm-500" ||
+              medId === "med-amx-500" ||
+              medId === "med-ctz-10" ||
+              medName.includes("azithromycin 500mg") ||
+              medName.includes("pantoprazole 40mg") ||
+              medName.includes("vitamin c 500mg") ||
+              medName.includes("amoxicillin 500mg")
+            );
+          });
+          if (hasSampleItem && (b.createdBy === "Pharmacist" || patient === "" || patient === "walk-in patient")) return true;
+        }
+        return false;
+      };
+
+      const cleaned = bills.filter(b => !isSampleBill(b));
+      if (cleaned.length !== bills.length) {
+        window.localStorage.setItem(BILLS_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch { return []; }
   }
   static saveBills(bills: AppPharmacyBill[]) {
@@ -733,10 +1322,40 @@ export class PharmacyDatabase {
     try {
       const stored = window.localStorage.getItem(RETURNS_KEY);
       let list: AppPharmacyReturn[] = stored ? JSON.parse(stored) : [];
-      // Clean up previous test returns for Rahul Verma (BILL-2026-001245)
-      const cleaned = list.filter(
-        r => r.originalBillNumber !== "BILL-2026-001245" && r.patientName !== "Rahul Verma"
-      );
+      const isSampleReturn = (r: any) => {
+        const id = (r.id || "").toLowerCase();
+        const retNo = (r.returnNumber || "").toLowerCase();
+        const billNo = (r.originalBillNumber || "").toLowerCase();
+        const patient = (r.patientName || "").toLowerCase();
+        if (id.startsWith("ret-2026-") || retNo.startsWith("ret-2026-") || id.startsWith("ret-demo") || retNo.startsWith("ret-demo")) return true;
+        if (id === "ret-2026-62111" || retNo === "ret-2026-62111") return true;
+        if (billNo === "bill-2026-001245" || billNo === "inv-2026-8845" || billNo === "inv-2026-8844" || billNo.startsWith("pb-2026-00")) return true;
+        if (patient === "rahul verma" || patient === "priya sharma" || patient === "amit kumar") return true;
+        if (Array.isArray(r.items)) {
+          const hasSample = r.items.some((item: any) => {
+            const medId = (item.medicineId || "").toLowerCase();
+            const medName = (item.medicineName || "").toLowerCase();
+            return (
+              medId.startsWith("med-azm") ||
+              medId.startsWith("med-pan") ||
+              medId.startsWith("med-vtc") ||
+              medId.startsWith("med-pcm") ||
+              medId.startsWith("med-amx") ||
+              medId.startsWith("med-ctz") ||
+              medId.startsWith("med-00") ||
+              medId.startsWith("med-01") ||
+              medName.includes("azithromycin") ||
+              medName.includes("pantoprazole") ||
+              medName.includes("vitamin c") ||
+              medName.includes("amoxicillin") ||
+              medName.includes("paracetamol")
+            );
+          });
+          if (hasSample) return true;
+        }
+        return false;
+      };
+      const cleaned = list.filter(r => !isSampleReturn(r));
       if (cleaned.length !== list.length) {
         this.saveReturns(cleaned);
         return cleaned;

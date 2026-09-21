@@ -186,6 +186,13 @@ export default function MedicineMaster({ onNavigate }: MedicineMasterProps) {
                 </td>
               </tr>
             ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={10} className="p-8 text-center text-[#94A3B8]">
+                  No medicines found in master catalog.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
