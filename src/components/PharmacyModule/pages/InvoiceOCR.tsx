@@ -206,7 +206,6 @@ export default function InvoiceOCR({ onNavigate }: InvoiceOCRProps) {
           id: medId,
           medicineName: item.matched,
           genericName: "Auto-created Generic",
-          categoryId: "General",
           manufacturer: item.mfr,
           stock: item.quantity,
           mrp: item.mrp,

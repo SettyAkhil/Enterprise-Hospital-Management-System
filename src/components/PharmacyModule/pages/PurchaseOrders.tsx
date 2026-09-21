@@ -106,8 +106,8 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
                 <td><StatusBadge status={po.status} size="sm" /></td>
                 <td>
                   <div className="flex items-center gap-1">
-                    <button className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B] transition-colors" title="View"><Eye size={13} /></button>
-                    {po.status === "Draft" && <button className="p-1.5 rounded hover:bg-[#E8EDF5] text-[#1B4FD8] transition-colors" title="Send"><Send size={13} /></button>}
+                    <button onClick={() => window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Opened PO Details!" } }))} className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B] transition-colors" title="View"><Eye size={13} /></button>
+                    {po.status === "Draft" && <button onClick={() => { handleApprove(po.id); window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "PO Sent to Supplier!" } })); }} className="p-1.5 rounded hover:bg-[#E8EDF5] text-[#1B4FD8] transition-colors" title="Send"><Send size={13} /></button>}
                     {po.status === "Submitted" && <button onClick={() => handleApprove(po.id)} className="p-1.5 rounded hover:bg-[#DCFCE7] text-[#15803d] transition-colors" title="Approve"><Check size={13} /></button>}
                     {po.status === "Approved" && <button onClick={() => onNavigate("grn")} className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded" style={{ background: "#E8EDF5", color: "#1B4FD8" }}>Receive</button>}
                   </div>

@@ -64,7 +64,6 @@ export function usePharmacyData() {
   const [prescriptions, setPrescriptions] = useState(() => PharmacyDatabase.getPrescriptions());
   const [suppliers, setSuppliers] = useState(() => PharmacyDatabase.getSuppliers());
   const [purchaseOrders, setPurchaseOrders] = useState(() => PharmacyDatabase.getPurchaseOrders());
-  const [categories, setCategories] = useState(() => PharmacyDatabase.getCategories());
   const [batches, setBatches] = useState(() => PharmacyDatabase.getBatches());
   const [bills, setBills] = useState(() => PharmacyDatabase.getBills());
 
@@ -99,7 +98,6 @@ export function usePharmacyData() {
       barcode: m.barcode || "89000000000",
       schedule: m.scheduleType || "H",
       prescription: m.controlledSubstanceFlag || false,
-      category: m.categoryId || "General",
       reorderLevel: m.reorderLevel || 10
     };
   });
@@ -162,7 +160,6 @@ export function usePharmacyData() {
     setPrescriptions(PharmacyDatabase.getPrescriptions());
     setSuppliers(PharmacyDatabase.getSuppliers());
     setPurchaseOrders(PharmacyDatabase.getPurchaseOrders());
-    setCategories(PharmacyDatabase.getCategories());
     setBatches(PharmacyDatabase.getBatches());
     setBills(PharmacyDatabase.getBills());
     setUsers(PharmacyDatabase.getUsers());
@@ -246,14 +243,6 @@ export function usePharmacyData() {
       medicines: 1,
       date: t.createdAt,
       status: TRANSFER_STAGE[t.status],
-    })),
-    categories: categories.map(c => ({
-      id: c.id,
-      name: c.categoryName,
-      description: c.description,
-      medicines: medicines.filter(m => m.categoryId === c.id).length,
-      status: c.status === "Active" ? "active" : "inactive",
-      created: c.createdAt,
     })),
     stockTransactions,
     supplierReturns,

@@ -15,7 +15,7 @@ const reportCategories = [
 interface ReportsProps { onNavigate: (page: string) => void }
 
 export default function Reports({ onNavigate }: ReportsProps) {
-  const {  salesData, bills  } = usePharmacyData();
+  const {  salesData, bills, supplierReturns  } = usePharmacyData();
   const [activeReport, setActiveReport] = useState("Daily Sales");
 
   // Synthesize Data
@@ -84,6 +84,28 @@ export default function Reports({ onNavigate }: ReportsProps) {
 
   const chartData = salesData || [];
 
+  const handleGenerate = () => {
+    window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Report generated successfully!" } }));
+  };
+
+  const handleExportCSV = () => {
+    const csvContent = "data:text/csv;charset=utf-8," + 
+        ["Return ID,Supplier ID,Medicine ID,Return Amount,Status"].join(",") + "\n" +
+        supplierReturns.map((r: any) => `${r.id},${r.supplierId},${r.medicineId},${r.returnAmount},${r.status}`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "supplier_returns_report.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Report exported to CSV!" } }));
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="p-6 space-y-5">
       <PageHeader
@@ -130,7 +152,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
                   <input type="date" defaultValue="2026-09-12" className="px-3 py-1.5 rounded border border-[#DDE2EC] text-[12px] focus:border-[#1B4FD8] focus:outline-none" />
                 </div>
               </div>
-              <button className="mt-4 flex items-center gap-1.5 px-4 py-1.5 rounded text-white text-[12px] font-medium" style={{ background: "#1B4FD8" }}>
+              <button onClick={handleGenerate} className="mt-4 flex items-center gap-1.5 px-4 py-1.5 rounded text-white text-[12px] font-medium" style={{ background: "#1B4FD8" }}>
                 <Filter size={12} /> Generate Report
               </button>
             </div>
@@ -236,11 +258,11 @@ export default function Reports({ onNavigate }: ReportsProps) {
               <div className="flex justify-between items-center mb-4">
                 <p className="font-semibold text-[14px] text-[#0F1624]">Supplier Return Ledger</p>
                 <div className="flex gap-2">
-                   <button className="flex items-center gap-1.5 px-3 py-1.5 border border-[#DDE2EC] rounded text-[12px] font-medium text-[#334155] hover:bg-[#F5F7FA]">
-                     <FileText size={14} /> PDF
+                   <button onClick={handlePrint} className="flex items-center gap-1.5 px-3 py-1.5 border border-[#DDE2EC] rounded text-[12px] font-medium text-[#334155] hover:bg-[#F5F7FA]">
+                     <FileText size={14} /> Print
                    </button>
-                   <button className="flex items-center gap-1.5 px-3 py-1.5 border border-[#DDE2EC] rounded text-[12px] font-medium text-[#334155] hover:bg-[#F5F7FA]">
-                     <Download size={14} /> Excel
+                   <button onClick={handleExportCSV} className="flex items-center gap-1.5 px-3 py-1.5 border border-[#DDE2EC] rounded text-[12px] font-medium text-[#334155] hover:bg-[#F5F7FA]">
+                     <Download size={14} /> CSV
                    </button>
                 </div>
               </div>

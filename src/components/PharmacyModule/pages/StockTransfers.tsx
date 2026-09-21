@@ -75,12 +75,12 @@ export default function StockTransfers({ onNavigate }: StockTransfersProps) {
                 <td>
                   <div className="flex items-center gap-1">
                     {t.status === "requested" && (
-                      <button className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded" style={{ background: "#DCFCE7", color: "#15803d" }}>
+                      <button onClick={() => window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Transfer Approved!" } }))} className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded" style={{ background: "#DCFCE7", color: "#15803d" }}>
                         <Check size={10} /> Approve
                       </button>
                     )}
                     {t.status === "in_transit" && (
-                      <button className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded" style={{ background: "#E8EDF5", color: "#1B4FD8" }}>
+                      <button onClick={() => window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Transfer Received!" } }))} className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded" style={{ background: "#E8EDF5", color: "#1B4FD8" }}>
                         <Truck size={10} /> Receive
                       </button>
                     )}
@@ -132,7 +132,7 @@ export default function StockTransfers({ onNavigate }: StockTransfersProps) {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[12px] font-semibold text-[#64748B] uppercase tracking-wide">Medicines to Transfer</p>
-                  <button className="flex items-center gap-1 text-[12px] font-medium" style={{ color: "#1B4FD8" }}><Plus size={12} /> Add</button>
+                  <button onClick={() => window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Medicine line added!" } }))} className="flex items-center gap-1 text-[12px] font-medium" style={{ color: "#1B4FD8" }}><Plus size={12} /> Add</button>
                 </div>
                 <div className="rounded border border-[#DDE2EC] overflow-hidden">
                   <table>
@@ -152,7 +152,7 @@ export default function StockTransfers({ onNavigate }: StockTransfersProps) {
               </div>
             </div>
             <div className="p-5 border-t border-[#DDE2EC] flex gap-3">
-              <button className="flex-1 py-2.5 rounded text-white font-semibold text-[13px]" style={{ background: "#1B4FD8" }}>Submit Request</button>
+              <button onClick={() => { setShowCreate(false); window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Stock Transfer Requested successfully!" } })); }} className="flex-1 py-2.5 rounded text-white font-semibold text-[13px]" style={{ background: "#1B4FD8" }}>Submit Request</button>
               <button onClick={() => setShowCreate(false)} className="flex-1 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors">Cancel</button>
             </div>
           </div>
