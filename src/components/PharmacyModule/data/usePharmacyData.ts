@@ -209,20 +209,17 @@ export function usePharmacyData() {
   })
 
   const expiringMedicines = batches
-
+    .filter((b) => medicines.some((m) => m.id === b.medicineId))
     .filter(
       (b) =>
         new Date(b.expiryDate).getTime() <
         new Date().getTime() + 90 * 24 * 60 * 60 * 1000,
     )
-
     .map((b) => {
-      const m = medicines.find((m) => m.id === b.medicineId)
-
+      const m = medicines.find((m) => m.id === b.medicineId);
       const daysLeft = Math.ceil(
         (new Date(b.expiryDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000),
-      )
-
+      );
       return {
         id: b.id,
 
@@ -437,24 +434,18 @@ export function usePharmacyData() {
 
       totalPurchase: 0,
     })),
-
-    purchaseOrders: purchaseOrders.map((p) => ({
-      ...p,
-
-      supplier:
-        suppliers.find((s) => s.id === p.supplierId)?.supplierName || "Unknown",
-
-      itemsCount: p.items.length,
-
-      items: p.items,
-
-      total: p.totalOrderValue || 0,
-
-      date: p.poDate,
-
-      expected: p.expectedDeliveryDate,
-    })),
-
+    purchaseOrders: purchaseOrders
+      .filter((p) => p.supplierId && suppliers.some((s) => s.id === p.supplierId))
+      .map((p) => ({
+        ...p,
+        supplier:
+          suppliers.find((s) => s.id === p.supplierId)?.supplierName || "Supplier",
+        itemsCount: p.items ? p.items.length : 0,
+        items: p.items || [],
+        total: p.totalOrderValue || 0,
+        date: p.poDate,
+        expected: p.expectedDeliveryDate,
+      })),
     salesData,
 
     users: users.map((u) => ({

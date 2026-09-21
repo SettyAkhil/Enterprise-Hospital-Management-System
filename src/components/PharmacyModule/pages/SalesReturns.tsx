@@ -907,6 +907,12 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
                           {new Date(ret.createdAt).toLocaleDateString()}
                         </td>
                         <td className="p-3 text-center">
+                          <button 
+                            onClick={() => handlePrintPastReturn(ret)}
+                            className="px-2.5 py-1 text-[11px] font-semibold bg-white border border-[#DDE2EC] text-[#334155] rounded hover:bg-gray-50 flex items-center gap-1 mx-auto transition-colors"
+                          >
+                            <Printer size={12} /> Print
+                          </button>
                           <div className="flex items-center justify-center gap-1.5">
                             <button 
                               onClick={() => handlePrintPastReturn(ret)}
