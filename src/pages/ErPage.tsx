@@ -34,10 +34,6 @@ import {
   FiDollarSign,
   FiLogOut,
   FiLayers,
-  FiArrowRight,
-  FiHeart,
-  FiAlertOctagon,
-  FiSliders,
 } from "react-icons/fi";
 
 import {
@@ -896,122 +892,6 @@ function getArrivalTimeDisplay(iso: string | null): {
   if (hrs < 24) return { elapsed: `${hrs} hr${hrs > 1 ? "s" : ""} ago`, clock };
 
   return { elapsed: `${Math.floor(hrs / 24)}d ago`, clock };
-}
-
-function getLiveDwellInfo(iso: string | null | undefined, nowMs: number): {
-  mins: number;
-  label: string;
-  clock: string;
-  severity: "normal" | "warning" | "critical" | "delayed";
-} {
-  if (!iso) return { mins: 0, label: "—", clock: "", severity: "normal" };
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return { mins: 0, label: "—", clock: "", severity: "normal" };
-  const clock = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
-  const ms = Math.max(0, nowMs - d.getTime());
-  const mins = Math.floor(ms / 60000);
-
-  if (mins < 30) {
-    return { mins, label: `${mins}m dwell`, clock, severity: "normal" };
-  } else if (mins < 60) {
-    return { mins, label: `${mins}m dwell`, clock, severity: "warning" };
-  } else if (mins < 120) {
-    const hrs = Math.floor(mins / 60);
-    const remMins = mins % 60;
-    return { mins, label: `${hrs}h ${remMins}m`, clock, severity: "critical" };
-  } else {
-    const hrs = Math.floor(mins / 60);
-    const remMins = mins % 60;
-    return { mins, label: `${hrs}h ${remMins}m`, clock, severity: "delayed" };
-  }
-}
-
-function renderDwellBadge(iso: string | null | undefined, nowMs: number) {
-  const dwell = getLiveDwellInfo(iso, nowMs);
-  if (!iso) return <span className="text-slate-400 font-medium text-xs">—</span>;
-
-  let badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-  let icon = "⚡";
-
-  if (dwell.severity === "warning") {
-    badgeClass = "bg-amber-50 text-amber-800 border-amber-300";
-    icon = "⏱️";
-  } else if (dwell.severity === "critical") {
-    badgeClass = "bg-red-50 text-red-700 border-red-300 font-extrabold animate-pulse";
-    icon = "⚠️";
-  } else if (dwell.severity === "delayed") {
-    badgeClass = "bg-red-600 text-white border-red-700 font-black shadow-xs animate-pulse";
-    icon = "🚨";
-  }
-
-  return (
-    <div>
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${badgeClass}`}>
-        <span>{icon}</span>
-        <span>{dwell.label}</span>
-      </span>
-      {dwell.clock && (
-        <div className="text-[10.5px] text-slate-500 mt-0.5 font-mono">
-          Arr {dwell.clock}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function renderVitalsPreview(v: ErVisit) {
-  const anyV = v as any;
-  const vitals = anyV.vitals_summary || anyV.vitals || anyV.latest_vitals;
-  const bp = vitals?.bp || (vitals?.systolic_bp && `${vitals.systolic_bp}/${vitals.diastolic_bp}`);
-  const hr = vitals?.heart_rate || vitals?.pulse;
-  const spo2 = vitals?.spo2 || vitals?.oxygen_saturation;
-  const temp = vitals?.temperature;
-
-  if (!bp && !hr && !spo2 && !temp) {
-    return <span className="text-slate-400 text-[11px] font-medium">Pending Triage</span>;
-  }
-
-  const isHrAbnormal = hr && (Number(hr) > 110 || Number(hr) < 55);
-  const isSpo2Abnormal = spo2 && Number(spo2) < 92;
-
-  return (
-    <div className="flex flex-wrap items-center gap-1 text-[10.5px]">
-      {hr && (
-        <span
-          className={`px-1.5 py-0.5 rounded font-mono font-bold ${
-            isHrAbnormal
-              ? "bg-red-100 text-red-700 border border-red-300 animate-pulse"
-              : "bg-slate-100 text-slate-700 border border-slate-200"
-          }`}
-          title={isHrAbnormal ? "Abnormal Heart Rate" : "Heart Rate"}
-        >
-          HR {hr}
-        </span>
-      )}
-      {bp && (
-        <span className="px-1.5 py-0.5 rounded font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200">
-          BP {bp}
-        </span>
-      )}
-      {spo2 && (
-        <span
-          className={`px-1.5 py-0.5 rounded font-mono font-bold ${
-            isSpo2Abnormal
-              ? "bg-red-100 text-red-700 border border-red-300 animate-pulse"
-              : "bg-blue-50 text-blue-700 border border-blue-200"
-          }`}
-          title={isSpo2Abnormal ? "Critical Hypoxia (<92%)" : "Oxygen Saturation"}
-        >
-          SpO₂ {spo2}%
-        </span>
-      )}
-      {temp && (
-        <span className="px-1.5 py-0.5 rounded font-mono font-medium bg-slate-100 text-slate-600 border border-slate-200">
-          {temp}°
-        </span>
-      )}
-    </div>
-  );
 }
 
 function getDestination(v: ErVisit): string | null {
@@ -1935,21 +1815,6 @@ export default function ErPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mergeTarget]);
 
-  // ── Live Command Center State & Filters ──
-  const [liveNow, setLiveNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setLiveNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const [acuityFilter, setAcuityFilter] = useState<
-    "all" | "B1" | "B2" | "B3" | "B4" | "B5"
-  >("all");
-
-  const [stageFilter, setStageFilter] = useState<
-    "all" | "awaiting_doctor" | "in_treatment" | "bed_requested"
-  >("all");
-
   const summary = useMemo(() => {
     const byStatus: Record<string, number> = {};
 
@@ -1961,83 +1826,37 @@ export default function ErPage({
     return byStatus;
   }, [visits]);
 
-  // Real-time Acuity Counts across loaded visits
-  const acuityCounts = useMemo(() => {
-    const counts = { all: visits.length, B1: 0, B2: 0, B3: 0, B4: 0, B5: 0 };
-    for (const v of visits) {
-      const cat = (v.triage_category || "").toUpperCase();
-      if (cat === "B1" || cat === "RED") counts.B1++;
-      else if (cat === "B2" || cat === "YELLOW" || cat === "ORANGE") counts.B2++;
-      else if (cat === "B3" || cat === "GREEN") counts.B3++;
-      else if (cat === "B4") counts.B4++;
-      else if (cat === "B5" || cat === "BLACK" || cat === "EXPECTANT") counts.B5++;
-    }
-    return counts;
-  }, [visits]);
-
   const filteredVisits = useMemo(() => {
-    let list = visits;
-
-    // 1. Acuity Filter
-    if (acuityFilter !== "all") {
-      list = list.filter((v) => {
-        const cat = (v.triage_category || "").toUpperCase();
-        if (acuityFilter === "B1") return cat === "B1" || cat === "RED";
-        if (acuityFilter === "B2") return cat === "B2" || cat === "YELLOW" || cat === "ORANGE";
-        if (acuityFilter === "B3") return cat === "B3" || cat === "GREEN";
-        if (acuityFilter === "B4") return cat === "B4";
-        if (acuityFilter === "B5") return cat === "B5" || cat === "BLACK" || cat === "EXPECTANT";
-        return true;
-      });
-    }
-
-    // 2. Stage Filter
-    if (stageFilter === "awaiting_doctor") {
-      list = list.filter(
-        (v) =>
-          v.status !== "closed" &&
-          (v.status === "registered" ||
-            v.status === "triaged" ||
-            !v.assigned_doctor_name)
-      );
-    } else if (stageFilter === "in_treatment") {
-      list = list.filter(
-        (v) =>
-          v.status === "under_treatment" ||
-          v.status === "treatment" ||
-          v.status === "doctor_assigned" ||
-          v.status === "stabilizing" ||
-          v.status === "stabilized"
-      );
-    } else if (stageFilter === "bed_requested") {
-      list = list.filter((v) => {
-        const dest = getDestination(v);
-        const bed = getBedLabel(v);
-        return Boolean(dest && !bed && (dest.includes("Requested") || dest.includes("ICU") || dest.includes("Ward")));
-      });
-    }
-
-    // 3. Search Query
-    if (!trackboardSearch.trim()) return list;
+    if (!trackboardSearch.trim()) return visits;
 
     const q = trackboardSearch.trim().toLowerCase();
 
-    return list.filter((v) => {
+    return visits.filter((v) => {
       const fullName =
         `${v.patient_name || ""} ${v.patient_last_name || ""}`.toLowerCase();
+
       const patientId = (v.patient_id || "").toLowerCase();
+
       const visitNo = (v.visit_no || "").toLowerCase();
+
       const unknownLabel = (v.unknown_patient_label || "").toLowerCase();
+
       const phone = (v.patient_phone || "").toLowerCase();
+
       const doc = (v.assigned_doctor_name || "").toLowerCase();
+
       const specialty = (v.assigned_specialty || "").toLowerCase();
+
       const complaint = (
         (v as any).complaints?.[0]?.complaint ||
         (v as any).condition_at_arrival ||
         ""
       ).toLowerCase();
+
       const bed = (v.triage_bed_label || "").toLowerCase();
+
       const category = (v.triage_category || "").toLowerCase();
+
       const visitStatus = (v.status || "").toLowerCase();
 
       return (
@@ -2054,7 +1873,7 @@ export default function ErPage({
         visitStatus.includes(q)
       );
     });
-  }, [visits, trackboardSearch, acuityFilter, stageFilter]);
+  }, [visits, trackboardSearch]);
 
   const refreshAfterAction = async () => {
     await loadVisits();
@@ -2200,62 +2019,42 @@ export default function ErPage({
   const wardAllocatedCount = Math.max(0, bedAllocatedCount - icuAllocatedCount);
 
   return (
-    <div className="flex-1 bg-[#F8FAFC] p-4 sm:p-6 space-y-3.5 min-h-full font-sans text-slate-900">
-      {/* ── 1. EMERGENCY COMMAND CENTER STATUS BANNER ──────────────────────── */}
-      <div className="bg-slate-900 text-white rounded-xl p-3.5 sm:p-4 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3 border border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-red-600/90 text-white flex items-center justify-center text-xl font-bold shadow-sm shrink-0">
-            <FiActivity className="animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-black tracking-tight text-white uppercase">
-                Emergency Command Center
-              </h1>
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-[10.5px] font-bold text-emerald-400 uppercase tracking-widest">
-                LIVE PULSE
-              </span>
-            </div>
-            <p className="text-xs text-slate-300 font-medium mt-0.5">
-              Department Census: <strong className="text-white font-bold">{activeCount}</strong> Active Cases • <span className="text-amber-400 font-bold">{awaitingDoctorCount}</span> Awaiting MD
-            </p>
+    <div className="flex-1 bg-[#F0F2F5] p-5 sm:p-6 space-y-4 min-h-full">
+      {/* Top Header: Search Bar & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Search Option in place of the subtitle */}
+        <div className="relative flex-1 max-w-2xl">
+          <div className="relative flex items-center">
+            <FiSearch className="absolute left-3.5 text-gray-400 text-[15px] pointer-events-none" />
+            <input
+              type="text"
+              value={trackboardSearch}
+              onChange={(e) => setTrackboardSearch(e.target.value)}
+              placeholder="Search ED Track Board by patient name, ID, phone, triage, complaint, doctor, bed..."
+              className="w-full pl-10 pr-10 py-2 bg-white border border-[#DDE2EC] rounded text-[13px] text-gray-900 placeholder:text-gray-400 shadow-2xs focus:outline-none focus:border-[#1B4FD8] transition-all"
+            />
+            {trackboardSearch && (
+              <button
+                type="button"
+                onClick={() => setTrackboardSearch("")}
+                className="absolute right-3 text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer"
+                title="Clear search"
+              >
+                <FiX className="text-[14px]" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Clock & Action buttons */}
-        <div className="flex items-center gap-2.5 shrink-0 self-start md:self-auto">
-          <div className="bg-slate-800/90 px-3 py-1.5 rounded-lg border border-slate-700/80 text-right">
-            <div className="text-xs font-mono font-bold tracking-wider text-slate-100 flex items-center gap-1.5 justify-end">
-              <FiClock className="text-emerald-400 text-xs" />
-              <span>
-                {new Date(liveNow).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                  hour12: true,
-                })}
-              </span>
-            </div>
-            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
-              {new Date(liveNow).toLocaleDateString([], {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              })}
-            </div>
-          </div>
-
+        {/* Top Right Action Controls */}
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
           <button
             type="button"
             onClick={loadVisits}
-            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
-            title="Refresh ER visits"
+            className="px-3.5 py-2 bg-white border border-[#DDE2EC] hover:bg-slate-50 text-gray-700 text-[12.5px] font-semibold rounded shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+            title="Refresh ED visits"
           >
-            <FiRefreshCw className="text-[12px]" /> Refresh
+            <FiRefreshCw className="text-[13px]" /> Refresh
           </button>
 
           {/* New Registration Dropdown */}
@@ -2263,23 +2062,23 @@ export default function ErPage({
             <button
               type="button"
               onClick={() => setIsRegMenuOpen((prev) => !prev)}
-              className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 bg-[#1B4FD8] hover:bg-[#1E40AF] text-white text-[13px] font-bold rounded shadow-xs transition-all flex items-center gap-2 cursor-pointer"
               aria-expanded={isRegMenuOpen}
               aria-haspopup="true"
             >
-              <FiPlus className="text-[15px]" />
-              <span>New Intake</span>
+              <FiPlus className="text-[16px]" />
+              <span>New Registration</span>
               <FiChevronDown
-                className={`text-[13px] transition-transform duration-200 ${
+                className={`text-[14px] transition-transform duration-200 ${
                   isRegMenuOpen ? "rotate-180" : ""
                 }`}
               />
             </button>
 
             {isRegMenuOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#DDE2EC] rounded-lg shadow-xl z-50 py-1.5 overflow-hidden text-slate-900">
-                <div className="px-3.5 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
-                  Emergency Intake Options
+              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#DDE2EC] rounded shadow-lg z-50 py-1.5 overflow-hidden">
+                <div className="px-3.5 py-1.5 text-[10.5px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                  Select Registration Type
                 </div>
 
                 {/* 1. New Patient */}
@@ -2287,6 +2086,7 @@ export default function ErPage({
                   type="button"
                   onClick={() => {
                     setIntakeModalType("new");
+
                     setIsRegMenuOpen(false);
                   }}
                   className="w-full text-left px-3.5 py-2.5 hover:bg-blue-50/70 text-gray-800 hover:text-[#1B4FD8] transition-colors flex items-start gap-3 group cursor-pointer"
@@ -2298,7 +2098,7 @@ export default function ErPage({
                     <div className="text-[13px] font-bold text-gray-900 group-hover:text-[#1B4FD8]">
                       New Patient
                     </div>
-                    <div className="text-[11px] text-gray-500 font-normal">
+                    <div className="text-[11.5px] text-gray-500 font-normal">
                       Register brand new patient with demographics
                     </div>
                   </div>
@@ -2309,6 +2109,7 @@ export default function ErPage({
                   type="button"
                   onClick={() => {
                     setIntakeModalType("existing");
+
                     setIsRegMenuOpen(false);
                   }}
                   className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 text-gray-800 hover:text-[#1B4FD8] transition-colors flex items-start gap-3 group cursor-pointer border-t border-gray-100"
@@ -2320,7 +2121,7 @@ export default function ErPage({
                     <div className="text-[13px] font-bold text-gray-900 group-hover:text-[#1B4FD8]">
                       Existing Patient
                     </div>
-                    <div className="text-[11px] text-gray-500 font-normal">
+                    <div className="text-[11.5px] text-gray-500 font-normal">
                       Search hospital records by UHID or phone
                     </div>
                   </div>
@@ -2331,6 +2132,7 @@ export default function ErPage({
                   type="button"
                   onClick={() => {
                     setIntakeModalType("unknown");
+
                     setIsRegMenuOpen(false);
                   }}
                   className="w-full text-left px-3.5 py-2.5 hover:bg-red-50/70 text-gray-800 hover:text-[#DC2626] transition-colors flex items-start gap-3 group cursor-pointer border-t border-gray-100"
@@ -2345,7 +2147,7 @@ export default function ErPage({
                         Emergency
                       </span>
                     </div>
-                    <div className="text-[11px] text-gray-500 font-normal">
+                    <div className="text-[11.5px] text-gray-500 font-normal">
                       Unconscious / unknown patient with emergency label
                     </div>
                   </div>
@@ -2356,516 +2158,301 @@ export default function ErPage({
         </div>
       </div>
 
-      {/* ── 2. CRITICAL ACUITY ALERT BANNER (If B1 or B2 present) ──────────── */}
-      {(acuityCounts.B1 > 0 || acuityCounts.B2 > 0) && (
-        <div className="bg-red-600/10 border-l-4 border-l-red-600 border border-red-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-red-900 shadow-2xs">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-3 w-3 relative shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+      {/* 4 Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: ACTIVE VISITS */}
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-xl shrink-0">
+            <FiUsers />
+          </div>
+          <div>
+            <span className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider block">
+              ACTIVE VISITS
             </span>
-            <span className="font-bold text-xs uppercase tracking-wider text-red-700 shrink-0">
-              CRITICAL PATIENT ALERT:
-            </span>
-            <span className="text-xs font-semibold">
-              {acuityCounts.B1 > 0 ? `${acuityCounts.B1} Resuscitation (B1) ` : ""}
-              {acuityCounts.B1 > 0 && acuityCounts.B2 > 0 ? "and " : ""}
-              {acuityCounts.B2 > 0 ? `${acuityCounts.B2} Emergent (B2) ` : ""}
-              patient{acuityCounts.B1 + acuityCounts.B2 > 1 ? "s" : ""} in department. Immediate priority.
+            <div className="text-2xl font-bold text-gray-900 leading-tight">
+              {activeCount}
+            </div>
+            <span className="text-[11.5px] font-semibold text-[#16A34A]">
+              {visits.length} total recorded
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setAcuityFilter("B1")}
-            className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold shrink-0 transition-colors shadow-2xs cursor-pointer self-start sm:self-auto"
-          >
-            Filter Critical
-          </button>
         </div>
-      )}
 
-      {/* ── 3. 4 HIGH-IMPACT COMMAND KPI CARDS ─────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        {/* Card 1: ACTIVE CENSUS */}
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-lg bg-blue-50 text-[#1B4FD8] flex items-center justify-center text-xl shrink-0 border border-blue-100">
-              <FiUsers />
+        {/* Card 2: AWAITING DOCTOR */}
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-amber-50 text-[#D97706] flex items-center justify-center text-xl shrink-0">
+            <FiWatch />
+          </div>
+          <div>
+            <span className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider block">
+              AWAITING DOCTOR
+            </span>
+            <div className="text-2xl font-bold text-gray-900 leading-tight">
+              {awaitingDoctorCount}
             </div>
-            <div>
-              <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">
-                ED Census
-              </span>
-              <div className="text-2xl font-black text-slate-900 leading-tight">
-                {activeCount}
-              </div>
-              <span className="text-[11px] font-semibold text-emerald-600">
-                {bedAllocatedCount} in beds ({activeCount > 0 ? Math.round((bedAllocatedCount / activeCount) * 100) : 0}%)
-              </span>
-            </div>
+            <span className="text-[11.5px] font-medium text-[#D97706]">
+              {highPriorityAwaitingCount} High Priority
+            </span>
           </div>
         </div>
 
-        {/* Card 2: CRITICAL (B1 + B2) */}
-        <div
-          className={`bg-white border rounded-xl p-3.5 shadow-2xs flex items-center justify-between ${
-            acuityCounts.B1 + acuityCounts.B2 > 0
-              ? "border-red-300 ring-1 ring-red-100"
-              : "border-slate-200"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-11 h-11 rounded-lg flex items-center justify-center text-xl shrink-0 ${
-                acuityCounts.B1 + acuityCounts.B2 > 0
-                  ? "bg-red-50 text-red-600 border border-red-200"
-                  : "bg-slate-50 text-slate-600 border border-slate-200"
-              }`}
-            >
-              <FiAlertOctagon
-                className={acuityCounts.B1 + acuityCounts.B2 > 0 ? "animate-pulse" : ""}
-              />
+        {/* Card 3: BED REQUESTED */}
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-red-50 text-[#DC2626] flex items-center justify-center text-xl shrink-0">
+            <FiBell />
+          </div>
+          <div>
+            <span className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider block">
+              BED REQUESTED
+            </span>
+            <div className="text-2xl font-bold text-gray-900 leading-tight">
+              {bedRequestedCount}
             </div>
-            <div>
-              <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">
-                Immediate / Emergent
-              </span>
-              <div
-                className={`text-2xl font-black leading-tight ${
-                  acuityCounts.B1 + acuityCounts.B2 > 0 ? "text-red-600" : "text-slate-900"
-                }`}
-              >
-                {acuityCounts.B1 + acuityCounts.B2}
-              </div>
-              <span className="text-[11px] font-semibold text-red-600">
-                {acuityCounts.B1} B1 Resuscitation • {acuityCounts.B2} B2
-              </span>
-            </div>
+            <span className="text-[11.5px] font-medium text-[#64748B]">
+              {icuReqCount} ICU • {wardReqCount} Ward
+            </span>
           </div>
         </div>
 
-        {/* Card 3: AWAITING DOCTOR */}
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0 border border-amber-100">
-              <FiWatch />
-            </div>
-            <div>
-              <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">
-                Awaiting Doctor
-              </span>
-              <div className="text-2xl font-black text-slate-900 leading-tight">
-                {awaitingDoctorCount}
-              </div>
-              <span className="text-[11px] font-semibold text-amber-600">
-                {highPriorityAwaitingCount} High priority
-              </span>
-            </div>
+        {/* Card 4: BED ALLOCATED */}
+        <div className="bg-white border border-[#DDE2EC] rounded p-3.5 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded bg-green-50 text-[#16A34A] flex items-center justify-center text-xl shrink-0">
+            <FiHome />
           </div>
-        </div>
-
-        {/* Card 4: BED QUEUE & TRANSFERS */}
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-xl shrink-0 border border-purple-100">
-              <FiHome />
+          <div>
+            <span className="text-[10.5px] font-bold text-[#64748B] uppercase tracking-wider block">
+              BED ALLOCATED
+            </span>
+            <div className="text-2xl font-bold text-gray-900 leading-tight">
+              {bedAllocatedCount}
             </div>
-            <div>
-              <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">
-                Bed Queue & Transfers
-              </span>
-              <div className="text-2xl font-black text-slate-900 leading-tight">
-                {bedRequestedCount}
-              </div>
-              <span className="text-[11px] font-semibold text-purple-600">
-                {icuReqCount} ICU • {wardReqCount} Ward
-              </span>
-            </div>
+            <span className="text-[11.5px] font-medium text-[#64748B]">
+              {icuAllocatedCount} ICU • {wardAllocatedCount} Ward
+            </span>
           </div>
         </div>
       </div>
 
-      {/* ── 4. COMMAND CENTER TRACK BOARD CARD & CONTROLS ─────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        {/* Controls Bar */}
-        <div className="p-3 sm:p-4 border-b border-slate-200 bg-slate-50/70 space-y-3">
-          {/* Top Row: Search & Status Selector */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-xl">
-              <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[15px] pointer-events-none" />
-              <input
-                type="text"
-                value={trackboardSearch}
-                onChange={(e) => setTrackboardSearch(e.target.value)}
-                placeholder="Search by patient name, UHID, phone, doctor, bed, triage or complaint..."
-                className="w-full pl-10 pr-10 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 shadow-2xs focus:outline-none focus:border-[#1B4FD8] focus:ring-1 focus:ring-[#1B4FD8] transition-all"
-              />
-              {trackboardSearch && (
-                <button
-                  type="button"
-                  onClick={() => setTrackboardSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded transition-colors cursor-pointer"
-                  title="Clear search"
-                >
-                  <FiX className="text-[13px]" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Visit Scope:
-              </span>
-              <select
-                value={queueFilter}
-                onChange={(e) => setQueueFilter(e.target.value as "active" | "closed" | "all")}
-                className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
-                aria-label="Filter ER visits"
-              >
-                <option value="active">Active visits</option>
-                <option value="closed">Closed visits</option>
-                <option value="all">All visits</option>
-              </select>
-            </div>
+      {/* Main Track Board Panel */}
+      <div className="bg-white border border-[#DDE2EC] rounded shadow-2xs overflow-hidden">
+        {/* Track Board Header & Filter */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#DDE2EC] px-5 py-2.5 bg-white gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-bold text-gray-900">
+              Emergency Queue
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-[#1B4FD8] border border-blue-100">
+              {filteredVisits.length}{" "}
+              {filteredVisits.length === 1 ? "Patient" : "Patients"}
+            </span>
           </div>
 
-          {/* Bottom Row: Acuity & Stage Filter Pills */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
-            {/* Acuity Level Filters */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider mr-1">
-                Acuity:
-              </span>
-              <button
-                type="button"
-                onClick={() => setAcuityFilter("all")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                  acuityFilter === "all"
-                    ? "bg-slate-900 text-white shadow-2xs"
-                    : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                All ({visits.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setAcuityFilter("B1")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  acuityFilter === "B1"
-                    ? "bg-red-600 text-white shadow-2xs ring-1 ring-red-700"
-                    : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
-                }`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-red-600 inline-block"></span>
-                <span>B1 Resuscitation ({acuityCounts.B1})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAcuityFilter("B2")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  acuityFilter === "B2"
-                    ? "bg-amber-500 text-white shadow-2xs ring-1 ring-amber-600"
-                    : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
-                }`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>
-                <span>B2 Emergent ({acuityCounts.B2})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAcuityFilter("B3")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  acuityFilter === "B3"
-                    ? "bg-emerald-600 text-white shadow-2xs ring-1 ring-emerald-700"
-                    : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                }`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block"></span>
-                <span>B3 Urgent ({acuityCounts.B3})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAcuityFilter("B4")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  acuityFilter === "B4"
-                    ? "bg-sky-600 text-white shadow-2xs ring-1 ring-sky-700"
-                    : "bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100"
-                }`}
-              >
-                <span>B4 ({acuityCounts.B4})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAcuityFilter("B5")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                  acuityFilter === "B5"
-                    ? "bg-slate-700 text-white shadow-2xs"
-                    : "bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
-                }`}
-              >
-                <span>B5 Non-Urgent ({acuityCounts.B5})</span>
-              </button>
-            </div>
-
-            {/* Stage Quick Filter Tabs */}
-            <div className="flex items-center gap-1 bg-white border border-slate-200 p-0.5 rounded-lg shadow-2xs">
-              <button
-                type="button"
-                onClick={() => setStageFilter("all")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-                  stageFilter === "all" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                All Stages
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter("awaiting_doctor")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-                  stageFilter === "awaiting_doctor" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                Awaiting MD
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter("in_treatment")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-                  stageFilter === "in_treatment" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                In Treatment
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter("bed_requested")}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-                  stageFilter === "bed_requested" ? "bg-[#1B4FD8] text-white shadow-2xs" : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                Bed Queue
-              </button>
-            </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={queueFilter}
+              onChange={(e) =>
+                setQueueFilter(e.target.value as "active" | "closed" | "all")
+              }
+              className="bg-white border border-[#CBD5E1] rounded px-3 py-1 text-[12px] font-semibold text-gray-800 shadow-2xs focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+              aria-label="Filter ER visits"
+            >
+              <option value="active">Active visits</option>
+              <option value="closed">Closed visits</option>
+              <option value="all">All visits</option>
+            </select>
           </div>
         </div>
 
-        {/* Track Board Table Body */}
         {loading ? (
-          <div className="p-12 text-center text-slate-500 text-xs">
-            <FiRefreshCw className="animate-spin text-xl text-[#1B4FD8] mx-auto mb-2" />
-            Loading Emergency Command Board...
+          <div className="p-8 text-center text-[#64748B] text-[13px]">
+            Loading ER visits...
           </div>
         ) : visits.length === 0 ? (
-          <div className="p-12 text-center text-slate-500">
-            <p className="font-bold text-slate-800 text-sm">
+          <div className="p-12 text-center text-[#64748B]">
+            <p className="font-bold text-gray-800 text-[14px]">
               {queueFilter === "closed"
                 ? "No closed ER visits"
                 : queueFilter === "all"
-                  ? "No ER visits recorded yet"
-                  : "No active patients in Emergency Department"}
+                  ? "No ER visits yet"
+                  : "No active ER visits"}
             </p>
-            <p className="text-xs text-slate-500 mt-1">
-              Click &quot;New Intake&quot; in the header above to admit an emergency patient.
+            <p className="text-[12px] text-[#64748B] mt-1">
+              {queueFilter === "active"
+                ? "Register a new ER visit to get started."
+                : "Switch the filter above to see other visits."}
             </p>
           </div>
         ) : filteredVisits.length === 0 ? (
-          <div className="p-12 text-center text-slate-500">
-            <p className="font-bold text-slate-800 text-sm">
-              No patients match current filters or search &quot;{trackboardSearch}&quot;
+          <div className="p-12 text-center text-[#64748B]">
+            <p className="font-bold text-gray-800 text-[14px]">
+              No visits matching "{trackboardSearch}"
             </p>
-            <p className="text-xs text-slate-500 mt-1">
-              Try resetting the acuity or stage filters, or clearing the search box.
+            <p className="text-[12px] text-[#64748B] mt-1">
+              Try searching by patient name, ID, phone, doctor, bed, triage or
+              complaint.
             </p>
-            <div className="mt-3 flex items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setTrackboardSearch("");
-                  setAcuityFilter("all");
-                  setStageFilter("all");
-                }}
-                className="px-3 py-1.5 bg-[#1B4FD8] text-white text-xs font-bold rounded-lg cursor-pointer hover:bg-blue-700 transition-colors shadow-2xs"
-              >
-                Reset All Filters
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setTrackboardSearch("")}
+              className="mt-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded cursor-pointer transition-colors"
+            >
+              Clear Search Filter
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-[10.5px] font-black text-slate-500 uppercase tracking-wider">
-                  <th className="pl-4 py-3">VISIT #</th>
-                  <th className="px-3.5 py-3">ACUITY</th>
-                  <th className="px-3.5 py-3">PATIENT & CHIEF COMPLAINT</th>
-                  <th className="px-3.5 py-3">VITALS PREVIEW</th>
-                  <th className="px-3.5 py-3">DWELL TIME</th>
-                  <th className="px-3.5 py-3">CARE STATUS</th>
-                  <th className="px-3.5 py-3">PHYSICIAN</th>
-                  <th className="px-3.5 py-3">BAY / BED</th>
-                  <th className="px-3.5 py-3">BILLING</th>
-                  <th className="pr-4 py-3 text-right">ACTION</th>
+                <tr className="border-b border-[#E2E8F0] bg-[#FAFCFF] text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
+                  <th className="pl-6 py-3.5">VISIT</th>
+                  <th className="px-4 py-3.5">TRIAGE</th>
+                  <th className="px-4 py-3.5">PATIENT</th>
+                  <th className="px-4 py-3.5">ARRIVED</th>
+                  <th className="px-4 py-3.5">STATUS</th>
+                  <th className="px-4 py-3.5">BILLING</th>
+                  <th className="px-4 py-3.5">DOCTOR</th>
+                  <th className="px-4 py-3.5">DESTINATION</th>
+                  <th className="px-4 py-3.5">BED</th>
+                  <th className="pr-6 py-3.5 text-right"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
+              <tbody className="divide-y divide-[#F1F5F9] text-[12.5px]">
                 {filteredVisits.map((v) => {
+                  const arrivalInfo = getArrivalTimeDisplay(v.arrival_at);
+
                   const dest = getDestination(v);
+
                   const bed = getBedLabel(v);
-                  const cat = (v.triage_category || "").toUpperCase();
 
-                  const isB1 = cat === "B1" || cat === "RED";
-                  const isB2 = cat === "B2" || cat === "YELLOW" || cat === "ORANGE";
-                  const isB3 = cat === "B3" || cat === "GREEN";
-                  const isB4 = cat === "B4";
+                  const isB1 = v.triage_category === "B1";
 
-                  // Extract chief complaint snippet
-                  const anyV = v as any;
-                  const complaintText =
-                    anyV.complaints?.[0]?.complaint ||
-                    anyV.condition_at_arrival ||
-                    anyV.initial_assessment ||
-                    "";
+                  const isB2 = v.triage_category === "B2";
 
                   return (
                     <tr
                       key={v.id}
-                      onClick={() => setSelectedVisitId(v.id)}
-                      className={`cursor-pointer transition-colors ${
-                        isB1
-                          ? "border-l-[6px] border-l-red-600 bg-red-50/25 hover:bg-red-50/50"
+                      className="hover:bg-[#F8FAFC] transition-colors"
+                      style={{
+                        borderLeft: isB1
+                          ? "4px solid #DC2626"
                           : isB2
-                            ? "border-l-[5px] border-l-amber-500 bg-amber-50/20 hover:bg-amber-50/40"
-                            : isB3
-                              ? "border-l-[4px] border-l-emerald-500 hover:bg-emerald-50/20"
-                              : isB4
-                                ? "border-l-[4px] border-l-sky-500 hover:bg-sky-50/20"
-                                : "border-l-[4px] border-l-slate-400 hover:bg-slate-50"
-                      }`}
+                            ? "4px solid #EA580C"
+                            : "4px solid transparent",
+                      }}
                     >
-                      {/* 1. VISIT # */}
-                      <td className="pl-4 py-3 whitespace-nowrap">
-                        <div className="font-mono font-bold text-slate-900 text-xs">
-                          {v.visit_no}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          ID #{v.id}
-                        </div>
+                      {/* 1. VISIT */}
+                      <td className="pl-5 py-3.5 font-bold text-gray-900 whitespace-nowrap">
+                        {v.visit_no}
                       </td>
 
-                      {/* 2. ACUITY */}
-                      <td className="px-3.5 py-3 whitespace-nowrap">
+                      {/* 2. TRIAGE */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
                         {renderTriagePill(v.triage_category)}
                       </td>
 
-                      {/* 3. PATIENT & CHIEF COMPLAINT */}
-                      <td className="px-3.5 py-3 max-w-[260px]">
+                      {/* 3. PATIENT */}
+                      <td className="px-4 py-3.5">
                         {v.is_unknown_patient ? (
                           <div>
-                            <div className="font-black text-red-700 text-xs flex items-center gap-1">
+                            <div className="font-bold text-gray-900 text-[13px] flex items-center gap-1.5">
                               <span>🚨</span>
-                              <span>{v.unknown_patient_label || "Unidentified Patient"}</span>
+                              <span>
+                                {v.unknown_patient_label || "Unknown Male"}
+                              </span>
                             </div>
-                            <div className="text-[10.5px] text-slate-500">
-                              Emergency Tag {v.patient_age ? `• ~ ${v.patient_age}y` : ""}
+                            <div className="text-[11.5px] text-[#64748B] font-medium">
+                              Temp Tag{" "}
+                              {v.patient_age ? `• ~${v.patient_age}y` : ""}
                             </div>
                           </div>
                         ) : (
                           <div>
-                            <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                              <span>
-                                {[v.patient_name, v.patient_last_name].filter(Boolean).join(" ") ||
-                                  v.patient_id}
-                              </span>
+                            <div className="font-semibold text-gray-900 text-[13px]">
+                              {[v.patient_name, v.patient_last_name]
+                                .filter(Boolean)
+                                .join(" ") || v.patient_id}
                             </div>
-                            <div className="text-[10.5px] text-slate-500">
-                              <span className="font-mono">{v.patient_id}</span>
+                            <div className="text-[11.5px] text-[#64748B] font-medium">
+                              {v.patient_id}
                               {v.patient_gender ? ` • ${v.patient_gender}` : ""}
                               {v.patient_age ? ` • ${v.patient_age}y` : ""}
                             </div>
                           </div>
                         )}
+                      </td>
 
-                        {complaintText && (
-                          <div
-                            className="text-[11px] text-slate-600 truncate mt-1 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/80"
-                            title={complaintText}
-                          >
-                            <span className="font-semibold text-slate-700">Sx: </span>
-                            {complaintText}
+                      {/* 4. ARRIVED */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <div className="font-medium text-gray-800 text-[12px]">
+                          {arrivalInfo.elapsed}
+                        </div>
+                        {arrivalInfo.clock && (
+                          <div className="text-[11px] text-[#64748B]">
+                            {arrivalInfo.clock}
                           </div>
                         )}
                       </td>
 
-                      {/* 4. VITALS PREVIEW */}
-                      <td className="px-3.5 py-3">
-                        {renderVitalsPreview(v)}
-                      </td>
-
-                      {/* 5. DWELL TIME */}
-                      <td className="px-3.5 py-3 whitespace-nowrap">
-                        {renderDwellBadge(v.arrival_at, liveNow)}
-                      </td>
-
-                      {/* 6. CARE STATUS */}
-                      <td className="px-3.5 py-3 whitespace-nowrap">
+                      {/* 5. STATUS */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
                         {renderStatusPill(v.status)}
                       </td>
 
-                      {/* 7. ATTENDING PHYSICIAN */}
-                      <td className="px-3.5 py-3">
-                        {v.assigned_doctor_name ? (
-                          <div>
-                            <div className="font-bold text-slate-900 text-xs flex items-center gap-1">
-                              <FiUser className="text-[11px] text-[#1B4FD8]" />
-                              <span>{v.assigned_doctor_name.replace(/\s*\(.*\)/, "")}</span>
-                            </div>
-                            <div className="text-[10.5px] text-slate-500 mt-0.5">
-                              {v.assigned_specialty ||
-                                v.assigned_doctor_name.match(/\((.*)\)/)?.[1] ||
-                                "Emergency Medicine"}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                            <FiAlertCircle className="text-[11px] animate-pulse" />
-                            <span>Awaiting MD</span>
-                          </span>
-                        )}
-                      </td>
-
-                      {/* 8. BAY / BED */}
-                      <td className="px-3.5 py-3 whitespace-nowrap">
-                        {bed ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-[11px] font-bold border border-slate-200">
-                            <FiHome className="text-[10px] text-slate-500" />
-                            <span>{bed}</span>
-                          </span>
-                        ) : dest ? (
-                          <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                            <span>{dest}</span>
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs font-medium">Lounge / Triage</span>
-                        )}
-                      </td>
-
-                      {/* 9. BILLING */}
-                      <td className="px-3.5 py-3 whitespace-nowrap">
+                      {/* 6. BILLING */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
                         {renderBillingPill(v)}
                       </td>
 
-                      {/* 10. ACTION */}
-                      <td className="pr-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      {/* 6. DOCTOR */}
+                      <td className="px-4 py-3.5">
+                        {v.assigned_doctor_name ? (
+                          <div>
+                            <div className="font-semibold text-gray-900 text-[12.5px]">
+                              {v.assigned_doctor_name.replace(/\s*\(.*\)/, "")}
+                            </div>
+                            <div className="text-[11px] text-[#64748B]">
+                              (
+                              {v.assigned_specialty ||
+                                v.assigned_doctor_name.match(/\((.*)\)/)?.[1] ||
+                                "Emergency Medicine"}
+                              )
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 font-bold">—</span>
+                        )}
+                      </td>
+
+                      {/* 7. DESTINATION */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {renderDestinationPill(dest)}
+                      </td>
+
+                      {/* 8. BED */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {bed ? (
+                          <span className="font-mono text-[12px] font-semibold text-gray-800">
+                            {bed}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 font-bold">—</span>
+                        )}
+                      </td>
+
+                      {/* 9. ACTION */}
+                      <td className="pr-6 py-3.5 text-right whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedVisitId(v.id);
+                            if (onOpenTriage) {
+                              onOpenTriage(v.id);
+                            } else {
+                              setSelectedVisitId(v.id);
+                            }
                           }}
-                          className="px-3 py-1.5 text-xs font-bold text-white bg-[#1B4FD8] hover:bg-blue-700 rounded-lg shadow-2xs hover:shadow-xs transition-all cursor-pointer inline-flex items-center gap-1"
-                          title="Open Emergency Clinical Record"
+                          className="px-3.5 py-1 text-[12px] font-semibold text-[#1B4FD8] bg-white border border-[#CBD5E1] rounded hover:bg-blue-50 hover:border-[#1B4FD8] transition-all cursor-pointer shadow-2xs"
                         >
-                          <span>Open Chart</span>
-                          <FiArrowRight className="text-[12px]" />
+                          Open
                         </button>
                       </td>
                     </tr>
