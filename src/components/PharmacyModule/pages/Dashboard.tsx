@@ -1,7 +1,8 @@
 import { usePharmacyData } from "../data/usePharmacyData";
 import { useState } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { ShoppingCart, ClipboardList, AlertTriangle, Clock, TrendingUp, TrendingDown, Package, FileText, IndianRupee, RefreshCcw, BarChart3, ChevronRight, ArrowRight, Zap } from "lucide-react";
+import { ShoppingCart, ClipboardList, AlertTriangle, Clock, TrendingUp, TrendingDown, Package, FileText, IndianRupee, RefreshCcw, BarChart3, ChevronRight, ArrowRight, Zap, Trash2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -31,14 +32,19 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   });
 
   const chartData = last7Days.map(dateStr => {
-    const dayBills = bills.filter(
-      b => (b.billDate || "").startsWith(dateStr) && !b.isModifiedReturnBill
+    // Find all original bills generated on this day
+    const dayOriginalBills = bills.filter(
+      b => (b.createdAt || "").startsWith(dateStr) && !b.isModifiedReturnBill
     );
-    const dayReturns = PharmacyDatabase.getReturns().filter(
-      r => (r.createdAt || "").startsWith(dateStr)
+    
+    // Find ALL returns associated with these specific bills, regardless of when the return was made
+    const originalBillNumbers = new Set(dayOriginalBills.map(b => b.billNumber));
+    const returnsForTheseBills = PharmacyDatabase.getReturns().filter(
+      r => originalBillNumbers.has(r.originalBillNumber || "")
     );
-    const dayGross = dayBills.reduce((acc, b) => acc + (b.totalAmount || 0), 0);
-    const dayRefunds = dayReturns.reduce((acc, r) => acc + (r.refundAmount || 0), 0);
+
+    const dayGross = dayOriginalBills.reduce((acc, b) => acc + (b.totalAmount || 0), 0);
+    const dayRefunds = returnsForTheseBills.reduce((acc, r) => acc + (r.refundAmount || 0), 0);
     const dayNetRevenue = Math.max(0, dayGross - dayRefunds);
 
     return {
@@ -46,7 +52,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       revenue: dayNetRevenue,
       gross: dayGross,
       refunds: dayRefunds,
-      orders: dayBills.length
+      orders: dayOriginalBills.length
     };
   });
   
@@ -117,6 +123,18 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             </button>
             <button onClick={() => onNavigate("prescriptions")} className="px-4 py-2 rounded text-[13px] font-medium border border-[#DDE2EC] bg-white text-[#334155] hover:bg-[#F5F7FA] flex items-center gap-1.5 transition-colors">
               <ClipboardList size={14} /> Scan Prescription
+            </button>
+            <button 
+              onClick={() => {
+                if (window.confirm("Are you sure you want to delete ALL demo, seed, and mock data from the pharmacy module? This will give you a 100% clean state.")) {
+                  PharmacyDatabase.clearAllPharmacyData();
+                  toast.success("All pharmacy data deleted successfully. Clean state ready!");
+                }
+              }} 
+              className="px-3 py-2 rounded text-[13px] font-medium border border-[#FEE2E2] bg-[#FEF2F2] text-[#DC2626] hover:bg-[#FEE2E2] flex items-center gap-1.5 transition-colors"
+              title="Purge all pharmacy demo and seed data"
+            >
+              <Trash2 size={14} /> Clear All Data
             </button>
           </div>
         }
@@ -361,3 +379,4 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     </div>
   );
 }
+
