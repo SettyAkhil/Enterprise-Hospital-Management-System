@@ -806,21 +806,35 @@ export function purgeSampleData(): boolean {
 export function clearAllPharmacyData(): void {
   if (typeof window === "undefined") return;
   const keys = [
-    CATEGORIES_KEY, SUPPLIERS_KEY, MEDICINES_KEY, BATCHES_KEY,
-    POS_KEY, GRNS_KEY, STOCK_TXS_KEY, PRESCRIPTIONS_KEY,
-    BILLS_KEY, RETURNS_KEY, TRANSFERS_KEY, SUPPLIER_RETURNS_KEY,
-    ADJUSTMENTS_KEY, CLARIFICATIONS_KEY, NOTIFICATIONS_KEY, AUDIT_LOGS_KEY,
-    "hospai_pharm_purchase_orders_v2", "hospai_pharm_prescriptions_v2",
+    USERS_KEY, NOTIFICATIONS_KEY, AUDIT_LOGS_KEY, CATEGORIES_KEY, SUPPLIERS_KEY,
+    MEDICINES_KEY, BATCHES_KEY, POS_KEY, GRNS_KEY, STOCK_TXS_KEY, PRESCRIPTIONS_KEY,
+    BILLS_KEY, RETURNS_KEY, TRANSFERS_KEY, SUPPLIER_RETURNS_KEY, ADJUSTMENTS_KEY,
+    CLARIFICATIONS_KEY, "hospai_pharm_purchase_orders_v2", "hospai_pharm_prescriptions_v2",
     "hospai_pharm_supplier_returns_v2", "hospai_pharm_sample_data_v1"
   ];
   keys.forEach(k => window.localStorage.removeItem(k));
+
+  const toRemove: string[] = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const k = window.localStorage.key(i);
+    if (k && k.startsWith("hospai_pharm_")) {
+      toRemove.push(k);
+    }
+  }
+  toRemove.forEach(k => window.localStorage.removeItem(k));
+
   window.dispatchEvent(new Event("storage"));
   window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"));
 }
 
-// Automatically run sample data purge on module load
+// Automatically clear all demo and seed data on initial load
 if (typeof window !== "undefined") {
-  purgeSampleData();
+  if (!window.localStorage.getItem("hospai_pharm_wiped_all_demo_v1")) {
+    clearAllPharmacyData();
+    window.localStorage.setItem("hospai_pharm_wiped_all_demo_v1", "true");
+  } else {
+    purgeSampleData();
+  }
 }
 
 export class PharmacyDatabase {
@@ -1256,43 +1270,7 @@ export class PharmacyDatabase {
       let bills: AppPharmacyBill[] = stored ? JSON.parse(stored) : [];
       if (!Array.isArray(bills)) bills = [];
 
-      const isSampleBill = (b: any) => {
-        const id = (b.id || "").toLowerCase();
-        const billNo = (b.billNumber || "").toLowerCase();
-        const patient = (b.patientName || "").toLowerCase();
-        if (typeof b.id === "string" && b.id.startsWith("BILL-DEMO-")) return true;
-        if (typeof b.billNumber === "string" && b.billNumber.startsWith("BILL-DEMO-")) return true;
-        if (id.startsWith("pb-2026-00") || billNo === "bill-2026-001245" || billNo === "inv-2026-8845" || billNo === "inv-2026-8844") return true;
-        if (patient === "rahul verma" || patient === "priya sharma" || patient === "amit kumar") return true;
-        if (b.billNumber === "MOD-BILL-2026-001245" || (b.originalBillNumber === "BILL-2026-001245" && b.billNumber?.startsWith("MOD-"))) return true;
-        if (b.createdBy === "Pharmacist" && (b.totalAmount === 115 || b.totalAmount === 440 || b.totalAmount === 555)) return true;
-        if (Array.isArray(b.items)) {
-          const hasSampleItem = b.items.some((item: any) => {
-            const medId = (item.medicineId || "").toLowerCase();
-            const medName = (item.medicineName || "").toLowerCase();
-            return (
-              medId === "med-azm-500" ||
-              medId === "med-pan-40" ||
-              medId === "med-vtc-500" ||
-              medId === "med-pcm-500" ||
-              medId === "med-amx-500" ||
-              medId === "med-ctz-10" ||
-              medName.includes("azithromycin 500mg") ||
-              medName.includes("pantoprazole 40mg") ||
-              medName.includes("vitamin c 500mg") ||
-              medName.includes("amoxicillin 500mg")
-            );
-          });
-          if (hasSampleItem && (b.createdBy === "Pharmacist" || patient === "" || patient === "walk-in patient")) return true;
-        }
-        return false;
-      };
-
-      const cleaned = bills.filter(b => !isSampleBill(b));
-      if (cleaned.length !== bills.length) {
-        window.localStorage.setItem(BILLS_KEY, JSON.stringify(cleaned));
-      }
-      return cleaned;
+      return bills;
     } catch { return []; }
   }
   static saveBills(bills: AppPharmacyBill[]) {
@@ -1311,44 +1289,6 @@ export class PharmacyDatabase {
     try {
       const stored = window.localStorage.getItem(RETURNS_KEY);
       let list: AppPharmacyReturn[] = stored ? JSON.parse(stored) : [];
-      const isSampleReturn = (r: any) => {
-        const id = (r.id || "").toLowerCase();
-        const retNo = (r.returnNumber || "").toLowerCase();
-        const billNo = (r.originalBillNumber || "").toLowerCase();
-        const patient = (r.patientName || "").toLowerCase();
-        if (id.startsWith("ret-2026-") || retNo.startsWith("ret-2026-") || id.startsWith("ret-demo") || retNo.startsWith("ret-demo")) return true;
-        if (id === "ret-2026-62111" || retNo === "ret-2026-62111") return true;
-        if (billNo === "bill-2026-001245" || billNo === "inv-2026-8845" || billNo === "inv-2026-8844" || billNo.startsWith("pb-2026-00")) return true;
-        if (patient === "rahul verma" || patient === "priya sharma" || patient === "amit kumar") return true;
-        if (Array.isArray(r.items)) {
-          const hasSample = r.items.some((item: any) => {
-            const medId = (item.medicineId || "").toLowerCase();
-            const medName = (item.medicineName || "").toLowerCase();
-            return (
-              medId.startsWith("med-azm") ||
-              medId.startsWith("med-pan") ||
-              medId.startsWith("med-vtc") ||
-              medId.startsWith("med-pcm") ||
-              medId.startsWith("med-amx") ||
-              medId.startsWith("med-ctz") ||
-              medId.startsWith("med-00") ||
-              medId.startsWith("med-01") ||
-              medName.includes("azithromycin") ||
-              medName.includes("pantoprazole") ||
-              medName.includes("vitamin c") ||
-              medName.includes("amoxicillin") ||
-              medName.includes("paracetamol")
-            );
-          });
-          if (hasSample) return true;
-        }
-        return false;
-      };
-      const cleaned = list.filter(r => !isSampleReturn(r));
-      if (cleaned.length !== list.length) {
-        this.saveReturns(cleaned);
-        return cleaned;
-      }
       return list;
     } catch { return []; }
   }
@@ -1584,6 +1524,24 @@ export class PharmacyDatabase {
   static saveTransfers(transfers: AppStockTransfer[]) {
     if (typeof window !== "undefined") { window.localStorage.setItem(TRANSFERS_KEY, JSON.stringify(transfers)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
   }
+  static addTransfer(transfer: AppStockTransfer) {
+    const list = this.getTransfers();
+    list.unshift(transfer);
+    this.saveTransfers(list);
+  }
+  static updateTransferStatus(id: string, status: TransferStatus, user?: string) {
+    const list = this.getTransfers();
+    const idx = list.findIndex(t => t.id === id || t.transferId === id);
+    if (idx !== -1) {
+      list[idx].status = status;
+      if (status === "Approved" || status === "Transferred") {
+        list[idx].approvedBy = user || "Pharmacist";
+      } else if (status === "Received") {
+        list[idx].receivedBy = user || "Pharmacist";
+      }
+      this.saveTransfers(list);
+    }
+  }
 
   // Supplier Returns
   static getSupplierReturns(): AppSupplierReturn[] {
@@ -1687,3 +1645,4 @@ export class PharmacyDatabase {
      };
   }
 }
+

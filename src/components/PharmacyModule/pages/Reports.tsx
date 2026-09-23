@@ -96,9 +96,12 @@ export default function Reports({ onNavigate }: ReportsProps) {
     suppliers: true,
   });
 
-  // Date Filter State (Defaults to current month)
-  const [startDate, setStartDate] = useState<string>("2026-09-01");
-  const [endDate, setEndDate] = useState<string>("2026-09-30");
+  // Date Filter State (Defaults dynamically to current month)
+  const [startDate, setStartDate] = useState<string>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [activePreset, setActivePreset] = useState<string>("This Month");
 
   // Detailed Report Search State
@@ -133,7 +136,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
       setStartDate(firstDayLastMonth);
       setEndDate(lastDayLastMonth);
     } else if (preset === "All Time") {
-      setStartDate("2026-01-01");
+      setStartDate("2020-01-01");
       setEndDate(todayStr);
     }
   };
