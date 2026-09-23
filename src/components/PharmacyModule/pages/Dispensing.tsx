@@ -1,6 +1,6 @@
 import { usePharmacyData } from "../data/usePharmacyData";
 import { useState, useEffect } from "react";
-import { Search, X, Plus, Minus, Printer, CreditCard, Smartphone, Wallet, ShieldCheck, ReceiptText, Trash2, ChevronDown, CheckCircle, RefreshCw, QrCode } from "lucide-react";
+import { Search, X, Plus, Minus, Printer, CreditCard, Smartphone, Wallet, ShieldCheck, ReceiptText, Trash2, ChevronDown, CheckCircle, RefreshCw, QrCode, ShoppingCart } from "lucide-react";
 import { PharmacyDatabase } from "../../../services/pharmacyDb";
 import PageHeader from "../components/PageHeader";
 import InvoicePrintModal from "../components/InvoicePrintModal";
@@ -400,28 +400,41 @@ const completeTransaction = () => {
 
       
       {/* Main Container */}
-
-      <div className="flex-1 flex flex-col overflow-hidden print:hidden bg-gradient-to-br from-[#F8FAFC] to-[#F1F5F9]">
-        <div className="p-6 pb-0">
-          <PageHeader
-            breadcrumbs={[{ label: "Pharmacy" }, { label: "Dispensing & Billing" }]}
-            title="Dispensing & Billing"
-            description={activeTab === "new_sale" ? "New sale · POS" : "Past transactions"}
-            actions={
-              <div className="flex rounded border border-[#DDE2EC] overflow-hidden text-[13px]">
-                <button onClick={() => setActiveTab("new_sale")} className="px-5 py-2 font-medium transition-colors" style={{ background: activeTab === "new_sale" ? "#0F1624" : "#fff", color: activeTab === "new_sale" ? "#fff" : "#64748B" }}>New Sale</button>
-                <button onClick={() => setActiveTab("sales_history")} className="px-5 py-2 font-medium transition-colors" style={{ background: activeTab === "sales_history" ? "#0F1624" : "#fff", color: activeTab === "sales_history" ? "#fff" : "#64748B" }}>Sales History</button>
-              </div>
-            }
-            onNavigate={onNavigate}
-          />
-        </div>
+      <div className="flex-1 flex flex-col overflow-hidden print:hidden bg-[#F4F6F9]">
+        <PageHeader
+          breadcrumbs={[{ label: "Pharmacy" }, { label: "Dispensing & Billing" }]}
+          title="Dispensing & Point of Sale"
+          badge="POS & DISPENSARY"
+          description={activeTab === "new_sale" ? "Real-time prescription dispensing and retail checkout" : "Historical billing ledger and audit invoices"}
+          actions={
+            <div className="flex rounded-md border border-[#DDE2EC] overflow-hidden text-[12px] bg-white shadow-xs" >
+              <button
+                onClick={() => setActiveTab("new_sale")}
+                className={`px-4 py-1.5 font-semibold transition-colors ${
+                  activeTab === "new_sale" ? "bg-[#1E293B] text-white" : "text-[#64748B] hover:bg-[#F1F5F9]"
+                }`}
+              >
+                New Sale (POS)
+              </button>
+              <button
+                onClick={() => setActiveTab("sales_history")}
+                className={`px-4 py-1.5 font-semibold transition-colors ${
+                  activeTab === "sales_history" ? "bg-[#1E293B] text-white" : "text-[#64748B] hover:bg-[#F1F5F9]"
+                }`}
+              >
+                Sales History
+              </button>
+            </div>
+          }
+          onNavigate={onNavigate}
+        icon={ShoppingCart} iconBg="bg-blue-600"
+      />
 
         {activeTab === "sales_history" ? (
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-[#E2E8F0] overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-[#E2E8F0] flex justify-between items-center bg-[#F8FAFC]">
-                <h3 className="font-bold text-[15px] text-[#0F1624]">Completed Transactions</h3>
+          <div className="flex-1 overflow-y-auto p-5 max-w-[1600px] w-full mx-auto">
+            <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-[#E2E8F0] flex justify-between items-center bg-[#FAFCFF]">
+                <h3 className="font-bold text-[14px] text-[#0F1624]">Completed Transactions</h3>
                 <div className="flex items-center gap-3">
                   <button onClick={() => window.dispatchEvent(new CustomEvent("hospai_pharmacy_toast", { detail: { message: "Customer Add modal opened!" } }))} className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#DDE2EC] text-[12px] font-medium text-[#334155] hover:bg-[#F5F7FA]">
                     <Plus size={14} /> Add Customer
@@ -479,32 +492,36 @@ const completeTransaction = () => {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4 flex flex-col">
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 flex flex-col max-w-[1600px] w-full mx-auto">
             {/* Patient / Rx Info */}
-          <div className="bg-white rounded-2xl shadow-sm border border-[#E2E8F0] p-5 flex gap-4 items-end hover:shadow-md transition-shadow">
-            <div className="grid grid-cols-2 gap-4 flex-1">
+            <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-4 flex gap-4 items-end">
+              <div className="grid grid-cols-2 gap-4 flex-1">
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Prescription ID</label>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1">Prescription ID</label>
                   <input
                     value={rxId}
                     onChange={e => setRxId(e.target.value)}
                     placeholder="e.g. RX-2026-1041"
-                    className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] text-[#0F1624] focus:border-[#1B4FD8] focus:outline-none transition-colors bg-[#F5F7FA] focus:bg-white"
+                    className="w-full px-3 py-2 rounded-lg border border-[#DDE2EC] text-[13px] text-[#0F1624] focus:border-[#2563EB] focus:outline-none transition-colors bg-[#F8FAFC] focus:bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Patient Name</label>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1">Patient Name</label>
                   <input
                     value={patientName}
                     onChange={e => setPatientName(e.target.value)}
-                    className="w-full px-3 py-2 rounded border border-[#DDE2EC] text-[13px] text-[#0F1624] focus:border-[#1B4FD8] focus:outline-none transition-colors bg-[#F5F7FA] focus:bg-white"
+                    placeholder="Walk-in Patient or search..."
+                    className="w-full px-3 py-2 rounded-lg border border-[#DDE2EC] text-[13px] text-[#0F1624] focus:border-[#2563EB] focus:outline-none transition-colors bg-[#F8FAFC] focus:bg-white"
                   />
                 </div>
-            </div>
-            <button onClick={loadPrescriptionFEFO} className="bg-[#1B4FD8] text-white px-5 py-2 h-[42px] rounded-lg text-[13px] font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all whitespace-nowrap">
+              </div>
+              <button 
+                onClick={loadPrescriptionFEFO} 
+                className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2 h-[38px] rounded-lg text-[12.5px] font-bold shadow-xs hover:shadow-sm transition-all whitespace-nowrap cursor-pointer"
+              >
                 Load Rx & Auto-Allocate
-            </button>
-          </div>
+              </button>
+            </div>
 
           {/* Medicine Search */}
           <div className="relative">
@@ -546,42 +563,42 @@ const completeTransaction = () => {
           </div>
 
           {/* Cart Table */}
-          <div className="bg-white rounded-2xl shadow-sm border border-[#E2E8F0] overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] overflow-hidden">
             <table>
               <thead><tr>
-                <th className="text-left px-5 py-4 bg-[#F8FAFC] text-[12px] font-extrabold text-[#475569] uppercase tracking-wider border-b border-[#E2E8F0]">Medicine</th>
-                <th className="text-left px-5 py-4 bg-[#F8FAFC] text-[12px] font-extrabold text-[#475569] uppercase tracking-wider border-b border-[#E2E8F0]">Batch</th>
-                <th className="text-left px-5 py-4 bg-[#F8FAFC] text-[12px] font-extrabold text-[#475569] uppercase tracking-wider border-b border-[#E2E8F0]">Expiry</th>
-                <th className="text-center px-5 py-4 bg-[#F8FAFC] text-[12px] font-extrabold text-[#475569] uppercase tracking-wider border-b border-[#E2E8F0]">Qty</th>
-                <th className="text-right px-5 py-4 bg-[#F8FAFC] text-[12px] font-extrabold text-[#475569] uppercase tracking-wider border-b border-[#E2E8F0]">MRP (₹)</th>
-                <th className="text-center px-5 py-4 bg-[#F8FAFC] text-[12px] font-extrabold text-[#475569] uppercase tracking-wider border-b border-[#E2E8F0]">Tax%</th>
-                <th className="text-right px-5 py-4 bg-[#F8FAFC] text-[12px] font-extrabold text-[#475569] uppercase tracking-wider border-b border-[#E2E8F0]">Total (₹)</th>
-                <th className="px-5 py-4 bg-[#F8FAFC] border-b border-[#E2E8F0]"></th>
+                <th className="text-left px-4 py-3 bg-[#FAFCFF] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#E2E8F0]">Medicine</th>
+                <th className="text-left px-4 py-3 bg-[#FAFCFF] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#E2E8F0]">Batch</th>
+                <th className="text-left px-4 py-3 bg-[#FAFCFF] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#E2E8F0]">Expiry</th>
+                <th className="text-center px-4 py-3 bg-[#FAFCFF] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#E2E8F0]">Qty</th>
+                <th className="text-right px-4 py-3 bg-[#FAFCFF] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#E2E8F0]">MRP (₹)</th>
+                <th className="text-center px-4 py-3 bg-[#FAFCFF] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#E2E8F0]">Tax%</th>
+                <th className="text-right px-4 py-3 bg-[#FAFCFF] text-[11px] font-bold text-[#64748B] uppercase tracking-wider border-b border-[#E2E8F0]">Total (₹)</th>
+                <th className="px-4 py-3 bg-[#FAFCFF] border-b border-[#E2E8F0]"></th>
               </tr></thead>
               <tbody>
                 {cart.length === 0 ? (
                   <tr><td colSpan={9} className="py-12 text-center text-[#94A3B8]">
-                    <Search size={28} className="mx-auto mb-2 opacity-40" />
-                    <p className="font-medium">No medicines added</p>
-                    <p className="text-[12px] mt-1">Search or Load Rx above</p>
+                    <Search size={28} className="mx-auto mb-2 opacity-40 text-[#64748B]" />
+                    <p className="font-semibold text-gray-800 text-[13px]">No medicines added to sale</p>
+                    <p className="text-[12px] text-[#94A3B8] mt-1">Search the formulary or load an Rx order above</p>
                   </td></tr>
                 ) : cart.map((item, i) => (
-                  <tr key={i} className="border-b border-[#DDE2EC] last:border-0 hover:bg-[#F5F7FA]">
-                    <td className="px-5 py-4 font-medium text-[13px] text-[#0F1624]">{item.medicine}</td>
-                    <td className="px-5 py-4 text-[#64748B] font-mono text-[12px]">{item.batch}</td>
-                    <td className="px-5 py-4 text-[#64748B] text-[13px]">{item.expiry}</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => updateQty(item.id, -1)} className="p-1 hover:bg-[#DDE2EC] rounded text-[#64748B]"><Minus size={14} /></button>
-                        <span className="w-8 text-center font-medium text-[13px] text-[#0F1624]">{item.qty}</span>
-                        <button onClick={() => updateQty(item.id, 1)} className="p-1 hover:bg-[#DDE2EC] rounded text-[#64748B]"><Plus size={14} /></button>
+                  <tr key={i} className="border-b border-[#F1F5F9] last:border-0 hover:bg-[#F8FAFC]">
+                    <td className="px-4 py-3 font-semibold text-[13px] text-gray-900">{item.medicine}</td>
+                    <td className="px-4 py-3 text-[#64748B] font-mono text-[11.5px]">{item.batch}</td>
+                    <td className="px-4 py-3 text-[#64748B] text-[12px]">{item.expiry}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1.5 bg-gray-50 border border-[#DDE2EC] rounded-md px-1.5 py-0.5 w-max mx-auto">
+                        <button onClick={() => updateQty(item.id, -1)} className="p-0.5 hover:bg-gray-200 rounded text-[#64748B] cursor-pointer"><Minus size={13} /></button>
+                        <span className="w-7 text-center font-bold text-[12.5px] text-gray-900 font-mono">{item.qty}</span>
+                        <button onClick={() => updateQty(item.id, 1)} className="p-0.5 hover:bg-gray-200 rounded text-[#64748B] cursor-pointer"><Plus size={13} /></button>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-right text-[13px] text-[#0F1624]">{(item.mrp || 0).toFixed(2)}</td>
-                    <td className="px-5 py-4 text-center text-[13px] text-[#0F1624]">{item.tax || 0}%</td>
-                    <td className="px-5 py-4 text-right font-bold text-[13px] text-[#0F1624]">{(item.total || 0).toFixed(2)}</td>
-                    <td className="px-5 py-4 text-right">
-                      <button onClick={() => removeItem(item.id)} className="p-1 text-[#94A3B8] hover:text-[#dc2626] transition-colors"><Trash2 size={16} /></button>
+                    <td className="px-4 py-3 text-right text-[12.5px] text-gray-800 font-mono">{(item.mrp || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-center text-[12px] text-[#64748B]">{item.tax || 0}%</td>
+                    <td className="px-4 py-3 text-right font-bold text-[13px] text-gray-900 font-mono">₹{(item.total || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => removeItem(item.id)} className="p-1 text-[#94A3B8] hover:text-[#DC2626] transition-colors cursor-pointer"><Trash2 size={15} /></button>
                     </td>
                   </tr>
                 ))}
@@ -594,50 +611,55 @@ const completeTransaction = () => {
 
       {/* Right: Payment summary (Only shown in New Sale tab) */}
       {activeTab === "new_sale" && (
-        <div className="w-[420px] bg-white border-l border-[#E2E8F0] shadow-[-10px_0_40px_rgba(0,0,0,0.04)] flex flex-col print:hidden z-10">
-          <div className="p-6 border-b border-[#E2E8F0] bg-[#F8FAFC]">
-          <h3 className="font-black text-[18px] text-[#0F1624] tracking-tight">Payment Summary</h3>
-        </div>
-
-        <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-          {/* Bill Breakup */}
-          <div className="space-y-3 bg-[#F8FAFC] p-6 rounded-2xl border border-[#E2E8F0]">
-            <div className="flex justify-between text-[13px] text-[#475569]">
-              <span>Subtotal</span><span className="font-medium text-[#0F1624]">₹{subtotal.toFixed(2)}</span>
-            </div>
-            
-            <div className="flex justify-between items-center text-[13px] text-[#475569]">
-              <span>Discount</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number" value={discount} onChange={e => setDiscount(Number(e.target.value))}
-                  className="w-12 px-2 py-1 text-right border border-[#DDE2EC] bg-white text-[#0F1624] focus:border-[#1B4FD8] focus:outline-none"
-                />
-                <span className="text-[#94A3B8]">%</span>
-                <span className="font-medium text-[#16a34a]">-₹{discountAmt.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-between text-[13px] text-[#475569]">
-              <span>CGST</span><span className="font-medium text-[#0F1624]">₹{totalCGST.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-[13px] text-[#475569]">
-              <span>SGST</span><span className="font-medium text-[#0F1624]">₹{totalSGST.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-[13px] text-[#475569]">
-              <span>Round Off</span><span className="font-medium text-[#0F1624]">₹{roundOff > 0 ? "+" : ""}{roundOff.toFixed(2)}</span>
-            </div>
-            
-            <div className="h-px bg-[#DDE2EC] my-3"></div>
-            
-            <div className="flex justify-between items-end">
-              <span className="text-[14px] font-black text-[#475569] uppercase tracking-widest">Net Payable</span>
-              <div className="text-right">
-                <span className="text-[11px] text-[#64748B] block mb-1">Total Amount</span>
-                <span className="text-[36px] font-black text-[#1B4FD8] leading-none tracking-tighter">₹{finalAmount}</span>
-              </div>
-            </div>
+        <div className="w-[390px] bg-white border-l border-[#E2E8F0] shadow-sm flex flex-col print:hidden z-10">
+          <div className="px-5 py-3.5 border-b border-[#E2E8F0] bg-[#FAFCFF] flex items-center justify-between">
+            <h3 className="font-bold text-[14px] text-gray-900 tracking-tight">Payment Summary</h3>
+            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB]">
+              TENDER & BILLING
+            </span>
           </div>
+
+          <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+            {/* Bill Breakup */}
+            <div className="space-y-2.5 bg-[#F8FAFC] p-4 rounded-xl border border-[#E2E8F0]">
+              <div className="flex justify-between text-[12.5px] text-[#475569]">
+                <span>Subtotal</span><span className="font-semibold text-gray-900 font-mono">₹{subtotal.toFixed(2)}</span>
+              </div>
+              
+              <div className="flex justify-between items-center text-[12.5px] text-[#475569]">
+                <span>Discount</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number" value={discount} onChange={e => setDiscount(Number(e.target.value))}
+                    className="w-12 px-1.5 py-0.5 text-right border border-[#DDE2EC] rounded bg-white text-gray-900 text-[12px] font-mono focus:border-[#2563EB] focus:outline-none"
+                  />
+                  <span className="text-[#94A3B8] text-[11px]">%</span>
+                  <span className="font-bold text-[#16A34A] font-mono text-[12px]">-₹{discountAmt.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between text-[12px] text-[#64748B]">
+                <span>CGST</span><span className="font-mono text-gray-800">₹{totalCGST.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-[12px] text-[#64748B]">
+                <span>SGST</span><span className="font-mono text-gray-800">₹{totalSGST.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-[12px] text-[#64748B]">
+                <span>Round Off</span><span className="font-mono text-gray-800">{roundOff > 0 ? "+" : ""}₹{roundOff.toFixed(2)}</span>
+              </div>
+              
+              <div className="h-px bg-[#E2E8F0] my-2"></div>
+              
+              <div className="flex justify-between items-baseline pt-1">
+                <div>
+                  <span className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider block">Net Payable</span>
+                  <span className="text-[10px] text-[#94A3B8]">Inc. all taxes</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-3xl font-extrabold text-[#2563EB] font-mono leading-none tracking-tight">₹{finalAmount}</span>
+                </div>
+              </div>
+            </div>
 
           
           {/* Payment Allocation */}
@@ -723,16 +745,15 @@ const completeTransaction = () => {
           </div>
         </div>
 
-        <div className="p-5 border-t border-[#DDE2EC] bg-white">
-
+        <div className="p-4 border-t border-[#E2E8F0] bg-[#FAFCFF]">
           <button 
             onClick={completeTransaction}
             disabled={cart.length === 0 || !isPaid}
-            className={`w-full py-4 text-[14px] font-bold shadow-sm transition-colors uppercase tracking-wide ${
-                (cart.length > 0 && isPaid) ? "bg-[#1B4FD8] text-white hover:bg-[#1742B8]" : "bg-[#F0F2F5] text-[#94A3B8] cursor-not-allowed"
+            className={`w-full py-3 rounded-lg text-[13px] font-bold shadow-xs transition-colors uppercase tracking-wider cursor-pointer ${
+                (cart.length > 0 && isPaid) ? "bg-[#2563EB] text-white hover:bg-[#1D4ED8]" : "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
             }`}
           >
-            Complete Transaction
+            Complete & Print Invoice
           </button>
         </div>
       </div>

@@ -1,6 +1,4 @@
 
-
-
 export interface AppUser {
   id: string;
   name: string;
@@ -63,6 +61,7 @@ export interface AppMedicine {
   genericName: string;
   brandName: string;
   hsnCode?: string;
+  categoryId: string;
   manufacturer: string;
   dosageForm: string;
   strength: string;
@@ -148,7 +147,7 @@ export interface AppGRN {
   createdAt: string;
 }
 
-export type StockTransactionType = "PURCHASE_RECEIVED" | "DISPENSED" | "RETURNED" | "EXPIRED" | "ADJUSTMENT" | "DAMAGED" | "TRANSFER_OUT" | "TRANSFER_IN" | "SUPPLIER_RETURN";
+export type StockTransactionType = "PURCHASE_RECEIVED" | "DISPENSED" | "RETURNED" | "EXPIRED" | "ADJUSTMENT" | "DAMAGED" | "TRANSFER_OUT" | "TRANSFER_IN";
 
 export interface AppStockTransaction {
   id: string;
@@ -372,89 +371,49 @@ export interface AppStockTransfer {
 }
 
 export interface AppSupplierReturn {
-  id: string; // returnId internal
-  debitNoteNumber: string; // DN-YYYY-XXXXX
-  returnNumber?: string;
+  id: string;
   supplierId: string;
-  supplierName?: string;
   medicineId: string;
-  medicineName?: string;
   batchId: string;
-  batchNumber?: string;
   quantity: number;
-  purchaseRate: number;
-  unitCost?: number;
-  returnAmount: number;
-  reason: string;
-  status:
-    | "Draft"
-    | "Submitted"
-    | "Approved"
-    | "Sent To Supplier"
-    | "Credit Note Pending"
-    | "Credit Received"
-    | "Closed"
-    | "Credit Note Received"
-    | string;
-  poNumber?: string;
-  grnNumber?: string;
-  invoiceNumber?: string;
+  reason: "Expired" | "Damaged" | "Wrong Item";
+  status: "Requested" | "Approved" | "Credit Note Received";
   creditNoteId?: string;
-  notes?: string;
-  requestedBy?: string;
-  createdBy?: string;
-  approvedBy?: string;
-  returnDate?: string;
   createdAt: string;
-  updatedAt?: string;
 }
 
 export interface AppStockAdjustment {
   id: string;
-  adjustmentNumber?: string;
   medicineId: string;
-  medicineName?: string;
   batchId: string;
-  batchNumber?: string;
-  supplierId?: string;
-  supplierName?: string;
-  category?: string;
-  quantity?: number;
-  unitCost?: number;
-  lossValue?: number;
   systemQuantity: number;
   physicalQuantity: number;
   difference: number;
-  reason: "Physical Mismatch" | "Damage" | "Missing Stock" | string;
-  disposalMethod?: string;
-  location?: string;
-  witnessName?: string;
-  reportedBy?: string;
-  adjustmentDate?: string;
-  approvedBy?: string;
-  status?: "Approved" | string;
+  reason: "Physical Mismatch" | "Damage" | "Missing Stock";
+  approvedBy: string;
+  status: "Approved";
   createdAt: string;
 }
 
 
-const USERS_KEY = "hospai_pharm_users_v4";
-const NOTIFICATIONS_KEY = "hospai_pharm_notifications_v4";
-const AUDIT_LOGS_KEY = "hospai_pharm_audit_logs_v4";
+const USERS_KEY = "hospai_pharm_users_v2";
+const NOTIFICATIONS_KEY = "hospai_pharm_notifications_v2";
+const AUDIT_LOGS_KEY = "hospai_pharm_audit_logs_v2";
 
-const CATEGORIES_KEY = "hospai_pharm_categories_v4";
-const SUPPLIERS_KEY = "hospai_pharm_suppliers_v4";
-const MEDICINES_KEY = "hospai_pharm_medicines_v4";
-const BATCHES_KEY = "hospai_pharm_batches_v4";
-const POS_KEY = "hospai_pharm_pos_v4";
-const GRNS_KEY = "hospai_pharm_grns_v4";
-const STOCK_TXS_KEY = "hospai_pharm_stock_txs_v4";
-const PRESCRIPTIONS_KEY = "hospai_pharm_rx_v4";
-const BILLS_KEY = "hospai_pharm_bills_v4";
-const RETURNS_KEY = "hospai_pharm_returns_v4";
-const TRANSFERS_KEY = "hospai_pharm_transfers_v4";
-const SUPPLIER_RETURNS_KEY = "hospai_pharm_supp_returns_v4";
-const ADJUSTMENTS_KEY = "hospai_pharm_adjustments_v4";
-const CLARIFICATIONS_KEY = "hospai_pharm_clarifications_v4";
+const CATEGORIES_KEY = "hospai_pharm_categories_v2";
+const SUPPLIERS_KEY = "hospai_pharm_suppliers_v2";
+const MEDICINES_KEY = "hospai_pharm_medicines_v2";
+const BATCHES_KEY = "hospai_pharm_batches_v2";
+const POS_KEY = "hospai_pharm_pos_v2";
+const GRNS_KEY = "hospai_pharm_grns_v2";
+const STOCK_TXS_KEY = "hospai_pharm_stock_txs_v2";
+const PRESCRIPTIONS_KEY = "hospai_pharm_rx_v2";
+const BILLS_KEY = "hospai_pharm_bills_v2";
+const RETURNS_KEY = "hospai_pharm_returns_v2";
+const TRANSFERS_KEY = "hospai_pharm_transfers_v2";
+const SUPPLIER_RETURNS_KEY = "hospai_pharm_supp_returns_v2";
+const ADJUSTMENTS_KEY = "hospai_pharm_adjustments_v2";
+const CLARIFICATIONS_KEY = "hospai_pharm_clarifications_v2";
 
 /**
  * Purges all sample, demo, test, and seed data from the Pharmacy stores.
@@ -1292,8 +1251,7 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return [];
     try {
       const stored = window.localStorage.getItem(PRESCRIPTIONS_KEY);
-      const prescriptions: AppPrescription[] = stored ? JSON.parse(stored) : [];
-      return prescriptions;
+      return stored ? JSON.parse(stored) : [];
     } catch { return []; }
   }
   static savePrescriptions(rx: AppPrescription[]) {
@@ -1380,7 +1338,7 @@ export class PharmacyDatabase {
     notes?: string
   ): { returnRecord: AppPharmacyReturn; modifiedBill: AppPharmacyBill } {
     const returnNumber = "RET-" + new Date().getFullYear() + "-" + String(Math.floor(10000 + Math.random() * 90000));
-    const modifiedBillNumber = originalBill.originalBillNumber || originalBill.billNumber;
+    const modifiedBillNumber = "MOD-" + originalBill.billNumber;
     const now = new Date().toISOString();
 
     const refundAmount = returnedItems.reduce((sum, item) => sum + (item.refundAmount || 0), 0);
@@ -1595,87 +1553,6 @@ export class PharmacyDatabase {
   }
   static saveSupplierReturns(returns: AppSupplierReturn[]) {
     if (typeof window !== "undefined") { window.localStorage.setItem(SUPPLIER_RETURNS_KEY, JSON.stringify(returns)); window.dispatchEvent(new Event("storage")); window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated")); }
-  }
-
-  static processSupplierReturn(payload: Omit<AppSupplierReturn, "id" | "debitNoteNumber" | "status" | "createdAt" | "returnAmount" | "purchaseRate">, createdBy: string): AppSupplierReturn {
-    const returns = this.getSupplierReturns();
-    
-    // Auto-calculate financial value
-    const batches = this.getBatches();
-    const batch = batches.find(b => b.id === payload.batchId);
-    if (!batch) throw new Error("Batch not found.");
-    if (batch.availableQuantity < payload.quantity) throw new Error("Return quantity cannot exceed available stock.");
-    
-    const purchaseRate = batch.purchasePrice || 0;
-    const returnAmount = payload.quantity * purchaseRate;
-
-    const newReturn: AppSupplierReturn = {
-      ...payload,
-      id: "RET-" + Date.now(),
-      debitNoteNumber: "DN-" + new Date().getFullYear() + "-" + String(Math.floor(1 + Math.random() * 90000)).padStart(5, '0'),
-      purchaseRate,
-      returnAmount,
-      status: "Draft",
-      createdBy,
-      createdAt: new Date().toISOString()
-    };
-    
-    // NOTE: Stock is NOT deducted during "Draft" or "Submitted". It happens at "Approved".
-    
-    returns.push(newReturn);
-    this.saveSupplierReturns(returns);
-    
-    this.logAudit(createdBy, "Return Created", "Inventory", newReturn.debitNoteNumber, `Draft Return created for ${payload.quantity} units of batch ${batch.batchNumber}`);
-    return newReturn;
-  }
-
-  static updateSupplierReturnStatus(returnId: string, newStatus: AppSupplierReturn["status"], user: string): AppSupplierReturn {
-    const returns = this.getSupplierReturns();
-    const rtn = returns.find(r => r.id === returnId);
-    if (!rtn) throw new Error("Return not found.");
-    
-    const oldStatus = rtn.status;
-    rtn.status = newStatus;
-    rtn.updatedAt = new Date().toISOString();
-    
-    // Stock Deduction Logic (only happens exactly when Approved)
-    if (newStatus === "Approved" && oldStatus !== "Approved") {
-      rtn.approvedBy = user;
-      const batches = this.getBatches();
-      const batch = batches.find(b => b.id === rtn.batchId);
-      
-      if (batch) {
-        if (batch.availableQuantity >= rtn.quantity) {
-          batch.availableQuantity -= rtn.quantity;
-          this.updateBatch(batch.id, batch);
-          
-          this.addTransaction({
-            id: "TXN" + Math.floor(Math.random() * 100000),
-            date: new Date().toISOString(),
-            medicineId: rtn.medicineId,
-            batchId: rtn.batchId,
-            quantity: rtn.quantity,
-            transactionType: "SUPPLIER_RETURN",
-            userId: user,
-            reason: `Supplier Return (DN: ${rtn.debitNoteNumber}): ${rtn.reason}`
-          });
-          this.logAudit(user, "Stock Deducted", "Inventory", rtn.debitNoteNumber, `Stock deducted for Approved Return (${rtn.quantity} units)`);
-        } else {
-          throw new Error(`Cannot approve: Insufficient stock available. Only ${batch.availableQuantity} left.`);
-        }
-      }
-    }
-
-    this.saveSupplierReturns(returns);
-    this.logAudit(user, `Return ${newStatus}`, "Inventory", rtn.debitNoteNumber, `Return status changed from ${oldStatus} to ${newStatus}`);
-    
-    if (newStatus === "Approved") {
-       this.addNotification("Return Approved", `Debit Note ${rtn.debitNoteNumber} approved and stock deducted.`, "success");
-    } else if (newStatus === "Credit Received") {
-       this.addNotification("Credit Received", `Credit applied for Debit Note ${rtn.debitNoteNumber} (₹${rtn.returnAmount}).`, "success");
-    }
-
-    return rtn;
   }
 
   // Adjustments

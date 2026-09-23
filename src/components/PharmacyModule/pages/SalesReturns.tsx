@@ -370,6 +370,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
           </div>
         }
         onNavigate={onNavigate}
+        icon={RefreshCcw} iconBg="bg-amber-600"
       />
 
       {/* Summary KPI Cards */}

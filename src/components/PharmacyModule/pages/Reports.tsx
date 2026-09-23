@@ -3,15 +3,11 @@ import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, 
   CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend 
 } from "recharts";
-import { 
-  Download, FileText, Printer, ChevronDown, ChevronRight, 
-  Calendar, RotateCcw, Search, ArrowLeft, TrendingUp, AlertTriangle, 
-  Clock, Package, ShoppingCart, Truck, CheckCircle2, AlertCircle,
-  LayoutDashboard, ShoppingBag, ArrowRight
-} from "lucide-react";
+import { Download, FileText, Printer, ChevronDown, ChevronRight, Calendar, RotateCcw, Search, ArrowLeft, TrendingUp, AlertTriangle, Clock, Package, ShoppingCart, Truck, CheckCircle2, AlertCircle, LayoutDashboard, ShoppingBag, ArrowRight, BarChart3 } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import { usePharmacyData } from "../data/usePharmacyData";
 import { PharmacyDatabase } from "../../../services/pharmacyDb";
+import { Btn } from "../../shared";
 
 // 5 Structured Report Categories (Zero Profit/Margin Metrics)
 interface ReportCategory {
@@ -1529,7 +1525,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
   };
 
   return (
-    <div className="p-6 space-y-5 bg-[#F8FAFC] min-h-screen">
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#F4F6F9]">
       {/* Print Styles: Strict read-only printable layout */}
       <style>{`
         @media print {
@@ -1541,39 +1537,34 @@ export default function Reports({ onNavigate }: ReportsProps) {
       `}</style>
 
       {/* TOP HEADER */}
-      <div className="bg-white rounded border border-[#DDE2EC] px-6 py-4 shadow-sm flex items-center justify-between flex-wrap gap-4 no-print">
-        <div>
-          <nav className="flex items-center gap-1.5 text-[12px] text-[#64748B] mb-1">
-            <span>HospAI</span>
-            <ChevronRight size={11} />
-            <button onClick={() => onNavigate("dashboard")} className="hover:text-[#1B4FD8]">Pharmacy</button>
-            <ChevronRight size={11} />
-            <span className="text-[#0F1624] font-medium">Analytics & Reports</span>
-          </nav>
-          <h1 className="text-[20px] font-bold text-[#0F1624]">Reports & Analytics</h1>
-          <p className="text-[12px] text-[#64748B]">Insights and business intelligence for pharmacy operations</p>
-        </div>
-
-        {/* Top-Right Action Controls (Clean, not visually overpowering) */}
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={handlePrint}
-            title="Print Report"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#DDE2EC] bg-white text-[12px] font-medium text-[#334155] hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            <Printer size={13} className="text-gray-600" /> Print
-          </button>
-
-          <button 
-            onClick={handleExportExcel}
-            title="Export Data to Excel/CSV"
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded text-white text-[12px] font-semibold transition-colors shadow-sm hover:bg-green-800"
-            style={{ background: "#15803d" }}
-          >
-            <Download size={13} /> Export Excel
-          </button>
-        </div>
+      <div className="no-print">
+        <PageHeader
+          breadcrumbs={[{ label: "Pharmacy" }, { label: "Analytics & Reports" }]}
+          title="Pharmacy Operations & Analytics Hub"
+          badge="ANALYTICS & AUDIT"
+          description="Operational metrics, sales velocity, valuation ledgers, and vendor compliance reports"
+          actions={
+            <div className="flex items-center gap-2" icon={BarChart3} iconBg="bg-sky-600"
+        >
+              <Btn variant="outline" size="sm" onClick={handlePrint} className="shadow-xs">
+                <Printer size={13} className="text-gray-600" /> Print
+              </Btn>
+              <Btn 
+                variant="primary" 
+                size="sm" 
+                onClick={handleExportExcel} 
+                className="shadow-xs bg-[#059669] hover:bg-[#047857] border-[#059669]"
+              >
+                <Download size={13} /> Export Excel / CSV
+              </Btn>
+            </div>
+          }
+          onNavigate={onNavigate}
+        icon={BarChart3} iconBg="bg-sky-600"
+      />
       </div>
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-4 max-w-[1600px] w-full mx-auto">
 
       {/* DATE FILTER TOOLBAR (Compact, professional) */}
       <div className="bg-white rounded border border-[#DDE2EC] px-5 py-3 shadow-sm no-print">
@@ -3911,5 +3902,6 @@ export default function Reports({ onNavigate }: ReportsProps) {
         </div>
       </div>
     </div>
+  </div>
   );
 }
