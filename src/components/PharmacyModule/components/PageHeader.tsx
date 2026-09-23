@@ -28,7 +28,7 @@ export default function PageHeader({
   iconBg = "bg-[#1B4FD8]",
 }: PageHeaderProps) {
   return (
-    <div className="bg-white border-b border-[#DDE2EC] px-6 py-4 shadow-xs">
+    <div className="bg-gradient-to-r from-[#F0FDFA] to-white border-b border-[#A7F3D0] border-t-2 border-t-[#0F766E] px-6 py-5 shadow-[0_4px_20px_-4px_rgba(0,118,110,0.08)]">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 flex-wrap">
         <div className="flex items-start gap-3.5">
           {Icon && (
@@ -38,7 +38,7 @@ export default function PageHeader({
           )}
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-gray-900 tracking-tight leading-tight">
+              <h1 className="text-lg font-bold text-[#064E3B] tracking-tight leading-tight">
                 {title}
               </h1>
             </div>

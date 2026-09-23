@@ -51,6 +51,18 @@ export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps) {
 
   return (
     <div className="w-full h-full overflow-hidden bg-[#F4F6F9]">
+      <style>{`
+        /* Pharmacy Sidebar Theme Overrides */
+        aside { background-color: #064E3B !important; border-color: #022C22 !important; }
+        .nav-item.active { background-color: #0F766E !important; color: #FFFFFF !important; }
+        .nav-item.active > svg { color: #5EEAD4 !important; }
+        .nav-item.sub.active { background-color: rgba(15,118,110,0.3) !important; color: #5EEAD4 !important; border-left: 2px solid #5EEAD4 !important; padding-left: 34px !important; }
+        .nav-item:hover { background-color: rgba(255,255,255,0.08) !important; }
+        .badge { background-color: #022C22 !important; color: #34D399 !important; }
+        
+        /* Overriding collapsed state active background */
+        aside .bg-\\[\\#1B4FD8\\] { background-color: #0F766E !important; box-shadow: 0 4px 6px -1px rgba(15, 118, 110, 0.5) !important; ring-color: rgba(20, 184, 166, 0.4) !important; }
+      `}</style>
       <PharmacyApp page={page} onNavigate={handleNavigate} />
     </div>
   );
