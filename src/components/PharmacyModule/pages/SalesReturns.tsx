@@ -20,6 +20,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
   const [printInv, setPrintInv] = useState<any | null>(null);
   const [printReturnModal, setPrintReturnModal] = useState<{ bill: any; returnRecord: any } | null>(null);
   const [search, setSearch] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
 
   // Returns tab states
   const [searchBillNo, setSearchBillNo] = useState("");
@@ -34,25 +35,40 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
   const [recentReturns, setRecentReturns] = useState<AppPharmacyReturn[]>(() => PharmacyDatabase.getReturns());
 
   const filtered = useMemo(() => {
-    const matched = bills.filter(inv =>
+    let matched = bills.filter(inv =>
       !search || inv.billNumber.toLowerCase().includes(search.toLowerCase()) || inv.patientName.toLowerCase().includes(search.toLowerCase())
     );
-    // Deduplicate by billNumber so we only see the latest version in the table
+    // Apply selected date filter
+    if (selectedDate) {
+      matched = matched.filter(inv => (inv.createdAt || (inv as any).date || "").startsWith(selectedDate));
+    }
+    // Deduplicate by originalBillNumber to keep the LATEST modified bill
+    // Sort descending by createdAt so the modified (newer) bill comes first
+    const sorted = [...matched].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const seen = new Set<string>();
-    return matched.filter(inv => {
+    return sorted.filter(inv => {
       const key = inv.originalBillNumber || inv.billNumber;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
-  }, [bills, search]);
+  }, [bills, search, selectedDate]);
   
   // Net Revenue = Gross Sales Revenue (original bills only) - Total Refunds
-  const originalBills = useMemo(() => bills.filter(b => !b.isModifiedReturnBill), [bills]);
-  const grossSales = useMemo(() => originalBills.reduce((sum, b) => sum + (b.totalAmount || 0), 0), [originalBills]);
-  const totalRefunds = useMemo(() => recentReturns.reduce((sum, r) => sum + (r.refundAmount || 0), 0), [recentReturns]);
-  const todayRevenue = grossSales - totalRefunds;
-  const avgBill = originalBills.length > 0 ? (todayRevenue / originalBills.length) : 0;
+  // Filter for SELECTED DATE to make KPIs accurate
+  const todayOriginalBills = useMemo(() => bills.filter(b => !b.isModifiedReturnBill && (b.createdAt || "").startsWith(selectedDate)), [bills, selectedDate]);
+  const grossSales = useMemo(() => todayOriginalBills.reduce((sum, b) => sum + (b.totalAmount || 0), 0), [todayOriginalBills]);
+  
+  // Get all returns that map to these original bills, regardless of when the return was created
+  const todayReturns = useMemo(() => {
+    const originalBillNumbers = new Set(todayOriginalBills.map(b => b.billNumber));
+    return recentReturns.filter(r => originalBillNumbers.has(r.originalBillNumber || ""));
+  }, [recentReturns, todayOriginalBills]);
+
+  const totalRefunds = useMemo(() => todayReturns.reduce((sum, r) => sum + (r.refundAmount || 0), 0), [todayReturns]);
+  
+  const todayRevenue = Math.max(0, grossSales - totalRefunds);
+  const avgBill = todayOriginalBills.length > 0 ? (todayRevenue / todayOriginalBills.length) : 0;
 
   // Reset to clean Returns view
   const handleResetToReturns = () => {
@@ -359,9 +375,9 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Total Revenue", value: "₹" + todayRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#1B4FD8" },
-          { label: "Transactions", value: originalBills.length.toString(), color: "#16a34a" },
-          { label: "Total Refunds Processed", value: "₹" + totalRefunds.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#dc2626" },
+          { label: "Selected Date Total Revenue", value: "₹" + todayRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#1B4FD8" },
+          { label: "Selected Date Transactions", value: todayOriginalBills.length.toString(), color: "#16a34a" },
+          { label: "Selected Date Refunds", value: "₹" + totalRefunds.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#dc2626" },
           { label: "Avg. Bill Value", value: "₹" + avgBill.toLocaleString("en-IN", { maximumFractionDigits: 0 }), color: "#7c3aed" },
         ].map(s => (
           <div key={s.label} className="bg-white rounded p-4 border border-[#DDE2EC]">
@@ -399,7 +415,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <input type="date" defaultValue="2026-09-15" className="px-3 py-2 rounded border border-[#DDE2EC] text-[13px] bg-white focus:border-[#1B4FD8] focus:outline-none" />
+              <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="px-3 py-2 rounded border border-[#DDE2EC] text-[13px] bg-white focus:border-[#1B4FD8] focus:outline-none" />
             </div>
           </>
         )}
