@@ -329,7 +329,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
   };
 
   return (
-    <div className="p-6 space-y-5 relative">
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#F4F6F9] relative">
       {printInv && <InvoicePrintModal bill={printInv} onClose={() => setPrintInv(null)} />}
       {printReturnModal && (
         <InvoicePrintModal 
@@ -344,85 +344,98 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
         title="Sales & Medicine Returns"
         description="Search billed invoices, process item-level returns, recalculate bills, and generate modified credit invoices"
         actions={
-          <div className="flex gap-2">
-            <button 
-              onClick={handleExport}
-              className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#DDE2EC] bg-white text-[13px] text-[#334155] hover:bg-[#F5F7FA] transition-colors"
-            >
-              <Download size={13} /> Export
-            </button>
-          </div>
+          <button 
+            onClick={handleExport}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[#E2E8F0] bg-white text-[13px] font-semibold text-[#334155] hover:bg-[#F8FAFC] shadow-sm transition-colors"
+           >
+            <Download size={14} className="text-[#64748B]" /> Export CSV
+          </button>
         }
         onNavigate={onNavigate}
+        icon={RefreshCcw} iconBg="bg-amber-600"
       />
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {[
-          { label: "Total Revenue", value: "₹" + todayRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#1B4FD8" },
-          { label: "Transactions", value: originalBills.length.toString(), color: "#16a34a" },
-          { label: "Total Refunds Processed", value: "₹" + totalRefunds.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#dc2626" },
-          { label: "Avg. Bill Value", value: "₹" + avgBill.toLocaleString("en-IN", { maximumFractionDigits: 0 }), color: "#7c3aed" },
-        ].map(s => (
-          <div key={s.label} className="bg-white rounded p-4 border border-[#DDE2EC]">
-            <p className="text-[11px] text-[#64748B] font-medium">{s.label}</p>
-            <p className="text-[20px] font-bold mt-1" style={{ color: s.color }}>{s.value}</p>
-          </div>
-        ))}
-      </div>
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Summary KPI Cards */}
+        <div className="grid grid-cols-4 gap-4">
+          {[
+            { label: "Net Revenue (Today)", value: "₹" + todayRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#1B4FD8", bg: "bg-blue-50", border: "border-blue-200" },
+            { label: "Total Sale Bills", value: originalBills.length.toString(), color: "#16a34a", bg: "bg-emerald-50", border: "border-emerald-200" },
+            { label: "Total Refunds Processed", value: "₹" + totalRefunds.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#dc2626", bg: "bg-red-50", border: "border-red-200" },
+            { label: "Avg. Ticket Value", value: "₹" + avgBill.toLocaleString("en-IN", { maximumFractionDigits: 0 }), color: "#7c3aed", bg: "bg-purple-50", border: "border-purple-200" },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-xl p-4 border border-[#E2E8F0] shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">{s.label}</span>
+                <span className={`w-2.5 h-2.5 rounded-full ${s.bg} border ${s.border}`} />
+              </div>
+              <p className="text-[20px] font-bold mt-2 font-mono tracking-tight" style={{ color: s.color }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
 
-      {/* Tab switch */}
-      <div className="flex items-center gap-4">
-        <div className="flex rounded border border-[#DDE2EC] overflow-hidden text-[13px]">
+      {/* Tab switch & Search */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex bg-[#E2E8F0]/60 p-1 rounded-xl border border-[#CBD5E1]/60">
           {(["sales", "returns"] as const).map(v => (
             <button 
               key={v} 
               onClick={() => setView(v)} 
-              className="px-5 py-2 font-medium transition-colors flex items-center gap-2" 
-              style={{ background: view === v ? "#0F1624" : "#fff", color: view === v ? "#fff" : "#64748B" }}
+              className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all flex items-center gap-2 ${
+                view === v 
+                  ? "bg-white text-[#0F1624] shadow-sm" 
+                  : "text-[#64748B] hover:text-[#0F1624]"
+              }`}
             >
-              {v === "sales" ? <FileText size={14} /> : <RotateCcw size={14} />}
+              {v === "sales" ? <FileText size={14} className={view === v ? "text-[#1B4FD8]" : ""} /> : <RotateCcw size={14} className={view === v ? "text-amber-600" : ""} />}
               {v === "sales" ? "Sales History" : "Medicine Returns"}
             </button>
           ))}
         </div>
 
         {view === "sales" && (
-          <>
-            <div className="flex items-center gap-2 bg-white border border-[#DDE2EC] rounded px-3 py-2 ml-auto">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-white border border-[#E2E8F0] rounded-lg px-3 py-1.5 shadow-sm">
               <Search size={14} className="text-[#94A3B8]" />
               <input 
                 value={search} 
                 onChange={e => setSearch(e.target.value)} 
-                placeholder="Search invoice, patient…" 
-                className="text-[13px] outline-none text-[#0F1624] placeholder:text-[#94A3B8] w-44" 
+                placeholder="Search bill, patient..." 
+                className="text-[13px] outline-none text-[#0F1624] placeholder:text-[#94A3B8] w-52 bg-transparent" 
               />
             </div>
             <div className="flex items-center gap-2">
-              <input type="date" defaultValue="2026-09-15" className="px-3 py-2 rounded border border-[#DDE2EC] text-[13px] bg-white focus:border-[#1B4FD8] focus:outline-none" />
+              <input type="date" defaultValue="2026-09-15" className="px-3 py-1.5 rounded-lg border border-[#E2E8F0] text-[12px] bg-white shadow-sm focus:border-[#1B4FD8] focus:outline-none text-[#475569]" />
             </div>
-          </>
+          </div>
         )}
       </div>
 
       {view === "sales" ? (
         /* SALES HISTORY TAB */
-        <div className="bg-white rounded border border-[#DDE2EC] overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F8FAFC] border-b border-[#DDE2EC]">
-                <th className="p-3 text-[12px] font-semibold text-[#475569]">Bill Number</th>
-                <th className="p-3 text-[12px] font-semibold text-[#475569]">Date & Time</th>
-                <th className="p-3 text-[12px] font-semibold text-[#475569]">Patient</th>
-                <th className="p-3 text-[12px] font-semibold text-[#475569]">Doctor</th>
-                <th className="p-3 text-[12px] font-semibold text-[#475569] text-center">Items</th>
-                <th className="p-3 text-[12px] font-semibold text-[#475569]">Payment</th>
-                <th className="p-3 text-[12px] font-semibold text-[#475569] text-right">Total (₹)</th>
-                <th className="p-3 text-[12px] font-semibold text-[#475569]">Status</th>
-                <th className="p-3 text-[12px] font-semibold text-[#475569] text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 bg-[#FAFCFF] border-b border-[#E2E8F0] flex items-center justify-between">
+            <span className="text-[12px] font-bold text-[#475569] uppercase tracking-wider">
+              Billed Sales Transactions ({filtered.length})
+            </span>
+            <span className="text-[11px] text-[#94A3B8]">Includes active & modified return bills</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
+                  <th className="px-4 py-3">Bill Number</th>
+                  <th className="px-4 py-3">Date & Time</th>
+                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Doctor</th>
+                  <th className="px-4 py-3 text-center">Items</th>
+                  <th className="px-4 py-3">Payment</th>
+                  <th className="px-4 py-3 text-right">Total Amount</th>
+                  <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F1F5F9] text-[13px]">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="p-8 text-center text-[#94A3B8] text-[13px]">
@@ -493,31 +506,32 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
             </tbody>
           </table>
         </div>
+      </div>
       ) : (
         /* MEDICINE RETURNS WORKFLOW TAB */
         <div className="space-y-6">
           {/* Section 1: Search Original Bill */}
-          <div className="bg-white rounded border border-[#DDE2EC] p-6 space-y-4 shadow-sm">
-            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 space-y-5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-4">
               <div>
                 <h3 className="font-bold text-[16px] text-[#0F1624] flex items-center gap-2">
                   <RotateCcw size={16} className="text-amber-600" /> Process Medicine Return
                 </h3>
-                <p className="text-[12px] text-[#64748B]">
+                <p className="text-[12px] text-[#64748B] mt-0.5">
                   Enter the original Bill Number below to retrieve billed medicines and process customer returns
                 </p>
               </div>
               <div className="flex items-center gap-2 text-[12px] text-[#64748B]">
-                <span>Sample Bills:</span>
+                <span className="font-medium text-[11px] uppercase tracking-wider text-[#94A3B8]">Sample Bills:</span>
                 <button 
                   onClick={() => { setSearchBillNo("BILL-2026-001245"); handleSearchBill("BILL-2026-001245"); }}
-                  className="px-2 py-0.5 bg-blue-50 text-blue-700 font-mono text-[11px] rounded hover:bg-blue-100 transition-colors"
+                  className="px-2.5 py-1 bg-blue-50 text-blue-700 font-mono text-[11px] font-bold rounded-lg border border-blue-200/60 hover:bg-blue-100 transition-colors"
                 >
                   BILL-2026-001245 (Rahul Verma)
                 </button>
                 <button 
                   onClick={() => { setSearchBillNo("INV-2026-8845"); handleSearchBill("INV-2026-8845"); }}
-                  className="px-2 py-0.5 bg-purple-50 text-purple-700 font-mono text-[11px] rounded hover:bg-purple-100 transition-colors"
+                  className="px-2.5 py-1 bg-purple-50 text-purple-700 font-mono text-[11px] font-bold rounded-lg border border-purple-200/60 hover:bg-purple-100 transition-colors"
                 >
                   INV-2026-8845 (Priya Sharma)
                 </button>
@@ -525,7 +539,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
             </div>
 
             <div className="max-w-2xl">
-              <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1.5">
+              <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-2">
                 Original Bill Number *
               </label>
               <div className="flex gap-2">
@@ -535,13 +549,13 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
                     onChange={e => setSearchBillNo(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") handleSearchBill(); }}
                     placeholder="Enter bill number (e.g. BILL-2026-001245)"
-                    className="w-full pl-9 pr-3 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-mono font-medium focus:border-[#1B4FD8] focus:outline-none" 
+                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] focus:bg-white text-[13px] font-mono font-medium focus:border-[#1B4FD8] focus:outline-none transition-all shadow-inner" 
                   />
                   <Search size={15} className="absolute left-3 top-3.5 text-[#94A3B8]" />
                 </div>
                 <button 
                   onClick={() => handleSearchBill()}
-                  className="px-5 py-2.5 rounded text-white text-[13px] font-semibold flex items-center gap-2 shadow-sm transition-colors hover:bg-blue-700 shrink-0" 
+                  className="px-5 py-2.5 rounded-lg text-white text-[13px] font-semibold flex items-center gap-2 shadow-sm transition-all hover:bg-blue-700 shrink-0" 
                   style={{ background: "#1B4FD8" }}
                 >
                   <Search size={14} /> Search Bill
@@ -550,20 +564,20 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
             </div>
 
             {searchError && (
-              <div className="p-3.5 bg-red-50 border border-red-200 rounded flex items-center gap-2.5 text-red-700 text-[13px]">
+              <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2.5 text-red-700 text-[13px]">
                 <AlertCircle size={16} className="shrink-0" />
                 <span>{searchError}</span>
               </div>
             )}
 
             {processSuccess && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded flex items-start justify-between gap-3 text-green-800 text-[13px]">
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start justify-between gap-3 text-emerald-900 text-[13px] shadow-sm">
                 <div className="flex items-start gap-2.5">
-                  <CheckCircle2 size={18} className="text-green-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-bold text-[14px] text-green-900">{processSuccess}</p>
+                    <p className="font-bold text-[14px] text-emerald-900">{processSuccess}</p>
                     {processedReturn && (
-                      <p className="text-[12px] text-green-700 mt-1">
+                      <p className="text-[12px] text-emerald-700 mt-1">
                         Return ID: <span className="font-mono font-bold">{processedReturn.returnNumber}</span> · 
                         Total Refund: <span className="font-bold">₹{processedReturn.refundAmount?.toFixed(2)}</span> · 
                         Modified Bill: <span className="font-mono font-bold">{processedReturn.modifiedBillNumber}</span>
@@ -574,14 +588,14 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
                 <div className="flex items-center gap-2 shrink-0">
                   <button 
                     onClick={handleResetToReturns}
-                    className="px-3 py-1.5 bg-white border border-[#DDE2EC] hover:bg-gray-100 text-gray-700 font-semibold text-[12px] rounded flex items-center gap-1.5 shadow-sm transition-colors"
+                    className="px-3.5 py-1.5 bg-white border border-[#E2E8F0] hover:bg-gray-50 text-gray-700 font-semibold text-[12px] rounded-lg flex items-center gap-1.5 shadow-sm transition-colors"
                   >
                     ← Back to Returns
                   </button>
                   {processedReturn && processedModifiedBill && (
                     <button 
                       onClick={() => setPrintReturnModal({ bill: processedModifiedBill, returnRecord: processedReturn })}
-                      className="px-3.5 py-1.5 bg-green-700 hover:bg-green-800 text-white font-semibold text-[12px] rounded flex items-center gap-1.5 shadow-sm transition-colors"
+                      className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-[12px] rounded-lg flex items-center gap-1.5 shadow-sm transition-colors"
                     >
                       <Printer size={13} /> Print Modified Bill
                     </button>
@@ -593,7 +607,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
 
           {/* Section 2: Loaded Bill Details & Return Quantities */}
           {searchedBill && (
-            <div className="bg-white rounded border border-[#DDE2EC] shadow-sm overflow-hidden space-y-6">
+            <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden space-y-6">
               {/* Original Bill Info Card */}
               <div className="p-6 bg-[#F8FAFC] border-b border-[#DDE2EC]">
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -855,38 +869,38 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
           )}
 
           {/* Section 3: Recent Returns Audit History */}
-          <div className="bg-white rounded border border-[#DDE2EC] p-6 space-y-4 shadow-sm">
-            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden space-y-0">
+            <div className="px-6 py-4 bg-[#FAFCFF] border-b border-[#E2E8F0] flex items-center justify-between">
               <div>
                 <h4 className="font-bold text-[15px] text-[#0F1624]">Recent Returns History</h4>
-                <p className="text-[12px] text-[#64748B]">Audit trail of all processed medicine returns and credit notes</p>
+                <p className="text-[12px] text-[#64748B] mt-0.5">Audit trail of all processed medicine returns and credit notes</p>
               </div>
-              <span className="text-[12px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded">
+              <span className="text-[12px] font-bold text-purple-700 bg-purple-50 border border-purple-200/60 px-3 py-1 rounded-full">
                 Total Returns: {recentReturns.length}
               </span>
             </div>
 
             {recentReturns.length === 0 ? (
-              <div className="p-8 text-center text-[#94A3B8] text-[13px] border border-dashed border-[#DDE2EC] rounded">
+              <div className="p-12 text-center text-[#94A3B8] text-[13px]">
                 No return transactions have been processed yet.
               </div>
             ) : (
-              <div className="border border-[#DDE2EC] rounded overflow-hidden">
+              <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-[#F8FAFC] border-b border-[#DDE2EC]">
-                    <tr>
-                      <th className="p-3 text-[11px] font-bold text-[#475569] uppercase">Return ID</th>
-                      <th className="p-3 text-[11px] font-bold text-[#475569] uppercase">Original Bill</th>
-                      <th className="p-3 text-[11px] font-bold text-[#475569] uppercase">Modified Bill</th>
-                      <th className="p-3 text-[11px] font-bold text-[#475569] uppercase">Patient</th>
-                      <th className="p-3 text-[11px] font-bold text-[#475569] uppercase text-center">Items</th>
-                      <th className="p-3 text-[11px] font-bold text-amber-700 uppercase text-right">Refund Amount</th>
-                      <th className="p-3 text-[11px] font-bold text-[#475569] uppercase">Reason</th>
-                      <th className="p-3 text-[11px] font-bold text-[#475569] uppercase">Date</th>
-                      <th className="p-3 text-[11px] font-bold text-[#475569] uppercase text-center">Actions</th>
+                  <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                    <tr className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
+                      <th className="px-4 py-3">Return ID</th>
+                      <th className="px-4 py-3">Original Bill</th>
+                      <th className="px-4 py-3">Modified Bill</th>
+                      <th className="px-4 py-3">Patient</th>
+                      <th className="px-4 py-3 text-center">Items</th>
+                      <th className="px-4 py-3 text-amber-700 text-right">Refund Amount</th>
+                      <th className="px-4 py-3">Reason</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3 text-center">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#F1F5F9]">
+                  <tbody className="divide-y divide-[#F1F5F9] text-[13px]">
                     {recentReturns.map(ret => (
                       <tr key={ret.id} className="hover:bg-[#F8FAFC]">
                         <td className="p-3 font-mono text-[12px] font-bold text-amber-700">{ret.returnNumber}</td>
@@ -907,12 +921,6 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
                           {new Date(ret.createdAt).toLocaleDateString()}
                         </td>
                         <td className="p-3 text-center">
-                          <button 
-                            onClick={() => handlePrintPastReturn(ret)}
-                            className="px-2.5 py-1 text-[11px] font-semibold bg-white border border-[#DDE2EC] text-[#334155] rounded hover:bg-gray-50 flex items-center gap-1 mx-auto transition-colors"
-                          >
-                            <Printer size={12} /> Print
-                          </button>
                           <div className="flex items-center justify-center gap-1.5">
                             <button 
                               onClick={() => handlePrintPastReturn(ret)}
@@ -939,33 +947,34 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
           </div>
         </div>
       )}
+      </div>
 
       {/* Invoice Detail Modal for Sales History */}
       {selectedInv && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(15,23,42,0.6)" }} onClick={() => setSelectedInv(null)}>
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#F0F2F5]">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#F0F2F5] bg-[#FAFCFF]">
               <div>
-                <p className="font-bold text-[16px] text-[#0F1624]">{selectedInv.billNumber}</p>
+                <p className="font-bold text-[16px] text-[#0F1624] font-mono">{selectedInv.billNumber}</p>
                 <p className="text-[12px] text-[#64748B]">{new Date(selectedInv.createdAt || selectedInv.date).toLocaleString()} · {selectedInv.patientName}</p>
               </div>
-              <button onClick={() => setSelectedInv(null)} className="p-2 rounded hover:bg-[#F0F2F5] text-[#94A3B8]"><X size={16} /></button>
+              <button onClick={() => setSelectedInv(null)} className="p-2 rounded-lg hover:bg-[#F0F2F5] text-[#94A3B8] transition-colors"><X size={16} /></button>
             </div>
             <div className="flex-1 overflow-y-auto">
               <div className="px-6 py-4 border-b border-[#F0F2F5] grid grid-cols-2 gap-3 text-[13px]">
-                <div><span className="text-[#94A3B8]">Pharmacist</span><p className="font-medium text-[#0F1624]">{selectedInv.createdBy || "Pharmacist"}</p></div>
-                <div><span className="text-[#94A3B8]">Payment</span><p className="font-medium text-[#0F1624]">{selectedInv.paymentMode || "Cash"}</p></div>
-                <div><span className="text-[#94A3B8]">Items</span><p className="font-medium text-[#0F1624]">{selectedInv.items?.length || 0}</p></div>
-                <div><span className="text-[#94A3B8]">Status</span><StatusBadge status="completed" size="sm" /></div>
+                <div><span className="text-[#94A3B8] text-[11px] uppercase block">Pharmacist</span><p className="font-semibold text-[#0F1624]">{selectedInv.createdBy || "Pharmacist"}</p></div>
+                <div><span className="text-[#94A3B8] text-[11px] uppercase block">Payment</span><p className="font-semibold text-[#0F1624]">{selectedInv.paymentMode || "Cash"}</p></div>
+                <div><span className="text-[#94A3B8] text-[11px] uppercase block">Items</span><p className="font-semibold text-[#0F1624]">{selectedInv.items?.length || 0}</p></div>
+                <div><span className="text-[#94A3B8] text-[11px] uppercase block">Status</span><StatusBadge status="completed" size="sm" /></div>
               </div>
               <table className="w-full text-left">
                 <thead className="bg-[#F8FAFC]">
                   <tr>
-                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase">Medicine</th>
-                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase">Qty</th>
-                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase">MRP</th>
-                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase">Disc%</th>
-                    <th className="px-5 py-3 text-[12px] font-bold text-[#475569] uppercase text-right">Total</th>
+                    <th className="px-5 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Medicine</th>
+                    <th className="px-5 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Qty</th>
+                    <th className="px-5 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">MRP</th>
+                    <th className="px-5 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Disc%</th>
+                    <th className="px-5 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
@@ -978,27 +987,27 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
                     <tr key={i}>
                       <td className="px-5 py-3 text-[13px] font-medium text-[#0F1624]">{item.medicine || item.medicineName}</td>
                       <td className="px-5 py-3 text-[13px]">{qty}</td>
-                      <td className="px-5 py-3 text-[13px]">₹{mrp.toFixed(2)}</td>
-                      <td className="px-5 py-3 text-[13px] text-[#d97706]">{discount}%</td>
-                      <td className="px-5 py-3 text-[13px] font-semibold text-right">₹{total.toFixed(2)}</td>
+                      <td className="px-5 py-3 text-[13px] font-mono">₹{mrp.toFixed(2)}</td>
+                      <td className="px-5 py-3 text-[13px] text-[#d97706] font-mono">{discount}%</td>
+                      <td className="px-5 py-3 text-[13px] font-bold text-right font-mono">₹{total.toFixed(2)}</td>
                     </tr>
                     );
                   })}
                 </tbody>
               </table>
-              <div className="px-5 py-4 border-t border-[#F0F2F5] flex justify-end">
+              <div className="px-5 py-4 border-t border-[#F0F2F5] flex justify-end bg-[#FAFCFF]">
                 <div className="text-right">
-                  <p className="text-[12px] text-[#64748B]">Grand Total</p>
-                  <p className="text-[20px] font-bold text-[#0F1624]">₹{(selectedInv.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">Grand Total</p>
+                  <p className="text-[20px] font-bold text-[#0F1624] font-mono">₹{(selectedInv.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>
-            <div className="p-5 border-t border-[#DDE2EC] flex gap-3">
+            <div className="p-4 border-t border-[#E2E8F0] flex gap-3 bg-[#F8FAFC]">
               <button 
                 onClick={() => { setPrintInv(selectedInv); setSelectedInv(null); }} 
-                className="flex items-center gap-1.5 flex-1 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors justify-center"
+                className="flex items-center gap-1.5 flex-1 py-2.5 rounded-lg border border-[#E2E8F0] bg-white text-[13px] font-semibold text-[#334155] hover:bg-[#F8FAFC] shadow-sm transition-colors justify-center"
               >
-                <Printer size={13} /> Print / Download
+                <Printer size={14} className="text-[#64748B]" /> Print / Download
               </button>
               {!selectedInv.billNumber?.startsWith("MOD-") && (
                 <button 
@@ -1006,7 +1015,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
                     setSelectedInv(null); 
                     handleStartReturnFromSales(selectedInv); 
                   }} 
-                  className="flex-1 py-2.5 rounded text-white font-semibold text-[13px] transition-colors" 
+                  className="flex-1 py-2.5 rounded-lg text-white font-semibold text-[13px] shadow-sm transition-all hover:bg-purple-700" 
                   style={{ background: "#7c3aed" }}
                 >
                   Process Return

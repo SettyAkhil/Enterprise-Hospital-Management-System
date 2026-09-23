@@ -1,8 +1,5 @@
 import { useState } from "react";
-import { 
-  Upload, ZoomIn, ZoomOut, RotateCw, Maximize2, Edit3, XCircle, 
-  AlertTriangle, Loader, Plus, Trash2, FileText, Check, ShieldCheck, Receipt 
-} from "lucide-react";
+import { Upload, ZoomIn, ZoomOut, RotateCw, Maximize2, Edit3, XCircle, AlertTriangle, Loader, Plus, Trash2, FileText, Check, ShieldCheck, Receipt, ScanText } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import { usePharmacyData } from "../data/usePharmacyData";
 import { PharmacyDatabase } from "../../../services/pharmacyDb";
@@ -643,17 +640,29 @@ Output strictly valid JSON only without markdown formatting.`;
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#F4F6F9]">
       <PageHeader
         breadcrumbs={[{ label: "Pharmacy" }, { label: "Procurement" }, { label: "Smart Supplier Invoice OCR" }]}
         title="Smart Supplier Invoice OCR"
-        description="Upload a supplier bill image or PDF to extract details using vLLM AI Vision, calculate exact amounts & taxes, and post directly into Inventory."
+        description="Upload a supplier bill image or PDF to extract details using vLLM AI Vision, calculate exact amounts & taxes, and post directly into Inventory"
+        actions={
+          done ? (
+            <button 
+              onClick={handleReset}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[#E2E8F0] bg-white text-[13px] font-semibold text-[#334155] hover:bg-[#F8FAFC] shadow-sm transition-colors"
+             >
+              Upload New Invoice
+            </button>
+          ) : undefined
+        }
         onNavigate={onNavigate}
+        icon={ScanText} iconBg="bg-rose-600"
       />
 
-      {/* PHASE 1: Clean Initial Upload State (Before OCR) -- NO PRESETS */}
-      {!done && !processing && (
-        <div className="max-w-3xl mx-auto bg-white rounded-xl border border-[#DDE2EC] p-10 shadow-sm text-center space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* PHASE 1: Clean Initial Upload State (Before OCR) -- NO PRESETS */}
+        {!done && !processing && (
+          <div className="max-w-3xl mx-auto bg-white rounded-xl border border-[#E2E8F0] p-10 shadow-sm text-center space-y-6">
           <div className="w-16 h-16 rounded-full bg-[#E8EDF5] text-[#1B4FD8] flex items-center justify-center mx-auto">
             <Upload size={28} />
           </div>
@@ -1035,6 +1044,7 @@ Output strictly valid JSON only without markdown formatting.`;
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

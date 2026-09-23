@@ -1,7 +1,7 @@
 import { usePharmacyData } from "../data/usePharmacyData";
 import { PharmacyDatabase } from "../../../services/pharmacyDb";
 import { useState } from "react";
-import { Search, X, Plus, Printer, RefreshCw, Undo2, ArrowRight, CheckCircle2, FileText, Send, Building2, Package, XCircle } from "lucide-react";
+import { Search, X, Plus, Printer, RefreshCw, Undo2, ArrowRight, CheckCircle2, FileText, Send, Building2, Package, XCircle, RotateCcw } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import toast from "react-hot-toast";
@@ -137,99 +137,102 @@ export default function SupplierReturns({ onNavigate }: { onNavigate: (page: str
 
   if (viewState === "create") {
     return (
-      <div className="p-6 space-y-6">
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#F4F6F9]">
         <PageHeader
           breadcrumbs={[{ label: "Pharmacy" }, { label: "Inventory" }, { label: "Supplier Returns" }, { label: "Initiate Return" }]}
           title="Initiate Supplier Return"
           description="Create a draft Debit Note and link to original purchase"
           onNavigate={onNavigate}
-        />
+        icon={RotateCcw} iconBg="bg-orange-600"
+      />
 
-        <div className="bg-white rounded border border-[#DDE2EC] p-6 space-y-8">
-          {/* Section 1: Supplier & Batch */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-[14px] text-[#0F1624] flex items-center gap-2"><Building2 size={16} className="text-[#1B4FD8]" /> 1. Select Supplier & Product</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Supplier</label>
-                <select value={selectedSupplierId} onChange={(e) => { setSelectedSupplierId(e.target.value); setSelectedBatchId(""); }} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px] rounded focus:border-[#1B4FD8] focus:outline-none">
-                  <option value="">-- Choose Supplier --</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Select Batch (In Stock)</label>
-                <select value={selectedBatchId} onChange={(e) => setSelectedBatchId(e.target.value)} disabled={!selectedSupplierId} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px] rounded disabled:bg-[#F8FAFC]">
-                  <option value="">-- Choose Batch --</option>
-                  {activeBatches.map(b => (
-                    <option key={b.id} value={b.id}>
-                      {getMedicineName(b.medicineId)} - {b.batchNumber} (Stock: {b.availableQuantity})
-                    </option>
-                  ))}
-                </select>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 space-y-8 shadow-sm">
+            {/* Section 1: Supplier & Batch */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-[14px] text-[#0F1624] flex items-center gap-2"><Building2 size={16} className="text-[#1B4FD8]" /> 1. Select Supplier & Product</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">Supplier *</label>
+                  <select value={selectedSupplierId} onChange={(e) => { setSelectedSupplierId(e.target.value); setSelectedBatchId(""); }} className="w-full px-3 py-2.5 border border-[#E2E8F0] bg-[#F8FAFC] focus:bg-white text-[13px] rounded-lg focus:border-[#1B4FD8] focus:outline-none transition-all">
+                    <option value="">-- Choose Supplier --</option>
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">Select Batch (In Stock) *</label>
+                  <select value={selectedBatchId} onChange={(e) => setSelectedBatchId(e.target.value)} disabled={!selectedSupplierId} className="w-full px-3 py-2.5 border border-[#E2E8F0] bg-[#F8FAFC] focus:bg-white text-[13px] rounded-lg disabled:bg-gray-100 disabled:text-gray-400 focus:border-[#1B4FD8] focus:outline-none transition-all">
+                    <option value="">-- Choose Batch --</option>
+                    {activeBatches.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {getMedicineName(b.medicineId)} - {b.batchNumber} (Stock: {b.availableQuantity})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
 
-          <hr className="border-[#F0F2F5]" />
+            <hr className="border-[#F1F5F9]" />
 
-          {/* Section 2: Reference Details */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-[14px] text-[#0F1624] flex items-center gap-2"><FileText size={16} className="text-[#1B4FD8]" /> 2. Original Purchase Details (Optional)</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">PO Number</label>
-                <input type="text" value={poNumber} onChange={e => setPoNumber(e.target.value)} placeholder="PO-2026-..." className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px] rounded" />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">GRN Number</label>
-                <input type="text" value={grnNumber} onChange={e => setGrnNumber(e.target.value)} placeholder="GRN-2026-..." className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px] rounded" />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Supplier Invoice</label>
-                <input type="text" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="INV-..." className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px] rounded" />
+            {/* Section 2: Reference Details */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-[14px] text-[#0F1624] flex items-center gap-2"><FileText size={16} className="text-[#1B4FD8]" /> 2. Original Purchase Details (Optional)</h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">PO Number</label>
+                  <input type="text" value={poNumber} onChange={e => setPoNumber(e.target.value)} placeholder="PO-2026-..." className="w-full px-3 py-2.5 border border-[#E2E8F0] bg-[#F8FAFC] focus:bg-white text-[13px] rounded-lg font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">GRN Number</label>
+                  <input type="text" value={grnNumber} onChange={e => setGrnNumber(e.target.value)} placeholder="GRN-2026-..." className="w-full px-3 py-2.5 border border-[#E2E8F0] bg-[#F8FAFC] focus:bg-white text-[13px] rounded-lg font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">Supplier Invoice</label>
+                  <input type="text" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="INV-..." className="w-full px-3 py-2.5 border border-[#E2E8F0] bg-[#F8FAFC] focus:bg-white text-[13px] rounded-lg font-mono" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <hr className="border-[#F0F2F5]" />
+            <hr className="border-[#F1F5F9]" />
 
-          {/* Section 3: Return Specifics */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-[14px] text-[#0F1624] flex items-center gap-2"><Package size={16} className="text-[#1B4FD8]" /> 3. Return Details</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Return Quantity</label>
-                <input type="number" min="1" value={returnQuantity} onChange={(e) => setReturnQuantity(e.target.value)} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px] rounded" placeholder="e.g. 50" />
+            {/* Section 3: Return Specifics */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-[14px] text-[#0F1624] flex items-center gap-2"><Package size={16} className="text-[#1B4FD8]" /> 3. Return Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">Return Quantity *</label>
+                  <input type="number" min="1" value={returnQuantity} onChange={(e) => setReturnQuantity(e.target.value)} className="w-full px-3 py-2.5 border border-[#E2E8F0] bg-[#F8FAFC] focus:bg-white text-[13px] rounded-lg font-mono" placeholder="e.g. 50" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">Reason</label>
+                  <select value={returnReason} onChange={(e) => setReturnReason(e.target.value)} className="w-full px-3 py-2.5 border border-[#E2E8F0] bg-[#F8FAFC] focus:bg-white text-[13px] rounded-lg">
+                    {RETURN_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">Reason</label>
-                <select value={returnReason} onChange={(e) => setReturnReason(e.target.value)} className="w-full px-3 py-2 border border-[#DDE2EC] text-[13px] rounded">
-                  {RETURN_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+              
+              <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-4 flex justify-between items-center mt-4">
+                <div>
+                  <p className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">Purchase Rate</p>
+                  <p className="text-[16px] font-bold text-[#334155] font-mono">₹{purchaseRate.toFixed(2)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">Total Return Value</p>
+                  <p className="text-[20px] font-bold text-[#dc2626] font-mono">₹{returnAmountPreview.toFixed(2)}</p>
+                </div>
               </div>
             </div>
-            
-            <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded p-4 flex justify-between items-center mt-4">
-              <div>
-                <p className="text-[12px] font-semibold text-[#64748B] uppercase">Purchase Rate</p>
-                <p className="text-[16px] font-bold text-[#334155]">₹{purchaseRate.toFixed(2)}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[12px] font-semibold text-[#64748B] uppercase">Total Return Value</p>
-                <p className="text-[20px] font-bold text-[#dc2626]">₹{returnAmountPreview.toFixed(2)}</p>
-              </div>
+
+            <div className="bg-blue-50 border border-blue-200/60 text-[#1D4ED8] p-3.5 rounded-xl text-[12px] flex gap-2.5 items-start">
+              <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+              <p>Creating this return will save it as a <strong>Draft</strong>. Stock will <strong>not</strong> be deducted until the Pharmacy Manager Approves it.</p>
             </div>
-          </div>
 
-          <div className="bg-[#EFF6FF] text-[#1D4ED8] p-3 rounded text-[12px] flex gap-2 items-start">
-            <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
-            <p>Creating this return will save it as a <strong>Draft</strong>. Stock will <strong>not</strong> be deducted until the Pharmacy Manager Approves it.</p>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#F0F2F5]">
-            <button onClick={() => setViewState("list")} className="px-6 py-2.5 rounded border border-[#DDE2EC] text-[13px] font-medium text-[#334155] hover:bg-[#F5F7FA] transition-colors">Cancel</button>
-            <button onClick={handleInitiateReturn} className="px-6 py-2.5 rounded text-white font-semibold text-[13px] hover:bg-[#1e40af] transition-colors" style={{ background: "#1B4FD8" }}>Create Draft Return</button>
+            <div className="flex justify-end gap-3 pt-4 border-t border-[#F1F5F9]">
+              <button onClick={() => setViewState("list")} className="px-5 py-2.5 rounded-lg border border-[#E2E8F0] text-[13px] font-semibold text-[#334155] hover:bg-[#F8FAFC] transition-colors">Cancel</button>
+              <button onClick={handleInitiateReturn} className="px-6 py-2.5 rounded-lg text-white font-semibold text-[13px] hover:bg-[#1e40af] shadow-sm transition-all" style={{ background: "#1B4FD8" }}>Create Draft Return</button>
+            </div>
           </div>
         </div>
       </div>
@@ -313,100 +316,118 @@ export default function SupplierReturns({ onNavigate }: { onNavigate: (page: str
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#F4F6F9]">
       <PageHeader
         breadcrumbs={[{ label: "Pharmacy" }, { label: "Inventory" }, { label: "Supplier Returns" }]}
         title="Purchase Returns (Debit Notes)"
-        description={`${supplierReturns.length} historical returns tracking`}
+        description={`${supplierReturns.length} historical returns and vendor credit notes tracking`}
         actions={
-          <div className="flex gap-2">
-            <button onClick={seedTestData} className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium bg-emerald-600 hover:bg-emerald-700">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={seedTestData} 
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 text-[13px] font-semibold text-emerald-700 hover:bg-emerald-100 shadow-sm transition-colors"
+            >
               Inject Test Data
             </button>
-            <button onClick={() => setViewState("create")} className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium" style={{ background: "#1B4FD8" }}>
+            <button 
+              onClick={() => setViewState("create")} 
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-white text-[13px] font-semibold shadow-sm hover:bg-blue-700 transition-colors" 
+              style={{ background: "#1B4FD8" }}
+            >
               <Plus size={14} /> Initiate Return
             </button>
           </div>
         }
         onNavigate={onNavigate}
+        icon={RotateCcw} iconBg="bg-orange-600"
       />
 
-      <div className="bg-white rounded border border-[#DDE2EC] overflow-hidden">
-        <table>
-          <thead>
-            <tr>
-              <th>Debit Note No</th>
-              <th>Date</th>
-              <th>Supplier</th>
-              <th>Medicine / Batch</th>
-              <th>Return Val</th>
-              <th>Reason</th>
-              <th>Status</th>
-              <th className="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {supplierReturns.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="text-center py-8 text-[#94A3B8] text-[13px]">
-                  No supplier returns found. Create one to get started.
-                </td>
-              </tr>
-            ) : (
-              supplierReturns.map((rtn) => {
-                const nextStatus = STATUS_ORDER[STATUS_ORDER.indexOf(rtn.status) + 1];
-                return (
-                  <tr key={rtn.id}>
-                    <td>
-                      <p className="font-mono text-[13px] font-medium text-[#1B4FD8]">{rtn.debitNoteNumber}</p>
-                      {(rtn.poNumber || rtn.grnNumber) && (
-                        <p className="text-[10px] text-[#64748B] mt-0.5">PO: {rtn.poNumber || '-'} | GRN: {rtn.grnNumber || '-'}</p>
-                      )}
-                    </td>
-                    <td className="text-[13px] text-[#334155]">{new Date(rtn.createdAt).toLocaleDateString()}</td>
-                    <td className="text-[13px] font-semibold text-[#0F1624]">{getSupplierName(rtn.supplierId)}</td>
-                    <td>
-                      <p className="font-semibold text-[13px] text-[#0F1624]">{getMedicineName(rtn.medicineId)}</p>
-                      <p className="text-[11px] text-[#94A3B8]">Batch: {getBatchNumber(rtn.batchId)} | Qty: {rtn.quantity}</p>
-                    </td>
-                    <td className="text-[13px] font-bold text-[#dc2626]">₹{rtn.returnAmount}</td>
-                    <td className="text-[13px] text-[#64748B]">{rtn.reason}</td>
-                    <td>
-                      <div className={`inline-flex px-2 py-1 rounded text-[11px] font-semibold border
-                        ${rtn.status === 'Draft' ? 'bg-[#F1F5F9] text-[#475569] border-[#CBD5E1]' : 
-                          rtn.status === 'Approved' ? 'bg-[#EFF6FF] text-[#1D4ED8] border-[#BFDBFE]' :
-                          rtn.status === 'Credit Received' || rtn.status === 'Closed' ? 'bg-[#DCFCE7] text-[#15803D] border-[#BBF7D0]' :
-                          'bg-[#FEF3C7] text-[#B45309] border-[#FDE68A]'}
-                      `}>
-                        {rtn.status}
-                      </div>
-                    </td>
-                    <td className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {nextStatus && (
-                          <button 
-                            onClick={() => advanceStatus(rtn.id, rtn.status)}
-                            className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#1B4FD8]" 
-                            title={`Advance to ${nextStatus}`}
-                          >
-                            <ArrowRight size={15} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => { setPrintReturnId(rtn.id); setViewState("print"); }}
-                          className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B]" 
-                          title="Print Document"
-                        >
-                          <Printer size={15} />
-                        </button>
-                      </div>
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 bg-[#FAFCFF] border-b border-[#E2E8F0] flex items-center justify-between">
+            <span className="text-[12px] font-bold text-[#475569] uppercase tracking-wider">
+              Debit Note Records ({supplierReturns.length})
+            </span>
+            <span className="text-[11px] text-[#94A3B8]">Vendor Reconciled</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
+                  <th className="px-4 py-3">Debit Note No</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3">Supplier</th>
+                  <th className="px-4 py-3">Medicine / Batch</th>
+                  <th className="px-4 py-3 text-right">Return Val</th>
+                  <th className="px-4 py-3">Reason</th>
+                  <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F1F5F9] text-[13px]">
+                {supplierReturns.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-12 text-[#94A3B8] text-[13px]">
+                      No supplier returns found. Create one to get started.
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                ) : (
+                  supplierReturns.map((rtn) => {
+                    const nextStatus = STATUS_ORDER[STATUS_ORDER.indexOf(rtn.status) + 1];
+                    return (
+                      <tr key={rtn.id} className="hover:bg-[#F8FAFC] transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-mono text-[12px] font-bold text-[#1B4FD8]">{rtn.debitNoteNumber}</p>
+                          {(rtn.poNumber || rtn.grnNumber) && (
+                            <p className="text-[10px] text-[#64748B] mt-0.5 font-mono">PO: {rtn.poNumber || '-'} | GRN: {rtn.grnNumber || '-'}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-[12px] text-[#64748B] whitespace-nowrap">{new Date(rtn.createdAt).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 font-semibold text-[#0F1624]">{getSupplierName(rtn.supplierId)}</td>
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-[13px] text-[#0F1624]">{getMedicineName(rtn.medicineId)}</p>
+                          <p className="text-[11px] text-[#94A3B8] font-mono">Batch: {getBatchNumber(rtn.batchId)} | Qty: {rtn.quantity}</p>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-[#dc2626] font-mono">₹{rtn.returnAmount.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-[12px] text-[#64748B]">{rtn.reason}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold border
+                            ${rtn.status === 'Draft' ? 'bg-[#F1F5F9] text-[#475569] border-[#CBD5E1]' : 
+                              rtn.status === 'Approved' ? 'bg-[#EFF6FF] text-[#1D4ED8] border-[#BFDBFE]' :
+                              rtn.status === 'Credit Received' || rtn.status === 'Closed' ? 'bg-[#DCFCE7] text-[#15803D] border-[#BBF7D0]' :
+                              'bg-[#FEF3C7] text-[#B45309] border-[#FDE68A]'}
+                          `}>
+                            {rtn.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end items-center gap-1.5">
+                            {nextStatus && (
+                              <button 
+                                onClick={() => advanceStatus(rtn.id, rtn.status)}
+                                className="p-1.5 rounded-lg hover:bg-[#F0F2F5] text-[#1B4FD8] transition-colors" 
+                                title={`Advance to ${nextStatus}`}
+                              >
+                                <ArrowRight size={14} />
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => { setPrintReturnId(rtn.id); setViewState("print"); }}
+                              className="p-1.5 rounded-lg hover:bg-[#F0F2F5] text-[#64748B] transition-colors" 
+                              title="Print Document"
+                            >
+                              <Printer size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

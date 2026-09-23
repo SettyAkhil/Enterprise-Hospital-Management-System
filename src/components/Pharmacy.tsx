@@ -50,7 +50,7 @@ export default function Pharmacy({ activeModule, onNavigate }: PharmacyProps) {
   };
 
   return (
-    <div className="w-full h-full overflow-hidden bg-[#F0F2F5]">
+    <div className="w-full h-full overflow-hidden bg-[#F4F6F9]">
       <PharmacyApp page={page} onNavigate={handleNavigate} />
     </div>
   );
