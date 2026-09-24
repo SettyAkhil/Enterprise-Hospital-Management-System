@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "./icons";
 import { StatusBadge, Btn, Input } from "./shared";
 import { db, DBPatient, DBOPEncounter } from "../services/db";
-import { getDoctorMaster } from "../services/doctorMaster";
+import { getDoctorMaster, getDoctorConsultationFee } from "../services/doctorMaster";
 
 export interface OPPatient {
   id?: string;
@@ -2081,13 +2081,14 @@ export default function OPWorkflow({
 
         {/* ── STEP 6: BILLING & OP VISIT COMPLETION ───────────────────── */}
         {currentStep === 6 && (() => {
-          const consultFee = patient.billing?.consultationFee || 50;
+          const regFee = (patient.billing as any)?.registrationFee ?? (patient.isNew === false ? 0 : 20);
+          const consultFee = patient.billing?.consultationFee || getDoctorConsultationFee(patient.assignedDoctor);
           const labItems = patient.investigations || [];
           const rxItems = patient.prescription || [];
           const labTotal = labItems.length * 40;
           const rxTotal = rxItems.length * 20;
           const nursingFee = 20;
-          const grossSubtotal = consultFee + labTotal + rxTotal + nursingFee;
+          const grossSubtotal = regFee + consultFee + labTotal + rxTotal + nursingFee;
           const isInsurance = patient.billing?.mode === "Insurance Co-Pay";
           const insuranceCoverage = isInsurance ? Math.round(grossSubtotal * 0.8) : 0;
           const netTotalPayable = grossSubtotal - insuranceCoverage;
@@ -2105,11 +2106,12 @@ export default function OPWorkflow({
                 status: "OP Completed" as const,
                 billing: {
                   ...patient.billing,
+                  registrationFee: regFee,
                   consultationFee: consultFee,
                   labFee: labTotal,
                   total: netTotalPayable,
                   status: "Paid" as const,
-                  mode: patient.billing.mode || "Card"
+                  mode: patient.billing?.mode || "Card"
                 },
                 timestamps: {
                   ...patient.timestamps,
@@ -2131,11 +2133,12 @@ export default function OPWorkflow({
                     vitals: patient.vitals,
                     status: "OP Completed",
                     billing: {
+                      registrationFee: regFee,
                       consultationFee: consultFee,
                       labFee: labTotal,
                       total: netTotalPayable,
                       status: "Paid",
-                      mode: patient.billing.mode || "Card"
+                      mode: patient.billing?.mode || "Card"
                     },
                     timestamps: {
                       ...patient.timestamps,
@@ -2160,7 +2163,7 @@ export default function OPWorkflow({
                     OP Billing, Payment &amp; Encounter Settlement
                   </h2>
                   <p className="text-[12px] text-[#64748B] mt-0.5">
-                    Official financial statement aggregating physician consultation, nursing triage, prescribed medications, and laboratory diagnostic tests.
+                    Official financial statement aggregating patient registration, physician consultation, nursing triage, prescribed medications, and laboratory diagnostic tests.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2197,11 +2200,22 @@ export default function OPWorkflow({
                   </div>
 
                   <div className="divide-y divide-[#E2E8F0] text-[12.5px]">
-                    {/* 1. Consultation */}
+                    {/* 1. Patient Registration Fee */}
                     <div className="py-2.5 flex justify-between items-start">
                       <div>
-                        <div className="font-semibold text-gray-900">1. Physician Consultation Fee</div>
-                        <div className="text-[11px] text-[#64748B]">Attending: {patient.assignedDoctor} ({patient.aiSpecialty})</div>
+                        <div className="font-semibold text-gray-900">1. Patient Registration Fee</div>
+                        <div className="text-[11px] text-[#64748B]">
+                          {regFee === 0 ? "Existing / Revisit Patient Registration (Waived - ₹0)" : "New Patient Registration Charge (₹20)"}
+                        </div>
+                      </div>
+                      <span className="font-mono font-bold text-gray-900">₹{regFee}.00</span>
+                    </div>
+
+                    {/* 2. Physician Consultation */}
+                    <div className="py-2.5 flex justify-between items-start">
+                      <div>
+                        <div className="font-semibold text-gray-900">2. Physician Consultation Fee</div>
+                        <div className="text-[11px] text-[#64748B]">Attending: {patient.assignedDoctor || "Assigned Doctor"} ({patient.aiSpecialty || "General"})</div>
                       </div>
                       <span className="font-mono font-bold text-gray-900">₹{consultFee}.00</span>
                     </div>

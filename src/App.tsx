@@ -1150,19 +1150,27 @@ export default function App() {
   }, [module, loggedIn, userPermissions]);
 
   const handleLogout = () => {
+    let curUsername = activeStaff.name;
+    try {
+      const curData = localStorage.getItem("hospai_current_user");
+      if (curData) {
+        const u = JSON.parse(curData);
+        if (u && u.user) curUsername = u.user;
+      }
+    } catch {}
+
     AuditDatabase.logEvent(
       "Logout",
-
       "Authentication",
-
       `User ${activeStaff.name} logged out.`,
-
       "Success",
-
       activeStaff.id,
-
-      activeStaff.name,
+      curUsername,
     );
+
+    try {
+      localStorage.removeItem("hospai_current_user");
+    } catch {}
 
     setLoggedIn(false);
   };
@@ -1188,6 +1196,13 @@ export default function App() {
     setModule(doctor ? "doctor_portal" : "dashboard");
 
     setRoleMenuOpen(false);
+
+    try {
+      localStorage.setItem(
+        "hospai_current_user",
+        JSON.stringify({ user: targetUsername, staffId: targetRole }),
+      );
+    } catch {}
   };
 
   const handleLogin = (userData: {
@@ -1201,6 +1216,13 @@ export default function App() {
 
     doctorId?: string;
   }) => {
+    try {
+      localStorage.setItem(
+        "hospai_current_user",
+        JSON.stringify({ user: userData.user, staffId: userData.staffId, role: userData.role }),
+      );
+    } catch {}
+
     setUserRole(userData.role);
 
     setUserPermissions(userData.permissions);
