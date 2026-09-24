@@ -5,7 +5,7 @@
  * server-side pagination, and full export/print support.
  */
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react"
 import {
   LineChart,
   Line,
@@ -20,7 +20,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
   Legend,
-} from "recharts";
+} from "recharts"
 import {
   Calendar,
   Printer,
@@ -53,13 +53,13 @@ import {
   HeartPulse,
   UserPlus,
   Zap,
-} from "lucide-react";
+} from "lucide-react"
 import {
   GeneralReportsService,
   DateRangePreset,
   ReportPayload,
   KpiMetric,
-} from "../../services/generalReportsDb";
+} from "../../services/generalReportsDb"
 import {
   exportGenericReportCsv,
   exportGenericReportExcel,
@@ -71,15 +71,15 @@ import {
   resolveDoctorReportData,
   printDoctorReport,
   downloadDoctorReportPdf,
-} from "../../utils/generalReportsExporter";
-import { useLiveClinic } from "../../hooks/useLiveClinic";
+} from "../../utils/generalReportsExporter"
+import { useLiveClinic } from "../../hooks/useLiveClinic"
 import {
   PatientDataPdfModal,
   InReportEncounterModal,
   ActiveFilterChips,
   resolvePatientClinicalRecord,
-} from "./PatientReportModals";
-import { DoctorReportPdfModal, DoctorReportModal } from "./DoctorReportModals";
+} from "./PatientReportModals"
+import { DoctorReportPdfModal, DoctorReportModal } from "./DoctorReportModals"
 import {
   RevenueReceiptModal,
   DamagedStockModal,
@@ -89,36 +89,21 @@ import {
   SupplierReturnData,
   printHtmlDocument,
   downloadPdfWindow,
-} from "./FinancialReportModals";
-import { PharmacyDatabase } from "../../services/pharmacyDb";
-import { apiFetch } from "../../lib/api";
+} from "./FinancialReportModals"
+import { PharmacyDatabase } from "../../services/pharmacyDb"
+import { apiFetch } from "../../lib/api"
 
-export type ReportType =
-  | "reports_patients"
-  | "reports_er"
-  | "reports_inpatient"
-  | "reports_appointments"
-  | "reports_doctors"
-  | "reports_pharmacy"
-  | "reports_laboratory"
-  | "reports_radiology"
-  | "reports_beds"
-  | "reports_admissions"
-  | "reports_discharges"
-  | "reports_staff"
-  | "revenue_reports"
-  | "reports_pharmacy_damaged"
-  | "reports_supplier_returns";
+export type ReportType = "reports_patients" | "reports_er" | "reports_inpatient" | "reports_appointments" | "reports_doctors" | "reports_pharmacy" | "reports_laboratory" | "reports_radiology" | "reports_beds" | "reports_admissions" | "reports_discharges" | "reports_staff" | "revenue_reports" | "reports_pharmacy_damaged" | "reports_supplier_returns"
 
 interface GenericReportPageProps {
-  reportType: ReportType;
-  onNavigate?: (module: string) => void;
+  reportType: ReportType
+  onNavigate?: (module: string) => void
 }
 
 interface ReportConfig {
-  title: string;
-  subtitle: string;
-  tableColumns: { header: string; key: string }[];
+  title: string
+  subtitle: string
+  tableColumns: { header: string ;key: string }[]
 }
 
 const REPORT_CONFIGS: Record<ReportType, ReportConfig> = {
@@ -357,7 +342,7 @@ const REPORT_CONFIGS: Record<ReportType, ReportConfig> = {
       { header: "Status", key: "status" },
     ],
   },
-};
+}
 
 const DATE_RANGE_LABELS: Record<DateRangePreset, string> = {
   today: "Today",
@@ -367,13 +352,13 @@ const DATE_RANGE_LABELS: Record<DateRangePreset, string> = {
   thisMonth: "This Month",
   lastMonth: "Last Month",
   custom: "Custom Date Range",
-};
+}
 
 export default function GenericReportPage({
   reportType,
   onNavigate,
 }: GenericReportPageProps) {
-  const config = REPORT_CONFIGS[reportType] || REPORT_CONFIGS.reports_patients;
+  const config = REPORT_CONFIGS[reportType] || REPORT_CONFIGS.reports_patients
 
   // Always scroll to top whenever a new report is opened / switched
   useEffect(() => {
@@ -386,110 +371,110 @@ export default function GenericReportPage({
   const { revision } = useLiveClinic();
 
   // Filter States
-  const [dateRange, setDateRange] = useState<DateRangePreset>("last30");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
-  const [showCustomPicker, setShowCustomPicker] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRangePreset>("last30")
+  const [customStart, setCustomStart] = useState("")
+  const [customEnd, setCustomEnd] = useState("")
+  const [showCustomPicker, setShowCustomPicker] = useState(false)
 
-  const [selectedDept, setSelectedDept] = useState("All");
-  const [selectedDoctor, setSelectedDoctor] = useState("All");
-  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [selectedDept, setSelectedDept] = useState("All")
+  const [selectedDoctor, setSelectedDoctor] = useState("All")
+  const [selectedStatus, setSelectedStatus] = useState("All")
 
-  const [stagedDept, setStagedDept] = useState("All");
-  const [stagedDoctor, setStagedDoctor] = useState("All");
-  const [stagedStatus, setStagedStatus] = useState("All");
+  const [stagedDept, setStagedDept] = useState("All")
+  const [stagedDoctor, setStagedDoctor] = useState("All")
+  const [stagedStatus, setStagedStatus] = useState("All")
 
   // Specialized Financial Filter States
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("All");
-  const [stagedPaymentMethod, setStagedPaymentMethod] = useState("All");
-  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState("All");
-  const [stagedPaymentStatus, setStagedPaymentStatus] = useState("All");
-  const [selectedSupplier, setSelectedSupplier] = useState("All");
-  const [stagedSupplier, setStagedSupplier] = useState("All");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [stagedCategory, setStagedCategory] = useState("All");
-  const [selectedReason, setSelectedReason] = useState("All");
-  const [stagedReason, setStagedReason] = useState("All");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("All")
+  const [stagedPaymentMethod, setStagedPaymentMethod] = useState("All")
+  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState("All")
+  const [stagedPaymentStatus, setStagedPaymentStatus] = useState("All")
+  const [selectedSupplier, setSelectedSupplier] = useState("All")
+  const [stagedSupplier, setStagedSupplier] = useState("All")
+  const [selectedCategory, setSelectedCategory] = useState("All")
+  const [stagedCategory, setStagedCategory] = useState("All")
+  const [selectedReason, setSelectedReason] = useState("All")
+  const [stagedReason, setStagedReason] = useState("All")
 
   // Financial Modals
   const [revenueModalData, setRevenueModalData] =
-    useState<RevenueReceiptData | null>(null);
+    useState<RevenueReceiptData | null>(null)
   const [damagedModalData, setDamagedModalData] =
-    useState<DamagedStockData | null>(null);
+    useState<DamagedStockData | null>(null)
   const [supplierReturnModalData, setSupplierReturnModalData] =
-    useState<SupplierReturnData | null>(null);
+    useState<SupplierReturnData | null>(null)
 
   // Search & Pagination
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
   // Export & Modals
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const [selectedRow, setSelectedRow] = useState<any | null>(null);
-  const [reportModalItem, setReportModalItem] = useState<any | null>(null);
-  const [pdfModalDetails, setPdfModalDetails] = useState<any | null>(null);
-  const [doctorModalItem, setDoctorModalItem] = useState<any | null>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const [selectedRow, setSelectedRow] = useState<any | null>(null)
+  const [reportModalItem, setReportModalItem] = useState<any | null>(null)
+  const [pdfModalDetails, setPdfModalDetails] = useState<any | null>(null)
+  const [doctorModalItem, setDoctorModalItem] = useState<any | null>(null)
   const [doctorPdfData, setDoctorPdfData] = useState<DoctorReportData | null>(
     null,
-  );
+  )
 
   // Data, Loading & Error
-  const [data, setData] = useState<ReportPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<ReportPayload | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Search debounce
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-      setCurrentPage(1);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+      setDebouncedSearch(searchQuery)
+      setCurrentPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   // Load Report Data via API
   const fetchReportData = async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
     try {
-      const cleanKey = reportType.replace(/^reports_/, "");
+      const cleanKey = reportType.replace(/^reports_/, "")
       const params = new URLSearchParams({
         preset: dateRange,
         page: currentPage.toString(),
         limit: pageSize.toString(),
-      });
+      })
 
       if (dateRange === "custom") {
-        if (customStart) params.set("from", customStart);
-        if (customEnd) params.set("to", customEnd);
+        if (customStart) params.set("from", customStart)
+        if (customEnd) params.set("to", customEnd)
       }
-      if (selectedDept !== "All") params.set("department", selectedDept);
-      if (selectedDoctor !== "All") params.set("doctor", selectedDoctor);
-      if (selectedStatus !== "All") params.set("status", selectedStatus);
+      if (selectedDept !== "All") params.set("department", selectedDept)
+      if (selectedDoctor !== "All") params.set("doctor", selectedDoctor)
+      if (selectedStatus !== "All") params.set("status", selectedStatus)
       if (selectedPaymentMethod !== "All")
-        params.set("paymentMethod", selectedPaymentMethod);
+        params.set("paymentMethod", selectedPaymentMethod)
       if (selectedPaymentStatus !== "All")
-        params.set("paymentStatus", selectedPaymentStatus);
-      if (selectedSupplier !== "All") params.set("supplier", selectedSupplier);
-      if (selectedCategory !== "All") params.set("category", selectedCategory);
-      if (selectedReason !== "All") params.set("reason", selectedReason);
-      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+        params.set("paymentStatus", selectedPaymentStatus)
+      if (selectedSupplier !== "All") params.set("supplier", selectedSupplier)
+      if (selectedCategory !== "All") params.set("category", selectedCategory)
+      if (selectedReason !== "All") params.set("reason", selectedReason)
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim())
 
       const res = await apiFetch<ReportPayload>(
         `/api/reports/${cleanKey}?${params.toString()}`,
-      );
-      setData(res);
+      )
+      setData(res)
     } catch (err: any) {
-      setError(err?.message || "Unable to load report data. Please try again.");
+      setError(err?.message || "Unable to load report data. Please try again.")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
-    fetchReportData();
+    fetchReportData()
   }, [
     revision,
     reportType,
@@ -507,64 +492,64 @@ export default function GenericReportPage({
     debouncedSearch,
     currentPage,
     pageSize,
-  ]);
+  ])
 
-  const departments = useMemo(() => GeneralReportsService.getDepartments(), []);
+  const departments = useMemo(() => GeneralReportsService.getDepartments(), [])
   const doctors = useMemo(
     () => GeneralReportsService.getDoctors(stagedDept),
     [stagedDept],
-  );
+  )
   const pharmacySuppliers = useMemo(() => {
     try {
-      return PharmacyDatabase.getSuppliers().map((s) => s.supplierName);
+      return PharmacyDatabase.getSuppliers().map((s) => s.supplierName)
     } catch {
-      return [];
+      return []
     }
-  }, []);
+  }, [])
   const pharmacyCategories = useMemo(() => {
     try {
-      return PharmacyDatabase.getCategories().map((c) => c.categoryName);
+      return PharmacyDatabase.getCategories().map((c) => c.categoryName)
     } catch {
-      return [];
+      return []
     }
-  }, []);
+  }, [])
 
   const handleApplyFilters = () => {
-    setSelectedDept(stagedDept);
-    setSelectedDoctor(stagedDoctor);
-    setSelectedStatus(stagedStatus);
-    setSelectedPaymentMethod(stagedPaymentMethod);
-    setSelectedPaymentStatus(stagedPaymentStatus);
-    setSelectedSupplier(stagedSupplier);
-    setSelectedCategory(stagedCategory);
-    setSelectedReason(stagedReason);
-    setCurrentPage(1);
-  };
+    setSelectedDept(stagedDept)
+    setSelectedDoctor(stagedDoctor)
+    setSelectedStatus(stagedStatus)
+    setSelectedPaymentMethod(stagedPaymentMethod)
+    setSelectedPaymentStatus(stagedPaymentStatus)
+    setSelectedSupplier(stagedSupplier)
+    setSelectedCategory(stagedCategory)
+    setSelectedReason(stagedReason)
+    setCurrentPage(1)
+  }
 
   const handleResetFilters = () => {
-    setStagedDept("All");
-    setStagedDoctor("All");
-    setStagedStatus("All");
-    setSelectedDept("All");
-    setSelectedDoctor("All");
-    setSelectedStatus("All");
-    setStagedPaymentMethod("All");
-    setSelectedPaymentMethod("All");
-    setStagedPaymentStatus("All");
-    setSelectedPaymentStatus("All");
-    setStagedSupplier("All");
-    setSelectedSupplier("All");
-    setStagedCategory("All");
-    setSelectedCategory("All");
-    setStagedReason("All");
-    setSelectedReason("All");
-    setDateRange("last30");
-    setCustomStart("");
-    setCustomEnd("");
-    setShowCustomPicker(false);
-    setSearchQuery("");
-    setCurrentPage(1);
-  };
+    setStagedDept("All")
+    setStagedDoctor("All")
+    setStagedStatus("All")
+    setSelectedDept("All")
+    setSelectedDoctor("All")
+    setSelectedStatus("All")
+    setStagedPaymentMethod("All")
+    setSelectedPaymentMethod("All")
+    setStagedPaymentStatus("All")
+    setSelectedPaymentStatus("All")
+    setStagedSupplier("All")
+    setSelectedSupplier("All")
+    setStagedCategory("All")
+    setSelectedCategory("All")
+    setStagedReason("All")
+    setSelectedReason("All")
+    setDateRange("last30")
+    setCustomStart("")
+    setCustomEnd("")
+    setShowCustomPicker(false)
+    setSearchQuery("")
+    setCurrentPage(1)
+  }
 
   // Export handlers
   const prepareExportData = () => {
@@ -577,27 +562,27 @@ export default function GenericReportPage({
       kpis: data?.kpis || [],
       columns: config.tableColumns,
       records: data?.records || [],
-    };
-  };
+    }
+  }
 
   const handleExportPdf = () => {
-    exportGenericReportPdf(prepareExportData());
-    setExportMenuOpen(false);
-  };
+    exportGenericReportPdf(prepareExportData())
+    setExportMenuOpen(false)
+  }
 
   const handleExportExcel = () => {
-    exportGenericReportExcel(prepareExportData());
-    setExportMenuOpen(false);
-  };
+    exportGenericReportExcel(prepareExportData())
+    setExportMenuOpen(false)
+  }
 
   const handleExportCsv = () => {
-    exportGenericReportCsv(prepareExportData());
-    setExportMenuOpen(false);
-  };
+    exportGenericReportCsv(prepareExportData())
+    setExportMenuOpen(false)
+  }
 
   const handlePrint = () => {
-    printGenericReport(prepareExportData());
-  };
+    printGenericReport(prepareExportData())
+  }
 
   // ── Render Charts Specific to Current Report Type ────────────────────────
   const renderVisualizations = () => {
@@ -606,17 +591,17 @@ export default function GenericReportPage({
         <div className="bg-white border border-[#E2E8F0] rounded-xl p-8 text-center text-slate-500">
           No chart data available for the selected filters.
         </div>
-      );
+      )
     }
 
-    const charts = data.charts;
+    const charts = data.charts
 
     switch (reportType) {
       case "reports_patients": {
-        const regTrend = charts.registrationTrend || [];
-        const deptPts = charts.deptPts || [];
-        const genderDist = charts.genderDist || [];
-        const ageDist = charts.ageDist || [];
+        const regTrend = charts.registrationTrend || []
+        const deptPts = charts.deptPts || []
+        const genderDist = charts.genderDist || []
+        const ageDist = charts.ageDist || []
 
         return (
           <div className="space-y-3.5">
@@ -822,14 +807,14 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_er": {
-        const visitTrend = charts.erVisitTrend || [];
-        const priorityDist = charts.priorityDist || [];
-        const dispDist = charts.dispDist || [];
-        const bedUtil = charts.erBedUtilization || [];
+        const visitTrend = charts.erVisitTrend || []
+        const priorityDist = charts.priorityDist || []
+        const dispDist = charts.dispDist || []
+        const bedUtil = charts.erBedUtilization || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -1011,14 +996,14 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_inpatient": {
-        const admTrend = charts.admissionTrend || [];
-        const disTrend = charts.dischargeTrend || [];
-        const wardOcc = charts.wardOccupancy || [];
-        const deptAdm = charts.deptAdmissions || [];
+        const admTrend = charts.admissionTrend || []
+        const disTrend = charts.dischargeTrend || []
+        const wardOcc = charts.wardOccupancy || []
+        const deptAdm = charts.deptAdmissions || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -1210,14 +1195,14 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_appointments": {
-        const trend = charts.appointmentTrend || [];
-        const docAppts = charts.doctorAppts || [];
-        const deptAppts = charts.departmentAppts || [];
-        const statusDist = charts.apptStatusDist || [];
+        const trend = charts.appointmentTrend || []
+        const docAppts = charts.doctorAppts || []
+        const deptAppts = charts.departmentAppts || []
+        const statusDist = charts.apptStatusDist || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -1403,13 +1388,13 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_doctors": {
-        const docVisits = charts.doctorVisits || [];
-        const deptDoc = charts.departmentDoctorActivity || [];
-        const consultTrend = charts.consultationTrend || [];
+        const docVisits = charts.doctorVisits || []
+        const deptDoc = charts.departmentDoctorActivity || []
+        const consultTrend = charts.consultationTrend || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
@@ -1553,14 +1538,14 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_pharmacy": {
-        const rxTrend = charts.prescriptionTrend || [];
-        const medCons = charts.medicineConsumption || [];
-        const deptUsage = charts.deptUsage || [];
-        const rxStatus = charts.rxStatusDist || [];
+        const rxTrend = charts.prescriptionTrend || []
+        const medCons = charts.medicineConsumption || []
+        const deptUsage = charts.deptUsage || []
+        const rxStatus = charts.rxStatusDist || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -1746,14 +1731,14 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_laboratory": {
-        const labTrend = charts.labOrderTrend || [];
-        const testVol = charts.testVolume || [];
-        const deptLab = charts.departmentLabOrders || [];
-        const resDist = charts.resultStatusDist || [];
+        const labTrend = charts.labOrderTrend || []
+        const testVol = charts.testVolume || []
+        const deptLab = charts.departmentLabOrders || []
+        const resDist = charts.resultStatusDist || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -1939,14 +1924,14 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_radiology": {
-        const radTrend = charts.radOrderTrend || [];
-        const scanDist = charts.scanTypeDist || [];
-        const modDist = charts.modalityDist || [];
-        const deptRad = charts.departmentRadOrders || [];
+        const radTrend = charts.radOrderTrend || []
+        const scanDist = charts.scanTypeDist || []
+        const modDist = charts.modalityDist || []
+        const deptRad = charts.departmentRadOrders || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -2132,13 +2117,13 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_beds": {
-        const occTrend = charts.bedOccupancyTrend || [];
-        const wardOcc = charts.wardOccupancy || [];
-        const bedTypeDist = charts.bedTypeDist || [];
+        const occTrend = charts.bedOccupancyTrend || []
+        const wardOcc = charts.wardOccupancy || []
+        const bedTypeDist = charts.bedTypeDist || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
@@ -2278,14 +2263,14 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_admissions": {
-        const admTrend = charts.admissionTrend || [];
-        const admTypeDist = charts.admTypeDist || [];
-        const deptAdm = charts.deptAdmissions || [];
-        const wardAdm = charts.wardAdmissions || [];
+        const admTrend = charts.admissionTrend || []
+        const admTypeDist = charts.admTypeDist || []
+        const deptAdm = charts.deptAdmissions || []
+        const wardAdm = charts.wardAdmissions || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -2471,13 +2456,13 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_discharges": {
-        const disTrend = charts.dischargeTrend || [];
-        const disTypeDist = charts.dischargeTypeDist || [];
-        const deptDis = charts.departmentDischarges || [];
+        const disTrend = charts.dischargeTrend || []
+        const disTypeDist = charts.dischargeTypeDist || []
+        const deptDis = charts.departmentDischarges || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
@@ -2617,13 +2602,13 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_staff": {
-        const deptStaff = charts.deptStaff || [];
-        const staffDist = charts.staffDist || [];
-        const staffActivity = charts.staffActivity || [];
+        const deptStaff = charts.deptStaff || []
+        const staffDist = charts.staffDist || []
+        const staffActivity = charts.staffActivity || []
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
@@ -2761,24 +2746,24 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "revenue_reports": {
-        const rawTrend = charts.revenueTrend || [];
+        const rawTrend = charts.revenueTrend || []
         const trend = rawTrend.map((t: any) => ({
           ...t,
           date: t.date || t.period || "Day",
           revenue: Number(t.revenue ?? t.amount ?? 0),
           collections: Number(t.collections ?? t.paidAmount ?? t.revenue ?? 0),
-        }));
+        }))
 
         const deptRev = (charts.deptRevenue || []).map((d: any) => ({
           department: d.department || "General",
           revenue: Number(d.revenue ?? d.amount ?? 0),
           percentage: d.percentage ?? 0,
           count: d.count ?? 0,
-        }));
+        }))
 
         const serviceLines = (
           charts.serviceRevenue ||
@@ -2788,7 +2773,7 @@ export default function GenericReportPage({
           serviceLine:
             s.serviceLine || s.service || s.category || "Clinical Care",
           revenue: Number(s.revenue ?? s.amount ?? 0),
-        }));
+        }))
 
         const colors = [
           "#10B981",
@@ -2797,7 +2782,7 @@ export default function GenericReportPage({
           "#F59E0B",
           "#8B5CF6",
           "#EC4899",
-        ];
+        ]
         const payDist = (
           charts.paymentMethods ||
           charts.paymentMethodDist ||
@@ -2808,7 +2793,7 @@ export default function GenericReportPage({
             value: Number(p.value ?? p.amount ?? 0),
             color: p.color || colors[idx % colors.length],
           }))
-          .filter((p: any) => p.value > 0);
+          .filter((p: any) => p.value > 0)
 
         return (
           <div className="space-y-3.5">
@@ -3084,7 +3069,7 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_pharmacy_damaged": {
@@ -3092,21 +3077,21 @@ export default function GenericReportPage({
           ...d,
           date: d.date || "Period",
           lossValue: Number(d.lossValue ?? d.loss ?? d.amount ?? 0),
-        }));
+        }))
         const topProducts = (charts.lossByProduct || []).map((p: any) => ({
           product: p.product || p.medicineName || "Unknown",
           lossValue: Number(p.lossValue ?? p.loss ?? 0),
           units: p.units ?? p.quantity ?? 0,
-        }));
+        }))
         const lossReasons = (charts.lossByReason || []).map((r: any) => ({
           reason: r.reason || "Unspecified",
           lossValue: Number(r.lossValue ?? r.loss ?? 0),
           count: r.count ?? 1,
-        }));
+        }))
         const catLoss = (charts.lossByCategory || []).map((c: any) => ({
           category: c.category || "General",
           lossValue: Number(c.lossValue ?? c.loss ?? 0),
-        }));
+        }))
 
         return (
           <div className="space-y-3.5">
@@ -3373,7 +3358,7 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       case "reports_supplier_returns": {
@@ -3381,7 +3366,7 @@ export default function GenericReportPage({
           ...r,
           date: r.date || "Period",
           returnAmount: Number(r.returnAmount ?? r.amount ?? 0),
-        }));
+        }))
         const supReturns = (
           charts.returnBySupplier ||
           charts.supplierReturns ||
@@ -3390,7 +3375,7 @@ export default function GenericReportPage({
           supplier: s.supplier || s.supplierName || "Vendor",
           returnAmount: Number(s.returnAmount ?? s.amount ?? 0),
           count: s.count ?? 1,
-        }));
+        }))
         const rReasons = (
           charts.returnByReason ||
           charts.returnReasons ||
@@ -3399,21 +3384,21 @@ export default function GenericReportPage({
           reason: r.reason || "Unspecified",
           returnAmount: Number(r.returnAmount ?? r.amount ?? 0),
           count: r.count ?? 1,
-        }));
+        }))
         const colorsSup = [
           "#059669",
           "#1B4FD8",
           "#F59E0B",
           "#64748B",
           "#8B5CF6",
-        ];
+        ]
         const rStatuses = (charts.returnByStatus || charts.returnStatuses || [])
           .map((s: any, idx: number) => ({
             name: s.status || s.name || "Status",
             value: Number(s.returnAmount ?? s.amount ?? s.value ?? 0),
             color: s.color || colorsSup[idx % colorsSup.length],
           }))
-          .filter((s: any) => s.value > 0);
+          .filter((s: any) => s.value > 0)
 
         return (
           <div className="space-y-3.5">
@@ -3676,13 +3661,13 @@ export default function GenericReportPage({
               </div>
             </div>
           </div>
-        );
+        )
       }
 
       default:
-        return null;
+        return null
     }
-  };
+  }
 
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#F8FAFC] text-slate-900 font-sans pb-16">
@@ -3702,11 +3687,11 @@ export default function GenericReportPage({
               <select
                 value={dateRange}
                 onChange={(e) => {
-                  const val = e.target.value as DateRangePreset;
-                  setDateRange(val);
-                  if (val === "custom") setShowCustomPicker(true);
-                  else setShowCustomPicker(false);
-                  setCurrentPage(1);
+                  const val = e.target.value as DateRangePreset
+                  setDateRange(val)
+                  if (val === "custom") setShowCustomPicker(true)
+                  else setShowCustomPicker(false)
+                  setCurrentPage(1)
                 }}
                 className="appearance-none bg-white border border-[#CBD5E1] hover:border-slate-400 text-slate-800 text-xs font-semibold py-1.5 pl-3 pr-8 rounded-lg shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#1B4FD8] transition cursor-pointer"
               >
@@ -3741,11 +3726,11 @@ export default function GenericReportPage({
                 <div className="absolute right-0 mt-1.5 w-48 bg-white border border-[#E2E8F0] rounded-xl shadow-xl z-50 py-1.5 animate-in fade-in duration-100">
                   <button
                     onClick={() => {
-                      const rec = selectedRow || data?.records?.[0] || null;
+                      const rec = selectedRow || data?.records?.[0] || null
                       if (rec) {
-                        setPdfModalDetails(resolvePatientClinicalRecord(rec));
+                        setPdfModalDetails(resolvePatientClinicalRecord(rec))
                       }
-                      setExportMenuOpen(false);
+                      setExportMenuOpen(false)
                     }}
                     className="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-[#F8FAFC] flex items-center gap-2.5 transition cursor-pointer"
                   >
@@ -3811,8 +3796,8 @@ export default function GenericReportPage({
             </div>
             <button
               onClick={() => {
-                setCurrentPage(1);
-                fetchReportData();
+                setCurrentPage(1)
+                fetchReportData()
               }}
               className="px-3 py-1 bg-[#1B4FD8] text-white text-xs font-semibold rounded-lg shadow-2xs hover:bg-blue-700 transition"
             >
@@ -4104,9 +4089,9 @@ export default function GenericReportPage({
                 label: "Dept",
                 value: selectedDept,
                 onRemove: () => {
-                  setSelectedDept("All");
-                  setStagedDept("All");
-                  setCurrentPage(1);
+                  setSelectedDept("All")
+                  setStagedDept("All")
+                  setCurrentPage(1)
                 },
               },
               {
@@ -4114,9 +4099,9 @@ export default function GenericReportPage({
                 label: "Doctor",
                 value: selectedDoctor,
                 onRemove: () => {
-                  setSelectedDoctor("All");
-                  setStagedDoctor("All");
-                  setCurrentPage(1);
+                  setSelectedDoctor("All")
+                  setStagedDoctor("All")
+                  setCurrentPage(1)
                 },
               },
               {
@@ -4124,9 +4109,9 @@ export default function GenericReportPage({
                 label: "Status",
                 value: selectedStatus,
                 onRemove: () => {
-                  setSelectedStatus("All");
-                  setStagedStatus("All");
-                  setCurrentPage(1);
+                  setSelectedStatus("All")
+                  setStagedStatus("All")
+                  setCurrentPage(1)
                 },
               },
               {
@@ -4134,9 +4119,9 @@ export default function GenericReportPage({
                 label: "Method",
                 value: selectedPaymentMethod,
                 onRemove: () => {
-                  setSelectedPaymentMethod("All");
-                  setStagedPaymentMethod("All");
-                  setCurrentPage(1);
+                  setSelectedPaymentMethod("All")
+                  setStagedPaymentMethod("All")
+                  setCurrentPage(1)
                 },
               },
               {
@@ -4144,9 +4129,9 @@ export default function GenericReportPage({
                 label: "Payment Status",
                 value: selectedPaymentStatus,
                 onRemove: () => {
-                  setSelectedPaymentStatus("All");
-                  setStagedPaymentStatus("All");
-                  setCurrentPage(1);
+                  setSelectedPaymentStatus("All")
+                  setStagedPaymentStatus("All")
+                  setCurrentPage(1)
                 },
               },
               {
@@ -4154,9 +4139,9 @@ export default function GenericReportPage({
                 label: "Supplier",
                 value: selectedSupplier,
                 onRemove: () => {
-                  setSelectedSupplier("All");
-                  setStagedSupplier("All");
-                  setCurrentPage(1);
+                  setSelectedSupplier("All")
+                  setStagedSupplier("All")
+                  setCurrentPage(1)
                 },
               },
               {
@@ -4164,9 +4149,9 @@ export default function GenericReportPage({
                 label: "Category",
                 value: selectedCategory,
                 onRemove: () => {
-                  setSelectedCategory("All");
-                  setStagedCategory("All");
-                  setCurrentPage(1);
+                  setSelectedCategory("All")
+                  setStagedCategory("All")
+                  setCurrentPage(1)
                 },
               },
               {
@@ -4174,9 +4159,9 @@ export default function GenericReportPage({
                 label: "Reason",
                 value: selectedReason,
                 onRemove: () => {
-                  setSelectedReason("All");
-                  setStagedReason("All");
-                  setCurrentPage(1);
+                  setSelectedReason("All")
+                  setStagedReason("All")
+                  setCurrentPage(1)
                 },
               },
               {
@@ -4184,9 +4169,9 @@ export default function GenericReportPage({
                 label: "Search",
                 value: searchQuery,
                 onRemove: () => {
-                  setSearchQuery("");
-                  setDebouncedSearch("");
-                  setCurrentPage(1);
+                  setSearchQuery("")
+                  setDebouncedSearch("")
+                  setCurrentPage(1)
                 },
               },
             ]}
@@ -4236,7 +4221,7 @@ export default function GenericReportPage({
             {/* ── 3. KPI SUMMARY CARDS ────────────────────────────────────────── */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 animate-flow-in delay-75">
               {data.kpis.map((kpi) => {
-                const isUp = kpi.trend === "up";
+                const isUp = kpi.trend === "up"
                 return (
                   <div
                     key={kpi.id}
@@ -4270,7 +4255,7 @@ export default function GenericReportPage({
                       </div>
                     )}
                   </div>
-                );
+                )
               })}
             </div>
 
@@ -4308,8 +4293,8 @@ export default function GenericReportPage({
                   <select
                     value={pageSize}
                     onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
+                      setPageSize(Number(e.target.value))
+                      setCurrentPage(1)
                     }}
                     className="bg-white border border-[#CBD5E1] text-xs font-semibold px-2 py-1.5 rounded-lg text-slate-700"
                   >
@@ -4359,11 +4344,11 @@ export default function GenericReportPage({
                           className="hover:bg-slate-50/80 transition duration-150"
                         >
                           {config.tableColumns.map((col) => {
-                            const val = row[col.key];
+                            const val = row[col.key]
                             const isStatus =
                               col.key === "status" ||
                               col.key === "reportStatus" ||
-                              col.key === "resultStatus";
+                              col.key === "resultStatus"
                             return (
                               <td
                                 key={col.key}
@@ -4403,7 +4388,7 @@ export default function GenericReportPage({
                                   </span>
                                 )}
                               </td>
-                            );
+                            )
                           })}
                           <td className="px-4 py-3 text-right whitespace-nowrap">
                             <div className="inline-flex items-center gap-1.5 justify-end">
@@ -4417,24 +4402,24 @@ export default function GenericReportPage({
                               <button
                                 onClick={() => {
                                   if (reportType === "revenue_reports") {
-                                    setRevenueModalData(row);
+                                    setRevenueModalData(row)
                                   } else if (
                                     reportType === "reports_pharmacy_damaged"
                                   ) {
-                                    setDamagedModalData(row);
+                                    setDamagedModalData(row)
                                   } else if (
                                     reportType === "reports_supplier_returns"
                                   ) {
-                                    setSupplierReturnModalData(row);
+                                    setSupplierReturnModalData(row)
                                   } else if (reportType === "reports_doctors") {
                                     const d = resolveDoctorReportData(
                                       row,
                                       DATE_RANGE_LABELS[dateRange],
-                                    );
-                                    setDoctorPdfData(d);
+                                    )
+                                    setDoctorPdfData(d)
                                   } else {
-                                    const d = resolvePatientClinicalRecord(row);
-                                    setPdfModalDetails(d);
+                                    const d = resolvePatientClinicalRecord(row)
+                                    setPdfModalDetails(d)
                                   }
                                 }}
                                 className="px-2 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-[11px] font-semibold transition cursor-pointer flex items-center gap-1 border border-rose-200"
@@ -4466,24 +4451,24 @@ export default function GenericReportPage({
                               <button
                                 onClick={() => {
                                   if (reportType === "revenue_reports") {
-                                    setRevenueModalData(row);
+                                    setRevenueModalData(row)
                                   } else if (
                                     reportType === "reports_pharmacy_damaged"
                                   ) {
-                                    setDamagedModalData(row);
+                                    setDamagedModalData(row)
                                   } else if (
                                     reportType === "reports_supplier_returns"
                                   ) {
-                                    setSupplierReturnModalData(row);
+                                    setSupplierReturnModalData(row)
                                   } else if (reportType === "reports_doctors") {
                                     const d = resolveDoctorReportData(
                                       row,
                                       DATE_RANGE_LABELS[dateRange],
-                                    );
-                                    printDoctorReport(d);
+                                    )
+                                    printDoctorReport(d)
                                   } else {
-                                    const d = resolvePatientClinicalRecord(row);
-                                    printPatientClinicalReport(d);
+                                    const d = resolvePatientClinicalRecord(row)
+                                    printPatientClinicalReport(d)
                                   }
                                 }}
                                 className="px-2 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-[11px] font-semibold transition cursor-pointer flex items-center gap-1 border border-slate-200"
@@ -4495,19 +4480,19 @@ export default function GenericReportPage({
                               <button
                                 onClick={() => {
                                   if (reportType === "revenue_reports") {
-                                    setRevenueModalData(row);
+                                    setRevenueModalData(row)
                                   } else if (
                                     reportType === "reports_pharmacy_damaged"
                                   ) {
-                                    setDamagedModalData(row);
+                                    setDamagedModalData(row)
                                   } else if (
                                     reportType === "reports_supplier_returns"
                                   ) {
-                                    setSupplierReturnModalData(row);
+                                    setSupplierReturnModalData(row)
                                   } else if (reportType === "reports_doctors") {
-                                    setDoctorModalItem(row);
+                                    setDoctorModalItem(row)
                                   } else {
-                                    setReportModalItem(row);
+                                    setReportModalItem(row)
                                   }
                                 }}
                                 className="px-2.5 py-1 bg-[#1B4FD8] text-white hover:bg-blue-700 rounded text-[11px] font-semibold transition cursor-pointer"
@@ -4671,5 +4656,5 @@ export default function GenericReportPage({
         data={supplierReturnModalData}
       />
     </div>
-  );
+  )
 }

@@ -1,38 +1,37 @@
 export interface AuditLog {
-  id: string;
-  userId: string;
-  username: string;
-  action: string;
-  module: string;
-  description: string;
-  timestamp: string;
-  status: "Success" | "Failed";
-  device?: string;
-  loginTime?: string;
-  logoutTime?: string;
-  duration?: string;
-  sessionId?: string;
+  id: string
+  userId: string
+  username: string
+  action: string
+  module: string
+  description: string
+  timestamp: string
+  status: "Success" | "Failed"
+  device?: string
+  loginTime?: string
+  logoutTime?: string
+  duration?: string
+  sessionId?: string
 }
 
 export function detectDevice(): string {
   if (typeof navigator === "undefined") {
-    return "Lenovo Laptop";
+    return "Lenovo Laptop"
   }
 
-  const ua = navigator.userAgent || "";
-  const platform = navigator.platform || "";
-  const vendor = navigator.vendor || "";
+  const ua = navigator.userAgent || ""
+  const platform = navigator.platform || ""
+  const vendor = navigator.vendor || ""
 
-  // WebGL GPU Renderer check for hardware context hints
-  let gpuRenderer = "";
+  let gpuRenderer = ""
   try {
     if (typeof document !== "undefined") {
-      const canvas = document.createElement("canvas");
-      const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+      const canvas = document.createElement("canvas")
+      const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
       if (gl) {
-        const debugInfo = (gl as any).getExtension("WEBGL_debug_renderer_info");
+        const debugInfo = (gl as any).getExtension("WEBGL_debug_renderer_info")
         if (debugInfo) {
-          gpuRenderer = (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || "";
+          gpuRenderer = (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || ""
         }
       }
     }
@@ -40,87 +39,84 @@ export function detectDevice(): string {
     // Ignore
   }
 
-  const fullContext = `${ua} ${platform} ${vendor} ${gpuRenderer}`;
+  const fullContext = `${ua} ${platform} ${vendor} ${gpuRenderer}`
 
-  // ── 1. MOBILE & TABLET BRANDS ─────────────────────────────────────────────
-  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 0 && /Android|Mobile/i.test(ua));
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 0 && /Android|Mobile/i.test(ua))
 
   if (isMobile || /iPhone|iPad|iPod/i.test(ua)) {
-    if (/iPhone/i.test(ua)) return "Apple iPhone";
-    if (/iPad/i.test(ua)) return "Apple iPad";
-    if (/Vivo|V2\d{3}|V1\d{3}|V20|V21|V22|V23|V24|V25|V27|V29|V30|Y20|Y21|Y33|Y56|Y75|CPH/i.test(fullContext)) return "Vivo Phone";
-    if (/Samsung|SM-[A-Z0-9]|Galaxy/i.test(fullContext)) return "Samsung Phone";
-    if (/Xiaomi|Redmi|Poco|Mi /i.test(fullContext)) return "Xiaomi Phone";
-    if (/OnePlus|ONEPLUS/i.test(fullContext)) return "OnePlus Phone";
-    if (/Oppo/i.test(fullContext)) return "Oppo Phone";
-    if (/Realme|RMX/i.test(fullContext)) return "Realme Phone";
-    if (/Pixel/i.test(fullContext)) return "Google Pixel";
-    if (/Motorola|Moto/i.test(fullContext)) return "Motorola Phone";
-    if (/Huawei|Honor/i.test(fullContext)) return "Huawei Phone";
-    if (/Nokia/i.test(fullContext)) return "Nokia Phone";
-    if (/LG/i.test(fullContext)) return "LG Phone";
-    return "Android Phone";
+    if (/iPhone/i.test(ua)) return "Apple iPhone"
+    if (/iPad/i.test(ua)) return "Apple iPad"
+    if (/Vivo|V2\d{3}|V1\d{3}|V20|V21|V22|V23|V24|V25|V27|V29|V30|Y20|Y21|Y33|Y56|Y75|CPH/i.test(fullContext)) return "Vivo Phone"
+    if (/Samsung|SM-[A-Z0-9]|Galaxy/i.test(fullContext)) return "Samsung Phone"
+    if (/Xiaomi|Redmi|Poco|Mi /i.test(fullContext)) return "Xiaomi Phone"
+    if (/OnePlus|ONEPLUS/i.test(fullContext)) return "OnePlus Phone"
+    if (/Oppo/i.test(fullContext)) return "Oppo Phone"
+    if (/Realme|RMX/i.test(fullContext)) return "Realme Phone"
+    if (/Pixel/i.test(fullContext)) return "Google Pixel"
+    if (/Motorola|Moto/i.test(fullContext)) return "Motorola Phone"
+    if (/Huawei|Honor/i.test(fullContext)) return "Huawei Phone"
+    if (/Nokia/i.test(fullContext)) return "Nokia Phone"
+    if (/LG/i.test(fullContext)) return "LG Phone"
+    return "Android Phone"
   }
 
-  // ── 2. LAPTOP & DESKTOP BRANDS ────────────────────────────────────────────
-  if (/Macintosh|Mac OS X|MacIntel/i.test(fullContext)) return "Apple MacBook";
-  if (/Lenovo|ThinkPad|IdeaPad|Yoga|Legion/i.test(fullContext)) return "Lenovo Laptop";
-  if (/HP|Hewlett-Packard|Pavilion|EliteBook|ProBook|Envy|Spectre|OMEN/i.test(fullContext)) return "HP Laptop";
-  if (/Dell|Inspiron|Latitude|XPS|Alienware|Vostro/i.test(fullContext)) return "Dell Laptop";
-  if (/Asus|ROG|ZenBook|VivoBook/i.test(fullContext)) return "Asus Laptop";
-  if (/Acer|Predator|Aspire|Swift|Nitro/i.test(fullContext)) return "Acer Laptop";
-  if (/MSI/i.test(fullContext)) return "MSI Laptop";
-  if (/Surface/i.test(fullContext)) return "Microsoft Surface";
-  if (/Samsung/i.test(fullContext)) return "Samsung Galaxy Book";
+  if (/Macintosh|Mac OS X|MacIntel/i.test(fullContext)) return "Apple MacBook"
+  if (/Lenovo|ThinkPad|IdeaPad|Yoga|Legion/i.test(fullContext)) return "Lenovo Laptop"
+  if (/HP|Hewlett-Packard|Pavilion|EliteBook|ProBook|Envy|Spectre|OMEN/i.test(fullContext)) return "HP Laptop"
+  if (/Dell|Inspiron|Latitude|XPS|Alienware|Vostro/i.test(fullContext)) return "Dell Laptop"
+  if (/Asus|ROG|ZenBook|VivoBook/i.test(fullContext)) return "Asus Laptop"
+  if (/Acer|Predator|Aspire|Swift|Nitro/i.test(fullContext)) return "Acer Laptop"
+  if (/MSI/i.test(fullContext)) return "MSI Laptop"
+  if (/Surface/i.test(fullContext)) return "Microsoft Surface"
+  if (/Samsung/i.test(fullContext)) return "Samsung Galaxy Book"
 
-  // For Windows platform laptop where specific OEM is not in UA string
   if (/Windows|Win32|Win64/i.test(fullContext)) {
-    return "Lenovo Laptop";
+    return "Lenovo Laptop"
   }
 
-  if (/Linux/i.test(fullContext)) return "Linux Workstation";
-  if (/CrOS/i.test(fullContext)) return "Chromebook";
+  if (/Linux/i.test(fullContext)) return "Linux Workstation"
+  if (/CrOS/i.test(fullContext)) return "Chromebook"
 
-  return "Lenovo Laptop";
+  return "Lenovo Laptop"
 }
 
 export function formatTimeOnly(isoStr?: string): string {
-  if (!isoStr) return "—";
-  if (isoStr === "Active" || isoStr === "Session Expired" || isoStr === "—") return isoStr;
+  if (!isoStr) return "—"
+  if (isoStr === "Active" || isoStr === "Session Expired" || isoStr === "—") return isoStr
   try {
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const d = new Date(isoStr)
+    if (isNaN(d.getTime())) return isoStr
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
   } catch {
-    return isoStr;
+    return isoStr
   }
 }
 
 export function formatDuration(startDate: Date, endDate: Date): string {
-  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "—";
-  let diffMs = Math.max(0, endDate.getTime() - startDate.getTime());
-  let totalSeconds = Math.floor(diffMs / 1000);
-  let seconds = totalSeconds % 60;
-  let minutes = Math.floor((totalSeconds / 60) % 60);
-  let hours = Math.floor(totalSeconds / 3600);
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "—"
+  let diffMs = Math.max(0, endDate.getTime() - startDate.getTime())
+  let totalSeconds = Math.floor(diffMs / 1000)
+  let seconds = totalSeconds % 60
+  let minutes = Math.floor((totalSeconds / 60) % 60)
+  let hours = Math.floor(totalSeconds / 3600)
 
-  const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
-  parts.push(`${seconds}s`);
-  return parts.join(" ");
+  const parts: string[] = []
+  if (hours > 0) parts.push(`${hours}h`)
+  if (minutes > 0 || hours > 0) parts.push(`${minutes}m`)
+  parts.push(`${seconds}s`)
+  return parts.join(" ")
 }
 
-const STORAGE_KEY = "hospai_audit_logs_v1";
+const STORAGE_KEY = "hospai_audit_logs_v1"
 
 export class AuditDatabase {
   static getRawLogs(): AuditLog[] {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       try {
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(raw)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed
         }
       } catch {
         // Fall through to default seed
@@ -182,49 +178,49 @@ export class AuditDatabase {
         timestamp: new Date(Date.now() - 1000 * 60 * 480).toISOString(),
         status: "Success",
       },
-    ];
+    ]
 
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultLogs));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultLogs))
     } catch {}
 
-    return defaultLogs;
+    return defaultLogs
   }
 
   static getLogs(): AuditLog[] {
-    const rawLogs = this.getRawLogs();
-    let currentUsername = "";
+    const rawLogs = this.getRawLogs()
+    let currentUsername = ""
     try {
-      const curData = localStorage.getItem("hospai_current_user");
+      const curData = localStorage.getItem("hospai_current_user")
       if (curData) {
-        const u = JSON.parse(curData);
-        if (u && u.user) currentUsername = u.user;
+        const u = JSON.parse(curData)
+        if (u && u.user) currentUsername = u.user
       }
     } catch {
       // Ignore
     }
 
-    const now = new Date();
-    const currentDetected = detectDevice();
-    let updatedStorageNeeded = false;
+    const now = new Date()
+    const currentDetected = detectDevice()
+    let updatedStorageNeeded = false
 
     const processedLogs = rawLogs.map((log) => {
       const isLoginSession =
         log.action.toLowerCase().includes("login") ||
-        log.module === "Authentication";
+        log.module === "Authentication"
 
-      if (!isLoginSession) return log;
+      if (!isLoginSession) return log
 
-      let device = log.device;
+      let device = log.device
       if (!device || device === "Windows PC" || device === "Desktop Web Browser") {
-        device = currentDetected;
-        log.device = currentDetected;
-        updatedStorageNeeded = true;
+        device = currentDetected
+        log.device = currentDetected
+        updatedStorageNeeded = true
       }
 
-      const loginTimeIso = log.loginTime || log.timestamp;
-      const loginDate = new Date(loginTimeIso);
-      const isFailed = log.status === "Failed" || log.action.toLowerCase().includes("failed");
+      const loginTimeIso = log.loginTime || log.timestamp
+      const loginDate = new Date(loginTimeIso)
+      const isFailed = log.status === "Failed" || log.action.toLowerCase().includes("failed")
 
       if (isFailed) {
         return {
@@ -233,35 +229,32 @@ export class AuditDatabase {
           loginTime: formatTimeOnly(loginTimeIso),
           logoutTime: "—",
           duration: "—",
-        };
+        }
       }
 
-      let logoutTimeState = log.logoutTime;
-      let calculatedDuration = log.duration;
+      let logoutTimeState = log.logoutTime
+      let calculatedDuration = log.duration
 
-      // Handle active session vs session expired vs completed logout
       if (!logoutTimeState || logoutTimeState === "Active") {
-        const diffMins = (now.getTime() - loginDate.getTime()) / (1000 * 60);
+        const diffMins = (now.getTime() - loginDate.getTime()) / (1000 * 60)
         const matchesUser =
           !currentUsername ||
           currentUsername.toLowerCase() === log.username.toLowerCase() ||
-          log.userId === currentUsername;
+          log.userId === currentUsername
 
         if (matchesUser && diffMins < 480) {
-          logoutTimeState = "Active";
-          calculatedDuration = formatDuration(loginDate, now);
+          logoutTimeState = "Active"
+          calculatedDuration = formatDuration(loginDate, now)
         } else {
-          // Session was closed/expired without explicit logout -> mark Session Expired, but compute elapsed duration up to expiry
-          logoutTimeState = "Session Expired";
-          const expiryDate = new Date(loginDate.getTime() + Math.min(diffMins, 480) * 60 * 1000);
-          calculatedDuration = formatDuration(loginDate, expiryDate);
+          logoutTimeState = "Session Expired"
+          const expiryDate = new Date(loginDate.getTime() + Math.min(diffMins, 480) * 60 * 1000)
+          calculatedDuration = formatDuration(loginDate, expiryDate)
         }
       } else if (logoutTimeState !== "Session Expired" && logoutTimeState !== "—") {
-        // Real explicit logout timestamp recorded
-        const logoutDate = new Date(logoutTimeState);
+        const logoutDate = new Date(logoutTimeState)
         if (!isNaN(logoutDate.getTime())) {
-          calculatedDuration = formatDuration(loginDate, logoutDate);
-          logoutTimeState = formatTimeOnly(logoutTimeState);
+          calculatedDuration = formatDuration(loginDate, logoutDate)
+          logoutTimeState = formatTimeOnly(logoutTimeState)
         }
       }
 
@@ -271,59 +264,58 @@ export class AuditDatabase {
         loginTime: formatTimeOnly(loginTimeIso),
         logoutTime: logoutTimeState,
         duration: calculatedDuration || "0s",
-      };
-    });
+      }
+    })
 
     if (updatedStorageNeeded) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(rawLogs));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(rawLogs))
       } catch {
         // Ignore
       }
     }
 
-    return processedLogs;
+    return processedLogs
   }
 
   static recordLogout(username: string) {
-    const logs = this.getRawLogs();
-    const nowIso = new Date().toISOString();
-    let updated = false;
+    const logs = this.getRawLogs()
+    const nowIso = new Date().toISOString()
+    let updated = false
 
     for (const log of logs) {
-      const isLogin = log.action === "Login Successful" || (log.module === "Authentication" && log.status === "Success");
+      const isLogin = log.action === "Login Successful" || (log.module === "Authentication" && log.status === "Success")
       const isUserMatch =
         !username ||
         log.username.toLowerCase() === username.toLowerCase() ||
         log.userId === username ||
         username === "System" ||
-        username === "Hospital Administrator";
+        username === "Hospital Administrator"
 
       if (isLogin && isUserMatch && (!log.logoutTime || log.logoutTime === "Active")) {
-        const loginDate = new Date(log.loginTime || log.timestamp);
-        log.logoutTime = nowIso;
-        log.duration = formatDuration(loginDate, new Date(nowIso));
-        updated = true;
-        break;
+        const loginDate = new Date(log.loginTime || log.timestamp)
+        log.logoutTime = nowIso
+        log.duration = formatDuration(loginDate, new Date(nowIso))
+        updated = true
+        break
       }
     }
 
-    // Fallback if exact username string varied but there is an active session
     if (!updated) {
       for (const log of logs) {
-        const isLogin = log.action === "Login Successful" || (log.module === "Authentication" && log.status === "Success");
+        const isLogin = log.action === "Login Successful" || (log.module === "Authentication" && log.status === "Success")
         if (isLogin && (!log.logoutTime || log.logoutTime === "Active")) {
-          const loginDate = new Date(log.loginTime || log.timestamp);
-          log.logoutTime = nowIso;
-          log.duration = formatDuration(loginDate, new Date(nowIso));
-          updated = true;
-          break;
+          const loginDate = new Date(log.loginTime || log.timestamp)
+          log.logoutTime = nowIso
+          log.duration = formatDuration(loginDate, new Date(nowIso))
+          updated = true
+          break
         }
       }
     }
 
     if (updated) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(logs))
     }
   }
 
@@ -334,25 +326,25 @@ export class AuditDatabase {
     status: "Success" | "Failed",
     userId: string = "system",
     username: string = "System",
-    device?: string
+    device?: string,
   ) {
     if (action === "Logout" || action.toLowerCase().includes("logout")) {
-      this.recordLogout(username !== "System" ? username : userId);
-      return;
+      this.recordLogout(username !== "System" ? username : userId)
+      return
     }
 
-    const logs = this.getRawLogs();
-    let finalUserId = userId;
-    let finalUsername = username;
-    
+    const logs = this.getRawLogs()
+    let finalUserId = userId
+    let finalUsername = username
+
     if (finalUserId === "system") {
       try {
-        const currentUserData = localStorage.getItem("hospai_current_user");
+        const currentUserData = localStorage.getItem("hospai_current_user")
         if (currentUserData) {
-          const u = JSON.parse(currentUserData);
+          const u = JSON.parse(currentUserData)
           if (u && u.staffId) {
-            finalUserId = u.staffId;
-            finalUsername = u.user;
+            finalUserId = u.staffId
+            finalUsername = u.user
           }
         }
       } catch (e) {
@@ -360,8 +352,8 @@ export class AuditDatabase {
       }
     }
 
-    const isLoginRelated = action.toLowerCase().includes("login") || module === "Authentication";
-    const nowIso = new Date().toISOString();
+    const isLoginRelated = action.toLowerCase().includes("login") || module === "Authentication"
+    const nowIso = new Date().toISOString()
 
     const entry: AuditLog = {
       id: "AUD_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
@@ -380,14 +372,14 @@ export class AuditDatabase {
             duration: status === "Success" ? "0s" : "—",
           }
         : {}),
-    };
-
-    logs.unshift(entry);
-    
-    if (logs.length > 1000) {
-      logs.pop();
     }
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
+    logs.unshift(entry)
+
+    if (logs.length > 1000) {
+      logs.pop()
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(logs))
   }
 }

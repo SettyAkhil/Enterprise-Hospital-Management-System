@@ -16,521 +16,475 @@
  * All financial amounts formatted in Indian Rupees (₹ - INR).
  */
 
-import { BillingRbacManager } from "./billingRbac";
+import { apiFetch } from "../lib/api"
+import { BillingRbacManager } from "./billingRbac"
 
 import { db, DBPatient, DBOPEncounter } from "./db";
 import { getDoctorConsultationFee } from "./doctorMaster";
 
-import { ErDatabase, ErVisitRecord } from "./erDb";
+import { ErDatabase, ErVisitRecord } from "./erDb"
 
-import { BedDatabase, BedRecord } from "./bedDb";
+import { BedDatabase, BedRecord } from "./bedDb"
 
-export type DepartmentType =
-  | "Emergency"
-  | "Inpatient"
-  | "ICU"
-  | "Outpatient"
-  | "Radiology"
-  | "Laboratory"
-  | "Surgery";
+export type DepartmentType = "Emergency" | "Inpatient" | "ICU" | "Outpatient" | "Radiology" | "Laboratory" | "Surgery" | "Pharmacy"
 
 export interface InvoiceItem {
-  id: string;
+  id: string
 
-  description: string;
+  description: string
 
-  category:
-    | "Consultation"
-    | "Room / Bed Charges"
-    | "Nursing"
-    | "Procedure / Surgery"
-    | "Laboratory"
-    | "Radiology / Imaging"
-    | "Consumables";
+  category: "Consultation" | "Room / Bed Charges" | "Nursing" | "Procedure / Surgery" | "Laboratory" | "Radiology / Imaging" | "Consumables"
 
-  cptCode: string;
+  cptCode: string
 
-  quantity: number;
+  quantity: number
 
-  unitPrice: number;
+  unitPrice: number
 
-  total: number;
+  total: number
 
-  insuranceCovered: number;
+  insuranceCovered: number
 
-  patientPayable: number;
+  patientPayable: number
 
-  orderedBy?: string;
+  orderedBy?: string
 
-  orderedAt?: string;
+  orderedAt?: string
 }
 
 export interface PaymentRecord {
-  id: string;
+  id: string
 
-  invoiceId: string;
+  invoiceId: string
 
-  receiptNo: string;
+  receiptNo: string
 
-  amount: number;
+  amount: number
 
-  paymentDate: string;
+  paymentDate: string
 
-  paymentMethod:
-    | "Cash"
-    | "Credit Card"
-    | "Debit Card"
-    | "Insurance Copay"
-    | "UPI / Digital"
-    | "Bank Transfer"
-    | "Cheque";
+  paymentMethod: "Cash" | "Credit Card" | "Debit Card" | "Insurance Copay" | "UPI / Digital" | "Bank Transfer" | "Cheque"
 
-  transactionRef?: string;
+  transactionRef?: string
 
-  collectedBy: string;
+  collectedBy: string
 
-  notes?: string;
+  notes?: string
 }
 
-export type ClaimStatus =
-  | "Draft"
-  | "Ready"
-  | "Submitted"
-  | "Accepted"
-  | "Rejected"
-  | "Denied"
-  | "Appeal"
-  | "Paid"
-  | "Voided";
+export type ClaimStatus = "Draft" | "Ready" | "Submitted" | "Accepted" | "Rejected" | "Denied" | "Appeal" | "Paid" | "Voided"
 
 export interface ClaimRecord {
-  id: string; // e.g. "CLM-8921"
+  id: string // e.g. "CLM-8921"
 
-  invoiceNo: string; // e.g. "INV-2026-0811"
+  invoiceNo: string // e.g. "INV-2026-0811"
 
-  patientId: string; // UMR e.g. "UMR100501" or "UMR10001"
+  patientId: string // UMR e.g. "UMR100501" or "UMR10001"
 
-  patientName: string;
+  patientName: string
 
-  mrn: string;
+  mrn: string
 
-  age: number;
+  age: number
 
-  gender: "Male" | "Female" | "Other";
+  gender: "Male" | "Female" | "Other"
 
-  phone: string;
+  phone: string
 
-  department: DepartmentType;
+  department: DepartmentType
 
-  carePathway?: string; // e.g. "ER → ICU → 3N Ward Consolidated Stay" or "OP Consultation & Diagnostics"
+  carePathway?: string // e.g. "ER → ICU → 3N Ward Consolidated Stay" or "OP Consultation & Diagnostics"
 
-  dateOfService: string;
+  dateOfService: string
 
-  encounterId?: string;
+  encounterId?: string
 
-  hospitalStayId?: string;
+  hospitalStayId?: string
 
-  admissionId?: number;
+  admissionId?: number
 
-  bedId?: number;
+  bedId?: number
 
-  insuranceProvider: string; // "Star Health", "HDFC ERGO", "ICICI Lombard", "Care Health", "Bajaj Allianz", "PM-JAY (Ayushman Bharat)", "Self-Pay"
+  insuranceProvider: string // "Star Health", "HDFC ERGO", "ICICI Lombard", "Care Health", "Bajaj Allianz", "PM-JAY (Ayushman Bharat)", "Self-Pay"
 
-  policyNumber: string;
+  policyNumber: string
 
-  preAuthCode?: string;
+  preAuthCode?: string
 
-  status: ClaimStatus;
+  status: ClaimStatus
 
-  items: InvoiceItem[];
+  items: InvoiceItem[]
 
-  subtotal: number;
+  subtotal: number
 
-  discount: number;
+  discount: number
 
-  tax: number;
+  tax: number
 
-  totalAmount: number;
+  totalAmount: number
 
-  insurancePortion: number;
+  insurancePortion: number
 
-  patientPortion: number;
+  patientPortion: number
 
-  amountPaid: number;
+  amountPaid: number
 
-  balanceDue: number;
+  balanceDue: number
 
-  payments: PaymentRecord[];
+  payments: PaymentRecord[]
 
-  denialReason?: string;
+  denialReason?: string
 
-  appealNotes?: string;
+  appealNotes?: string
 
-  diagnosisCodes: string[]; // ICD-10 codes
+  diagnosisCodes: string[] // ICD-10 codes
 
-  attendingDoctor: string;
+  attendingDoctor: string
 
-  finalizedByNurse?: string;
+  finalizedByNurse?: string
 
-  createdAt: string;
+  createdAt: string
 
-  updatedAt: string;
+  updatedAt: string
 }
 
 // ── Department Charge Record (Clinical Running Ledger / Digital K-Sheet) ─────
 
 export interface DepartmentChargeRecord {
-  id: string; // e.g. "DCHG-2026-101"
+  id: string // e.g. "DCHG-2026-101"
 
-  patientId: string; // UMR e.g. "UMR100501"
+  patientId: string // UMR e.g. "UMR100501"
 
-  mrn: string; // "100501"
+  mrn: string // "100501"
 
-  patientName: string;
+  patientName: string
 
-  age: number;
+  age: number
 
-  gender: "Male" | "Female" | "Other";
+  gender: "Male" | "Female" | "Other"
 
-  phone: string;
+  phone: string
 
-  encounterId: string; // e.g. "ENC-OP-100501" or "ER-2026-00001" or "IP-BED-204"
+  encounterId: string // e.g. "ENC-OP-100501" or "ER-2026-00001" or "IP-BED-204"
 
-  hospitalStayId?: string; // e.g. "STAY-2026-881" for multi-department continuous stay
+  hospitalStayId?: string // e.g. "STAY-2026-881" for multi-department continuous stay
 
-  department: DepartmentType;
+  department: DepartmentType
 
-  carePathway?: string; // e.g. "ER → ICU → 3N Ward Consolidated Stay"
+  carePathway?: string // e.g. "ER → ICU → 3N Ward Consolidated Stay"
 
-  dateOfService: string;
+  dateOfService: string
 
-  insuranceProvider: string;
+  insuranceProvider: string
 
-  policyNumber: string;
+  policyNumber: string
 
-  preAuthCode?: string;
+  preAuthCode?: string
 
-  attendingDoctor: string;
+  attendingDoctor: string
 
-  diagnosisCodes: string[];
+  diagnosisCodes: string[]
 
-  items: InvoiceItem[];
+  items: InvoiceItem[]
 
-  subtotal: number;
+  subtotal: number
 
-  totalAmount: number;
+  totalAmount: number
 
-  status:
-    | "Accumulating Charges"
-    | "Pending Dept Verification"
-    | "Finalized by Dept"
-    | "Invoiced in Central Billing";
+  status: "Accumulating Charges" | "Pending Dept Verification" | "Finalized by Dept" | "Invoiced in Central Billing"
 
-  verifiedByNurse?: string;
+  verifiedByNurse?: string
 
-  finalizedAt?: string;
+  finalizedAt?: string
 
-  invoiceId?: string;
+  invoiceId?: string
 
-  createdAt: string;
+  createdAt: string
 
-  notes?: string;
+  notes?: string
 }
 
 // ── UMR Financial Ledger Summary Models ─────────────────────────────────────
 
 export interface EncounterChargeSummary {
-  encounterId: string;
+  encounterId: string
 
-  encounterType:
-    | "Outpatient"
-    | "Emergency"
-    | "Inpatient Ward"
-    | "ICU"
-    | "Surgery"
-    | "Laboratory"
-    | "Radiology";
+  encounterType: "Outpatient" | "Emergency" | "Inpatient Ward" | "ICU" | "Surgery" | "Laboratory" | "Radiology"
 
-  department: DepartmentType;
+  department: DepartmentType
 
-  date: string;
+  date: string
 
-  doctor: string;
+  doctor: string
 
-  status: string;
+  status: string
 
-  items: InvoiceItem[];
+  items: InvoiceItem[]
 
-  totalCharges: number;
+  totalCharges: number
 
-  isFinalized: boolean;
+  isFinalized: boolean
 
-  isInvoiced: boolean;
+  isInvoiced: boolean
 
-  invoiceId?: string;
+  invoiceId?: string
 
-  invoiceNo?: string;
+  invoiceNo?: string
 }
 
 export interface UmrFinancialLedger {
-  umr: string;
+  umr: string
 
-  patientName: string;
+  patientName: string
 
-  mrn: string;
+  mrn: string
 
-  age: number;
+  age: number
 
-  gender: "Male" | "Female" | "Other";
+  gender: "Male" | "Female" | "Other"
 
-  phone: string;
+  phone: string
 
-  insuranceProvider: string;
+  insuranceProvider: string
 
-  policyNumber: string;
+  policyNumber: string
 
-  totalHistoricalCharges: number;
+  totalHistoricalCharges: number
 
-  totalInvoiced: number;
+  totalInvoiced: number
 
-  totalPaid: number;
+  totalPaid: number
 
-  outstandingBalance: number;
+  outstandingBalance: number
 
-  insurancePending: number;
+  insurancePending: number
 
-  encounters: EncounterChargeSummary[];
+  encounters: EncounterChargeSummary[]
 
-  invoices: ClaimRecord[];
+  invoices: ClaimRecord[]
 
-  payments: PaymentRecord[];
+  payments: PaymentRecord[]
 
-  activeHospitalStayId?: string;
+  activeHospitalStayId?: string
 }
 
 export interface FinancialMetrics {
-  totalChargesMtd: number;
+  totalChargesMtd: number
 
-  insurancePending: number;
+  insurancePending: number
 
-  patientBalance: number;
+  patientBalance: number
 
-  deniedCount: number;
+  deniedCount: number
 
-  deniedAmount: number;
+  deniedAmount: number
 
-  collectionsRate: number;
+  collectionsRate: number
 
-  daysInAr: number;
+  daysInAr: number
 
-  firstPassRate: number;
+  firstPassRate: number
 
-  avgClaimValue: number;
+  avgClaimValue: number
 
-  paidCount: number;
+  paidCount: number
 
-  totalClaimsCount: number;
+  totalClaimsCount: number
 }
 
 export interface PayerMixItem {
-  payer: string;
+  payer: string
 
-  claimCount: number;
+  claimCount: number
 
-  totalAmount: number;
+  totalAmount: number
 
-  pct: number;
+  pct: number
 
-  color: string;
+  color: string
 }
 
 export interface ArAgingItem {
-  bucket: string;
+  bucket: string
 
-  amount: number;
+  amount: number
 
-  pct: number;
+  pct: number
 
-  color: string;
+  color: string
 
-  count: number;
+  count: number
 }
 
 // ── Diagnostic Order Interfaces with Pre-Payment Clearance ──────────────────
 
 export interface LabResultItem {
-  component: string;
+  component: string
 
-  value: string;
+  value: string
 
-  unit: string;
+  unit: string
 
-  ref: string;
+  ref: string
 
-  flag: "H" | "L" | "HH" | "LL" | "Critical" | "";
+  flag: "H" | "L" | "HH" | "LL" | "Critical" | ""
 }
 
 export interface LabOrderRecord {
-  id: string;
+  id: string
 
-  patient: string;
+  patient: string
 
-  mrn: string;
+  mrn: string
 
-  umr?: string;
+  umr?: string
 
-  invoiceNo?: string;
+  invoiceNo?: string
 
   encounterId?: string;
 
   department?: string;
 
-  diagnosis?: string;
+  diagnosis?: string
 
   orderedItems?: Array<{
-    description: string;
-    cptCode?: string;
-    price: number;
-    quantity: number;
-  }>;
+    description: string
+    cptCode?: string
+    price: number
+    quantity: number
+  }>
 
-  test: string;
+  test: string
 
-  category?: string;
+  category?: string
 
-  priority: "STAT" | "Routine";
+  priority: "STAT" | "Routine"
 
-  sampleType?: string;
+  sampleType?: string
 
-  accessionNo?: string;
+  accessionNo?: string
 
-  collected?: string;
+  collected?: string
 
-  collectedAt?: string;
+  collectedAt?: string
 
-  collectedBy?: string;
+  collectedBy?: string
 
-  analyzer?: string;
+  analyzer?: string
 
-  status: "Pending" | "Collected" | "Processing" | "Completed" | "Critical";
+  status: "Pending" | "Collected" | "Processing" | "Completed" | "Critical"
 
-  provider: string;
+  provider: string
 
-  price: number;
+  price: number
 
-  paymentStatus: "Paid" | "Payment Pending";
+  paymentStatus: "Paid" | "Payment Pending"
 
-  paidReceiptNo?: string;
+  paidReceiptNo?: string
 
-  paidAt?: string;
+  paidAt?: string
 
-  results?: LabResultItem[];
+  results?: LabResultItem[]
 
-  verifiedBy?: string;
+  verifiedBy?: string
 
-  verifiedAt?: string;
+  verifiedAt?: string
 
-  comments?: string;
+  comments?: string
 
   criticalNotified?: {
-    notified: boolean;
+    notified: boolean
 
-    notifiedTo?: string;
+    notifiedTo?: string
 
-    notifiedAt?: string;
+    notifiedAt?: string
 
-    channel?: string;
+    channel?: string
 
-    readBackVerified?: boolean;
-  };
+    readBackVerified?: boolean
+  }
 }
 
 export interface RadiologyStudyRecord {
-  id: string;
+  id: string
 
-  patient: string;
+  patient: string
 
-  mrn: string;
+  mrn: string
 
-  umr?: string;
+  umr?: string
 
-  invoiceNo?: string;
+  invoiceNo?: string
 
   encounterId?: string;
 
   department?: string;
 
-  diagnosis?: string;
+  diagnosis?: string
 
   orderedItems?: Array<{
-    description: string;
-    cptCode?: string;
-    price: number;
-    quantity: number;
-  }>;
+    description: string
+    cptCode?: string
+    price: number
+    quantity: number
+  }>
 
-  study: string;
+  study: string
 
-  modality: "XR" | "CT" | "MR" | "US" | "NM";
+  modality: "XR" | "CT" | "MR" | "US" | "NM"
 
-  priority: "STAT" | "Routine" | "Elective";
+  priority: "STAT" | "Routine" | "Elective"
 
-  ordered: string;
+  ordered: string
 
-  provider: string;
+  provider: string
 
-  status:
-    | "Orders"
-    | "Scheduled"
-    | "In Progress"
-    | "Images Ready"
-    | "Reporting"
-    | "Final";
+  status: "Orders" | "Scheduled" | "In Progress" | "Images Ready" | "Reporting" | "Final"
 
-  room: string;
+  room: string
 
-  price: number;
+  price: number
 
-  paymentStatus: "Paid" | "Payment Pending";
+  paymentStatus: "Paid" | "Payment Pending"
 
-  paidReceiptNo?: string;
+  paidReceiptNo?: string
 
-  paidAt?: string;
+  paidAt?: string
 
-  accessionNo?: string;
+  accessionNo?: string
 
-  technician?: string;
+  technician?: string
 
-  indication?: string;
+  indication?: string
 
-  technique?: string;
+  technique?: string
 
-  findings?: string[];
+  findings?: string[]
 
-  impression?: string[];
+  impression?: string[]
 
-  comparison?: string;
+  comparison?: string
 
-  radiologist?: string;
+  radiologist?: string
 
-  reportStatus?: "Draft" | "Final";
+  reportStatus?: "Draft" | "Final"
 
-  signedAt?: string;
+  signedAt?: string
 
-  addendum?: string;
+  addendum?: string
 
-  dicomImages?: string[];
+  dicomImages?: string[]
 }
 
-const STORAGE_KEY_CLAIMS = "hosp_billing_claims_inr_v11";
+const STORAGE_KEY_CLAIMS = "hosp_billing_claims_inr_v11"
 
-const STORAGE_KEY_DEPT_CHARGES = "hosp_billing_dept_charges_v11";
+const STORAGE_KEY_DEPT_CHARGES = "hosp_billing_dept_charges_v11"
 
-const STORAGE_KEY_LAB_ORDERS = "hosp_lab_orders_v1";
+const STORAGE_KEY_LAB_ORDERS = "hosp_lab_orders_v1"
 
-const STORAGE_KEY_RAD_STUDIES = "hosp_rad_studies_v1";
+const STORAGE_KEY_RAD_STUDIES = "hosp_rad_studies_v1"
 
-const BILLING_UPDATE_EVENT = "hospital_billing_updated";
+const BILLING_UPDATE_EVENT = "hospital_billing_updated"
 
 export const INITIAL_LAB_ORDERS: LabOrderRecord[] = [
   {
@@ -941,7 +895,7 @@ export const INITIAL_LAB_ORDERS: LabOrderRecord[] = [
 
     paymentStatus: "Payment Pending",
   },
-];
+]
 
 export const INITIAL_RAD_STUDIES: RadiologyStudyRecord[] = [
   {
@@ -1334,19 +1288,16 @@ export const INITIAL_RAD_STUDIES: RadiologyStudyRecord[] = [
 
     indication: "Postmenopausal osteoporosis screening.",
   },
-];
+]
 
 // ── Department Tariff & Service Catalogs (Streamlined Small Amounts) ──────────
 
-export const DEPARTMENT_TARIFF_CATALOG: Record<
-  DepartmentType,
-  {
-    category: InvoiceItem["category"];
-    description: string;
-    cpt: string;
-    price: number;
-  }[]
-> = {
+export const DEPARTMENT_TARIFF_CATALOG: Record<DepartmentType, {
+  category: InvoiceItem["category"]
+  description: string
+  cpt: string
+  price: number
+}[]> = {
   Outpatient: [
     {
       category: "Consultation",
@@ -1711,7 +1662,15 @@ export const DEPARTMENT_TARIFF_CATALOG: Record<
       price: 90,
     },
   ],
-};
+  Pharmacy: [
+    {
+      category: "Consumables",
+      description: "Dispensed Medicines & Pharmacy Consumables",
+      cpt: "PHARM-DISP",
+      price: 50,
+    },
+  ],
+}
 
 const STANDARD_SERVICES = [
   ...DEPARTMENT_TARIFF_CATALOG.Outpatient,
@@ -1727,7 +1686,7 @@ const STANDARD_SERVICES = [
   ...DEPARTMENT_TARIFF_CATALOG.Laboratory,
 
   ...DEPARTMENT_TARIFF_CATALOG.Radiology,
-];
+]
 
 // ── INITIAL SEED DEPARTMENT CHARGES (Streamlined Small Amounts) ─────────────
 
@@ -2449,7 +2408,7 @@ const INITIAL_DEPARTMENT_CHARGES: DepartmentChargeRecord[] = [
     notes:
       "Patient currently in ER Bay 1 awaiting ultrasound abdomen report. Additional charges may accumulate before nurse finalization.",
   },
-];
+]
 
 // ── INITIAL SEED CENTRAL INVOICES & CLAIMS (Streamlined Small Amounts) ──────
 
@@ -4355,78 +4314,127 @@ const INITIAL_HOSPITAL_CLAIMS: ClaimRecord[] = [
 
     updatedAt: "2026-09-12T10:30:00Z",
   },
-];
+]
 
 export class BillingDatabase {
-  private static load<T>(key: string, fallback: T): T {
+  private static load<T,>(key: string, fallback: T): T {
     try {
-      const raw = localStorage.getItem(key);
+      const raw = localStorage.getItem(key)
 
-      if (!raw) return fallback;
+      if (!raw) return fallback
 
-      return JSON.parse(raw);
+      return JSON.parse(raw)
     } catch {
-      return fallback;
+      return fallback
     }
   }
 
-  private static save<T>(key: string, data: T): void {
+  private static save<T,>(key: string, data: T): void {
     try {
-      localStorage.setItem(key, JSON.stringify(data));
+      localStorage.setItem(key, JSON.stringify(data))
 
-      this.dispatchUpdate();
+      this.dispatchUpdate()
     } catch (e) {
-      console.error("Failed to save to localStorage:", e);
+      console.error("Failed to save to localStorage:", e)
     }
   }
 
   static dispatchUpdate(): void {
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(BILLING_UPDATE_EVENT));
+      window.dispatchEvent(new CustomEvent(BILLING_UPDATE_EVENT))
     }
   }
 
   static emitUpdate(): void {
-    this.dispatchUpdate();
+    this.dispatchUpdate()
+  }
+
+  static syncClaimsWithBackend(): void {
+    apiFetch<{ claims: any[] }>("/api/billing/claims")
+      .then((res) => {
+        if (res && Array.isArray(res.claims) && res.claims.length > 0) {
+          const claims = this.load<ClaimRecord[]>(STORAGE_KEY_CLAIMS, INITIAL_HOSPITAL_CLAIMS)
+          let changed = false
+          for (const c of res.claims) {
+            const claimId = `CLM-${c.id}`
+            const existingIdx = claims.findIndex((item) => item.id === claimId || item.id === String(c.id))
+            if (existingIdx < 0) {
+              claims.unshift({
+                id: claimId,
+                invoiceNo: c.invoice_id ? `INV-${c.invoice_id}` : `INV-${c.id}`,
+                patientId: c.patient_id || `UMR-${c.id}`,
+                patientName: c.patient_name || "Patient",
+                mrn: c.mrn || "100245",
+                age: 40,
+                gender: "Male",
+                phone: "+91 98765 43210",
+                department: "General",
+                dateOfService: c.created_at ? c.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
+                insuranceProvider: c.insurer_name || "Insurance",
+                policyNumber: c.pre_auth_code || "POL-101",
+                totalAmount: parseFloat(c.claim_amount || 0),
+                insurancePortion: parseFloat(c.claim_amount || 0),
+                patientPortion: 0,
+                amountPaid: parseFloat(c.approved_amount || 0),
+                balanceDue: Math.max(0, parseFloat(c.claim_amount || 0) - parseFloat(c.approved_amount || 0)),
+                status: c.status === "approved" ? "Approved" : c.status === "rejected" ? "Rejected" : "Submitted",
+                items: [],
+                subtotal: parseFloat(c.claim_amount || 0),
+                discount: 0,
+                tax: 0,
+                auditTrail: [],
+                createdAt: c.created_at || new Date().toISOString(),
+                updatedAt: c.updated_at || new Date().toISOString(),
+              })
+              changed = true
+            }
+          }
+          if (changed) {
+            this.save(STORAGE_KEY_CLAIMS, claims)
+            this.dispatchUpdate()
+          }
+        }
+      })
+      .catch(() => {})
   }
 
   static addDepartmentCharge(charge: any): ClaimRecord {
-    return this.createClaim(charge);
+    return this.createClaim(charge)
   }
 
   static onUpdate(callback: () => void): () => void {
-    if (typeof window === "undefined") return () => {};
+    if (typeof window === "undefined") return () => {}
 
-    const handler = () => callback();
+    const handler = () => callback()
 
-    window.addEventListener(BILLING_UPDATE_EVENT, handler);
+    window.addEventListener(BILLING_UPDATE_EVENT, handler)
 
-    return () => window.removeEventListener(BILLING_UPDATE_EVENT, handler);
+    return () => window.removeEventListener(BILLING_UPDATE_EVENT, handler)
   }
 
   static getStandardServices() {
-    return STANDARD_SERVICES;
+    return STANDARD_SERVICES
   }
 
   static getDepartmentTariffCatalog() {
-    return DEPARTMENT_TARIFF_CATALOG;
+    return DEPARTMENT_TARIFF_CATALOG
   }
 
   // ── INVOICES & CLAIMS ───────────────────────────────────────────────────────
 
   static getClaims(filter?: {
-    status?: ClaimStatus | "All";
+    status?: ClaimStatus | "All"
 
-    department?: DepartmentType | "All";
+    department?: DepartmentType | "All"
 
-    search?: string;
+    search?: string
 
-    umr?: string;
+    umr?: string
   }): ClaimRecord[] {
     let claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
     // Auto-sync OP Encounters from db.ts if not yet in claims list
     try {
@@ -4534,23 +4542,23 @@ export class BillingDatabase {
 
     if (filter) {
       if (filter.status && filter.status !== "All") {
-        claims = claims.filter((c) => c.status === filter.status);
+        claims = claims.filter((c) => c.status === filter.status)
       }
 
       if (filter.department && filter.department !== "All") {
-        claims = claims.filter((c) => c.department === filter.department);
+        claims = claims.filter((c) => c.department === filter.department)
       }
 
       if (filter.umr && filter.umr.trim()) {
-        const u = filter.umr.trim().toLowerCase();
+        const u = filter.umr.trim().toLowerCase()
 
         claims = claims.filter(
           (c) => c.patientId.toLowerCase() === u || c.mrn.toLowerCase() === u,
-        );
+        )
       }
 
       if (filter.search && filter.search.trim()) {
-        const q = filter.search.trim().toLowerCase();
+        const q = filter.search.trim().toLowerCase()
 
         claims = claims.filter(
           (c) =>
@@ -4567,30 +4575,30 @@ export class BillingDatabase {
                 it.description.toLowerCase().includes(q) ||
                 it.cptCode.toLowerCase().includes(q),
             ),
-        );
+        )
       }
     }
 
     return claims.sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    )
   }
 
   static getClaimById(id: string): ClaimRecord | undefined {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
-    return claims.find((c) => c.id === id || c.invoiceNo === id);
+    return claims.find((c) => c.id === id || c.invoiceNo === id)
   }
 
   static createClaim(data: Partial<ClaimRecord>): ClaimRecord {
     let claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
     const maxClaimNum = claims.reduce((max, c) => {
       const num = parseInt((c.id || "").replace(/\D/g, ""), 10);
@@ -4605,29 +4613,29 @@ export class BillingDatabase {
     }, 827);
     const invNum = maxInvNum + 1;
 
-    const nowIso = new Date().toISOString();
+    const nowIso = new Date().toISOString()
 
-    const items: InvoiceItem[] = data.items || [];
+    const items: InvoiceItem[] = data.items || []
 
-    const subtotal = items.reduce((sum, it) => sum + Number(it.total || 0), 0);
+    const subtotal = items.reduce((sum, it) => sum + Number(it.total || 0), 0)
 
-    const discount = Number(data.discount || 0);
+    const discount = Number(data.discount || 0)
 
-    const tax = Number(data.tax || 0);
+    const tax = Number(data.tax || 0)
 
-    const totalAmount = Math.max(0, subtotal - discount + tax);
+    const totalAmount = Math.max(0, subtotal - discount + tax)
 
     // Calculate insurance & patient portions
 
-    const isSelfPay = (data.insuranceProvider || "Self-Pay") === "Self-Pay";
+    const isSelfPay = (data.insuranceProvider || "Self-Pay") === "Self-Pay"
 
     const insurancePortion = isSelfPay
       ? 0
-      : items.reduce((sum, it) => sum + Number(it.insuranceCovered || 0), 0);
+      : items.reduce((sum, it) => sum + Number(it.insuranceCovered || 0), 0)
 
     const patientPortion = isSelfPay
       ? totalAmount
-      : Math.max(0, totalAmount - insurancePortion);
+      : Math.max(0, totalAmount - insurancePortion)
 
     // Upsert: If an invoice already exists for this encounter, update it directly
 
@@ -4635,10 +4643,10 @@ export class BillingDatabase {
       (c) =>
         (data.encounterId && c.encounterId === data.encounterId) ||
         (data.id && c.id === data.id),
-    );
+    )
 
     if (existingIndex >= 0) {
-      const existing = claims[existingIndex];
+      const existing = claims[existingIndex]
 
       const finalAmountPaid =
         data.amountPaid !== undefined ? data.amountPaid : existing.amountPaid;
@@ -4680,13 +4688,13 @@ export class BillingDatabase {
         status: finalStatus,
 
         updatedAt: nowIso,
-      };
+      }
 
-      claims[existingIndex] = updatedClaim;
+      claims[existingIndex] = updatedClaim
 
-      this.save(STORAGE_KEY_CLAIMS, claims);
+      this.save(STORAGE_KEY_CLAIMS, claims)
 
-      return updatedClaim;
+      return updatedClaim
     }
 
     const newClaim: ClaimRecord = {
@@ -4768,11 +4776,11 @@ export class BillingDatabase {
       createdAt: nowIso,
 
       updatedAt: nowIso,
-    };
+    }
 
-    claims.unshift(newClaim);
+    claims.unshift(newClaim)
 
-    this.save(STORAGE_KEY_CLAIMS, claims);
+    this.save(STORAGE_KEY_CLAIMS, claims)
 
     BillingRbacManager.logEvent({
       action: "INVOICE_CREATED",
@@ -4792,55 +4800,99 @@ export class BillingDatabase {
       department: newClaim.department,
 
       reason: `Direct invoice created for ${newClaim.department} under UMR ${newClaim.patientId} (${newClaim.items.length} services).`,
-    });
+    })
 
-    return newClaim;
+    // Backend write-through for invoice, items, and insurance claim
+    apiFetch("/api/billing/invoices", {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: newClaim.patientId,
+        module: newClaim.department || "OP",
+        doctor_name: (data as any).consultingDoctor || "Dr. Staff",
+        total_amount: newClaim.totalAmount,
+        paid_amount: newClaim.amountPaid || 0,
+        due_amount: newClaim.balanceDue || 0,
+        status: newClaim.balanceDue === 0 ? "paid" : (newClaim.amountPaid || 0) > 0 ? "partial" : "due",
+      }),
+    }).then((invRes) => {
+      if (invRes && invRes.invoice_id) {
+        if (newClaim.items && newClaim.items.length > 0) {
+          apiFetch(`/api/billing/invoices/${invRes.invoice_id}/items`, {
+            method: "POST",
+            body: JSON.stringify({
+              items: newClaim.items.map((it) => ({
+                service_name: (it as any).serviceName || (it as any).description || "Medical Service",
+                quantity: it.quantity || 1,
+                unit_price: it.unitPrice || it.total || 0,
+                amount: it.total || 0,
+                department: newClaim.department || "General",
+              })),
+            }),
+          }).catch(() => {})
+        }
+        if (newClaim.insuranceProvider && newClaim.insuranceProvider !== "Self-Pay") {
+          apiFetch("/api/billing/claims", {
+            method: "POST",
+            body: JSON.stringify({
+              invoice_id: invRes.invoice_id,
+              insurer_name: newClaim.insuranceProvider,
+              claim_amount: newClaim.insurancePortion || newClaim.totalAmount,
+              status: newClaim.status ? newClaim.status.toLowerCase() : "submitted",
+              pre_auth_code: newClaim.preAuthCode,
+              notes: `Policy #${newClaim.policyNumber}`,
+            }),
+          }).catch(() => {})
+        }
+      }
+    }).catch(() => {})
+
+    return newClaim
   }
 
   static updateClaim(id: string, updates: Partial<ClaimRecord>): ClaimRecord {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
-    const idx = claims.findIndex((c) => c.id === id || c.invoiceNo === id);
+    const idx = claims.findIndex((c) => c.id === id || c.invoiceNo === id)
 
-    if (idx < 0) throw new Error("Claim not found");
+    if (idx < 0) throw new Error("Claim not found")
 
-    const current = claims[idx];
+    const current = claims[idx]
 
-    const items = updates.items || current.items;
+    const items = updates.items || current.items
 
-    const subtotal = items.reduce((sum, it) => sum + Number(it.total || 0), 0);
+    const subtotal = items.reduce((sum, it) => sum + Number(it.total || 0), 0)
 
     const discount =
       updates.discount !== undefined
         ? Number(updates.discount)
-        : current.discount;
+        : current.discount
 
-    const tax = updates.tax !== undefined ? Number(updates.tax) : current.tax;
+    const tax = updates.tax !== undefined ? Number(updates.tax) : current.tax
 
-    const totalAmount = Math.max(0, subtotal - discount + tax);
+    const totalAmount = Math.max(0, subtotal - discount + tax)
 
     const isSelfPay =
-      (updates.insuranceProvider || current.insuranceProvider) === "Self-Pay";
+      (updates.insuranceProvider || current.insuranceProvider) === "Self-Pay"
 
     const insurancePortion = isSelfPay
       ? 0
-      : items.reduce((sum, it) => sum + Number(it.insuranceCovered || 0), 0);
+      : items.reduce((sum, it) => sum + Number(it.insuranceCovered || 0), 0)
 
     const patientPortion = isSelfPay
       ? totalAmount
-      : Math.max(0, totalAmount - insurancePortion);
+      : Math.max(0, totalAmount - insurancePortion)
 
     const amountPaid =
       updates.amountPaid !== undefined
         ? Number(updates.amountPaid)
-        : current.amountPaid;
+        : current.amountPaid
 
-    const balanceDue = Math.max(0, patientPortion - amountPaid);
+    const balanceDue = Math.max(0, patientPortion - amountPaid)
 
-    let status = updates.status || current.status;
+    let status = updates.status || current.status
 
     if (
       balanceDue === 0 &&
@@ -4850,7 +4902,7 @@ export class BillingDatabase {
         amountPaid >= patientPortion &&
         (isSelfPay || current.status === "Accepted")
       ) {
-        status = "Paid";
+        status = "Paid"
       }
     }
 
@@ -4880,28 +4932,28 @@ export class BillingDatabase {
       status,
 
       updatedAt: new Date().toISOString(),
-    };
+    }
 
-    claims[idx] = updatedClaim;
+    claims[idx] = updatedClaim
 
-    this.save(STORAGE_KEY_CLAIMS, claims);
+    this.save(STORAGE_KEY_CLAIMS, claims)
 
-    return updatedClaim;
+    return updatedClaim
   }
 
   static submitClaim(id: string): ClaimRecord {
-    const claim = this.getClaimById(id);
+    const claim = this.getClaimById(id)
 
-    if (!claim) throw new Error("Claim not found");
+    if (!claim) throw new Error("Claim not found")
 
     const newStatus: ClaimStatus =
-      claim.insuranceProvider === "Self-Pay" ? "Ready" : "Submitted";
+      claim.insuranceProvider === "Self-Pay" ? "Ready" : "Submitted"
 
     const updated = this.updateClaim(id, {
       status: newStatus,
 
       updatedAt: new Date().toISOString(),
-    });
+    })
 
     BillingRbacManager.logEvent({
       action: "CLAIM_SUBMITTED",
@@ -4921,20 +4973,31 @@ export class BillingDatabase {
       department: claim.department,
 
       reason: `Claim submitted to clearinghouse / payer (${claim.insuranceProvider}) for ₹${claim.insurancePortion.toLocaleString("en-IN")}.`,
-    });
+    })
 
-    return updated;
+    const numericClaimId = parseInt(id.replace(/\D/g, ""))
+    if (!isNaN(numericClaimId)) {
+      apiFetch(`/api/billing/claims/${numericClaimId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status: updated.status ? updated.status.toLowerCase() : undefined,
+          approved_amount: updated.amountPaid || updated.insurancePortion,
+        }),
+      }).catch(() => {})
+    }
+
+    return updated
   }
 
   static resetClaimToUnpaid(query: string): boolean {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
-    const q = (query || "").toLowerCase().trim();
+    const q = (query || "").toLowerCase().trim()
 
-    let modified = false;
+    let modified = false
 
     const updated = claims.map((c) => {
       const match =
@@ -4942,12 +5005,12 @@ export class BillingDatabase {
         (c.patientId && c.patientId.toLowerCase().includes(q)) ||
         (c.patientName && c.patientName.toLowerCase().includes(q)) ||
         (c.invoiceNo && c.invoiceNo.toLowerCase().includes(q)) ||
-        (c.id && c.id.toLowerCase().includes(q));
+        (c.id && c.id.toLowerCase().includes(q))
 
       if (match) {
-        modified = true;
+        modified = true
 
-        const total = c.patientPortion || c.totalAmount || 4000;
+        const total = c.patientPortion || c.totalAmount || 4000
 
         return {
           ...c,
@@ -4963,28 +5026,28 @@ export class BillingDatabase {
           payments: [],
 
           updatedAt: new Date().toISOString(),
-        };
+        }
       }
 
-      return c;
-    });
+      return c
+    })
 
     if (modified) {
-      this.save(STORAGE_KEY_CLAIMS, updated);
+      this.save(STORAGE_KEY_CLAIMS, updated)
 
-      return true;
+      return true
     }
 
-    return false;
+    return false
   }
 
   static resetClaimToUnbilled(query: string): boolean {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
-    const q = (query || "").toLowerCase().trim();
+    const q = (query || "").toLowerCase().trim()
 
     const filtered = claims.filter((c) => {
       const match =
@@ -4992,32 +5055,32 @@ export class BillingDatabase {
         (c.patientId && c.patientId.toLowerCase().includes(q)) ||
         (c.patientName && c.patientName.toLowerCase().includes(q)) ||
         (c.invoiceNo && c.invoiceNo.toLowerCase().includes(q)) ||
-        (c.id && c.id.toLowerCase().includes(q));
+        (c.id && c.id.toLowerCase().includes(q))
 
-      return !match;
-    });
+      return !match
+    })
 
     if (filtered.length !== claims.length) {
-      this.save(STORAGE_KEY_CLAIMS, filtered);
+      this.save(STORAGE_KEY_CLAIMS, filtered)
 
-      return true;
+      return true
     }
 
-    return false;
+    return false
   }
 
   static bulkSubmitClaims(ids: string[]): number {
-    let count = 0;
+    let count = 0
 
     ids.forEach((id) => {
       try {
-        this.submitClaim(id);
+        this.submitClaim(id)
 
-        count++;
+        count++
       } catch (e) {
-        console.error(`Failed to submit claim ${id}:`, e);
+        console.error(`Failed to submit claim ${id}:`, e)
       }
-    });
+    })
 
     if (count > 0) {
       BillingRbacManager.logEvent({
@@ -5032,16 +5095,16 @@ export class BillingDatabase {
         invoiceNo: "BATCH-SUBMIT",
 
         reason: `Bulk submission of ${count} claims processed to clearinghouse.`,
-      });
+      })
     }
 
-    return count;
+    return count
   }
 
   static resubmitClaim(id: string, notes?: string): ClaimRecord {
-    const claim = this.getClaimById(id);
+    const claim = this.getClaimById(id)
 
-    if (!claim) throw new Error("Claim not found");
+    if (!claim) throw new Error("Claim not found")
 
     const updated = this.updateClaim(id, {
       status: "Submitted",
@@ -5053,7 +5116,7 @@ export class BillingDatabase {
         `Corrected claim re-submitted to payer with updated clinical codes.`,
 
       updatedAt: new Date().toISOString(),
-    });
+    })
 
     BillingRbacManager.logEvent({
       action: "CLAIM_RESUBMITTED",
@@ -5073,15 +5136,15 @@ export class BillingDatabase {
       department: claim.department,
 
       reason: `Claim resubmitted with corrections: ${notes || "Updated pre-authorization & diagnosis codes"}`,
-    });
+    })
 
-    return updated;
+    return updated
   }
 
   static appealClaim(id: string, appealNotes: string): ClaimRecord {
-    const claim = this.getClaimById(id);
+    const claim = this.getClaimById(id)
 
-    if (!claim) throw new Error("Claim not found");
+    if (!claim) throw new Error("Claim not found")
 
     const updated = this.updateClaim(id, {
       status: "Appeal",
@@ -5089,7 +5152,7 @@ export class BillingDatabase {
       appealNotes,
 
       updatedAt: new Date().toISOString(),
-    });
+    })
 
     BillingRbacManager.logEvent({
       action: "CLAIM_APPEALED",
@@ -5109,24 +5172,24 @@ export class BillingDatabase {
       department: claim.department,
 
       reason: `Formal appeal filed: ${appealNotes}`,
-    });
+    })
 
-    return updated;
+    return updated
   }
 
   static recordPayment(
     invoiceId: string,
 
     payment: {
-      amount: number;
+      amount: number
 
-      paymentMethod: PaymentRecord["paymentMethod"];
+      paymentMethod: PaymentRecord["paymentMethod"]
 
-      transactionRef?: string;
+      transactionRef?: string
 
-      collectedBy: string;
+      collectedBy: string
 
-      notes?: string;
+      notes?: string
     },
   ): { claim: ClaimRecord; payment: PaymentRecord } {
     const claims = this.getClaims();
@@ -5149,18 +5212,18 @@ export class BillingDatabase {
       );
     });
 
-    if (idx < 0) throw new Error("Invoice not found");
+    if (idx < 0) throw new Error("Invoice not found")
 
-    const claim = claims[idx];
+    const claim = claims[idx]
 
-    const newAmountPaid = (claim.amountPaid || 0) + payment.amount;
+    const newAmountPaid = (claim.amountPaid || 0) + payment.amount
 
-    const newBalanceDue = Math.max(0, claim.patientPortion - newAmountPaid);
+    const newBalanceDue = Math.max(0, claim.patientPortion - newAmountPaid)
 
     const rcptNum =
       5500 +
       (claim.payments?.length || 0) +
-      Math.floor(100 + Math.random() * 899);
+      Math.floor(100 + Math.random() * 899)
 
     const newPayment: PaymentRecord = {
       id: `PAY-${Date.now()}`,
@@ -5181,11 +5244,11 @@ export class BillingDatabase {
       collectedBy: payment.collectedBy,
 
       notes: payment.notes,
-    };
+    }
 
-    const updatedPayments = [...(claim.payments || []), newPayment];
+    const updatedPayments = [...(claim.payments || []), newPayment]
 
-    let newStatus = claim.status;
+    let newStatus = claim.status
 
     if (newBalanceDue === 0) {
       if (
@@ -5193,7 +5256,7 @@ export class BillingDatabase {
         claim.status === "Accepted" ||
         claim.insurancePortion === 0
       ) {
-        newStatus = "Paid";
+        newStatus = "Paid"
       }
     }
 
@@ -5209,11 +5272,11 @@ export class BillingDatabase {
       payments: updatedPayments,
 
       updatedAt: new Date().toISOString(),
-    };
+    }
 
-    claims[idx] = updatedClaim;
+    claims[idx] = updatedClaim
 
-    this.save(STORAGE_KEY_CLAIMS, claims);
+    this.save(STORAGE_KEY_CLAIMS, claims)
 
     // Sync underlying OP encounter in db.ts
     if (updatedClaim.encounterId) {
@@ -5253,9 +5316,19 @@ export class BillingDatabase {
       department: claim.department,
 
       reason: `Payment receipt ${newPayment.receiptNo} of ₹${newPayment.amount.toLocaleString("en-IN")} collected via ${newPayment.paymentMethod} (Ref: ${newPayment.transactionRef}). Remaining due: ₹${newBalanceDue.toLocaleString("en-IN")}.`,
-    });
+    })
 
-    return { claim: updatedClaim, payment: newPayment };
+    const numericInvId = parseInt((claim.invoiceNo || invoiceId).replace(/\D/g, "")) || 1
+    apiFetch(`/api/billing/invoices/${numericInvId}/payments`, {
+      method: "POST",
+      body: JSON.stringify({
+        amount: payment.amount,
+        payment_mode: payment.paymentMethod ? payment.paymentMethod.toLowerCase() : "cash",
+        gateway_ref: payment.transactionRef || newPayment.transactionRef,
+      }),
+    }).catch(() => {})
+
+    return { claim: updatedClaim, payment: newPayment }
   }
 
   // ── MANUAL DEPARTMENT FINANCIAL CLEARANCE DISPATCH ─────────────────────────
@@ -5592,7 +5665,7 @@ export class BillingDatabase {
       success: false,
       updatedCount: 0,
       message: `No pending ${department} orders found for this patient.`,
-    };
+    }
   }
 
 
@@ -5601,23 +5674,23 @@ export class BillingDatabase {
 
     claimContext?: ClaimRecord | null,
   ): {
-    hasLabOrders: boolean;
+    hasLabOrders: boolean
 
-    labPaidCount: number;
+    labPaidCount: number
 
-    labPendingCount: number;
+    labPendingCount: number
 
-    labTestNames: string[];
+    labTestNames: string[]
 
-    hasRadStudies: boolean;
+    hasRadStudies: boolean
 
-    radPaidCount: number;
+    radPaidCount: number
 
-    radPendingCount: number;
+    radPendingCount: number
 
-    radStudyNames: string[];
+    radStudyNames: string[]
 
-    isNonDiagnostic: boolean;
+    isNonDiagnostic: boolean
   } {
     // For Outpatient visits prior to doctor consultation (no prescribed investigations in encounter),
     // diagnostic clearance is NOT applicable because no lab/radiology tests have been prescribed yet.
@@ -5856,7 +5929,7 @@ export class BillingDatabase {
       claimLabItems.length > 0 ||
       extraLabTestNames.length > 0;
 
-    const hasRad = radStudies.length > 0 || claimRadItems.length > 0;
+    const hasRad = radStudies.length > 0 || claimRadItems.length > 0
 
     const labTestNames = [
       ...labOrders.map((o) => o.test),
@@ -5871,7 +5944,7 @@ export class BillingDatabase {
       });
     }
 
-    const radStudyNames = radStudies.map((s) => s.study);
+    const radStudyNames = radStudies.map((s) => s.study)
 
     if (claimRadItems.length > 0) {
       claimRadItems.forEach((i) => {
@@ -5881,21 +5954,19 @@ export class BillingDatabase {
       });
     }
 
-    const labPaid = labOrders.filter(
-      (lo) => lo.paymentStatus === "Paid",
-    ).length;
+    const labPaid = labOrders.filter((lo) => lo.paymentStatus === "Paid").length
 
     const labPending = labOrders.filter(
       (lo) => lo.paymentStatus === "Payment Pending",
-    ).length;
+    ).length
 
     const radPaid = radStudies.filter(
       (rs) => rs.paymentStatus === "Paid",
-    ).length;
+    ).length
 
     const radPending = radStudies.filter(
       (rs) => rs.paymentStatus === "Payment Pending",
-    ).length;
+    ).length
 
     return {
       hasLabOrders: hasLab,
@@ -5917,7 +5988,7 @@ export class BillingDatabase {
             : 0,
       radStudyNames,
       isNonDiagnostic: !hasLab && !hasRad,
-    };
+    }
   }
 
   // ── DIAGNOSTIC PRE-PAYMENT CLEARANCE ACCESS METHODS ────────────────────────
@@ -5926,11 +5997,11 @@ export class BillingDatabase {
     const orders = this.load<LabOrderRecord[]>(
       STORAGE_KEY_LAB_ORDERS,
       INITIAL_LAB_ORDERS,
-    );
+    )
 
-    const claims = this.getClaims();
+    const claims = this.getClaims()
 
-    const syncedOrders = [...orders];
+    const syncedOrders = [...orders]
 
     claims.forEach((claim) => {
       const labItems = claim.items.filter(
@@ -5948,29 +6019,29 @@ export class BillingDatabase {
           it.description.toLowerCase().includes("culture") ||
           it.description.toLowerCase().includes("hba1c") ||
           it.description.toLowerCase().includes("coagulation"),
-      );
+      )
 
       if (labItems.length > 0) {
-        const isPaid = claim.status === "Paid" || claim.balanceDue === 0;
+        const isPaid = claim.status === "Paid" || claim.balanceDue === 0
 
         const receiptNo =
           claim.payments?.[0]?.receiptNo ||
           (isPaid
             ? `RCPT-2026-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || "5501"}`
-            : undefined);
+            : undefined)
 
-        const targetName = (claim.patientName || "").toLowerCase().trim();
+        const targetName = (claim.patientName || "").toLowerCase().trim()
 
         const targetMrn = (claim.mrn || claim.patientId || "")
           .toLowerCase()
-          .trim();
+          .trim()
 
         const existingIdx = syncedOrders.findIndex((o) => {
-          const oName = (o.patient || "").toLowerCase().trim();
+          const oName = (o.patient || "").toLowerCase().trim()
 
-          const oMrn = (o.mrn || "").toLowerCase().trim();
+          const oMrn = (o.mrn || "").toLowerCase().trim()
 
-          const oInv = o.invoiceNo?.toLowerCase().trim();
+          const oInv = o.invoiceNo?.toLowerCase().trim()
 
           return (
             (oInv && oInv === claim.invoiceNo.toLowerCase().trim()) ||
@@ -5983,11 +6054,11 @@ export class BillingDatabase {
               o.test
                 .toLowerCase()
                 .includes(labItems[0].description.toLowerCase()))
-          );
-        });
+          )
+        })
 
         if (existingIdx >= 0) {
-          const current = syncedOrders[existingIdx];
+          const current = syncedOrders[existingIdx]
 
           syncedOrders[existingIdx] = {
             ...current,
@@ -6019,16 +6090,16 @@ export class BillingDatabase {
 
               quantity: it.quantity || 1,
             })),
-          };
+          }
         } else {
-          const testSummary = labItems.map((it) => it.description).join(" + ");
+          const testSummary = labItems.map((it) => it.description).join(" + ")
 
           const totalLabPrice = labItems.reduce(
             (sum, it) =>
               sum + (it.total || (it.unitPrice || 0) * (it.quantity || 1)),
 
             0,
-          );
+          )
 
           syncedOrders.push({
             id: `LAB-INV-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || Math.floor(100 + Math.random() * 900)}`,
@@ -6078,12 +6149,12 @@ export class BillingDatabase {
 
               quantity: it.quantity || 1,
             })),
-          });
+          })
         }
       }
-    });
+    })
 
-    const deptCharges = this.getDepartmentCharges();
+    const deptCharges = this.getDepartmentCharges()
 
     deptCharges.forEach((dept) => {
       const labItems = (dept.items || []).filter(
@@ -6101,19 +6172,19 @@ export class BillingDatabase {
           it.description.toLowerCase().includes("culture") ||
           it.description.toLowerCase().includes("hba1c") ||
           it.description.toLowerCase().includes("coagulation"),
-      );
+      )
 
       if (labItems.length > 0) {
-        const targetName = (dept.patientName || "").toLowerCase().trim();
+        const targetName = (dept.patientName || "").toLowerCase().trim()
 
         const targetMrn = (dept.mrn || dept.patientId || "")
           .toLowerCase()
-          .trim();
+          .trim()
 
         const existingIdx = syncedOrders.findIndex((o) => {
-          const oName = (o.patient || "").toLowerCase().trim();
+          const oName = (o.patient || "").toLowerCase().trim()
 
-          const oMrn = (o.mrn || "").toLowerCase().trim();
+          const oMrn = (o.mrn || "").toLowerCase().trim()
 
           return (
             (dept.invoiceId &&
@@ -6128,18 +6199,18 @@ export class BillingDatabase {
               o.test
                 .toLowerCase()
                 .includes(labItems[0].description.toLowerCase()))
-          );
-        });
+          )
+        })
 
         if (existingIdx < 0) {
-          const testSummary = labItems.map((it) => it.description).join(" + ");
+          const testSummary = labItems.map((it) => it.description).join(" + ")
 
           const totalLabPrice = labItems.reduce(
             (sum, it) =>
               sum + (it.total || (it.unitPrice || 0) * (it.quantity || 1)),
 
             0,
-          );
+          )
 
           syncedOrders.push({
             id: `LAB-DCHG-${(dept.id || "").replace(/\D/g, "").slice(-4) || Math.floor(100 + Math.random() * 900)}`,
@@ -6185,20 +6256,20 @@ export class BillingDatabase {
 
               quantity: it.quantity || 1,
             })),
-          });
+          })
         }
       }
-    });
+    })
 
-    return syncedOrders;
+    return syncedOrders
   }
 
   static createLabOrder(
     orderData: Omit<LabOrderRecord, "id"> & { id?: string },
   ): LabOrderRecord {
-    const orders = this.getLabOrders();
+    const orders = this.getLabOrders()
 
-    const id = orderData.id || `LAB-${Math.floor(100 + Math.random() * 900)}`;
+    const id = orderData.id || `LAB-${Math.floor(100 + Math.random() * 900)}`
 
     const newOrder: LabOrderRecord = {
       ...orderData,
@@ -6212,55 +6283,55 @@ export class BillingDatabase {
       collected: orderData.collected || "—",
 
       status: orderData.status || "Pending",
-    };
+    }
 
-    const updated = [newOrder, ...orders.filter((o) => o.id !== id)];
+    const updated = [newOrder, ...orders.filter((o) => o.id !== id)]
 
-    this.save(STORAGE_KEY_LAB_ORDERS, updated);
+    this.save(STORAGE_KEY_LAB_ORDERS, updated)
 
-    this.emitUpdate();
+    this.emitUpdate()
 
-    return newOrder;
+    return newOrder
   }
 
   static updateLabOrder(
     id: string,
     updates: Partial<LabOrderRecord>,
   ): LabOrderRecord {
-    const orders = this.getLabOrders();
+    const orders = this.getLabOrders()
 
-    const idx = orders.findIndex((o) => o.id === id);
+    const idx = orders.findIndex((o) => o.id === id)
 
-    if (idx < 0) throw new Error("Lab order not found");
+    if (idx < 0) throw new Error("Lab order not found")
 
-    const updated = { ...orders[idx], ...updates };
+    const updated = { ...orders[idx], ...updates }
 
-    orders[idx] = updated;
+    orders[idx] = updated
 
-    this.save(STORAGE_KEY_LAB_ORDERS, orders);
+    this.save(STORAGE_KEY_LAB_ORDERS, orders)
 
-    this.emitUpdate();
+    this.emitUpdate()
 
-    return updated;
+    return updated
   }
 
   static deleteLabOrder(id: string): void {
-    const orders = this.getLabOrders().filter((o) => o.id !== id);
+    const orders = this.getLabOrders().filter((o) => o.id !== id)
 
-    this.save(STORAGE_KEY_LAB_ORDERS, orders);
+    this.save(STORAGE_KEY_LAB_ORDERS, orders)
 
-    this.emitUpdate();
+    this.emitUpdate()
   }
 
   static getRadiologyStudies(): RadiologyStudyRecord[] {
     const studies = this.load<RadiologyStudyRecord[]>(
       STORAGE_KEY_RAD_STUDIES,
       INITIAL_RAD_STUDIES,
-    );
+    )
 
-    const claims = this.getClaims();
+    const claims = this.getClaims()
 
-    const syncedStudies = [...studies];
+    const syncedStudies = [...studies]
 
     claims.forEach((claim) => {
       const radItems = claim.items.filter(
@@ -6275,29 +6346,29 @@ export class BillingDatabase {
           it.description.toLowerCase().includes("echo") ||
           it.description.toLowerCase().includes("dexa") ||
           it.description.toLowerCase().includes("scan"),
-      );
+      )
 
       if (radItems.length > 0) {
-        const isPaid = claim.status === "Paid" || claim.balanceDue === 0;
+        const isPaid = claim.status === "Paid" || claim.balanceDue === 0
 
         const receiptNo =
           claim.payments?.[0]?.receiptNo ||
           (isPaid
             ? `RCPT-2026-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || "5501"}`
-            : undefined);
+            : undefined)
 
-        const targetName = (claim.patientName || "").toLowerCase().trim();
+        const targetName = (claim.patientName || "").toLowerCase().trim()
 
         const targetMrn = (claim.mrn || claim.patientId || "")
           .toLowerCase()
-          .trim();
+          .trim()
 
         const existingIdx = syncedStudies.findIndex((s) => {
-          const sName = (s.patient || "").toLowerCase().trim();
+          const sName = (s.patient || "").toLowerCase().trim()
 
-          const sMrn = (s.mrn || "").toLowerCase().trim();
+          const sMrn = (s.mrn || "").toLowerCase().trim()
 
-          const sInv = s.invoiceNo?.toLowerCase().trim();
+          const sInv = s.invoiceNo?.toLowerCase().trim()
 
           return (
             (sInv && sInv === claim.invoiceNo.toLowerCase().trim()) ||
@@ -6310,11 +6381,11 @@ export class BillingDatabase {
               s.study
                 .toLowerCase()
                 .includes(radItems[0].description.toLowerCase()))
-          );
-        });
+          )
+        })
 
         if (existingIdx >= 0) {
-          const current = syncedStudies[existingIdx];
+          const current = syncedStudies[existingIdx]
 
           syncedStudies[existingIdx] = {
             ...current,
@@ -6349,16 +6420,16 @@ export class BillingDatabase {
 
               quantity: it.quantity || 1,
             })),
-          };
+          }
         } else {
-          const studySummary = radItems.map((it) => it.description).join(" + ");
+          const studySummary = radItems.map((it) => it.description).join(" + ")
 
           const totalRadPrice = radItems.reduce(
             (sum, it) =>
               sum + (it.total || (it.unitPrice || 0) * (it.quantity || 1)),
 
             0,
-          );
+          )
 
           const modality = studySummary.toLowerCase().includes("ct")
             ? "CT"
@@ -6368,7 +6439,7 @@ export class BillingDatabase {
               : studySummary.toLowerCase().includes("ultra") ||
                   studySummary.toLowerCase().includes("echo")
                 ? "US"
-                : "XR";
+                : "XR"
 
           const room =
             modality === "CT"
@@ -6377,7 +6448,7 @@ export class BillingDatabase {
                 ? "MR-1"
                 : modality === "US"
                   ? "US-1"
-                  : "XR-1";
+                  : "XR-1"
 
           syncedStudies.push({
             id: `RAD-INV-${(claim.invoiceNo || "").replace(/\D/g, "").slice(-4) || Math.floor(200 + Math.random() * 800)}`,
@@ -6432,12 +6503,12 @@ export class BillingDatabase {
 
               quantity: it.quantity || 1,
             })),
-          });
+          })
         }
       }
-    });
+    })
 
-    const deptChargesRad = this.getDepartmentCharges();
+    const deptChargesRad = this.getDepartmentCharges()
 
     deptChargesRad.forEach((dept) => {
       const radItems = (dept.items || []).filter(
@@ -6452,19 +6523,19 @@ export class BillingDatabase {
           it.description.toLowerCase().includes("echo") ||
           it.description.toLowerCase().includes("dexa") ||
           it.description.toLowerCase().includes("scan"),
-      );
+      )
 
       if (radItems.length > 0) {
-        const targetName = (dept.patientName || "").toLowerCase().trim();
+        const targetName = (dept.patientName || "").toLowerCase().trim()
 
         const targetMrn = (dept.mrn || dept.patientId || "")
           .toLowerCase()
-          .trim();
+          .trim()
 
         const existingIdx = syncedStudies.findIndex((s) => {
-          const sName = (s.patient || "").toLowerCase().trim();
+          const sName = (s.patient || "").toLowerCase().trim()
 
-          const sMrn = (s.mrn || "").toLowerCase().trim();
+          const sMrn = (s.mrn || "").toLowerCase().trim()
 
           return (
             (dept.invoiceId &&
@@ -6479,18 +6550,18 @@ export class BillingDatabase {
               s.study
                 .toLowerCase()
                 .includes(radItems[0].description.toLowerCase()))
-          );
-        });
+          )
+        })
 
         if (existingIdx < 0) {
-          const studySummary = radItems.map((it) => it.description).join(" + ");
+          const studySummary = radItems.map((it) => it.description).join(" + ")
 
           const totalRadPrice = radItems.reduce(
             (sum, it) =>
               sum + (it.total || (it.unitPrice || 0) * (it.quantity || 1)),
 
             0,
-          );
+          )
 
           const modality = studySummary.toLowerCase().includes("ct")
             ? "CT"
@@ -6500,7 +6571,7 @@ export class BillingDatabase {
               : studySummary.toLowerCase().includes("ultra") ||
                   studySummary.toLowerCase().includes("echo")
                 ? "US"
-                : "XR";
+                : "XR"
 
           const room =
             modality === "CT"
@@ -6509,7 +6580,7 @@ export class BillingDatabase {
                 ? "MR-1"
                 : modality === "US"
                   ? "US-1"
-                  : "XR-1";
+                  : "XR-1"
 
           syncedStudies.push({
             id: `RAD-DCHG-${(dept.id || "").replace(/\D/g, "").slice(-4) || Math.floor(200 + Math.random() * 800)}`,
@@ -6561,20 +6632,20 @@ export class BillingDatabase {
 
               quantity: it.quantity || 1,
             })),
-          });
+          })
         }
       }
-    });
+    })
 
-    return syncedStudies;
+    return syncedStudies
   }
 
   static createRadiologyStudy(
     studyData: Omit<RadiologyStudyRecord, "id"> & { id?: string },
   ): RadiologyStudyRecord {
-    const studies = this.getRadiologyStudies();
+    const studies = this.getRadiologyStudies()
 
-    const id = studyData.id || `RAD-${Math.floor(200 + Math.random() * 800)}`;
+    const id = studyData.id || `RAD-${Math.floor(200 + Math.random() * 800)}`
 
     const newStudy: RadiologyStudyRecord = {
       ...studyData,
@@ -6593,44 +6664,44 @@ export class BillingDatabase {
         }),
 
       status: studyData.status || "Orders",
-    };
+    }
 
-    const updated = [newStudy, ...studies.filter((s) => s.id !== id)];
+    const updated = [newStudy, ...studies.filter((s) => s.id !== id)]
 
-    this.save(STORAGE_KEY_RAD_STUDIES, updated);
+    this.save(STORAGE_KEY_RAD_STUDIES, updated)
 
-    this.emitUpdate();
+    this.emitUpdate()
 
-    return newStudy;
+    return newStudy
   }
 
   static updateRadiologyStudy(
     id: string,
     updates: Partial<RadiologyStudyRecord>,
   ): RadiologyStudyRecord {
-    const studies = this.getRadiologyStudies();
+    const studies = this.getRadiologyStudies()
 
-    const idx = studies.findIndex((s) => s.id === id);
+    const idx = studies.findIndex((s) => s.id === id)
 
-    if (idx < 0) throw new Error("Radiology study not found");
+    if (idx < 0) throw new Error("Radiology study not found")
 
-    const updated = { ...studies[idx], ...updates };
+    const updated = { ...studies[idx], ...updates }
 
-    studies[idx] = updated;
+    studies[idx] = updated
 
-    this.save(STORAGE_KEY_RAD_STUDIES, studies);
+    this.save(STORAGE_KEY_RAD_STUDIES, studies)
 
-    this.emitUpdate();
+    this.emitUpdate()
 
-    return updated;
+    return updated
   }
 
   static deleteRadiologyStudy(id: string): void {
-    const studies = this.getRadiologyStudies().filter((s) => s.id !== id);
+    const studies = this.getRadiologyStudies().filter((s) => s.id !== id)
 
-    this.save(STORAGE_KEY_RAD_STUDIES, studies);
+    this.save(STORAGE_KEY_RAD_STUDIES, studies)
 
-    this.emitUpdate();
+    this.emitUpdate()
   }
 
   // ── EMERGENCY DEPARTMENT DISCHARGE / BED TRANSFER FINANCIAL CLEARANCE ──────
@@ -6639,43 +6710,43 @@ export class BillingDatabase {
     visitNoOrPatientId: string,
     optionalPatientName?: string,
   ): {
-    isCleared: boolean;
+    isCleared: boolean
 
-    status: "paid" | "due" | "unbilled";
+    status: "paid" | "due" | "unbilled"
 
-    hasActiveBill: boolean;
+    hasActiveBill: boolean
 
-    balanceDue: number;
+    balanceDue: number
 
-    totalAmount: number;
+    totalAmount: number
 
-    unbilledAmount: number;
+    unbilledAmount: number
 
-    receiptNo?: string;
+    receiptNo?: string
 
-    invoiceNo?: string;
+    invoiceNo?: string
 
-    claimId?: string;
+    claimId?: string
 
-    patientName?: string;
+    patientName?: string
 
-    hasPendingCharges?: boolean;
+    hasPendingCharges?: boolean
 
     pendingInvoices?: {
-      invoiceNo: string;
-      dueAmount: number;
-      department: string;
-    }[];
+      invoiceNo: string
+      dueAmount: number
+      department: string
+    }[]
   } {
-    const claims = this.getClaims();
+    const claims = this.getClaims()
 
-    const deptCharges = this.getDepartmentCharges();
+    const deptCharges = this.getDepartmentCharges()
 
-    const query = (visitNoOrPatientId || "").toLowerCase().trim();
+    const query = (visitNoOrPatientId || "").toLowerCase().trim()
 
-    const nameQuery = (optionalPatientName || "").toLowerCase().trim();
+    const nameQuery = (optionalPatientName || "").toLowerCase().trim()
 
-    const mrnClean = query.replace("umr", "").trim();
+    const mrnClean = query.replace("umr", "").trim()
 
     const isEncounterQuery = Boolean(
       query &&
@@ -6685,19 +6756,19 @@ export class BillingDatabase {
     );
 
     const matchingClaims = claims.filter((c) => {
-      if (c.status === "Voided") return false;
+      if (c.status === "Voided") return false
 
-      const pId = (c.patientId || "").toLowerCase().trim();
+      const pId = (c.patientId || "").toLowerCase().trim()
 
-      const encId = (c.encounterId || "").toLowerCase().trim();
+      const encId = (c.encounterId || "").toLowerCase().trim()
 
-      const invNo = (c.invoiceNo || "").toLowerCase().trim();
+      const invNo = (c.invoiceNo || "").toLowerCase().trim()
 
-      const cId = (c.id || "").toLowerCase().trim();
+      const cId = (c.id || "").toLowerCase().trim()
 
-      const cName = (c.patientName || "").toLowerCase().trim();
+      const cName = (c.patientName || "").toLowerCase().trim()
 
-      const cMrn = (c.mrn || "").toLowerCase().trim();
+      const cMrn = (c.mrn || "").toLowerCase().trim()
 
       // 1. Exact encounter match or invoice or claim ID match
       if (
@@ -6718,7 +6789,6 @@ export class BillingDatabase {
       ) {
         return false;
       }
-
       // 2. Match by MRN or patientId ONLY for Emergency department and if claim has no conflicting encounter
       if (
         !isEncounterQuery &&
@@ -6746,8 +6816,8 @@ export class BillingDatabase {
           return true;
       }
 
-      return false;
-    });
+      return false
+    })
 
     // Prioritize exact encounter match, then Emergency department, then active balance due, then newest
     matchingClaims.sort((a, b) => {
@@ -6772,13 +6842,13 @@ export class BillingDatabase {
     });
 
     const matchingDeptCharges = deptCharges.filter((d) => {
-      const pId = (d.patientId || "").toLowerCase().trim();
+      const pId = (d.patientId || "").toLowerCase().trim()
 
-      const encId = (d.encounterId || "").toLowerCase().trim();
+      const encId = (d.encounterId || "").toLowerCase().trim()
 
-      const dName = (d.patientName || "").toLowerCase().trim();
+      const dName = (d.patientName || "").toLowerCase().trim()
 
-      if (d.department !== "Emergency") return false;
+      if (d.department !== "Emergency") return false
 
       if (query && (encId === query || encId === `er-${query}`)) return true;
 
@@ -6800,12 +6870,12 @@ export class BillingDatabase {
 
     const unInvoicedCharges = matchingDeptCharges.filter(
       (d) => d.status !== "Invoiced in Central Billing",
-    );
+    )
 
     let totalUnbilledCharges = unInvoicedCharges.reduce(
       (sum, d) => sum + (d.totalAmount || 0),
       0,
-    );
+    )
 
     // Also look up the ErVisit record to count charted medications, treatments, or procedures not yet staged in deptCharges
     if (totalUnbilledCharges === 0) {
@@ -6889,7 +6959,7 @@ export class BillingDatabase {
         patientName: unInvoicedCharges[0]?.patientName,
         hasPendingCharges: totalUnbilledCharges > 0,
         pendingInvoices: [],
-      };
+      }
     }
 
     const claimBalanceDue = matchingClaims.reduce(
@@ -6959,7 +7029,7 @@ export class BillingDatabase {
         window.sessionStorage.setItem(
           "hospai_billing_preselected_claim",
           idOrInvoiceNo,
-        );
+        )
       }
     } catch {
       // Ignore in non-browser environment
@@ -7008,54 +7078,54 @@ export class BillingDatabase {
     encounterIdOrVisitNo: string,
 
     patientInfo: {
-      patientId: string;
+      patientId: string
 
-      patientName: string;
+      patientName: string
 
-      mrn?: string;
+      mrn?: string
 
-      age?: number;
+      age?: number
 
-      gender?: string;
+      gender?: string
 
-      phone?: string;
+      phone?: string
 
-      assignedDoctor?: string;
+      assignedDoctor?: string
     },
 
     item: {
-      description: string;
+      description: string
 
-      category: InvoiceItem["category"];
+      category: InvoiceItem["category"]
 
-      unitPrice: number;
+      unitPrice: number
 
-      quantity?: number;
+      quantity?: number
 
-      cptCode?: string;
+      cptCode?: string
     },
-  ): { totalAdded: number; newBalance: number; description: string } {
+  ): { totalAdded: number ;newBalance: number ;description: string } {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
     const deptCharges = this.load<DepartmentChargeRecord[]>(
       STORAGE_KEY_DEPT_CHARGES,
       INITIAL_DEPARTMENT_CHARGES,
-    );
+    )
 
-    const query = (encounterIdOrVisitNo || "").toLowerCase().trim();
+    const query = (encounterIdOrVisitNo || "").toLowerCase().trim()
 
-    const pIdQuery = (patientInfo.patientId || "").toLowerCase().trim();
+    const pIdQuery = (patientInfo.patientId || "").toLowerCase().trim()
 
-    const pNameQuery = (patientInfo.patientName || "").toLowerCase().trim();
+    const pNameQuery = (patientInfo.patientName || "").toLowerCase().trim()
 
-    const nowIso = new Date().toISOString();
+    const nowIso = new Date().toISOString()
 
-    const qty = item.quantity || 1;
+    const qty = item.quantity || 1
 
-    const total = item.unitPrice * qty;
+    const total = item.unitPrice * qty
 
     const newItem: InvoiceItem = {
       id: `ITEM-ER-${Date.now()}-${Math.floor(100 + Math.random() * 899)}`,
@@ -7075,35 +7145,35 @@ export class BillingDatabase {
       insuranceCovered: 0,
 
       patientPayable: total,
-    };
+    }
 
     const isSpecificVisit = Boolean(
       query &&
-      (query.startsWith("er-") ||
-        query.startsWith("enc-") ||
-        /^\d+$/.test(query)),
-    );
+        (query.startsWith("er-") ||
+          query.startsWith("enc-") ||
+          /^\d+$/.test(query)),
+    )
 
     // Check if an existing active dispatched Claim exists for this ER encounter
 
     const claimIdx = claims.findIndex((c) => {
-      if (c.status === "Voided") return false;
+      if (c.status === "Voided") return false
 
-      const pId = (c.patientId || "").toLowerCase().trim();
+      const pId = (c.patientId || "").toLowerCase().trim()
 
-      const encId = (c.encounterId || "").toLowerCase().trim();
+      const encId = (c.encounterId || "").toLowerCase().trim()
 
-      const invNo = (c.invoiceNo || "").toLowerCase().trim();
+      const invNo = (c.invoiceNo || "").toLowerCase().trim()
 
-      const cId = (c.id || "").toLowerCase().trim();
+      const cId = (c.id || "").toLowerCase().trim()
 
-      const cName = (c.patientName || "").toLowerCase().trim();
+      const cName = (c.patientName || "").toLowerCase().trim()
 
       if (query && (encId === query || invNo === query || cId === query))
-        return true;
+        return true
 
       if (!isSpecificVisit && c.department === "Emergency") {
-        if (pIdQuery && pId === pIdQuery) return true;
+        if (pIdQuery && pId === pIdQuery) return true
 
         if (
           pNameQuery &&
@@ -7112,33 +7182,30 @@ export class BillingDatabase {
             cName.includes(pNameQuery) ||
             pNameQuery.includes(cName))
         )
-          return true;
+          return true
       }
 
-      return false;
-    });
+      return false
+    })
 
     if (claimIdx >= 0) {
-      const current = claims[claimIdx];
+      const current = claims[claimIdx]
 
-      const updatedItems = [...current.items, newItem];
+      const updatedItems = [...current.items, newItem]
 
       const subtotal = updatedItems.reduce(
         (sum, it) => sum + Number(it.total || 0),
         0,
-      );
+      )
 
       const totalAmount = Math.max(
         0,
         subtotal - (current.discount || 0) + (current.tax || 0),
-      );
+      )
 
-      const patientPortion = totalAmount;
+      const patientPortion = totalAmount
 
-      const balanceDue = Math.max(
-        0,
-        patientPortion - (current.amountPaid || 0),
-      );
+      const balanceDue = Math.max(0, patientPortion - (current.amountPaid || 0))
 
       const updatedClaim: ClaimRecord = {
         ...current,
@@ -7156,11 +7223,11 @@ export class BillingDatabase {
         status: balanceDue > 0 ? "Accepted" : "Paid",
 
         updatedAt: nowIso,
-      };
+      }
 
-      claims[claimIdx] = updatedClaim;
+      claims[claimIdx] = updatedClaim
 
-      this.save(STORAGE_KEY_CLAIMS, claims);
+      this.save(STORAGE_KEY_CLAIMS, claims)
 
       BillingRbacManager.logEvent({
         action: "CHARGE_ADDED",
@@ -7180,28 +7247,28 @@ export class BillingDatabase {
         department: "Emergency",
 
         reason: `ER Clinical Charge attached to active invoice: "${item.description}" (+₹${total.toLocaleString("en-IN")}). Total Due: ₹${balanceDue.toLocaleString("en-IN")}.`,
-      });
+      })
 
       return {
         totalAdded: total,
         newBalance: balanceDue,
         description: item.description,
-      };
+      }
     }
 
     // If no active claim has been dispatched yet, stage charge in DepartmentChargeRecord as "Accumulating Charges"
 
     const deptIdx = deptCharges.findIndex((d) => {
-      const encId = (d.encounterId || "").toLowerCase().trim();
+      const encId = (d.encounterId || "").toLowerCase().trim()
 
-      const pId = (d.patientId || "").toLowerCase().trim();
+      const pId = (d.patientId || "").toLowerCase().trim()
 
-      const dName = (d.patientName || "").toLowerCase().trim();
+      const dName = (d.patientName || "").toLowerCase().trim()
 
-      if (d.department !== "Emergency") return false;
+      if (d.department !== "Emergency") return false
 
       if (isSpecificVisit) {
-        return encId === query;
+        return encId === query
       }
 
       return (
@@ -7210,18 +7277,18 @@ export class BillingDatabase {
           (dName === pNameQuery ||
             dName.includes(pNameQuery) ||
             pNameQuery.includes(dName)))
-      );
-    });
+      )
+    })
 
     if (deptIdx >= 0) {
-      const existing = deptCharges[deptIdx];
+      const existing = deptCharges[deptIdx]
 
-      const updatedItems = [...existing.items, newItem];
+      const updatedItems = [...existing.items, newItem]
 
       const subtotal = updatedItems.reduce(
         (sum, it) => sum + Number(it.total || 0),
         0,
-      );
+      )
 
       const updatedDept: DepartmentChargeRecord = {
         ...existing,
@@ -7236,9 +7303,9 @@ export class BillingDatabase {
           existing.status === "Invoiced in Central Billing"
             ? "Accumulating Charges"
             : existing.status,
-      };
+      }
 
-      deptCharges[deptIdx] = updatedDept;
+      deptCharges[deptIdx] = updatedDept
 
       this.save(STORAGE_KEY_DEPT_CHARGES, deptCharges);
       this.emitUpdate();
@@ -7247,7 +7314,7 @@ export class BillingDatabase {
         totalAdded: total,
         newBalance: subtotal,
         description: item.description,
-      };
+      }
     }
 
     const newDeptCharge: DepartmentChargeRecord = {
@@ -7263,7 +7330,7 @@ export class BillingDatabase {
 
       age: Number(patientInfo.age) || 30,
 
-      gender: (patientInfo.gender as any) || "Other",
+      gender: patientInfo.gender as any || "Other",
 
       phone: patientInfo.phone || "+91 98765 43210",
 
@@ -7292,9 +7359,9 @@ export class BillingDatabase {
       status: "Accumulating Charges",
 
       createdAt: nowIso,
-    };
+    }
 
-    deptCharges.unshift(newDeptCharge);
+    deptCharges.unshift(newDeptCharge)
 
     this.save(STORAGE_KEY_DEPT_CHARGES, deptCharges);
     this.emitUpdate();
@@ -7303,7 +7370,7 @@ export class BillingDatabase {
       totalAdded: total,
       newBalance: total,
       description: item.description,
-    };
+    }
   }
 
   // ── INPATIENT WARD / ICU DISCHARGE FINANCIAL CLEARANCE ──────────────────────
@@ -7312,52 +7379,52 @@ export class BillingDatabase {
     patientIdOrBedId: string | number,
     optionalPatientName?: string,
   ): {
-    isCleared: boolean;
+    isCleared: boolean
 
-    balanceDue: number;
+    balanceDue: number
 
-    totalAmount: number;
+    totalAmount: number
 
-    receiptNo?: string;
+    receiptNo?: string
 
-    invoiceNo?: string;
+    invoiceNo?: string
 
-    claimId?: string;
+    claimId?: string
 
-    patientName?: string;
+    patientName?: string
 
-    hasPendingCharges?: boolean;
+    hasPendingCharges?: boolean
 
     pendingInvoices?: {
-      invoiceNo: string;
-      dueAmount: number;
-      department: string;
-    }[];
+      invoiceNo: string
+      dueAmount: number
+      department: string
+    }[]
   } {
-    const claims = this.getClaims();
+    const claims = this.getClaims()
 
-    const deptCharges = this.getDepartmentCharges();
+    const deptCharges = this.getDepartmentCharges()
 
     const query = String(patientIdOrBedId || "")
       .toLowerCase()
-      .trim();
+      .trim()
 
-    const nameQuery = (optionalPatientName || "").toLowerCase().trim();
+    const nameQuery = (optionalPatientName || "").toLowerCase().trim()
 
-    const mrnClean = query.replace("umr", "").trim();
+    const mrnClean = query.replace("umr", "").trim()
 
     const matchingClaims = claims.filter((c) => {
-      const pId = (c.patientId || "").toLowerCase().trim();
+      const pId = (c.patientId || "").toLowerCase().trim()
 
-      const pMrn = (c.mrn || "").toLowerCase().trim();
+      const pMrn = (c.mrn || "").toLowerCase().trim()
 
-      const encId = (c.encounterId || "").toLowerCase().trim();
+      const encId = (c.encounterId || "").toLowerCase().trim()
 
-      const invNo = (c.invoiceNo || "").toLowerCase().trim();
+      const invNo = (c.invoiceNo || "").toLowerCase().trim()
 
-      const cId = (c.id || "").toLowerCase().trim();
+      const cId = (c.id || "").toLowerCase().trim()
 
-      const cName = (c.patientName || "").toLowerCase().trim();
+      const cName = (c.patientName || "").toLowerCase().trim()
 
       return (
         (query &&
@@ -7372,17 +7439,17 @@ export class BillingDatabase {
             pMrn.includes(mrnClean))) ||
         (nameQuery.length >= 3 &&
           (cName.includes(nameQuery) || nameQuery.includes(cName)))
-      );
-    });
+      )
+    })
 
     const matchingDeptCharges = deptCharges.filter((d) => {
-      const pId = (d.patientId || "").toLowerCase().trim();
+      const pId = (d.patientId || "").toLowerCase().trim()
 
-      const pMrn = (d.mrn || "").toLowerCase().trim();
+      const pMrn = (d.mrn || "").toLowerCase().trim()
 
-      const encId = (d.encounterId || "").toLowerCase().trim();
+      const encId = (d.encounterId || "").toLowerCase().trim()
 
-      const dName = (d.patientName || "").toLowerCase().trim();
+      const dName = (d.patientName || "").toLowerCase().trim()
 
       return (
         (d.department === "Inpatient" ||
@@ -7393,8 +7460,8 @@ export class BillingDatabase {
             (pId.includes(query) || encId.includes(query))) ||
           (nameQuery.length >= 3 &&
             (dName.includes(nameQuery) || nameQuery.includes(dName))))
-      );
-    });
+      )
+    })
 
     if (matchingClaims.length === 0 && matchingDeptCharges.length === 0) {
       return {
@@ -7402,39 +7469,39 @@ export class BillingDatabase {
         balanceDue: 0,
         totalAmount: 0,
         pendingInvoices: [],
-      };
+      }
     }
 
     const claimBalanceDue = matchingClaims.reduce(
       (sum, c) => sum + (c.balanceDue || 0),
       0,
-    );
+    )
 
     const claimTotal = matchingClaims.reduce(
       (sum, c) => sum + (c.totalAmount || 0),
       0,
-    );
+    )
 
     const unInvoicedCharges = matchingDeptCharges.filter(
       (d) => d.status !== "Invoiced in Central Billing",
-    );
+    )
 
     const deptChargesDue = unInvoicedCharges.reduce(
       (sum, d) => sum + (d.totalAmount || 0),
       0,
-    );
+    )
 
     const totalBalanceDue =
-      claimBalanceDue + (matchingClaims.length === 0 ? deptChargesDue : 0);
+      claimBalanceDue + (matchingClaims.length === 0 ? deptChargesDue : 0)
 
-    const totalAmount = claimTotal || deptChargesDue;
+    const totalAmount = claimTotal || deptChargesDue
 
-    const latestClaim = matchingClaims[0];
+    const latestClaim = matchingClaims[0]
 
     const latestPayment =
       latestClaim?.payments && latestClaim.payments.length > 0
         ? latestClaim.payments[latestClaim.payments.length - 1]
-        : undefined;
+        : undefined
 
     const pendingInvoices = matchingClaims
 
@@ -7446,7 +7513,7 @@ export class BillingDatabase {
         dueAmount: c.balanceDue || 0,
 
         department: c.department,
-      }));
+      }))
 
     return {
       isCleared: totalBalanceDue === 0,
@@ -7469,7 +7536,7 @@ export class BillingDatabase {
       hasPendingCharges: unInvoicedCharges.length > 0,
 
       pendingInvoices,
-    };
+    }
   }
 
   static getAllPayments(): (PaymentRecord & {
@@ -7482,7 +7549,7 @@ export class BillingDatabase {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
     const paymentsList: (PaymentRecord & {
       patientName: string;
@@ -7490,10 +7557,10 @@ export class BillingDatabase {
       mrn: string;
       invoiceNo: string;
       department: DepartmentType;
-    })[] = [];
+    })[] = []
 
     claims.forEach((c) => {
-      (c.payments || []).forEach((p) => {
+      ;(c.payments || []).forEach((p) => {
         paymentsList.push({
           ...p,
 
@@ -7506,20 +7573,20 @@ export class BillingDatabase {
           invoiceNo: c.invoiceNo,
 
           department: c.department,
-        });
-      });
-    });
+        })
+      })
+    })
 
     return paymentsList.sort(
       (a, b) =>
         new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime(),
-    );
+    )
   }
 
   static voidClaim(id: string, reason: string): ClaimRecord {
-    const claim = this.getClaimById(id);
+    const claim = this.getClaimById(id)
 
-    if (!claim) throw new Error("Invoice not found");
+    if (!claim) throw new Error("Invoice not found")
 
     const updated = this.updateClaim(id, {
       status: "Voided",
@@ -7529,7 +7596,7 @@ export class BillingDatabase {
       denialReason: `Voided / Reversed: ${reason}`,
 
       updatedAt: new Date().toISOString(),
-    });
+    })
 
     BillingRbacManager.logEvent({
       action: "INVOICE_VOIDED",
@@ -7553,9 +7620,9 @@ export class BillingDatabase {
       newValue: "Status: Voided, Balance Due: ₹0",
 
       reason: `Authorized invoice void: ${reason}`,
-    });
+    })
 
-    return updated;
+    return updated
   }
 
   static applyDirectAdjustment(
@@ -7567,23 +7634,23 @@ export class BillingDatabase {
 
     reason: string,
   ): ClaimRecord {
-    const claim = this.getClaimById(id);
+    const claim = this.getClaimById(id)
 
-    if (!claim) throw new Error("Invoice not found");
+    if (!claim) throw new Error("Invoice not found")
 
-    const newDiscount = (claim.discount || 0) + amount;
+    const newDiscount = (claim.discount || 0) + amount
 
     const newTotal = Math.max(
       0,
       claim.subtotal - newDiscount + (claim.tax || 0),
-    );
+    )
 
-    const newPatientPortion = Math.max(0, claim.patientPortion - amount);
+    const newPatientPortion = Math.max(0, claim.patientPortion - amount)
 
     const newBalanceDue = Math.max(
       0,
       newPatientPortion - (claim.amountPaid || 0),
-    );
+    )
 
     const updated = this.updateClaim(id, {
       discount: newDiscount,
@@ -7595,7 +7662,7 @@ export class BillingDatabase {
       balanceDue: newBalanceDue,
 
       updatedAt: new Date().toISOString(),
-    });
+    })
 
     BillingRbacManager.logEvent({
       action: "ADJUSTMENT_APPLIED",
@@ -7615,70 +7682,68 @@ export class BillingDatabase {
       department: claim.department,
 
       reason: `Direct adjustment applied (${adjustmentType}) for ₹${amount.toLocaleString("en-IN")}: ${reason}`,
-    });
+    })
 
-    return updated;
+    return updated
   }
 
   static deleteClaim(id: string): void {
-    this.voidClaim(id, "Administrative removal / reversal requested");
+    this.voidClaim(id, "Administrative removal / reversal requested")
   }
 
   // ── DEPARTMENT-TO-BILLING WORKQUEUE METHODS ─────────────────────────────────
 
   static getDepartmentCharges(filter?: {
-    status?: string;
+    status?: string
 
-    department?: DepartmentType | "All";
+    department?: DepartmentType | "All"
 
-    search?: string;
+    search?: string
 
-    umr?: string;
+    umr?: string
   }): DepartmentChargeRecord[] {
     let charges = this.load<DepartmentChargeRecord[]>(
       STORAGE_KEY_DEPT_CHARGES,
       INITIAL_DEPARTMENT_CHARGES,
-    );
+    )
 
     // Deduplicate charges by encounterId (keep the latest record if duplicates exist)
 
-    const seenEncounters = new Set<string>();
+    const seenEncounters = new Set<string>()
 
-    const deduplicated: DepartmentChargeRecord[] = [];
+    const deduplicated: DepartmentChargeRecord[] = []
 
     for (const c of charges) {
-      const key = c.encounterId
-        ? `${c.patientId || ""}-${c.encounterId}`
-        : c.id;
+      const key = c.encounterId ? `${c.patientId || ""}-${c.encounterId}` : c.id
 
       if (!seenEncounters.has(key)) {
-        seenEncounters.add(key);
+        seenEncounters.add(key)
 
-        deduplicated.push(c);
+        deduplicated.push(c)
       }
     }
 
-    charges = deduplicated;
+    charges = deduplicated
 
     if (filter) {
       if (filter.department && filter.department !== "All") {
-        charges = charges.filter((c) => c.department === filter.department);
+        charges = charges.filter((c) => c.department === filter.department)
       }
 
       if (filter.status && filter.status !== "All") {
-        charges = charges.filter((c) => c.status === filter.status);
+        charges = charges.filter((c) => c.status === filter.status)
       }
 
       if (filter.umr && filter.umr.trim()) {
-        const u = filter.umr.trim().toLowerCase();
+        const u = filter.umr.trim().toLowerCase()
 
         charges = charges.filter(
           (c) => c.patientId.toLowerCase() === u || c.mrn.toLowerCase() === u,
-        );
+        )
       }
 
       if (filter.search && filter.search.trim()) {
-        const q = filter.search.trim().toLowerCase();
+        const q = filter.search.trim().toLowerCase()
 
         charges = charges.filter(
           (c) =>
@@ -7692,14 +7757,14 @@ export class BillingDatabase {
                 it.description.toLowerCase().includes(q) ||
                 it.cptCode.toLowerCase().includes(q),
             ),
-        );
+        )
       }
     }
 
     return charges.sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    )
   }
 
   static getDepartmentChargeById(
@@ -7708,9 +7773,9 @@ export class BillingDatabase {
     const charges = this.load<DepartmentChargeRecord[]>(
       STORAGE_KEY_DEPT_CHARGES,
       INITIAL_DEPARTMENT_CHARGES,
-    );
+    )
 
-    return charges.find((c) => c.id === id || c.encounterId === id);
+    return charges.find((c) => c.id === id || c.encounterId === id)
   }
 
   static createDepartmentCharge(
@@ -7719,15 +7784,15 @@ export class BillingDatabase {
     let charges = this.load<DepartmentChargeRecord[]>(
       STORAGE_KEY_DEPT_CHARGES,
       INITIAL_DEPARTMENT_CHARGES,
-    );
+    )
 
-    const nowIso = new Date().toISOString();
+    const nowIso = new Date().toISOString()
 
-    const id = `DCHG-${Date.now().toString().slice(-6)}`;
+    const id = `DCHG-${Date.now().toString().slice(-6)}`
 
-    const items = data.items || [];
+    const items = data.items || []
 
-    const subtotal = items.reduce((sum, it) => sum + Number(it.total || 0), 0);
+    const subtotal = items.reduce((sum, it) => sum + Number(it.total || 0), 0)
 
     // Upsert: If a charge packet already exists for this encounter, update it instead of creating a duplicate
 
@@ -7735,10 +7800,10 @@ export class BillingDatabase {
       (c) =>
         (data.encounterId && c.encounterId === data.encounterId) ||
         (data.id && c.id === data.id),
-    );
+    )
 
     if (existingIndex >= 0) {
-      const existing = charges[existingIndex];
+      const existing = charges[existingIndex]
 
       const updatedRecord: DepartmentChargeRecord = {
         ...existing,
@@ -7756,9 +7821,9 @@ export class BillingDatabase {
         status: data.status || existing.status,
 
         finalizedAt: data.finalizedAt || existing.finalizedAt || nowIso,
-      };
+      }
 
-      charges[existingIndex] = updatedRecord;
+      charges[existingIndex] = updatedRecord
 
       // Also purge any historical duplicate packets with same encounterId
 
@@ -7766,12 +7831,12 @@ export class BillingDatabase {
         charges = charges.filter(
           (c, idx) =>
             idx === existingIndex || c.encounterId !== data.encounterId,
-        );
+        )
       }
 
-      this.save(STORAGE_KEY_DEPT_CHARGES, charges);
+      this.save(STORAGE_KEY_DEPT_CHARGES, charges)
 
-      return updatedRecord;
+      return updatedRecord
     }
 
     const newRecord: DepartmentChargeRecord = {
@@ -7825,11 +7890,11 @@ export class BillingDatabase {
       createdAt: nowIso,
 
       notes: data.notes,
-    };
+    }
 
-    charges.unshift(newRecord);
+    charges.unshift(newRecord)
 
-    this.save(STORAGE_KEY_DEPT_CHARGES, charges);
+    this.save(STORAGE_KEY_DEPT_CHARGES, charges)
 
     BillingRbacManager.logEvent({
       action: "CHARGE_ADDED",
@@ -7847,9 +7912,9 @@ export class BillingDatabase {
       department: newRecord.department,
 
       reason: `Department charge sheet created for ${newRecord.department} under UMR ${newRecord.patientId} (${newRecord.items.length} services attached).`,
-    });
+    })
 
-    return newRecord;
+    return newRecord
   }
 
   static addServiceToDepartmentCharge(
@@ -7859,26 +7924,26 @@ export class BillingDatabase {
     const charges = this.load<DepartmentChargeRecord[]>(
       STORAGE_KEY_DEPT_CHARGES,
       INITIAL_DEPARTMENT_CHARGES,
-    );
+    )
 
-    const idx = charges.findIndex((c) => c.id === chargeId);
+    const idx = charges.findIndex((c) => c.id === chargeId)
 
-    if (idx < 0) throw new Error("Department charge sheet not found");
+    if (idx < 0) throw new Error("Department charge sheet not found")
 
-    const current = charges[idx];
+    const current = charges[idx]
 
     const newItem: InvoiceItem = {
       ...item,
 
       id: `IT-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 89)}`,
-    };
+    }
 
-    const updatedItems = [...current.items, newItem];
+    const updatedItems = [...current.items, newItem]
 
     const subtotal = updatedItems.reduce(
       (sum, it) => sum + Number(it.total || 0),
       0,
-    );
+    )
 
     const updated: DepartmentChargeRecord = {
       ...current,
@@ -7888,11 +7953,11 @@ export class BillingDatabase {
       subtotal,
 
       totalAmount: subtotal,
-    };
+    }
 
-    charges[idx] = updated;
+    charges[idx] = updated
 
-    this.save(STORAGE_KEY_DEPT_CHARGES, charges);
+    this.save(STORAGE_KEY_DEPT_CHARGES, charges)
 
     BillingRbacManager.logEvent({
       action: "CHARGE_ADDED",
@@ -7910,9 +7975,9 @@ export class BillingDatabase {
       department: current.department,
 
       reason: `Service added under UMR ${current.patientId} (${current.department}): "${newItem.description}" (₹${newItem.total.toLocaleString("en-IN")}).`,
-    });
+    })
 
-    return updated;
+    return updated
   }
 
   static finalizeDepartmentCharges(
@@ -7923,15 +7988,15 @@ export class BillingDatabase {
     const charges = this.load<DepartmentChargeRecord[]>(
       STORAGE_KEY_DEPT_CHARGES,
       INITIAL_DEPARTMENT_CHARGES,
-    );
+    )
 
-    const idx = charges.findIndex((c) => c.id === chargeId);
+    const idx = charges.findIndex((c) => c.id === chargeId)
 
-    if (idx < 0) throw new Error("Department charge sheet not found");
+    if (idx < 0) throw new Error("Department charge sheet not found")
 
-    const current = charges[idx];
+    const current = charges[idx]
 
-    const nowIso = new Date().toISOString();
+    const nowIso = new Date().toISOString()
 
     const updated: DepartmentChargeRecord = {
       ...current,
@@ -7946,11 +8011,11 @@ export class BillingDatabase {
         notes ||
         current.notes ||
         "All clinical charges verified and finalized by department nurse. Transferred to Universal Billing.",
-    };
+    }
 
-    charges[idx] = updated;
+    charges[idx] = updated
 
-    this.save(STORAGE_KEY_DEPT_CHARGES, charges);
+    this.save(STORAGE_KEY_DEPT_CHARGES, charges)
 
     BillingRbacManager.logEvent({
       action: "CHARGE_ADDED",
@@ -7968,9 +8033,9 @@ export class BillingDatabase {
       department: current.department,
 
       reason: `Department charges finalized by ${verifiedByNurse} for UMR ${current.patientId} (Total: ₹${current.totalAmount.toLocaleString("en-IN")}). Sent to Central Billing queue.`,
-    });
+    })
 
-    return updated;
+    return updated
   }
 
   static convertDepartmentChargeToInvoice(
@@ -7979,33 +8044,33 @@ export class BillingDatabase {
     billingStaffName: string,
 
     customOptions?: {
-      insuranceProvider?: string;
-      preAuthCode?: string;
-      discount?: number;
+      insuranceProvider?: string
+      preAuthCode?: string
+      discount?: number
     },
   ): ClaimRecord {
     const charges = this.load<DepartmentChargeRecord[]>(
       STORAGE_KEY_DEPT_CHARGES,
       INITIAL_DEPARTMENT_CHARGES,
-    );
+    )
 
-    const idx = charges.findIndex((c) => c.id === chargeId);
+    const idx = charges.findIndex((c) => c.id === chargeId)
 
-    if (idx < 0) throw new Error("Department charge packet not found");
+    if (idx < 0) throw new Error("Department charge packet not found")
 
-    const deptRecord = charges[idx];
+    const deptRecord = charges[idx]
 
     const payer =
       customOptions?.insuranceProvider ||
       deptRecord.insuranceProvider ||
-      "Star Health";
+      "Star Health"
 
-    const isSelfPay = payer === "Self-Pay";
+    const isSelfPay = payer === "Self-Pay"
 
     const mappedItems: InvoiceItem[] = deptRecord.items.map((it) => {
-      const ins = isSelfPay ? 0 : Math.round(it.total * 0.8);
+      const ins = isSelfPay ? 0 : Math.round(it.total * 0.8)
 
-      const pt = it.total - ins;
+      const pt = it.total - ins
 
       return {
         ...it,
@@ -8013,8 +8078,8 @@ export class BillingDatabase {
         insuranceCovered: ins,
 
         patientPayable: pt,
-      };
-    });
+      }
+    })
 
     const newClaim = this.createClaim({
       patientId: deptRecord.patientId,
@@ -8056,17 +8121,17 @@ export class BillingDatabase {
       status: "Ready",
 
       items: mappedItems,
-    });
+    })
 
     // Mark department record as invoiced
 
-    deptRecord.status = "Invoiced in Central Billing";
+    deptRecord.status = "Invoiced in Central Billing"
 
-    deptRecord.invoiceId = newClaim.id;
+    deptRecord.invoiceId = newClaim.id
 
-    charges[idx] = deptRecord;
+    charges[idx] = deptRecord
 
-    this.save(STORAGE_KEY_DEPT_CHARGES, charges);
+    this.save(STORAGE_KEY_DEPT_CHARGES, charges)
 
     BillingRbacManager.logEvent({
       action: "INVOICE_FINALIZED",
@@ -8086,9 +8151,9 @@ export class BillingDatabase {
       department: newClaim.department,
 
       reason: `Central billing generated official invoice ${newClaim.invoiceNo} from finalized ${deptRecord.department} charge packet (Staff: ${billingStaffName}).`,
-    });
+    })
 
-    return newClaim;
+    return newClaim
   }
 
   static consolidateHospitalStayInvoices(
@@ -8099,32 +8164,32 @@ export class BillingDatabase {
     const charges = this.load<DepartmentChargeRecord[]>(
       STORAGE_KEY_DEPT_CHARGES,
       INITIAL_DEPARTMENT_CHARGES,
-    );
+    )
 
     const stayCharges = charges.filter(
       (c) =>
         (c.hospitalStayId === hospitalStayId ||
           c.encounterId === hospitalStayId) &&
         c.status !== "Invoiced in Central Billing",
-    );
+    )
 
     if (stayCharges.length === 0)
-      throw new Error("No active stay charges found to consolidate");
+      throw new Error("No active stay charges found to consolidate")
 
-    const primary = stayCharges[0];
+    const primary = stayCharges[0]
 
-    const allItems: InvoiceItem[] = [];
+    const allItems: InvoiceItem[] = []
 
     stayCharges.forEach((c) => {
-      allItems.push(...c.items);
-    });
+      allItems.push(...c.items)
+    })
 
-    const isSelfPay = primary.insuranceProvider === "Self-Pay";
+    const isSelfPay = primary.insuranceProvider === "Self-Pay"
 
     const mappedItems = allItems.map((it) => {
-      const ins = isSelfPay ? 0 : Math.round(it.total * 0.8);
+      const ins = isSelfPay ? 0 : Math.round(it.total * 0.8)
 
-      const pt = it.total - ins;
+      const pt = it.total - ins
 
       return {
         ...it,
@@ -8132,8 +8197,8 @@ export class BillingDatabase {
         insuranceCovered: ins,
 
         patientPayable: pt,
-      };
-    });
+      }
+    })
 
     const consolidatedClaim = this.createClaim({
       patientId: primary.patientId,
@@ -8169,15 +8234,15 @@ export class BillingDatabase {
       status: "Ready",
 
       items: mappedItems,
-    });
+    })
 
     stayCharges.forEach((sc) => {
-      sc.status = "Invoiced in Central Billing";
+      sc.status = "Invoiced in Central Billing"
 
-      sc.invoiceId = consolidatedClaim.id;
-    });
+      sc.invoiceId = consolidatedClaim.id
+    })
 
-    this.save(STORAGE_KEY_DEPT_CHARGES, charges);
+    this.save(STORAGE_KEY_DEPT_CHARGES, charges)
 
     BillingRbacManager.logEvent({
       action: "INVOICE_FINALIZED",
@@ -8197,9 +8262,9 @@ export class BillingDatabase {
       department: "Inpatient",
 
       reason: `Consolidated single hospital stay invoice ${consolidatedClaim.invoiceNo} created across ${stayCharges.length} departments for UMR ${consolidatedClaim.patientId} (Staff: ${billingStaffName}).`,
-    });
+    })
 
-    return consolidatedClaim;
+    return consolidatedClaim
   }
 
   // ── UMR CENTRAL FINANCIAL LEDGER ENGINE ─────────────────────────────────────
@@ -8211,112 +8276,112 @@ export class BillingDatabase {
    */
 
   static getUmrLedger(umrQuery: string): UmrFinancialLedger | null {
-    if (!umrQuery || !umrQuery.trim()) return null;
+    if (!umrQuery || !umrQuery.trim()) return null
 
-    const cleanQuery = umrQuery.trim().toUpperCase();
+    const cleanQuery = umrQuery.trim().toUpperCase()
 
     // 1. Search comprehensively across all collections
 
-    const allClaimsList = this.getClaims();
+    const allClaimsList = this.getClaims()
 
-    const allDeptChargesList = this.getDepartmentCharges();
+    const allDeptChargesList = this.getDepartmentCharges()
 
-    const opPatients = db.getPatients();
+    const opPatients = db.getPatients()
 
-    const erPatients = ErDatabase.getPatients();
+    const erPatients = ErDatabase.getPatients()
 
-    const beds = BedDatabase.getBeds();
+    const beds = BedDatabase.getBeds()
 
     // Priority 1: Exact UMR match
 
-    let matchedUmr = "";
+    let matchedUmr = ""
 
-    let matchedName = "";
+    let matchedName = ""
 
-    let matchedMrn = "";
+    let matchedMrn = ""
 
-    let matchedAge = 40;
+    let matchedAge = 40
 
-    let matchedGender: "Male" | "Female" | "Other" = "Male";
+    let matchedGender: "Male" | "Female" | "Other" = "Male"
 
-    let matchedPhone = "+91 98765 43210";
+    let matchedPhone = "+91 98765 43210"
 
-    let matchedPayer = "Self-Pay";
+    let matchedPayer = "Self-Pay"
 
-    let matchedPolicy = "N/A";
+    let matchedPolicy = "N/A"
 
     const exactClaim = allClaimsList.find(
       (c) => c.patientId.toUpperCase() === cleanQuery,
-    );
+    )
 
     const exactDept = allDeptChargesList.find(
       (c) => c.patientId.toUpperCase() === cleanQuery,
-    );
+    )
 
-    const exactOp = opPatients.find((p) => p.umr.toUpperCase() === cleanQuery);
+    const exactOp = opPatients.find((p) => p.umr.toUpperCase() === cleanQuery)
 
     const exactEr = erPatients.find(
       (p) => p.patient_id.toUpperCase() === cleanQuery,
-    );
+    )
 
     if (exactClaim) {
-      matchedUmr = exactClaim.patientId;
+      matchedUmr = exactClaim.patientId
 
-      matchedName = exactClaim.patientName;
+      matchedName = exactClaim.patientName
 
-      matchedMrn = exactClaim.mrn;
+      matchedMrn = exactClaim.mrn
 
-      matchedAge = exactClaim.age;
+      matchedAge = exactClaim.age
 
-      matchedGender = exactClaim.gender;
+      matchedGender = exactClaim.gender
 
-      matchedPhone = exactClaim.phone;
+      matchedPhone = exactClaim.phone
 
-      matchedPayer = exactClaim.insuranceProvider;
+      matchedPayer = exactClaim.insuranceProvider
 
-      matchedPolicy = exactClaim.policyNumber;
+      matchedPolicy = exactClaim.policyNumber
     } else if (exactDept) {
-      matchedUmr = exactDept.patientId;
+      matchedUmr = exactDept.patientId
 
-      matchedName = exactDept.patientName;
+      matchedName = exactDept.patientName
 
-      matchedMrn = exactDept.mrn;
+      matchedMrn = exactDept.mrn
 
-      matchedAge = exactDept.age;
+      matchedAge = exactDept.age
 
-      matchedGender = exactDept.gender;
+      matchedGender = exactDept.gender
 
-      matchedPhone = exactDept.phone;
+      matchedPhone = exactDept.phone
 
-      matchedPayer = exactDept.insuranceProvider;
+      matchedPayer = exactDept.insuranceProvider
 
-      matchedPolicy = exactDept.policyNumber;
+      matchedPolicy = exactDept.policyNumber
     } else if (exactOp) {
-      matchedUmr = exactOp.umr;
+      matchedUmr = exactOp.umr
 
-      matchedName = exactOp.name;
+      matchedName = exactOp.name
 
-      matchedMrn = exactOp.umr.replace(/\D/g, "") || "100501";
+      matchedMrn = exactOp.umr.replace(/\D/g, "") || "100501"
 
-      matchedAge = exactOp.age;
+      matchedAge = exactOp.age
 
-      matchedGender = (exactOp.sex === "Female" ? "Female" : "Male") as any;
+      matchedGender = ((exactOp.sex === "Female" ? "Female" : "Male") as any)
 
-      matchedPhone = exactOp.phone;
+      matchedPhone = exactOp.phone
 
-      matchedPayer = (exactOp as any).insurance || "Self-Pay";
+      matchedPayer = (exactOp as any).insurance || "Self-Pay"
     } else if (exactEr) {
-      matchedUmr = exactEr.patient_id;
+      matchedUmr = exactEr.patient_id
 
-      matchedName = `${exactEr.name} ${exactEr.last_name}`.trim();
+      matchedName = `${exactEr.name} ${exactEr.last_name}`.trim()
 
-      matchedMrn = exactEr.patient_id.replace(/\D/g, "") || "100501";
+      matchedMrn = exactEr.patient_id.replace(/\D/g, "") || "100501"
 
-      matchedAge = exactEr.age;
+      matchedAge = exactEr.age
 
-      matchedGender = (exactEr.gender === "Female" ? "Female" : "Male") as any;
+      matchedGender = ((exactEr.gender === "Female" ? "Female" : "Male") as any)
 
-      matchedPhone = exactEr.phone;
+      matchedPhone = exactEr.phone
     } else {
       // Priority 2: Substring Name or Phone or MRN match
 
@@ -8324,106 +8389,108 @@ export class BillingDatabase {
         (p) =>
           p.name.toUpperCase().includes(cleanQuery) ||
           p.phone.includes(cleanQuery),
-      );
+      )
 
       const nameClaim = allClaimsList.find(
         (c) =>
           c.patientName.toUpperCase().includes(cleanQuery) ||
           c.phone.includes(cleanQuery) ||
           c.mrn.includes(cleanQuery),
-      );
+      )
 
       const nameDept = allDeptChargesList.find(
         (c) =>
           c.patientName.toUpperCase().includes(cleanQuery) ||
           c.phone.includes(cleanQuery) ||
           c.mrn.includes(cleanQuery),
-      );
+      )
 
       const nameEr = erPatients.find(
         (p) =>
           `${p.name} ${p.last_name}`.toUpperCase().includes(cleanQuery) ||
           p.phone.includes(cleanQuery),
-      );
+      )
 
       if (nameOp) {
-        matchedUmr = nameOp.umr;
+        matchedUmr = nameOp.umr
 
-        matchedName = nameOp.name;
+        matchedName = nameOp.name
 
-        matchedAge = nameOp.age;
+        matchedAge = nameOp.age
 
-        matchedGender = (nameOp.sex === "Female" ? "Female" : "Male") as any;
+        matchedGender = ((nameOp.sex === "Female" ? "Female" : "Male") as any)
 
-        matchedPhone = nameOp.phone;
+        matchedPhone = nameOp.phone
       } else if (nameClaim) {
-        matchedUmr = nameClaim.patientId;
+        matchedUmr = nameClaim.patientId
 
-        matchedName = nameClaim.patientName;
+        matchedName = nameClaim.patientName
 
-        matchedAge = nameClaim.age;
+        matchedAge = nameClaim.age
 
-        matchedGender = nameClaim.gender;
+        matchedGender = nameClaim.gender
 
-        matchedPhone = nameClaim.phone;
+        matchedPhone = nameClaim.phone
       } else if (nameDept) {
-        matchedUmr = nameDept.patientId;
+        matchedUmr = nameDept.patientId
 
-        matchedName = nameDept.patientName;
+        matchedName = nameDept.patientName
 
-        matchedAge = nameDept.age;
+        matchedAge = nameDept.age
 
-        matchedGender = nameDept.gender;
+        matchedGender = nameDept.gender
 
-        matchedPhone = nameDept.phone;
+        matchedPhone = nameDept.phone
       } else if (nameEr) {
-        matchedUmr = nameEr.patient_id;
+        matchedUmr = nameEr.patient_id
 
-        matchedName = `${nameEr.name} ${nameEr.last_name}`.trim();
+        matchedName = `${nameEr.name} ${nameEr.last_name}`.trim()
 
-        matchedAge = nameEr.age;
+        matchedAge = nameEr.age
 
-        matchedGender = (nameEr.gender === "Female" ? "Female" : "Male") as any;
+        matchedGender = ((
+          nameEr.gender === "Female" ? "Female" : "Male"
+        ) as any)
 
-        matchedPhone = nameEr.phone;
+        matchedPhone = nameEr.phone
       } else {
-        matchedUmr = cleanQuery;
+        matchedUmr = cleanQuery
 
-        matchedName = "Hospital Patient";
+        matchedName = "Hospital Patient"
       }
     }
 
-    const effectiveUmr = matchedUmr || cleanQuery;
+    const effectiveUmr = matchedUmr || cleanQuery
 
-    const effectiveName = matchedName || "Hospital Patient";
+    const effectiveName = matchedName || "Hospital Patient"
 
-    const mrn = matchedMrn || effectiveUmr.replace(/\D/g, "") || "100501";
+    const mrn = matchedMrn || effectiveUmr.replace(/\D/g, "") || "100501"
 
-    const age = matchedAge || 40;
+    const age = matchedAge || 40
 
-    const gender = matchedGender || "Male";
+    const gender = matchedGender || "Male"
 
-    const phone = matchedPhone || "+91 98765 43210";
+    const phone = matchedPhone || "+91 98765 43210"
 
     // 2. Fetch all Invoices & Claims linked to this UMR
 
-    const allClaims = this.getClaims({ umr: effectiveUmr });
+    const allClaims = this.getClaims({ umr: effectiveUmr })
 
     // 3. Fetch all Department Charge packets linked to this UMR
 
-    const allDeptCharges = this.getDepartmentCharges({ umr: effectiveUmr });
+    const allDeptCharges = this.getDepartmentCharges({ umr: effectiveUmr })
 
     // 4. Build Encounters list from OP, ER, Bed DB, and Dept Charges
 
-    const encounters: EncounterChargeSummary[] = [];
+    const encounters: EncounterChargeSummary[] = []
 
-    const seenEncIds = new Set<string>();
+    const seenEncIds = new Set<string>()
 
     // Add from Dept Charges
 
     allDeptCharges.forEach((dc) => {
       if (!seenEncIds.has(dc.encounterId)) {
-        seenEncIds.add(dc.encounterId);
+        seenEncIds.add(dc.encounterId)
 
         encounters.push({
           encounterId: dc.encounterId,
@@ -8458,17 +8525,17 @@ export class BillingDatabase {
           isInvoiced: dc.status === "Invoiced in Central Billing",
 
           invoiceId: dc.invoiceId,
-        });
+        })
       }
-    });
+    })
 
     // Add OP Encounters from db.ts if not yet in Dept Charges
 
-    const opEncounters = db.getEncountersForPatient(effectiveUmr);
+    const opEncounters = db.getEncountersForPatient(effectiveUmr)
 
     opEncounters.forEach((enc) => {
       if (!seenEncIds.has(enc.id)) {
-        seenEncIds.add(enc.id);
+        seenEncIds.add(enc.id)
 
         const items: InvoiceItem[] = [
           {
@@ -8494,18 +8561,17 @@ export class BillingDatabase {
 
             orderedAt: enc.registrationTime,
           },
-        ];
+        ]
 
         // Add Lab / Rad investigations ordered by doctor
-
-        (enc.investigations || []).forEach((inv, idx) => {
+        ;(enc.investigations || []).forEach((inv, idx) => {
           const isRad =
             inv.toLowerCase().includes("x-ray") ||
             inv.toLowerCase().includes("ct") ||
             inv.toLowerCase().includes("mri") ||
-            inv.toLowerCase().includes("ultra");
+            inv.toLowerCase().includes("ultra")
 
-          const uPrice = isRad ? 120 : 50;
+          const uPrice = isRad ? 120 : 50
 
           items.push({
             id: `OP-IT-${enc.id}-INV-${idx + 1}`,
@@ -8527,10 +8593,10 @@ export class BillingDatabase {
             patientPayable: Math.round(uPrice * 0.2),
 
             orderedBy: enc.assignedDoctor || "OP Physician",
-          });
-        });
+          })
+        })
 
-        const total = items.reduce((sum, i) => sum + i.total, 0);
+        const total = items.reduce((sum, i) => sum + i.total, 0)
 
         encounters.push({
           encounterId: enc.id,
@@ -8557,21 +8623,21 @@ export class BillingDatabase {
           isFinalized: enc.status === "OP Completed",
 
           isInvoiced: false,
-        });
+        })
       }
-    });
+    })
 
     // Add ER Visits from erDb.ts if not yet recorded
 
     const erVisits = ErDatabase.getVisits("all").filter(
       (v) => v.patient_id === effectiveUmr,
-    );
+    )
 
     erVisits.forEach((v) => {
-      const vEncId = v.visit_no;
+      const vEncId = v.visit_no
 
       if (!seenEncIds.has(vEncId)) {
-        seenEncIds.add(vEncId);
+        seenEncIds.add(vEncId)
 
         const items: InvoiceItem[] = [
           {
@@ -8595,14 +8661,13 @@ export class BillingDatabase {
 
             orderedBy: v.assigned_doctor_name || "Emergency Physician",
           },
-        ];
-
-        (v.investigations || []).forEach((inv, idx) => {
+        ]
+        ;(v.investigations || []).forEach((inv, idx) => {
           const invPrice = inv.category.toLowerCase().includes("radiology")
             ? 120
             : inv.category.toLowerCase().includes("cardiology")
               ? 80
-              : 50;
+              : 50
 
           items.push({
             id: `ER-IT-${v.id}-INV-${idx + 1}`,
@@ -8628,10 +8693,10 @@ export class BillingDatabase {
             patientPayable: Math.round(invPrice * 0.2),
 
             orderedBy: inv.ordered_by,
-          });
-        });
+          })
+        })
 
-        const total = items.reduce((sum, i) => sum + i.total, 0);
+        const total = items.reduce((sum, i) => sum + i.total, 0)
 
         encounters.push({
           encounterId: vEncId,
@@ -8655,31 +8720,28 @@ export class BillingDatabase {
           isFinalized: Boolean(v.closed_at),
 
           isInvoiced: false,
-        });
+        })
       }
-    });
+    })
 
     // 5. Aggregate Financials
 
     const totalHistoricalCharges = encounters.reduce(
       (sum, e) => sum + e.totalCharges,
       0,
-    );
+    )
 
     const totalInvoiced = allClaims.reduce(
       (sum, c) => sum + (c.totalAmount || 0),
       0,
-    );
+    )
 
-    const totalPaid = allClaims.reduce(
-      (sum, c) => sum + (c.amountPaid || 0),
-      0,
-    );
+    const totalPaid = allClaims.reduce((sum, c) => sum + (c.amountPaid || 0), 0)
 
     const outstandingBalance = allClaims.reduce(
       (sum, c) => sum + (c.balanceDue || 0),
       0,
-    );
+    )
 
     const insurancePending = allClaims
 
@@ -8689,9 +8751,9 @@ export class BillingDatabase {
         (sum, c) =>
           sum + Math.max(0, (c.insurancePortion || 0) - (c.amountPaid || 0)),
         0,
-      );
+      )
 
-    const allPayments = allClaims.flatMap((c) => c.payments || []);
+    const allPayments = allClaims.flatMap((c) => c.payments || [])
 
     return {
       umr: effectiveUmr,
@@ -8734,7 +8796,7 @@ export class BillingDatabase {
 
       activeHospitalStayId: allDeptCharges.find((c) => c.hospitalStayId)
         ?.hospitalStayId,
-    };
+    }
   }
 
   /**
@@ -8742,41 +8804,41 @@ export class BillingDatabase {
    */
 
   static getAllUmrLedgers(): UmrFinancialLedger[] {
-    const umrSet = new Set<string>();
+    const umrSet = new Set<string>()
 
     // Collect all UMRs
 
-    this.getClaims().forEach((c) => umrSet.add(c.patientId));
+    this.getClaims().forEach((c) => umrSet.add(c.patientId))
 
-    this.getDepartmentCharges().forEach((c) => umrSet.add(c.patientId));
+    this.getDepartmentCharges().forEach((c) => umrSet.add(c.patientId))
 
-    db.getPatients().forEach((p) => umrSet.add(p.umr));
+    db.getPatients().forEach((p) => umrSet.add(p.umr))
 
-    ErDatabase.getPatients().forEach((p) => umrSet.add(p.patient_id));
+    ErDatabase.getPatients().forEach((p) => umrSet.add(p.patient_id))
 
     BedDatabase.getBeds().forEach((b) => {
-      if (b.patient_id) umrSet.add(b.patient_id);
-    });
+      if (b.patient_id) umrSet.add(b.patient_id)
+    })
 
-    const ledgers: UmrFinancialLedger[] = [];
+    const ledgers: UmrFinancialLedger[] = []
 
     umrSet.forEach((umr) => {
-      const ledger = this.getUmrLedger(umr);
+      const ledger = this.getUmrLedger(umr)
 
-      if (ledger) ledgers.push(ledger);
-    });
+      if (ledger) ledgers.push(ledger)
+    })
 
     return ledgers.sort(
       (a, b) => b.totalHistoricalCharges - a.totalHistoricalCharges,
-    );
+    )
   }
 
   // ── RESET TO CLEAN SEED DATA ────────────────────────────────────────────────
 
   static resetToActualData(): void {
-    this.save(STORAGE_KEY_CLAIMS, INITIAL_HOSPITAL_CLAIMS);
+    this.save(STORAGE_KEY_CLAIMS, INITIAL_HOSPITAL_CLAIMS)
 
-    this.save(STORAGE_KEY_DEPT_CHARGES, INITIAL_DEPARTMENT_CHARGES);
+    this.save(STORAGE_KEY_DEPT_CHARGES, INITIAL_DEPARTMENT_CHARGES)
   }
 
   // ── FINANCIAL METRICS & KPI ENGINE ──────────────────────────────────────────
@@ -8785,14 +8847,14 @@ export class BillingDatabase {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
-    const activeClaims = claims.filter((c) => c.status !== "Voided");
+    const activeClaims = claims.filter((c) => c.status !== "Voided")
 
     const totalChargesMtd = activeClaims.reduce(
       (sum, c) => sum + (c.totalAmount || 0),
       0,
-    );
+    )
 
     const insurancePending = activeClaims
 
@@ -8802,47 +8864,47 @@ export class BillingDatabase {
         (sum, c) =>
           sum + Math.max(0, (c.insurancePortion || 0) - (c.amountPaid || 0)),
         0,
-      );
+      )
 
     const patientBalance = activeClaims.reduce(
       (sum, c) => sum + (c.balanceDue || 0),
       0,
-    );
+    )
 
     const deniedClaims = activeClaims.filter(
       (c) =>
         c.status === "Denied" ||
         c.status === "Rejected" ||
         c.status === "Appeal",
-    );
+    )
 
-    const deniedCount = deniedClaims.length;
+    const deniedCount = deniedClaims.length
 
     const deniedAmount = deniedClaims.reduce(
       (sum, c) => sum + (c.totalAmount || 0),
       0,
-    );
+    )
 
-    const paidClaims = activeClaims.filter((c) => c.status === "Paid");
+    const paidClaims = activeClaims.filter((c) => c.status === "Paid")
 
     const totalCollected = activeClaims.reduce(
       (sum, c) => sum + (c.amountPaid || 0),
       0,
-    );
+    )
 
     const collectionsRate =
       totalChargesMtd > 0
         ? Number(((totalCollected / totalChargesMtd) * 100).toFixed(1))
-        : 94.2;
+        : 94.2
 
-    const daysInAr = 28.6;
+    const daysInAr = 28.6
 
-    const firstPassRate = 89.4;
+    const firstPassRate = 89.4
 
     const avgClaimValue =
       activeClaims.length > 0
         ? Math.round(totalChargesMtd / activeClaims.length)
-        : 28500;
+        : 28500
 
     return {
       totalChargesMtd,
@@ -8866,22 +8928,19 @@ export class BillingDatabase {
       paidCount: paidClaims.length,
 
       totalClaimsCount: activeClaims.length,
-    };
+    }
   }
 
   static getPayerMixMetrics(): PayerMixItem[] {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
-    const totalAmount = claims.reduce(
-      (sum, c) => sum + (c.totalAmount || 0),
-      0,
-    );
+    const totalAmount = claims.reduce((sum, c) => sum + (c.totalAmount || 0), 0)
 
     const payerMap: {
-      [payer: string]: { count: number; amount: number; color: string };
+      [payer: string]: { count: number ;amount: number ;color: string }
     } = {
       "Star Health": { count: 0, amount: 0, color: "#1B4FD8" },
 
@@ -8896,19 +8955,19 @@ export class BillingDatabase {
       "PM-JAY (Ayushman Bharat)": { count: 0, amount: 0, color: "#0EA5E9" },
 
       "Self-Pay": { count: 0, amount: 0, color: "#DC2626" },
-    };
+    }
 
     claims.forEach((c) => {
-      const payer = c.insuranceProvider || "Self-Pay";
+      const payer = c.insuranceProvider || "Self-Pay"
 
       if (!payerMap[payer]) {
-        payerMap[payer] = { count: 0, amount: 0, color: "#64748B" };
+        payerMap[payer] = { count: 0, amount: 0, color: "#64748B" }
       }
 
-      payerMap[payer].count += 1;
+      payerMap[payer].count += 1
 
-      payerMap[payer].amount += c.totalAmount || 0;
-    });
+      payerMap[payer].amount += c.totalAmount || 0
+    })
 
     return Object.entries(payerMap).map(([payer, val]) => ({
       payer,
@@ -8920,23 +8979,23 @@ export class BillingDatabase {
       pct: totalAmount > 0 ? Math.round((val.amount / totalAmount) * 100) : 0,
 
       color: val.color,
-    }));
+    }))
   }
 
   static getArAgingMetrics(): ArAgingItem[] {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
     const unpaidClaims = claims.filter(
       (c) => c.status !== "Paid" && c.totalAmount > 0,
-    );
+    )
 
     const totalUnpaid = unpaidClaims.reduce(
       (sum, c) => sum + (c.totalAmount || 0),
       0,
-    );
+    )
 
     const buckets: ArAgingItem[] = [
       {
@@ -8978,16 +9037,16 @@ export class BillingDatabase {
         color: "#7F1D1D",
         count: 1,
       },
-    ];
+    ]
 
-    return buckets;
+    return buckets
   }
 
   static exportClaimsToCSV(): string {
     const claims = this.load<ClaimRecord[]>(
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
-    );
+    )
 
     const headers = [
       "Claim ID",
@@ -9015,7 +9074,7 @@ export class BillingDatabase {
       "Balance Due (INR)",
 
       "Status",
-    ];
+    ]
 
     const rows = claims.map((c) => [
       c.id,
@@ -9043,20 +9102,20 @@ export class BillingDatabase {
       c.balanceDue,
 
       c.status,
-    ]);
+    ])
 
-    return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
   }
 }
 
 export interface ErPricedItem {
-  name: string;
+  name: string
 
-  category: InvoiceItem["category"];
+  category: InvoiceItem["category"]
 
-  unitPrice: number;
+  unitPrice: number
 
-  cptCode: string;
+  cptCode: string
 }
 
 /**
@@ -9069,7 +9128,7 @@ export function resolveErItemPrice(
 
   itemType: "medication" | "investigation" | "intervention" | "procedure",
 ): ErPricedItem {
-  const norm = (itemName || "").toLowerCase().trim();
+  const norm = (itemName || "").toLowerCase().trim()
 
   if (itemType === "medication") {
     if (
@@ -9082,7 +9141,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 150,
         cptCode: "J0120",
-      };
+      }
 
     if (
       norm.includes("clopidogrel") ||
@@ -9095,7 +9154,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 250,
         cptCode: "J0121",
-      };
+      }
 
     if (
       norm.includes("atorvastatin") ||
@@ -9107,7 +9166,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 180,
         cptCode: "J0122",
-      };
+      }
 
     if (
       norm.includes("paracetamol") ||
@@ -9120,7 +9179,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 200,
         cptCode: "J0123",
-      };
+      }
 
     if (
       norm.includes("ceftriaxone") ||
@@ -9134,7 +9193,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 650,
         cptCode: "J0696",
-      };
+      }
 
     if (
       norm.includes("pantoprazole") ||
@@ -9147,7 +9206,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 220,
         cptCode: "J2440",
-      };
+      }
 
     if (
       norm.includes("ondansetron") ||
@@ -9159,7 +9218,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 180,
         cptCode: "J2405",
-      };
+      }
 
     if (
       norm.includes("morphine") ||
@@ -9172,7 +9231,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 450,
         cptCode: "J2270",
-      };
+      }
 
     if (norm.includes("furosemide") || norm.includes("lasix"))
       return {
@@ -9180,7 +9239,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 150,
         cptCode: "J1940",
-      };
+      }
 
     if (
       norm.includes("hydrocortisone") ||
@@ -9193,7 +9252,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 220,
         cptCode: "J1720",
-      };
+      }
 
     if (
       norm.includes("salbutamol") ||
@@ -9206,7 +9265,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 300,
         cptCode: "J7611",
-      };
+      }
 
     if (
       norm.includes("nitroglycerin") ||
@@ -9219,7 +9278,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 850,
         cptCode: "J3490",
-      };
+      }
 
     if (
       norm.includes("heparin") ||
@@ -9232,7 +9291,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 950,
         cptCode: "J1644",
-      };
+      }
 
     if (
       norm.includes("tenecteplase") ||
@@ -9245,7 +9304,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 24500,
         cptCode: "J3101",
-      };
+      }
 
     if (
       norm.includes("saline") ||
@@ -9259,7 +9318,7 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 250,
         cptCode: "J7030",
-      };
+      }
 
     if (
       norm.includes("adrenaline") ||
@@ -9272,14 +9331,14 @@ export function resolveErItemPrice(
         category: "Consumables",
         unitPrice: 350,
         cptCode: "J0171",
-      };
+      }
 
     return {
       name: itemName,
       category: "Consumables",
       unitPrice: 250,
       cptCode: "99070",
-    };
+    }
   }
 
   if (itemType === "investigation") {
@@ -9289,7 +9348,7 @@ export function resolveErItemPrice(
         category: "Laboratory",
         unitPrice: 450,
         cptCode: "93000",
-      };
+      }
 
     if (norm.includes("troponin"))
       return {
@@ -9297,7 +9356,7 @@ export function resolveErItemPrice(
         category: "Laboratory",
         unitPrice: 1200,
         cptCode: "84484",
-      };
+      }
 
     if (
       norm.includes("x-ray") ||
@@ -9310,7 +9369,7 @@ export function resolveErItemPrice(
         category: "Radiology / Imaging",
         unitPrice: 600,
         cptCode: "71045",
-      };
+      }
 
     if (
       norm.includes("ultrasound") ||
@@ -9323,7 +9382,7 @@ export function resolveErItemPrice(
         category: "Radiology / Imaging",
         unitPrice: 1500,
         cptCode: "76705",
-      };
+      }
 
     if (
       norm.includes("cbc") ||
@@ -9337,7 +9396,7 @@ export function resolveErItemPrice(
         category: "Laboratory",
         unitPrice: 450,
         cptCode: "85025",
-      };
+      }
 
     if (norm.includes("abg") || norm.includes("arterial blood gas"))
       return {
@@ -9345,7 +9404,7 @@ export function resolveErItemPrice(
         category: "Laboratory",
         unitPrice: 950,
         cptCode: "82803",
-      };
+      }
 
     if (norm.includes("ct") || norm.includes("computed tomography"))
       return {
@@ -9353,7 +9412,7 @@ export function resolveErItemPrice(
         category: "Radiology / Imaging",
         unitPrice: 3200,
         cptCode: "70450",
-      };
+      }
 
     if (norm.includes("mri") || norm.includes("magnetic resonance"))
       return {
@@ -9361,7 +9420,7 @@ export function resolveErItemPrice(
         category: "Radiology / Imaging",
         unitPrice: 6500,
         cptCode: "70551",
-      };
+      }
 
     if (
       norm.includes("renal") ||
@@ -9376,7 +9435,7 @@ export function resolveErItemPrice(
         category: "Laboratory",
         unitPrice: 850,
         cptCode: "80069",
-      };
+      }
 
     if (
       norm.includes("culture") ||
@@ -9388,7 +9447,7 @@ export function resolveErItemPrice(
         category: "Laboratory",
         unitPrice: 1200,
         cptCode: "87040",
-      };
+      }
 
     if (norm.includes("d-dimer") || norm.includes("dimer"))
       return {
@@ -9396,7 +9455,7 @@ export function resolveErItemPrice(
         category: "Laboratory",
         unitPrice: 1400,
         cptCode: "85379",
-      };
+      }
 
     if (
       norm.includes("lft") ||
@@ -9408,7 +9467,7 @@ export function resolveErItemPrice(
         category: "Laboratory",
         unitPrice: 850,
         cptCode: "80076",
-      };
+      }
 
     if (
       norm.includes("pt/inr") ||
@@ -9420,14 +9479,14 @@ export function resolveErItemPrice(
         category: "Laboratory",
         unitPrice: 650,
         cptCode: "85610",
-      };
+      }
 
     return {
       name: itemName,
       category: "Laboratory",
       unitPrice: 500,
       cptCode: "80050",
-    };
+    }
   }
 
   // Interventions / Procedures
@@ -9443,7 +9502,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 350,
       cptCode: "36000",
-    };
+    }
 
   if (
     norm.includes("oxygen") ||
@@ -9457,7 +9516,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 500,
       cptCode: "94640",
-    };
+    }
 
   if (
     norm.includes("defibrillat") ||
@@ -9469,7 +9528,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 2500,
       cptCode: "92960",
-    };
+    }
 
   if (
     norm.includes("cpr") ||
@@ -9482,7 +9541,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 4500,
       cptCode: "92950",
-    };
+    }
 
   if (
     norm.includes("intubat") ||
@@ -9495,7 +9554,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 3500,
       cptCode: "31500",
-    };
+    }
 
   if (
     norm.includes("wound") ||
@@ -9509,7 +9568,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 850,
       cptCode: "12001",
-    };
+    }
 
   if (
     norm.includes("catheter") ||
@@ -9521,7 +9580,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 450,
       cptCode: "51702",
-    };
+    }
 
   if (
     norm.includes("ryle") ||
@@ -9534,7 +9593,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 450,
       cptCode: "43752",
-    };
+    }
 
   if (norm.includes("nebuliz") || norm.includes("inhalation"))
     return {
@@ -9542,7 +9601,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 300,
       cptCode: "94640",
-    };
+    }
 
   if (
     norm.includes("pocus") ||
@@ -9554,7 +9613,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 1800,
       cptCode: "93308",
-    };
+    }
 
   if (
     norm.includes("lumbar puncture") ||
@@ -9566,7 +9625,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 2200,
       cptCode: "62270",
-    };
+    }
 
   if (
     norm.includes("chest tube") ||
@@ -9579,7 +9638,7 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 4500,
       cptCode: "32551",
-    };
+    }
 
   if (
     norm.includes("blood transfusion") ||
@@ -9591,12 +9650,12 @@ export function resolveErItemPrice(
       category: "Procedure / Surgery",
       unitPrice: 1800,
       cptCode: "36430",
-    };
+    }
 
   return {
     name: itemName,
     category: "Procedure / Surgery",
     unitPrice: 500,
     cptCode: "99285",
-  };
+  }
 }
