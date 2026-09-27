@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"/home/kalpra/Desktop/GNANESH/Enterprise-Hospital-Management-System/src/services\" *)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

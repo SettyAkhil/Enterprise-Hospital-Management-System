@@ -1,4 +1,25 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
+import {
+  LayoutDashboard,
+  Stethoscope,
+  Users,
+  ClipboardList,
+  FileText,
+  Siren,
+  BedDouble,
+  HeartPulse,
+  Syringe,
+  FlaskConical,
+  Scan,
+  Pill,
+  Scissors,
+  CreditCard,
+  ShieldCheck,
+  UsersRound,
+  Calendar,
+  Sparkles,
+  BarChart3,
+} from "lucide-react"
 
 import { Icon, type IconProps } from "./components/icons"
 
@@ -23,6 +44,7 @@ import { apiFetch } from "./lib/api"
 import Laboratory from "./components/Laboratory"
 
 import Pharmacy from "./components/Pharmacy"
+import EmergencyUI from "./components/Emergency"
 
 import Billing from "./components/Billing"
 
@@ -116,35 +138,30 @@ import { LabOrderDatabase } from "./services/labOrdersDb"
 
 import { PharmacyDatabase, isAwaitingVerification } from "./services/pharmacyDb"
 
-type Module = "dashboard" | "patients" | "appointments" | "emergency" | "clinical" | "inpatient" | "nursing" | "laboratory" | "radiology" | "pharmacy" | "pharmacy_dispensing" | "pharmacy_rx" | "pharmacy_ocr" | "pharmacy_returns" | "pharmacy_supplier_returns" | "pharmacy_medicine" | "pharmacy_category" | "pharmacy_suppliers" | "pharmacy_po" | "pharmacy_grn" | "pharmacy_ledger" | "pharmacy_transfers" | "pharmacy_expiry" | "pharmacy_analytics" | "pharmacy_notifications" | "pharmacy_users" | "pharmacy_audit" | "pharmacy_settings" | "surgery" | "billing" | "icu" | "discharge" | "triage" | "insurance" | "analytics" | "reports" | "reports_overview" | "reports_patients" | "reports_op" | "reports_er" | "reports_inpatient" | "reports_appointments" | "reports_doctors" | "reports_pharmacy" | "reports_laboratory" | "reports_radiology" | "reports_beds" | "reports_admissions" | "reports_discharges" | "reports_staff" | "admin" | "chart" | "register" | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow" | "op_nurse" | "opd_procedures" | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing" | "admissions" | "readmission" | "payments" | "revenue_reports" | "reports_pharmacy_damaged" | "reports_supplier_returns" | "hrms" | "employees" | "patient_exp" | "intelligence" | "ocr" | "dpi_ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering" | "beds"
+type Module = "dashboard" | "patients" | "appointments" | "emergency" | "emergency_ui" | "clinical" | "inpatient" | "nursing" | "laboratory" | "radiology" | "pharmacy" | "pharmacy_dispensing" | "pharmacy_rx" | "pharmacy_ocr" | "pharmacy_returns" | "pharmacy_supplier_returns" | "pharmacy_medicine" | "pharmacy_category" | "pharmacy_suppliers" | "pharmacy_po" | "pharmacy_grn" | "pharmacy_ledger" | "pharmacy_transfers" | "pharmacy_expiry" | "pharmacy_analytics" | "pharmacy_notifications" | "pharmacy_users" | "pharmacy_audit" | "pharmacy_settings" | "surgery" | "billing" | "icu" | "discharge" | "triage" | "insurance" | "analytics" | "reports" | "reports_overview" | "reports_patients" | "reports_op" | "reports_er" | "reports_inpatient" | "reports_appointments" | "reports_doctors" | "reports_pharmacy" | "reports_laboratory" | "reports_radiology" | "reports_beds" | "reports_admissions" | "reports_discharges" | "reports_staff" | "admin" | "chart" | "register" | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow" | "op_nurse" | "opd_procedures" | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing" | "admissions" | "readmission" | "payments" | "revenue_reports" | "reports_pharmacy_damaged" | "reports_supplier_returns" | "hrms" | "employees" | "patient_exp" | "intelligence" | "ocr" | "dpi_ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering" | "beds"
 
 interface NavItem {
   key: Module
 
   label: string
 
-  Icon: React.FC<IconProps>
+  Icon: React.ComponentType<{ className?: string; size?: number | string }>
 
   badge?: number
 
   children?: { key: Module; label: string; group?: string }[]
 }
 
+
 const NAV: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", Icon: Icon.Dashboard },
+  { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
 
-  { key: "doctor_portal", label: "Doctor Workspace", Icon: Icon.Stethoscope },
-
-  // The front desk, in the order the desk actually works: find or register the
-
-  // patient, book their doctor, take payment -- with OP Management alongside so
-
-  // reception can see where a patient has got to without leaving their own area.
+  { key: "doctor_portal", label: "Doctor Workspace", Icon: Stethoscope },
 
   {
     key: "patients",
     label: "Reception",
-    Icon: Icon.Patients,
+    Icon: Users,
 
     children: [
       { key: "patients", label: "Patient Search" },
@@ -155,14 +172,10 @@ const NAV: NavItem[] = [
     ],
   },
 
-  // The OP department floor: who has arrived, whose vitals are outstanding, and
-
-  // what each doctor's clinic looks like today.
-
   {
     key: "outpatient",
     label: "OP Department",
-    Icon: Icon.Stethoscope,
+    Icon: ClipboardList,
     children: [
       { key: "op_management", label: "OP Management" },
       { key: "queue", label: "Live Queue Board" },
@@ -174,7 +187,7 @@ const NAV: NavItem[] = [
   {
     key: "clinical",
     label: "Clinical",
-    Icon: Icon.Clinical,
+    Icon: FileText,
 
     children: [{ key: "chart", label: "Encounters" }],
   },
@@ -182,10 +195,11 @@ const NAV: NavItem[] = [
   {
     key: "emergency",
     label: "Emergency",
-    Icon: Icon.Emergency,
+    Icon: Siren,
 
     children: [
       { key: "emergency", label: "ED Track Board" },
+      { key: "emergency_ui", label: "Emergency UI (Updated)" },
       { key: "triage", label: "Triage" },
     ],
   },
@@ -193,7 +207,7 @@ const NAV: NavItem[] = [
   {
     key: "inpatient",
     label: "Inpatient",
-    Icon: Icon.Bed,
+    Icon: BedDouble,
 
     children: [
       { key: "inpatient", label: "Bed Board" },
@@ -208,18 +222,18 @@ const NAV: NavItem[] = [
     ],
   },
 
-  { key: "icu", label: "ICU", Icon: Icon.Heart },
+  { key: "icu", label: "ICU", Icon: HeartPulse },
 
-  { key: "nursing", label: "Nursing", Icon: Icon.Nursing },
+  { key: "nursing", label: "Nursing", Icon: Syringe },
 
-  { key: "laboratory", label: "Laboratory", Icon: Icon.Lab },
+  { key: "laboratory", label: "Laboratory", Icon: FlaskConical },
 
-  { key: "radiology", label: "Radiology", Icon: Icon.Radiology },
+  { key: "radiology", label: "Radiology", Icon: Scan },
 
   {
     key: "pharmacy",
     label: "Pharmacy",
-    Icon: Icon.Pharmacy,
+    Icon: Pill,
 
     children: [
       { key: "pharmacy", label: "Dashboard" },
@@ -259,6 +273,11 @@ const NAV: NavItem[] = [
         label: "Scan Invoice (GRN)",
         group: "Procurement & Receiving",
       },
+      {
+        key: "pharmacy_ocr",
+        label: "Invoice OCR",
+        group: "Procurement & Receiving",
+      },
       { key: "pharmacy_ledger", label: "Inventory Ledger", group: "Inventory" },
 
       {
@@ -283,12 +302,12 @@ const NAV: NavItem[] = [
     ],
   },
 
-  { key: "surgery", label: "Surgery", Icon: Icon.Surgery },
+  { key: "surgery", label: "Surgery", Icon: Scissors },
 
   {
     key: "billing",
     label: "Billing",
-    Icon: Icon.Billing,
+    Icon: CreditCard,
 
     children: [
       { key: "billing", label: "Invoices" },
@@ -297,12 +316,12 @@ const NAV: NavItem[] = [
     ],
   },
 
-  { key: "insurance", label: "Insurance", Icon: Icon.Insurance },
+  { key: "insurance", label: "Insurance", Icon: ShieldCheck },
 
   {
     key: "hrms",
     label: "HR & Staff",
-    Icon: Icon.User,
+    Icon: UsersRound,
 
     children: [
       { key: "hrms", label: "HRMS" },
@@ -311,12 +330,12 @@ const NAV: NavItem[] = [
     ],
   },
 
-  { key: "scheduling", label: "Doctor Scheduling", Icon: Icon.Calendar },
+  { key: "scheduling", label: "Doctor Scheduling", Icon: Calendar },
 
   {
     key: "intelligence",
     label: "Hosp AI",
-    Icon: Icon.FlaskConical,
+    Icon: Sparkles,
 
     children: [
       { key: "dpi_ocr", label: "Keppler OCR" },
@@ -334,7 +353,7 @@ const NAV: NavItem[] = [
   {
     key: "reports",
     label: "Reports",
-    Icon: Icon.Reports,
+    Icon: BarChart3,
 
     children: [
       { key: "reports_overview", label: "Overview", group: "General Reports" },
@@ -1376,10 +1395,11 @@ export default function App() {
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden bg-[#F0F2F5]"
+      className="flex flex-col overflow-hidden bg-[#F0F2F5]"
       style={{
         fontFamily: "'Inter', system-ui, sans-serif",
-
+        height: `${100 / zoomLevel}vh`,
+        width: `${100 / zoomLevel}vw`,
         zoom: zoomLevel,
       }}
     >
@@ -1697,7 +1717,7 @@ export default function App() {
             {/* ── Sidebar ──────────────────────────────────────────────── */}
             <aside
               className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${
-                sidebarCollapsed ? "w-14" : "w-64"
+                sidebarCollapsed ? "w-14" : "w-72"
               }`}
             >
               {/* Top Logo Section */}
@@ -1762,10 +1782,10 @@ export default function App() {
                       <div
                         className={
                           sidebarCollapsed
-                            ? `w-8 h-8 mx-auto my-1 flex items-center justify-center rounded-lg cursor-pointer transition-all duration-150 relative ${
+                            ? `w-10 h-10 mx-auto my-1 flex items-center justify-center rounded-xl cursor-pointer transition-all duration-150 relative ${
                                 isActive
                                   ? "bg-[#1B4FD8] text-white shadow-md shadow-blue-500/25 ring-1 ring-blue-400/40"
-                                  : "text-[#94A3B8] hover:text-white hover:bg-white/10"
+                                  : "hover:bg-white/10 text-white"
                               }`
                             : `nav-item ${isActive ? "active" : ""}`
                         }
@@ -1795,10 +1815,12 @@ export default function App() {
                         title={sidebarCollapsed ? item.label : undefined}
                       >
                         <item.Icon
-                          size={sidebarCollapsed ? 18 : 16}
-                          className={
-                            sidebarCollapsed ? "w-8 h-8 p-1.5" : "w-4 h-4"
-                          }
+                          size={sidebarCollapsed ? 20 : 18}
+                          className={`${
+                            sidebarCollapsed
+                              ? "w-5 h-5 transition-transform duration-150 group-hover:scale-110 flex-shrink-0"
+                              : "w-4.5 h-4.5 mr-3 flex-shrink-0"
+                          } ${isActive ? "text-white" : "text-[#94A3B8] group-hover:text-white"}`}
                         />
 
                         {/* Collapsed Badge Dot */}
@@ -2158,6 +2180,9 @@ export default function App() {
                     setModule("triage")
                   }}
                 />
+              )}
+              {module === "emergency_ui" && (
+                <EmergencyUI />
               )}
               {module === "inpatient" && (
                 <Inpatient

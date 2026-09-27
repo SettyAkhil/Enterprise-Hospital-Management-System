@@ -24,7 +24,7 @@ export interface AppUser {
   status?: "Active" | "Inactive"
 }
 
-const ROLES_STORAGE_KEY = "hospai_rbac_roles_v9"
+const ROLES_STORAGE_KEY = "hospai_rbac_roles_v11"
 
 const USERS_STORAGE_KEY = "hospai_rbac_users_v2"
 
@@ -175,6 +175,7 @@ const INITIAL_ROLES: AppRole[] = [
       "intelligence",
       "dpi_ocr",
       "discharge",
+      "surgery",
     ],
   },
 
@@ -274,6 +275,7 @@ const INITIAL_ROLES: AppRole[] = [
       "op_management",
       "queue",
       "outpatient",
+      "surgery",
     ],
   },
 

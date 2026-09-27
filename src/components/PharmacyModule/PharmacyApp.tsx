@@ -30,6 +30,7 @@ const pages: Record<string, React.ComponentType<{
   suppliers: Suppliers,
   "purchase-orders": PurchaseOrders,
   grn: InvoiceOCR,
+  ocr: InvoiceOCR,
   "inventory-ledger": InventoryLedger,
   "stock-transfers": StockTransfers,
   "expiry-low-stock": ExpiryLowStock,

@@ -300,7 +300,7 @@ export default function Emergency({ onSelect }: { onSelect?: () => void }) {
                 <div className="pl-3 text-[11px] font-mono text-[#94A3B8]">
                   {i + 1}
                 </div>
-                <div className="px-3 py-2.5">
+                <div className="px-3 py-1.5">
                   <div className="text-[12.5px] font-semibold text-gray-900">
                     {p.name}
                   </div>
@@ -308,7 +308,7 @@ export default function Emergency({ onSelect }: { onSelect?: () => void }) {
                     {p.age} yrs · {p.nurses}
                   </div>
                 </div>
-                <div className="px-3 text-[11.5px] text-gray-700 truncate">
+                <div className="px-3 py-1 text-[11.5px] text-gray-700 truncate">
                   {p.chief}
                 </div>
                 <div className="px-3">

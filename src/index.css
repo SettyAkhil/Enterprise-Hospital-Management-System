@@ -71,6 +71,10 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: 13.5px;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -81,8 +85,8 @@ body {
   font-family: var(--font-sans);
   background-color: var(--color-bg-main);
   color: var(--color-text-body);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
 
