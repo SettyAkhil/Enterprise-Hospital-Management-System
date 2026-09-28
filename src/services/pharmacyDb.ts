@@ -1189,7 +1189,66 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return []
     try {
       const stored = window.localStorage.getItem(SUPPLIERS_KEY)
-      return stored ? JSON.parse(stored) : []
+      let list: AppSupplier[] = stored ? JSON.parse(stored) : []
+      if (!Array.isArray(list)) list = []
+      if (list.length === 0) {
+        list = [
+          {
+            id: "SUP-APOLLO",
+            supplierName: "Apollo Demo Pharma",
+            contactInformation: "Venkatesh (+91 9988776655)",
+            phone: "+91 9988776655",
+            email: "distributor@apollo.com",
+            address: "Hyderabad, Telangana",
+            gstInformation: "36AAACA9876H1Z8",
+            licenseDetails: "TS-HYD-9988",
+            paymentTerms: "Immediate",
+            status: "Active",
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: "SUP-ALEMBIC",
+            supplierName: "Alembic Pharmaceuticals Ltd",
+            contactInformation: "Rajesh Sharma (+91 9876543210)",
+            phone: "+91 9876543210",
+            email: "orders@alembic.com",
+            address: "Vadodara, Gujarat",
+            gstInformation: "24AAACA1234F1Z5",
+            licenseDetails: "G/25/1234",
+            paymentTerms: "Net 30",
+            status: "Active",
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: "SUP-JNJ",
+            supplierName: "Johnson & Johnson Pvt Ltd",
+            contactInformation: "Kavita Rao (+91 9811223344)",
+            phone: "+91 9811223344",
+            email: "support@jnjindia.com",
+            address: "Mumbai, Maharashtra",
+            gstInformation: "27AAACJ5678G1Z1",
+            licenseDetails: "MH-MUM-4567",
+            paymentTerms: "Net 45",
+            status: "Active",
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: "SUP-STD",
+            supplierName: "Standard Pharmaceuticals",
+            contactInformation: "Amit Kumar (+91 9123456780)",
+            phone: "+91 9123456780",
+            email: "sales@standardpharma.com",
+            address: "Bangalore, Karnataka",
+            gstInformation: "29AAACS1122K1Z3",
+            licenseDetails: "KA-BLR-1122",
+            paymentTerms: "Net 30",
+            status: "Active",
+            createdAt: new Date().toISOString(),
+          },
+        ]
+        window.localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(list))
+      }
+      return list
     } catch {
       return []
     }
@@ -2115,8 +2174,16 @@ export class PharmacyDatabase {
     if (batch.availableQuantity < payload.quantity)
       throw new Error("Return quantity cannot exceed available stock.")
 
-    const purchaseRate = batch.purchasePrice || 0
-    const returnAmount = payload.quantity * purchaseRate
+    const purchaseRate =
+      batch.purchasePrice ||
+      (batch.mrp ? Number((batch.mrp * 0.8).toFixed(2)) : 0) ||
+      0
+    const returnAmount = Number((payload.quantity * purchaseRate).toFixed(2))
+
+    const medicines = this.getMedicines()
+    const suppliers = this.getSuppliers()
+    const med = medicines.find((m) => m.id === payload.medicineId)
+    const sup = suppliers.find((s) => s.id === payload.supplierId)
 
     const newReturn: AppSupplierReturn = {
       ...payload,
@@ -2126,6 +2193,13 @@ export class PharmacyDatabase {
         new Date().getFullYear() +
         "-" +
         String(Math.floor(1 + Math.random() * 90000)).padStart(5, "0"),
+      medicineName:
+        payload.medicineName ||
+        med?.brandName ||
+        med?.medicineName ||
+        "Medicine",
+      batchNumber: payload.batchNumber || batch.batchNumber,
+      supplierName: payload.supplierName || sup?.supplierName || "Supplier",
       purchaseRate,
       returnAmount,
       status: "Draft",

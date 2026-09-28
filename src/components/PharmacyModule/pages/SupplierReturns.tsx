@@ -63,25 +63,52 @@ export default function SupplierReturns({
   // Print State
   const [printReturnId, setPrintReturnId] = useState("")
 
-  const activeBatches = batches.filter(
+  const supplierMatchedBatches = batches.filter(
     (b) =>
       b.availableQuantity > 0 &&
-      (!selectedSupplierId || b.supplierId === selectedSupplierId),
+      selectedSupplierId &&
+      b.supplierId === selectedSupplierId,
   )
+  const displayBatches =
+    supplierMatchedBatches.length > 0
+      ? supplierMatchedBatches
+      : batches.filter(
+          (b) =>
+            b.availableQuantity > 0 &&
+            (!selectedSupplierId ||
+              !b.supplierId ||
+              b.supplierId === selectedSupplierId),
+        )
+  const activeBatches =
+    displayBatches.length > 0
+      ? displayBatches
+      : batches.filter((b) => b.availableQuantity > 0)
+
   const selectedBatch = batches.find((b) => b.id === selectedBatchId)
-  const purchaseRate = selectedBatch?.purchasePrice || 0
+  const purchaseRate =
+    selectedBatch?.purchasePrice ||
+    (selectedBatch?.mrp ? Number((selectedBatch.mrp * 0.8).toFixed(2)) : 0) ||
+    0
   const returnAmountPreview =
-    parseInt(returnQuantity || "0") * purchaseRate || 0
+    parseInt(returnQuantity || "0", 10) * purchaseRate || 0
 
   const handleInitiateReturn = () => {
-    if (!selectedSupplierId || !selectedBatchId || !returnQuantity) {
-      toast.error("Please fill all required fields")
+    if (!selectedSupplierId) {
+      toast.error("Please select a supplier")
+      return
+    }
+    if (!selectedBatchId) {
+      toast.error("Please select an in-stock batch from the dropdown")
+      return
+    }
+    if (!returnQuantity) {
+      toast.error("Please enter a return quantity")
       return
     }
 
     const qty = parseInt(returnQuantity, 10)
     if (isNaN(qty) || qty <= 0) {
-      toast.error("Invalid quantity")
+      toast.error("Please enter a valid positive quantity")
       return
     }
 
@@ -142,16 +169,16 @@ export default function SupplierReturns({
 
   const seedTestData = () => {
     try {
-      const sId = "SUP-TEST-" + Date.now()
-      const mId = "MED-TEST-" + Date.now()
-      const bId = "BAT-TEST-" + Date.now()
+      const sId = "SUP-SR-" + Date.now()
+      const mId = "M-SR-" + Date.now()
+      const bId = "B-SR-" + Date.now()
 
       const newSuppliers = PharmacyDatabase.getSuppliers()
       newSuppliers.push({
         id: sId,
         supplierName: "Apollo Demo Pharma",
-        contactInformation: "John Doe",
-        phone: "9876543210",
+        contactInformation: "Venkatesh (+91 9988776655)",
+        phone: "9988776655",
         email: "demo@apollo.com",
         gstInformation: "29ABCDE1234F1Z5",
         licenseDetails: "DL-12345",
@@ -165,15 +192,15 @@ export default function SupplierReturns({
       const newMedicines = PharmacyDatabase.getMedicines()
       newMedicines.push({
         id: mId,
-        medicineName: "DemoAmoxicillin 500mg",
-        genericName: "Amoxicillin",
+        medicineName: "Cefixime 200mg",
+        genericName: "Cefixime",
         manufacturer: "Apollo Demo Pharma",
         reorderLevel: 20,
         activeStatus: "Active",
         createdAt: new Date().toISOString(),
-        brandName: "Amox",
+        brandName: "Cefix-200",
         dosageForm: "Tablet",
-        strength: "500mg",
+        strength: "200mg",
         unit: "Strip",
         barcode: "12345",
         taxPercentage: 12,
@@ -189,13 +216,13 @@ export default function SupplierReturns({
         id: bId,
         medicineId: mId,
         supplierId: sId,
-        batchNumber: "TX-2026A",
+        batchNumber: "CFX-2026",
         expiryDate: new Date(
           Date.now() + 180 * 24 * 60 * 60 * 1000,
         ).toISOString(),
         availableQuantity: 100,
-        purchasePrice: 12,
-        mrp: 20,
+        purchasePrice: 14.5,
+        mrp: 22,
         status: "Active",
         createdAt: new Date().toISOString(),
         manufacturingDate: new Date().toISOString(),
@@ -213,9 +240,13 @@ export default function SupplierReturns({
   }
 
   const getSupplierName = (id: string) =>
-    suppliers.find((s) => s.id === id)?.name || id
-  const getMedicineName = (id: string) =>
-    medicines.find((m) => m.id === id)?.name || id
+    suppliers.find((s) => s.id === id)?.supplierName ||
+    suppliers.find((s) => s.id === id)?.name ||
+    id
+  const getMedicineName = (id: string) => {
+    const med = medicines.find((m) => m.id === id)
+    return med?.name || (med as any)?.medicineName || id
+  }
   const getBatchNumber = (id: string) =>
     batches.find((b) => b.id === id)?.batchNumber || id
 
@@ -250,7 +281,6 @@ export default function SupplierReturns({
                   value={selectedSupplierId}
                   onChange={(e) => {
                     setSelectedSupplierId(e.target.value)
-                    setSelectedBatchId("")
                   }}
                   className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px] rounded focus:border-[#0F766E] focus:outline-none"
                 >
@@ -269,13 +299,16 @@ export default function SupplierReturns({
                 <select
                   value={selectedBatchId}
                   onChange={(e) => setSelectedBatchId(e.target.value)}
-                  disabled={!selectedSupplierId}
-                  className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px] rounded disabled:bg-[#F8FAFC]"
+                  className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px] rounded focus:border-[#0F766E] focus:outline-none"
                 >
-                  <option value="">-- Choose Batch --</option>
+                  <option value="">
+                    {activeBatches.length > 0
+                      ? "-- Choose Batch --"
+                      : "No batches in stock"}
+                  </option>
                   {activeBatches.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {getMedicineName(b.medicineId)} - {b.batchNumber} (Stock:{" "}
+                      {getMedicineName(b.medicineId)} - Batch {b.batchNumber} (Stock:{" "}
                       {b.availableQuantity})
                     </option>
                   ))}
@@ -547,7 +580,7 @@ export default function SupplierReturns({
       />
 
       <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] overflow-hidden">
-        <table>
+        <table className="w-full text-left">
           <thead className="bg-[#ECFDF5] border-y border-[#A7F3D0]">
             <tr>
               <th className="py-3 px-4 text-[11px] font-bold text-[#065F46] uppercase tracking-wider">Debit Note No</th>
@@ -557,10 +590,10 @@ export default function SupplierReturns({
               <th className="py-3 px-4 text-[11px] font-bold text-[#065F46] uppercase tracking-wider">Return Val</th>
               <th className="py-3 px-4 text-[11px] font-bold text-[#065F46] uppercase tracking-wider">Reason</th>
               <th className="py-3 px-4 text-[11px] font-bold text-[#065F46] uppercase tracking-wider">Status</th>
-              <th className="text-right">Actions</th>
+              <th className="py-3 px-4 text-[11px] font-bold text-[#065F46] uppercase tracking-wider text-right">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-[#E2E8F0]">
             {supplierReturns.length === 0 ? (
               <tr>
                 <td
@@ -576,7 +609,7 @@ export default function SupplierReturns({
                   STATUS_ORDER[STATUS_ORDER.indexOf(rtn.status) + 1]
                 return (
                   <tr className="hover:bg-[#F0FDFA] transition-colors" key={rtn.id}>
-                    <td>
+                    <td className="py-3 px-4">
                       <p className="font-mono text-[13px] font-medium text-[#0F766E]">
                         {rtn.debitNoteNumber}
                       </p>
@@ -587,13 +620,13 @@ export default function SupplierReturns({
                         </p>
                       )}
                     </td>
-                    <td className="text-[13px] text-[#334155]">
+                    <td className="py-3 px-4 text-[13px] text-[#334155]">
                       {new Date(rtn.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="text-[13px] font-semibold text-[#0F1624]">
+                    <td className="py-3 px-4 text-[13px] font-semibold text-[#0F1624]">
                       {getSupplierName(rtn.supplierId)}
                     </td>
-                    <td>
+                    <td className="py-3 px-4">
                       <p className="font-semibold text-[13px] text-[#0F1624]">
                         {getMedicineName(rtn.medicineId)}
                       </p>
@@ -602,11 +635,11 @@ export default function SupplierReturns({
                         {rtn.quantity}
                       </p>
                     </td>
-                    <td className="text-[13px] font-bold text-[#dc2626]">
+                    <td className="py-3 px-4 text-[13px] font-bold text-[#dc2626]">
                       ₹{rtn.returnAmount}
                     </td>
-                    <td className="text-[13px] text-[#64748B]">{rtn.reason}</td>
-                    <td>
+                    <td className="py-3 px-4 text-[13px] text-[#64748B]">{rtn.reason}</td>
+                    <td className="py-3 px-4">
                       <div
                         className={`inline-flex px-2 py-1 rounded text-[11px] font-semibold border
                         ${
@@ -624,7 +657,7 @@ export default function SupplierReturns({
                         {rtn.status}
                       </div>
                     </td>
-                    <td className="text-right">
+                    <td className="py-3 px-4 text-right">
                       <div className="flex justify-end gap-2">
                         {nextStatus && (
                           <button
