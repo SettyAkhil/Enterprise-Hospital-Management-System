@@ -1555,7 +1555,76 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return []
     try {
       const stored = window.localStorage.getItem(PRESCRIPTIONS_KEY)
-      const prescriptions: AppPrescription[] = stored ? JSON.parse(stored) : []
+      let prescriptions: AppPrescription[] = stored ? JSON.parse(stored) : []
+      if (!Array.isArray(prescriptions)) prescriptions = []
+
+      const stockItems: AppPrescriptionItem[] = [
+        {
+          id: "item-azm-500",
+          medicineName: "Azithral 500",
+          dosage: "1-0-0",
+          frequency: "OD",
+          duration: "5 days",
+          quantity: 5,
+          substitutionAllowed: true,
+        },
+        {
+          id: "item-bnd-syr",
+          medicineName: "Benadryl Syrup",
+          dosage: "10ml",
+          frequency: "BD",
+          duration: "5 days",
+          quantity: 1,
+          substitutionAllowed: true,
+        },
+        {
+          id: "item-aug-625",
+          medicineName: "Augmentin 625 Duo",
+          dosage: "1-0-1",
+          frequency: "BD",
+          duration: "5 days",
+          quantity: 10,
+          substitutionAllowed: true,
+        },
+      ]
+
+      const stockRxIndex = prescriptions.findIndex((p) => p.id === "RX-2026-102")
+      if (stockRxIndex === -1) {
+        prescriptions.unshift({
+          id: "RX-2026-102",
+          patientId: "PAT-2026-089",
+          patientName: "Rahul Sharma",
+          uhid: "UHID-89211",
+          age: 34,
+          gender: "Male",
+          visitId: "OP-2026-4412",
+          doctorId: "DOC-001",
+          doctorName: "Dr. Sarah Jenkins",
+          department: "General Medicine",
+          diagnosis: "Upper Respiratory Tract Infection",
+          date: new Date().toISOString().split("T")[0],
+          sourceType: "DIGITAL",
+          priority: "Normal",
+          status: "Ready For Dispensing",
+          dispensingStatus: "Waiting",
+          items: stockItems,
+          createdAt: new Date().toISOString(),
+        })
+        window.localStorage.setItem(PRESCRIPTIONS_KEY, JSON.stringify(prescriptions))
+      } else {
+        const rx = prescriptions[stockRxIndex]
+        const needsUpdate =
+          rx.items.length !== 3 ||
+          !rx.items.some((i) => i.medicineName === "Augmentin 625 Duo") ||
+          rx.items.some((i) => i.medicineName.includes("mg"))
+        if (needsUpdate) {
+          rx.items = stockItems
+          rx.status = "Ready For Dispensing"
+          rx.dispensingStatus = "Waiting"
+          window.localStorage.setItem(PRESCRIPTIONS_KEY, JSON.stringify(prescriptions))
+        }
+      }
+
       return prescriptions
     } catch {
       return []

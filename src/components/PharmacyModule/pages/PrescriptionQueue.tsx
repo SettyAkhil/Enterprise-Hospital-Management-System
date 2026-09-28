@@ -1,4 +1,4 @@
-﻿import { usePharmacyData } from "../data/usePharmacyData"
+import { usePharmacyData } from "../data/usePharmacyData"
 import { useState } from "react"
 import {
   Search,
@@ -70,12 +70,30 @@ export default function PrescriptionQueue({
       dispensingStatus: "Waiting",
       items: [
         {
-          id: "RXI" + Date.now(),
-          medicineName: "Paracetamol 500mg",
-          dosage: "1-1-1",
-          frequency: "TID",
+          id: "RXI1-" + Date.now(),
+          medicineName: "Azithral 500",
+          dosage: "1-0-0",
+          frequency: "OD",
           duration: "5 days",
-          quantity: 15,
+          quantity: 5,
+          substitutionAllowed: true,
+        },
+        {
+          id: "RXI2-" + Date.now(),
+          medicineName: "Benadryl Syrup",
+          dosage: "10ml",
+          frequency: "BD",
+          duration: "5 days",
+          quantity: 1,
+          substitutionAllowed: true,
+        },
+        {
+          id: "RXI3-" + Date.now(),
+          medicineName: "Augmentin 625 Duo",
+          dosage: "1-0-1",
+          frequency: "BD",
+          duration: "5 days",
+          quantity: 10,
           substitutionAllowed: true,
         },
       ],

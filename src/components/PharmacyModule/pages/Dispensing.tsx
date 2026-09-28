@@ -758,47 +758,12 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={loadPrescriptionFEFO}
-                  className="bg-[#0F766E] text-white px-5 py-2 h-[42px] rounded-lg text-[13px] font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all whitespace-nowrap"
-                >
-                  Load Rx & Auto-Allocate
-                </button>
-                <button
-                  onClick={() => {
-                    const id = "RX-" + Math.floor(1000 + Math.random() * 9000);
-                    const newRx: any = {
-                      id,
-                      patientId: "PAT-001",
-                      patientName: "Demo Patient (Stock Test)",
-                      uhid: "UHID-001",
-                      doctorId: "DOC-001",
-                      doctorName: "Dr. Demo",
-                      department: "General Medicine",
-                      date: new Date().toISOString(),
-                      sourceType: "DIGITAL",
-                      priority: "Normal",
-                      status: "Sent To Pharmacy",
-                      dispensingStatus: "Waiting",
-                      items: [
-                        { id: "i1", medicineName: "Azithral 500", dosage: "1-0-1", duration: "5 days", quantity: 10, substitutionAllowed: true },
-                        { id: "i2", medicineName: "Benadryl Syrup", dosage: "10ml", duration: "5 days", quantity: 2, substitutionAllowed: true },
-                        { id: "i3", medicineName: "Augmentin 625 Duo", dosage: "1-1-1", duration: "5 days", quantity: 15, substitutionAllowed: true }
-                      ],
-                      createdAt: new Date().toISOString()
-                    };
-                    const rxs = PharmacyDatabase.getPrescriptions();
-                    rxs.push(newRx);
-                    PharmacyDatabase.savePrescriptions(rxs);
-                    setRxId(id);
-                    setTimeout(() => autoLoadRx(id), 100);
-                  }}
-                  className="bg-indigo-600 text-white px-5 py-2 h-[42px] rounded-lg text-[13px] font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all whitespace-nowrap"
-                >
-                  Generate Demo Rx
-                </button>
-              </div>
+              <button
+                onClick={loadPrescriptionFEFO}
+                className="bg-[#0F766E] text-white px-5 py-2 h-[42px] rounded-lg text-[13px] font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all whitespace-nowrap"
+              >
+                Load Rx & Auto-Allocate
+              </button>
             </div>
 
             {/* Medicine Search */}
