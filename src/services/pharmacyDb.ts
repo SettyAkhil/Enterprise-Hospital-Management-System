@@ -2238,7 +2238,11 @@ export class PharmacyDatabase {
       (b) =>
         b.medicineId === medicineId &&
         b.availableQuantity > 0 &&
-        (b.location || "Main Pharmacy") === location,
+        (!location ||
+          location === "Main Pharmacy" ||
+          location === "ALL" ||
+          (b.location || "Main Pharmacy") === location ||
+          Boolean(b.location)),
     )
 
     // Calculate total available to see if fulfillment is possible

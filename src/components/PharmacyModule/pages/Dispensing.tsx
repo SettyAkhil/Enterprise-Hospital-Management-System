@@ -186,11 +186,27 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
       const batches = PharmacyDatabase.getBatches().filter(
         (b) => b.medicineId === med.id,
       )
-      const { splits } = PharmacyDatabase.executeFEFOSplit(
+      let { splits } = PharmacyDatabase.executeFEFOSplit(
         med.id,
         item.quantity,
         batches,
       )
+
+      if (splits.length === 0 && batches.some((b) => b.availableQuantity > 0)) {
+        const available = batches
+          .filter((b) => b.availableQuantity > 0)
+          .sort(
+            (a, b) =>
+              new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime(),
+          )
+        let remaining = item.quantity
+        for (const b of available) {
+          if (remaining <= 0) break
+          const take = Math.min(b.availableQuantity, remaining)
+          splits.push({ batch: b, usedQty: take })
+          remaining -= take
+        }
+      }
 
       if (splits.length === 0) {
         outOfStock.push(item.medicineName)
