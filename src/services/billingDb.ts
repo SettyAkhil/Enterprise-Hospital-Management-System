@@ -762,137 +762,19 @@ export const INITIAL_LAB_ORDERS: LabOrderRecord[] = [
       },
     ],
   },
-
   {
-    id: "LAB-104",
-
-    patient: "Ann Martinez",
-
-    mrn: "100088",
-
-    test: "Lactic Acid (Plasma Lactate)",
-
-    category: "Biochemistry",
-
-    priority: "STAT",
-
-    sampleType: "Plasma (Gray Top Fluoride/Oxalate on Ice)",
-
-    accessionNo: "ACC-2026-9044",
-
-    collected: "10:02",
-
-    collectedAt: "10:02 AM",
-
-    collectedBy: "Nurse David (ER)",
-
-    analyzer: "Radiometer ABL90 FLEX",
-
-    status: "Processing",
-
-    provider: "Dr. Chen",
-
-    price: 120,
-
-    paymentStatus: "Paid",
-
-    paidReceiptNo: "RCPT-2026-5504",
-
-    results: [
-      {
-        component: "Plasma Lactate",
-        value: "4.2",
-        unit: "mmol/L",
-        ref: "0.5–2.0",
-        flag: "Critical",
-      },
-    ],
-
-    comments:
-      "Marked hyperlactatemia (> 4.0 mmol/L). High suspicion for tissue hypoperfusion / sepsis. Sepsis protocol initiated in ER.",
-  },
-
-  {
-    id: "LAB-105",
-
-    patient: "Patricia Okonkwo",
-
-    mrn: "100149",
-
-    test: "Type & Screen (Blood Group & Crossmatch)",
-
-    category: "Immunohematology",
-
-    priority: "STAT",
-
-    sampleType: "Whole Blood (Pink Top EDTA)",
-
-    accessionNo: "ACC-2026-9045",
-
-    collected: "—",
-
-    status: "Pending",
-
-    provider: "Dr. Williams",
-
-    price: 140,
-
-    paymentStatus: "Payment Pending",
-  },
-
-  {
-    id: "LAB-106",
-
-    patient: "Elena Vasquez",
-
-    mrn: "100198",
-
-    test: "Urinalysis Complete w/ Microscopic",
-
-    category: "Urinalysis",
-
+    id: "LAB-2026-0002",
+    patient: "Priya Sharma",
+    mrn: "PAT-00126",
+    test: "CUE / Complete Urine Examination & Urine C/S",
+    category: "Pathology",
     priority: "Routine",
-
     sampleType: "Mid-Stream Clean Catch Urine",
-
-    accessionNo: "ACC-2026-9046",
-
+    accessionNo: "ACC-2026-9048",
     collected: "—",
-
     status: "Pending",
-
-    provider: "Dr. Chen",
-
-    price: 90,
-
-    paymentStatus: "Payment Pending",
-  },
-
-  {
-    id: "LAB-107",
-
-    patient: "Marcus Kim",
-
-    mrn: "100377",
-
-    test: "Thyroid Profile (TSH, Free T3, Free T4)",
-
-    category: "Immunology",
-
-    priority: "Routine",
-
-    sampleType: "Serum (Gold Top SST)",
-
-    accessionNo: "ACC-2026-9047",
-
-    collected: "—",
-
-    status: "Pending",
-
-    provider: "Dr. Park",
-
-    price: 110,
-
+    provider: "Dr. Sarah Khan",
+    price: 1000,
     paymentStatus: "Payment Pending",
   },
 ]
@@ -2413,11 +2295,63 @@ const INITIAL_DEPARTMENT_CHARGES: DepartmentChargeRecord[] = [
 // ── INITIAL SEED CENTRAL INVOICES & CLAIMS (Streamlined Small Amounts) ──────
 
 const INITIAL_HOSPITAL_CLAIMS: ClaimRecord[] = [
-  // ── INPATIENT: Bed 204-A (John Smith - 3N Medical/Surgical) ──
+  // ── OUTPATIENT: Priya Sharma (PAT-00126 - Pending Lab Test Clearance) ──
+  {
+    id: "CLM-2026-0892",
+    invoiceNo: "INV-2026-0002",
+    patientId: "PAT-00126",
+    patientName: "Priya Sharma",
+    mrn: "PAT-00126",
+    age: 29,
+    gender: "Female",
+    phone: "+91 98112 34567",
+    department: "Outpatient",
+    carePathway: "OP Consultation & Diagnostic Laboratory Investigations",
+    dateOfService: new Date().toISOString().split("T")[0],
+    encounterId: "ENC-2026-0892",
+    insuranceProvider: "Self-Pay",
+    policyNumber: "—",
+    status: "Draft",
+    attendingDoctor: "Dr. Sarah Khan",
+    diagnosisCodes: ["N39.0"],
+    items: [
+      {
+        id: "ITEM-1",
+        description: "CUE / Complete Urine Examination",
+        category: "Laboratory",
+        cptCode: "81001",
+        quantity: 1,
+        unitPrice: 250,
+        total: 250,
+        insuranceCovered: 0,
+        patientPayable: 250,
+      },
+      {
+        id: "ITEM-2",
+        description: "Urine C/S (Culture & Sensitivity)",
+        category: "Laboratory",
+        cptCode: "87086",
+        quantity: 1,
+        unitPrice: 750,
+        total: 750,
+        insuranceCovered: 0,
+        patientPayable: 750,
+      },
+    ],
+    subtotal: 1000,
+    discount: 0,
+    tax: 0,
+    totalAmount: 1000,
+    insurancePortion: 0,
+    patientPortion: 1000,
+    amountPaid: 0,
+    balanceDue: 1000,
+    payments: [],
+  },
 
+  // ── INPATIENT: Bed 204-A (John Smith - 3N Medical/Surgical) ──
   {
     id: "CLM-8921",
-
     invoiceNo: "INV-2026-0811",
 
     patientId: "UMR100245",
@@ -4436,6 +4370,11 @@ export class BillingDatabase {
       INITIAL_HOSPITAL_CLAIMS,
     )
 
+    // Ensure Priya Sharma exists in claims list
+    if (!claims.some((c) => c.patientName?.toLowerCase().includes("priya sharma") || c.invoiceNo === "INV-2026-0002")) {
+      claims.unshift(INITIAL_HOSPITAL_CLAIMS[0])
+    }
+
     // Auto-sync OP Encounters from db.ts if not yet in claims list
     try {
       const opEncs = db.getEncounters();
@@ -5394,10 +5333,10 @@ export class BillingDatabase {
         return lo;
       });
 
-      // Also sync to LabOrderDatabase (hospai_lab_orders_v1)
+      // Also sync to LabOrderDatabase (hospai_lab_orders_v2)
       try {
         if (typeof window !== "undefined") {
-          const rawOrders = window.localStorage.getItem("hospai_lab_orders_v1");
+          const rawOrders = window.localStorage.getItem("hospai_lab_orders_v2");
           if (rawOrders) {
             const parsed = JSON.parse(rawOrders);
             let hasOrderChanged = false;
@@ -5426,7 +5365,7 @@ export class BillingDatabase {
               return o;
             });
             if (hasOrderChanged) {
-              window.localStorage.setItem("hospai_lab_orders_v1", JSON.stringify(updated));
+              window.localStorage.setItem("hospai_lab_orders_v2", JSON.stringify(updated));
               try {
                 new BroadcastChannel("hospai_lab_orders").postMessage("changed");
               } catch {}
@@ -5492,10 +5431,10 @@ export class BillingDatabase {
         const newLabOrders = [newLabOrder, ...labOrders];
         this.save(STORAGE_KEY_LAB_ORDERS, newLabOrders);
 
-        // Also add to hospai_lab_orders_v1 so it shows in Lab Worklist
+        // Also add to hospai_lab_orders_v2 so it shows in Lab Worklist
         try {
           if (typeof window !== "undefined") {
-            const rawOrders = window.localStorage.getItem("hospai_lab_orders_v1");
+            const rawOrders = window.localStorage.getItem("hospai_lab_orders_v2");
             const parsed = rawOrders ? JSON.parse(rawOrders) : [];
             const newOrderObj = {
               id: `ORD-${Date.now().toString().slice(-5)}`,
@@ -5541,13 +5480,13 @@ export class BillingDatabase {
                 },
               ],
             };
-            window.localStorage.setItem("hospai_lab_orders_v1", JSON.stringify([newOrderObj, ...parsed]));
+            window.localStorage.setItem("hospai_lab_orders_v2", JSON.stringify([newOrderObj, ...parsed]));
             try {
               new BroadcastChannel("hospai_lab_orders").postMessage("changed");
             } catch {}
           }
         } catch (e) {
-          console.warn("Could not insert to hospai_lab_orders_v1:", e);
+          console.warn("Could not insert to hospai_lab_orders_v2:", e);
         }
 
         this.emitUpdate();
@@ -5772,11 +5711,11 @@ export class BillingDatabase {
       return Boolean(matchName || matchMrn || matchInv || matchEnc);
     });
 
-    // Also check LabOrderDatabase (hospai_lab_orders_v1)
+    // Also check LabOrderDatabase (hospai_lab_orders_v2)
     const extraLabTestNames: string[] = [];
     try {
       if (typeof window !== "undefined") {
-        const rawOrders = window.localStorage.getItem("hospai_lab_orders_v1");
+        const rawOrders = window.localStorage.getItem("hospai_lab_orders_v2");
         if (rawOrders) {
           const parsed = JSON.parse(rawOrders);
           parsed.forEach((o: any) => {

@@ -212,7 +212,13 @@ export default function Billing() {
   const filteredClaims = useMemo(() => {
     const list = claims.filter((c) => {
       // Dept filter
-      if (deptFilter !== "All" && c.department !== deptFilter) return false
+      if (
+        deptFilter !== "All" &&
+        c.department !== deptFilter &&
+        !(deptFilter === "Laboratory" && c.items?.some((it) => it.category === "Laboratory"))
+      ) {
+        return false
+      }
       // Status filter
       if (statusFilter === "unpaid" && (c.balanceDue || 0) <= 0) return false
       if (statusFilter === "settled" && (c.balanceDue || 0) > 0) return false
