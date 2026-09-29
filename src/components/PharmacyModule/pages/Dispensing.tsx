@@ -9,13 +9,12 @@ import {
   CreditCard,
   Smartphone,
   Wallet,
-  ShieldCheck,
-  ReceiptText,
   Trash2,
   ChevronDown,
   CheckCircle,
   RefreshCw,
   QrCode,
+  Play,
 } from "lucide-react"
 import { PharmacyDatabase } from "../../../services/pharmacyDb"
 import PageHeader from "../components/PageHeader"
@@ -23,10 +22,8 @@ import InvoicePrintModal from "../components/InvoicePrintModal"
 
 const paymentMethods = [
   { id: "cash", label: "Cash", icon: Wallet },
-  { id: "card", label: "Card", icon: CreditCard },
   { id: "upi", label: "UPI", icon: Smartphone },
-  { id: "insurance", label: "Insurance", icon: ShieldCheck },
-  { id: "credit", label: "Credit", icon: ReceiptText },
+  { id: "card", label: "Card", icon: CreditCard },
 ]
 
 function numberToWords(num: number): string {
@@ -112,7 +109,6 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
   const [payments, setPayments] = useState<Record<string, number>>({})
   const [paymentRefs, setPaymentRefs] = useState<Record<string, string>>({})
   const [tenderedCash, setTenderedCash] = useState<number>(0)
-  const [setInsuranceProvider] = useState<string>("")
 
   const [patientName, setPatientName] = useState("")
   const [posStatus, setPosStatus] = useState<string | null>(null)
@@ -123,6 +119,81 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
   const [lastBillId, setLastBillId] = useState<any>("")
   const [printDate, setPrintDate] = useState("")
   const [loadedRxMeta, setLoadedRxMeta] = useState<any>(null)
+  const [showUpiQrModal, setShowUpiQrModal] = useState(false)
+  const [hospitalUpiId, setHospitalUpiId] = useState(() => {
+    const saved = localStorage.getItem("hospai_pharmacy_upi_id")
+    if (!saved || saved === "vhpharmacy@sbi") {
+      localStorage.setItem("hospai_pharmacy_upi_id", "8790689532@ibl")
+      return "8790689532@ibl"
+    }
+    return saved
+  })
+  const [isEditingUpiId, setIsEditingUpiId] = useState(false)
+  const [paymentToast, setPaymentToast] = useState<{
+    show: boolean
+    title: string
+    message: string
+    amount: number
+    ref: string
+  } | null>(null)
+
+  const playPaymentChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = "sine"
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime) // D5
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12) // A5
+      gain.gain.setValueAtTime(0.2, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.5)
+    } catch (e) {
+      console.log("Audio not supported or blocked by user gesture:", e)
+    }
+  }
+
+  const confirmUpiPayment = (targetAmt?: number, enteredUtr?: string) => {
+    const amt = targetAmt !== undefined ? Number(targetAmt) : (payments["upi"] || (balanceDue > 0 ? balanceDue : finalAmount) || 1)
+    const ref = enteredUtr?.trim() || paymentRefs["upi"]?.trim() || "CASHIER_VERIFIED"
+
+    setPayments((prev) => ({ ...prev, upi: amt }))
+    setPaymentRefs((prev) => ({ ...prev, upi: ref }))
+    setShowUpiQrModal(false)
+
+    // Play chime sound
+    playPaymentChime()
+
+    // Show floating toast
+    setPaymentToast({
+      show: true,
+      title: `₹${amt.toFixed(2)} UPI Payment Recorded!`,
+      message: `Received on ${hospitalUpiId}. Ref: ${ref}. Deducted from bill.`,
+      amount: amt,
+      ref,
+    })
+
+    // Store notification in database
+    try {
+      PharmacyDatabase.addNotification(
+        `UPI Payment Received: ₹${amt.toFixed(2)}`,
+        `Received ₹${amt.toFixed(2)} on ${hospitalUpiId} for ${patientName || "Mr. G KUMAR"}. Ref: ${ref}`,
+        "success",
+      )
+      window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
+    } catch (e) {
+      console.error(e)
+    }
+
+    setTimeout(() => {
+      setPaymentToast(null)
+    }, 6000)
+  }
 
   useEffect(() => {
     const script = document.createElement("script")
@@ -203,14 +274,18 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
           medicineId: med.id,
           batchId: b.id,
           medicine: med.brandName || med.medicineName,
+          generic: med.genericName,
           batch: b.batchNumber,
           expiry: b.expiryDate,
           qty: split.usedQty,
           mrp: b.mrp,
           discount: 0,
-          tax: med.taxPercentage || 12,
-          hsnCode: med.hsnCode || "300490",
-          total: b.mrp * split.usedQty * (1 + (med.taxPercentage || 12) / 100),
+          tax: med.taxPercentage ?? 5,
+          hsnCode: med.hsnCode || "3004 039",
+          mnf: (med as any).mnfCode || (med.manufacturer ? med.manufacturer.substring(0, 3).toUpperCase() : "MAN"),
+          sh: med.scheduleType || "H",
+          binNo: (b as any).location || (med as any).binNo || "",
+          total: b.mrp * split.usedQty * (1 + (med.taxPercentage ?? 5) / 100),
         })
       })
     })
@@ -301,7 +376,7 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
       return
     }
 
-    const taxPct = med.gst || 12
+    const taxPct = med.gst !== undefined ? med.gst : 5
     const itemMrp = b.mrp || med.mrp || 0
 
     const newItem = {
@@ -309,13 +384,17 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
       medicineId: med.id,
       batchId: b.id,
       medicine: med.name,
+      generic: med.generic,
       batch: b.batchNumber,
       expiry: b.expiryDate,
       qty: 1,
       mrp: itemMrp,
       discount: 0,
       tax: taxPct,
-      hsnCode: med.sku || "300490",
+      hsnCode: (med as any).hsnCode || med.sku || "3004 039",
+      mnf: (med as any).mnfCode || (med.manufacturer ? med.manufacturer.substring(0, 3).toUpperCase() : "MAN"),
+      sh: med.schedule || "H",
+      binNo: (b as any).location || (med as any).binNo || "",
       total: itemMrp * (1 + taxPct / 100),
     }
     setCart((prev) => [...prev, newItem])
@@ -329,6 +408,42 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
   const balanceDue = finalAmount - totalPaid
   const isPaid = balanceDue <= 0 && finalAmount > 0
 
+  const confirmCardPayment = (amount: number, refCode?: string) => {
+    const amt = Number(amount) || (balanceDue > 0 ? balanceDue : finalAmount) || 1
+    const ref = refCode || "AUTH_" + Math.floor(100000 + Math.random() * 900000)
+
+    setPayments((prev) => ({ ...prev, card: amt }))
+    setPaymentRefs((prev) => ({ ...prev, card: ref }))
+
+    // Play chime sound
+    playPaymentChime()
+
+    // Show floating toast
+    setPaymentToast({
+      show: true,
+      title: `₹${amt.toFixed(2)} Card Payment Approved!`,
+      message: `Card terminal transaction approved. Auth Code: ${ref}. Deducted from bill.`,
+      amount: amt,
+      ref,
+    })
+
+    // Store notification in database
+    try {
+      PharmacyDatabase.addNotification(
+        `Card Payment Received: ₹${amt.toFixed(2)}`,
+        `Received ₹${amt.toFixed(2)} via Debit/Credit Card for ${patientName || "Mr. G KUMAR"}. Auth: ${ref}`,
+        "success",
+      )
+      window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
+    } catch (e) {
+      console.error(e)
+    }
+
+    setTimeout(() => {
+      setPaymentToast(null)
+    }, 6000)
+  }
+
   const handlePhysicalPOSPayment = (amount: number) => {
     setPosStatus("Connecting to POS Terminal (192.168.1.100)...")
 
@@ -341,19 +456,16 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
         setTimeout(
           () => {
             setPosStatus("Approved!")
-            setPayments((prev) => ({ ...prev, card: amount }))
-            setPaymentRefs((prev) => ({
-              ...prev,
-              card: "POS_AUTH_" + Math.floor(100000 + Math.random() * 900000),
-            }))
+            const authRef = "POS_AUTH_" + Math.floor(100000 + Math.random() * 900000)
+            confirmCardPayment(amount, authRef)
 
             // Clear status after 2 seconds
             setTimeout(() => setPosStatus(null), 2000)
           },
-          3000,
+          2500,
         )
       },
-      1000,
+      800,
     )
   }
 
@@ -374,11 +486,7 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
       image: "https://cdn-icons-png.flaticon.com/512/3063/3063126.png",
       handler: function (response: any) {
         // Success callback triggered instantly by bank webhook
-        setPayments((prev) => ({ ...prev, [method]: amount }))
-        setPaymentRefs((prev) => ({
-          ...prev,
-          [method]: response.razorpay_payment_id,
-        }))
+        confirmCardPayment(amount, response.razorpay_payment_id)
       },
       prefill: {
         name: patientName || "Walk-in Patient",
@@ -446,7 +554,7 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
           : "Cash",
       paymentsData: { amounts: payments, refs: paymentRefs },
       prescriptionId: rxId || undefined,
-      items: cart.map((c) => ({
+      items: cart.map((c: any) => ({
         medicineId: c.medicineId,
         medicineName: c.medicine,
         batchNumber: c.batch,
@@ -454,7 +562,11 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
         quantity: c.qty,
         unitPrice: c.mrp,
         grossAmount: c.qty * c.mrp,
-        discount: 0,
+        discount: c.discount || 0,
+        hsnCode: c.hsnCode || "3004 039",
+        mnf: c.mnf || "MAN",
+        sh: c.sh || "H",
+        binNo: c.binNo || "",
         taxableAmount: c.total - c.total * (c.tax / (100 + c.tax)),
         cgstAmount: (c.total * (c.tax / (100 + c.tax))) / 2,
         sgstAmount: (c.total * (c.tax / (100 + c.tax))) / 2,
@@ -468,6 +580,8 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
       cgstTotal: totalCGST,
       sgstTotal: totalSGST,
       totalAmount: finalAmount,
+      totalPaid: totalPaid,
+      balanceDue: Math.max(0, balanceDue),
       createdBy: "Pharmacist",
       createdAt: new Date().toISOString(),
     }
@@ -498,9 +612,11 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
 
     if (rxId) {
       PharmacyDatabase.updatePrescription(rxId, {
-        status: "Dispensed",
-        dispensingStatus: "Dispensed",
-      })
+        status: isPaid ? "Dispensed" : "Processing",
+        dispensingStatus: isPaid ? "Dispensed" : "Partially Dispensed",
+        paidAmount: totalPaid,
+        remainingDue: Math.max(0, balanceDue),
+      } as any)
     }
 
     PharmacyDatabase.logAudit(
@@ -510,6 +626,27 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
       billId,
       "Created bill for " + finalAmount,
     )
+
+    // Push real-time notification for sale & dispense completion
+    try {
+      PharmacyDatabase.addNotification(
+        `Sale & Dispense Completed (${billId})`,
+        `Successfully dispensed ${cart.length} item(s) for ${patientName || "Walk-in Patient"}. Bill Total: ₹${finalAmount.toFixed(2)} (Paid: ₹${totalPaid.toFixed(2)}${balanceDue > 0 ? `, Due: ₹${balanceDue.toFixed(2)}` : ""}) via ${bill.paymentMode}.`,
+        "success",
+      )
+      window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
+    } catch (e) {
+      console.error(e)
+    }
+
+    playPaymentChime()
+    setPaymentToast({
+      show: true,
+      title: `Transaction Completed (${billId})`,
+      message: `Dispensed ${cart.length} item(s) for ${patientName || "Mr. G KUMAR"}. Bill Total: ₹${finalAmount.toFixed(2)}.`,
+      amount: finalAmount,
+      ref: billId,
+    })
 
     setShowInvoice(true)
   }
@@ -527,6 +664,38 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
 
   return (
     <div className="flex h-full overflow-hidden relative">
+      {/* Real-time Payment Success Notification Toast */}
+      {paymentToast && (
+        <div className="fixed top-5 right-5 z-[9999] max-w-md w-full bg-white border-2 border-emerald-500 rounded-2xl shadow-2xl p-4 flex items-start gap-3 animate-in slide-in-from-top-4 duration-300">
+          <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+            <CheckCircle size={22} />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[14px] font-bold text-emerald-900">
+                {paymentToast.title}
+              </h4>
+              <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
+                REAL-TIME
+              </span>
+            </div>
+            <p className="text-[12px] text-emerald-700 mt-0.5">
+              {paymentToast.message}
+            </p>
+            <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-emerald-800 bg-emerald-50 p-1.5 rounded border border-emerald-200">
+              <span>Ref / UTR: <strong>{paymentToast.ref}</strong></span>
+              <span className="ml-auto font-bold text-emerald-700">Deducted from Bill ✓</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setPaymentToast(null)}
+            className="text-gray-400 hover:text-gray-600 p-1"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Invoice Modal Overlay */}
       {showInvoice && lastBillId && (
         <InvoicePrintModal bill={lastBillId as any} onClose={closeInvoice} />
@@ -660,46 +829,95 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                             .toLowerCase()
                             .includes(historySearch.toLowerCase()),
                       )
-                      .map((inv, i) => (
-                        <tr key={i} className="hover:bg-[#F0FDFA] transition-colors hover:bg-[#F5F7FA] transition-colors"
-                        >
-                          <td className="px-5 py-3 font-mono text-[12px] font-semibold text-[#0F766E]">
-                            {inv.billNumber}
-                          </td>
-                          <td className="px-5 py-3 text-[12px] text-[#64748B]">
-                            {new Date(
-                              inv.createdAt ||
-                                (inv as any).date ||
-                                (inv as any).billDate,
-                            ).toLocaleString()}
-                          </td>
-                          <td className="px-5 py-3 font-medium text-[13px] text-[#0F1624]">
-                            {inv.patientName}
-                          </td>
-                          <td className="px-5 py-3 text-[13px] text-center">
-                            {inv.items ? inv.items.length : 0}
-                          </td>
-                          <td className="px-5 py-3">
-                            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-[#E8EDF5] text-[#0F766E]">
-                              {inv.paymentMode || "Cash"}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-[13px] font-bold text-[#0F1624] text-right">
-                            ₹
-                            {(inv.totalAmount || 0).toLocaleString("en-IN", {
-                              minimumFractionDigits: 2,
-                            })}
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            <button
-                              onClick={() => setPrintBill(inv)}
-                              className="p-1.5 rounded bg-white border border-[#E2E8F0] hover:bg-[#F0F2F5] text-[#475569] transition-colors inline-flex items-center justify-center shadow-sm"
-                            >
-                              <Printer size={14} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      .map((inv, i) => {
+                        const isModified =
+                          inv.isModifiedReturnBill ||
+                          inv.billNumber?.startsWith("MOD-")
+                        const billReturns = PharmacyDatabase.getReturnsForBill(
+                          inv.billNumber,
+                        )
+                        const hasReturns = billReturns.length > 0
+                        const totalRefunded = billReturns.reduce(
+                          (s, r) => s + (r.refundAmount || 0),
+                          0,
+                        )
+
+                        return (
+                          <tr
+                            key={i}
+                            className="hover:bg-[#F0FDFA] transition-colors"
+                          >
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono text-[12px] font-semibold text-[#0F766E]">
+                                  {inv.billNumber}
+                                </span>
+                                {isModified && (
+                                  <span className="px-1.5 py-0.5 text-[10px] bg-purple-100 text-purple-700 font-bold rounded">
+                                    MODIFIED
+                                  </span>
+                                )}
+                                {hasReturns && !isModified && (
+                                  <span className="px-1.5 py-0.5 text-[10px] bg-amber-100 text-amber-700 font-bold rounded">
+                                    RETURN PROCESSED
+                                  </span>
+                                )}
+                              </div>
+                              {isModified && inv.originalBillNumber && (
+                                <span className="block text-[11px] text-[#94A3B8] font-mono">
+                                  Original: {inv.originalBillNumber}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3 text-[12px] text-[#64748B]">
+                              {new Date(
+                                inv.createdAt ||
+                                  (inv as any).date ||
+                                  (inv as any).billDate,
+                              ).toLocaleString()}
+                            </td>
+                            <td className="px-5 py-3 font-medium text-[13px] text-[#0F1624]">
+                              {inv.patientName}
+                            </td>
+                            <td className="px-5 py-3 text-[13px] text-center">
+                              {inv.items ? inv.items.length : 0}
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-[#E8EDF5] text-[#0F766E]">
+                                {inv.paymentMode || "Cash"}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-[13px] font-bold text-[#0F1624] text-right">
+                              <div>
+                                ₹
+                                {(inv.totalAmount || 0).toLocaleString(
+                                  "en-IN",
+                                  {
+                                    minimumFractionDigits: 2,
+                                  },
+                                )}
+                              </div>
+                              {hasReturns && !isModified && (
+                                <div className="text-[11px] text-red-500 font-normal">
+                                  -₹
+                                  {totalRefunded.toLocaleString("en-IN", {
+                                    minimumFractionDigits: 2,
+                                  })}{" "}
+                                  refund
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <button
+                                onClick={() => setPrintBill(inv)}
+                                className="p-1.5 rounded bg-white border border-[#E2E8F0] hover:bg-[#F0F2F5] text-[#475569] transition-colors inline-flex items-center justify-center shadow-xs"
+                              >
+                                <Printer size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     {bills.length === 0 && (
                       <tr>
                         <td
@@ -971,17 +1189,37 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
 
               <div className="h-px bg-[#DDE2EC] my-3"></div>
 
-              <div className="flex justify-between items-end">
-                <span className="text-[14px] font-black text-[#475569] uppercase tracking-widest">
-                  Net Payable
-                </span>
-                <div className="text-right">
-                  <span className="text-[11px] text-[#64748B] block mb-1">
-                    Total Amount
-                  </span>
-                  <span className="text-[36px] font-black text-[#0F766E] leading-none tracking-tighter">
-                    ₹{finalAmount}
-                  </span>
+              {/* Live Real-time Payment & Balance Due Summary */}
+              <div className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl p-3.5 space-y-2">
+                <div className="flex justify-between items-center text-[13px]">
+                  <span className="text-[#64748B] font-medium">Total Bill Amount:</span>
+                  <span className="font-bold text-[#0F1624] text-[15px]">₹{finalAmount.toFixed(2)}</span>
+                </div>
+
+                {totalPaid > 0 && (
+                  <div className="flex justify-between items-center text-[13px] text-[#047857] font-bold bg-[#ECFDF5] border border-[#A7F3D0] px-3 py-1.5 rounded-lg">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Deducted / Paid {payments["upi"] ? `(UPI: ₹${Number(payments["upi"]).toFixed(2)})` : ""}{payments["card"] ? ` (Card: ₹${Number(payments["card"]).toFixed(2)})` : ""}{payments["cash"] ? ` (Cash: ₹${Number(payments["cash"]).toFixed(2)})` : ""}:
+                    </span>
+                    <span className="text-[14px] font-mono">- ₹{totalPaid.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center pt-2 border-t border-[#E2E8F0]">
+                  <div>
+                    <span className="text-[12px] font-bold text-[#334155] uppercase tracking-wide block">
+                      {balanceDue <= 0 ? "Payment Status" : "Remaining to Pay"}
+                    </span>
+                    {balanceDue > 0 && (
+                      <span className="text-[10px] text-[#64748B]">After deducting paid ₹{totalPaid.toFixed(2)}</span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-[28px] font-black leading-none ${balanceDue <= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {balanceDue <= 0 ? "PAID ✓" : `₹${balanceDue.toFixed(2)}`}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1008,9 +1246,20 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                   </div>
                   <div className="p-3 bg-white space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[12px] text-[#475569]">
-                        Paying (₹)
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] text-[#475569]">
+                          Paying (₹)
+                        </span>
+                        {balanceDue > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setPayments((p) => ({ ...p, cash: balanceDue }))}
+                            className="text-[10px] text-[#1B4FD8] font-semibold hover:underline"
+                          >
+                            (Fill Balance ₹{balanceDue.toFixed(2)})
+                          </button>
+                        )}
+                      </div>
                       <input
                         type="number"
                         value={payments["cash"] || ""}
@@ -1020,7 +1269,7 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                             cash: Number(e.target.value),
                           }))
                         }
-                        className="w-24 px-2 py-1 text-right text-[13px] border border-[#E2E8F0] focus:border-[#1B4FD8] outline-none rounded"
+                        className="w-24 px-2 py-1 text-right text-[13px] border border-[#E2E8F0] focus:border-[#1B4FD8] outline-none rounded font-bold"
                         placeholder="0.00"
                       />
                     </div>
@@ -1057,12 +1306,13 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                 </div>
 
                 {/* UPI */}
+                {/* UPI */}
                 <div className="border border-[#E2E8F0] rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
                   <div className="flex items-center justify-between bg-[#F8FAFC] p-3 border-b border-[#E2E8F0]">
                     <div className="flex items-center gap-2">
-                      <Smartphone size={16} className="text-[#1B4FD8]" />
+                      <Smartphone size={16} className="text-[#0F766E]" />
                       <span className="text-[13px] font-semibold text-[#0F1624]">
-                        UPI / QR
+                        UPI (GPay / PhonePe / QR)
                       </span>
                     </div>
                     {paymentRefs["upi"] && (
@@ -1071,47 +1321,99 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                       </span>
                     )}
                   </div>
-                  <div className="p-3 bg-white flex items-center justify-between gap-2">
-                    <input
-                      type="number"
-                      value={payments["upi"] || ""}
-                      onChange={(e) => {
-                        setPayments((p) => ({
-                          ...p,
-                          upi: Number(e.target.value),
-                        }))
-                        setPaymentRefs((p) => {
-                          const n = { ...p }
-                          delete n.upi
-                          return n
-                        })
-                      }}
-                      className="w-28 px-3 py-2 text-right text-[15px] font-bold border border-[#CBD5E1] focus:border-[#1B4FD8] focus:ring-2 focus:ring-[#1B4FD8]/20 outline-none rounded-md transition-all"
-                      placeholder="0.00"
-                    />
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() =>
-                          handleRazorpayPayment("upi", payments["upi"])
-                        }
-                        disabled={!payments["upi"]}
-                        className="px-3 py-1 bg-[#1B4FD8] text-white text-[12px] rounded font-medium disabled:opacity-50 hover:bg-[#1540B3]"
-                      >
-                        Pay via Gateway
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPayments((p) => ({ ...p, upi: payments["upi"] }))
-                          setPaymentRefs((p) => ({
+                  <div className="p-3 bg-white space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] text-[#475569]">Amount (₹)</span>
+                        {(!payments["upi"] || payments["upi"] === 0) && balanceDue > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setPayments((p) => ({ ...p, upi: balanceDue }))}
+                            className="text-[10px] text-[#0F766E] font-semibold hover:underline"
+                          >
+                            (Fill ₹{balanceDue.toFixed(2)})
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="number"
+                        value={payments["upi"] || ""}
+                        onChange={(e) => {
+                          setPayments((p) => ({
                             ...p,
-                            upi:
-                              "pay_DEMO" + Math.floor(Math.random() * 900000),
+                            upi: Number(e.target.value),
                           }))
                         }}
-                        disabled={!payments["upi"]}
-                        className="px-3 py-1 bg-green-600 text-white text-[12px] rounded font-medium disabled:opacity-50"
+                        className="w-28 px-3 py-1.5 text-right text-[14px] font-bold border border-[#CBD5E1] focus:border-[#0F766E] outline-none rounded"
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    {/* LIVE UPI RECEIVER CONFIGURATION */}
+                    <div className="bg-[#F0FDFA] border border-[#99F6E4] rounded-lg p-2.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-[#0F766E] flex items-center gap-1">
+                          <span>Your Receiver UPI ID (Live Real-Time)</span>
+                        </label>
+                        <span className="text-[9px] bg-[#CCFBF1] text-[#0F766E] font-bold px-1.5 py-0.5 rounded uppercase">
+                          Real-Time QR
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={hospitalUpiId}
+                          onChange={(e) => {
+                            setHospitalUpiId(e.target.value)
+                            localStorage.setItem("hospai_pharmacy_upi_id", e.target.value)
+                          }}
+                          placeholder="8790689532@ibl"
+                          className="flex-1 px-2.5 py-1.5 text-[12px] font-mono font-bold bg-white border border-[#5EEAD4] focus:border-[#0F766E] rounded outline-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const amt = payments["upi"] || (balanceDue > 0 ? balanceDue : finalAmount)
+                            setPayments((p) => ({ ...p, upi: amt }))
+                            setShowUpiQrModal(true)
+                          }}
+                          className="flex-1 py-1.5 bg-[#0F766E] text-white text-[11px] rounded font-bold flex items-center justify-center gap-1.5 hover:bg-[#0c5e58] transition-colors shadow-sm cursor-pointer"
+                        >
+                          <QrCode size={13} /> Open Live Scan & Pay QR
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#F0F2F5]">
+                      <input
+                        type="text"
+                        value={paymentRefs["upi"] || ""}
+                        onChange={(e) =>
+                          setPaymentRefs((p) => ({
+                            ...p,
+                            upi: e.target.value,
+                          }))
+                        }
+                        placeholder="12-digit Bank UTR / Ref No."
+                        className="flex-1 px-2.5 py-1 text-[11px] border border-[#E2E8F0] outline-none rounded font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const amt = payments["upi"] || (balanceDue > 0 ? balanceDue : finalAmount)
+                          setPayments((p) => ({ ...p, upi: amt }))
+                          if (!paymentRefs["upi"]) {
+                            setPaymentRefs((p) => ({
+                              ...p,
+                              upi: "UTR" + Date.now().toString().slice(-8),
+                            }))
+                          }
+                        }}
+                        className="px-2.5 py-1 bg-[#16a34a] text-white text-[11px] rounded font-semibold hover:bg-[#15803d] transition-colors"
                       >
-                        Demo Success
+                        ✓ Mark Paid
                       </button>
                     </div>
                   </div>
@@ -1123,7 +1425,7 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                     <div className="flex items-center gap-2">
                       <CreditCard size={16} className="text-[#1B4FD8]" />
                       <span className="text-[13px] font-semibold text-[#0F1624]">
-                        Card (Physical POS)
+                        Card (Debit / Credit POS)
                       </span>
                     </div>
                     {paymentRefs["card"] && (
@@ -1132,8 +1434,20 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                       </span>
                     )}
                   </div>
-                  <div className="p-3 bg-white flex flex-col gap-2">
+                  <div className="p-3 bg-white space-y-2">
                     <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] text-[#475569]">Amount (₹)</span>
+                        {(!payments["card"] || payments["card"] === 0) && balanceDue > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setPayments((p) => ({ ...p, card: balanceDue }))}
+                            className="text-[10px] text-[#1B4FD8] font-semibold hover:underline"
+                          >
+                            (Fill ₹{balanceDue.toFixed(2)})
+                          </button>
+                        )}
+                      </div>
                       <input
                         type="number"
                         value={payments["card"] || ""}
@@ -1142,25 +1456,63 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
                             ...p,
                             card: Number(e.target.value),
                           }))
-                          setPaymentRefs((p) => {
-                            const n = { ...p }
-                            delete n.card
-                            return n
-                          })
                         }}
-                        className="w-28 px-3 py-2 text-right text-[15px] font-bold border border-[#CBD5E1] focus:border-[#0F766E] focus:ring-2 focus:ring-[#0F766E]/20 outline-none rounded-md transition-all"
+                        className="w-28 px-3 py-1.5 text-right text-[14px] font-bold border border-[#CBD5E1] focus:border-[#1B4FD8] outline-none rounded"
                         placeholder="0.00"
                       />
-                      <button
-                        onClick={() =>
-                          handlePhysicalPOSPayment(payments["card"])
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#F0F2F5]">
+                      <input
+                        type="text"
+                        value={paymentRefs["card"] || ""}
+                        onChange={(e) =>
+                          setPaymentRefs((p) => ({
+                            ...p,
+                            card: e.target.value,
+                          }))
                         }
-                        disabled={!payments["card"] || posStatus !== null}
-                        className="px-3 py-1 bg-[#0F766E] text-white text-[12px] rounded font-medium disabled:opacity-50 flex items-center gap-1"
+                        placeholder="POS Auth Code / Slip No."
+                        className="flex-1 px-2.5 py-1 text-[11px] border border-[#E2E8F0] outline-none rounded font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const amt = payments["card"] || (balanceDue > 0 ? balanceDue : finalAmount)
+                          confirmCardPayment(amt)
+                        }}
+                        className="px-2.5 py-1 bg-[#1B4FD8] text-white text-[11px] rounded font-semibold hover:bg-[#1540B3] transition-colors"
                       >
-                        Send to Card Machine (POS)
+                        Swiped & Paid
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handlePhysicalPOSPayment(
+                            payments["card"] || (balanceDue > 0 ? balanceDue : finalAmount)
+                          )
+                        }
+                        disabled={posStatus !== null}
+                        className="px-2 py-1 border border-[#CBD5E1] text-[#334155] text-[11px] rounded font-medium hover:bg-[#F8FAFC] transition-colors"
+                        title="Simulate Card Machine Tap"
+                      >
+                        Send POS
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleRazorpayPayment(
+                            "card",
+                            payments["card"] || (balanceDue > 0 ? balanceDue : finalAmount)
+                          )
+                        }
+                        className="px-2 py-1 bg-[#0F1624] text-white text-[11px] rounded font-medium hover:bg-[#1E293B] transition-colors"
+                        title="Open Card Checkout Gateway"
+                      >
+                        Card PG
                       </button>
                     </div>
+
                     {posStatus && (
                       <div
                         className={`text-[11px] font-semibold p-2 rounded ${
@@ -1186,18 +1538,184 @@ export default function Dispensing({ onNavigate }: DispensingProps) {
             </div>
           </div>
 
-          <div className="p-5 border-t border-[#E2E8F0] bg-white">
+          <div className="p-5 border-t border-[#E2E8F0] bg-white space-y-2.5">
+            {balanceDue > 0 && totalPaid > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPayments((p) => ({ ...p, cash: balanceDue }))
+                }}
+                className="w-full py-2.5 bg-[#1B4FD8] hover:bg-[#1640b0] text-white text-[12px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Wallet size={15} /> Settle Remaining ₹{balanceDue.toFixed(2)} in Cash
+              </button>
+            )}
+
             <button
               onClick={completeTransaction}
-              disabled={cart.length === 0 || !isPaid}
-              className={`w-full py-4 text-[14px] font-bold shadow-sm transition-colors uppercase tracking-wide ${
-                cart.length > 0 && isPaid
-                  ? "bg-[#0F766E] text-white hover:bg-[#1742B8]"
+              disabled={cart.length === 0}
+              className={`w-full py-4 text-[14px] font-bold rounded-lg shadow-sm transition-colors uppercase tracking-wide flex items-center justify-center gap-2 ${
+                cart.length > 0
+                  ? isPaid
+                    ? "bg-[#0F766E] text-white hover:bg-[#0c5e58]"
+                    : "bg-[#D97706] text-white hover:bg-[#b45309]"
                   : "bg-[#F0F2F5] text-[#94A3B8] cursor-not-allowed"
               }`}
             >
-              Complete Transaction
+              {isPaid ? (
+                <>
+                  <CheckCircle size={18} /> Dispense & Print Invoice (Full Paid)
+                </>
+              ) : totalPaid > 0 ? (
+                <>
+                  <Play size={18} /> Dispense (₹{totalPaid.toFixed(2)} Paid · ₹{balanceDue.toFixed(2)} Due)
+                </>
+              ) : (
+                "Select Payment Method Above"
+              )}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Counter UPI QR Code Modal */}
+      {showUpiQrModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(15,23,42,0.7)" }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center relative border border-[#E2E8F0] animate-in fade-in zoom-in-95">
+            <button
+              onClick={() => setShowUpiQrModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-[#F1F5F9] text-[#64748B] transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="w-12 h-12 rounded-full bg-[#E6FFFA] text-[#0F766E] flex items-center justify-center mx-auto mb-2.5 border border-[#99F6E4]">
+              <QrCode size={24} />
+            </div>
+
+            <h3 className="text-[17px] font-bold text-[#0F1624]">
+              Scan & Pay via UPI
+            </h3>
+            <p className="text-[12px] text-[#64748B] mt-0.5">
+              GPay · PhonePe · Paytm · BHIM · Any Bank UPI App
+            </p>
+
+            {/* Editable Receiver UPI ID directly on modal */}
+            <div className="mt-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-3 text-left">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-bold text-[#64748B] uppercase tracking-wide">
+                  Receiver UPI ID (Your Account):
+                </label>
+                <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
+                  Live Active
+                </span>
+              </div>
+              <input
+                type="text"
+                value={hospitalUpiId}
+                onChange={(e) => {
+                  setHospitalUpiId(e.target.value)
+                  localStorage.setItem("hospai_pharmacy_upi_id", e.target.value)
+                }}
+                placeholder="8790689532@ibl"
+                className="w-full px-2.5 py-1.5 text-[13px] border border-[#CBD5E1] focus:border-[#0F766E] rounded font-mono font-bold text-[#0F1624] outline-none bg-white shadow-sm"
+              />
+            </div>
+
+            {/* QR Code Container */}
+            <div className="bg-[#F8FAFC] border-2 border-dashed border-[#0D9488] rounded-xl p-4 my-3 flex flex-col items-center justify-center">
+              {hospitalUpiId.trim() ? (
+                <>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(
+                      `upi://pay?pa=${hospitalUpiId.trim()}&pn=VH Pharmacy&am=${((payments["upi"] || finalAmount) || 0).toFixed(2)}&cu=INR`
+                    )}`}
+                    alt="UPI QR Code"
+                    className="w-48 h-48 rounded-lg shadow-sm bg-white p-2 border border-[#E2E8F0]"
+                  />
+                  <div className="mt-2.5 flex flex-col items-center">
+                    <span className="text-[10px] text-[#64748B] uppercase font-bold tracking-wider">Amount to Pay</span>
+                    <div className="flex items-center justify-center gap-1 mt-0.5">
+                      <span className="text-[18px] font-black text-[#0F766E]">₹</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={payments["upi"] !== undefined ? payments["upi"] : finalAmount}
+                        onChange={(e) => setPayments((p) => ({ ...p, upi: Number(e.target.value) }))}
+                        className="w-24 text-[22px] font-black text-[#0F766E] border-b-2 border-[#0D9488] text-center outline-none bg-transparent"
+                      />
+                    </div>
+                    <div className="flex gap-1.5 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setPayments((p) => ({ ...p, upi: 1 }))}
+                        className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold hover:bg-emerald-200 transition-colors"
+                      >
+                        ⚡ Quick ₹1 Test
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPayments((p) => ({ ...p, upi: finalAmount }))}
+                        className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-800 rounded font-bold hover:bg-slate-200 transition-colors"
+                      >
+                        Full (₹{finalAmount})
+                      </button>
+                    </div>
+                  </div>
+                  <a
+                    href={`upi://pay?pa=${hospitalUpiId.trim()}&pn=VH Pharmacy&am=${((payments["upi"] || finalAmount) || 0).toFixed(2)}&cu=INR`}
+                    className="mt-2 text-[11px] text-[#0F766E] hover:underline font-semibold flex items-center gap-1"
+                  >
+                    Open directly in UPI App ↗
+                  </a>
+                </>
+              ) : (
+                <div className="py-8 text-center text-rose-600 font-semibold text-[13px]">
+                  Please enter your receiver UPI ID above
+                </div>
+              )}
+            </div>
+
+            {/* Real 12-digit UPI Ref entry */}
+            <div className="text-left mb-3 bg-[#F1F5F9] p-3 rounded-xl border border-[#CBD5E1]">
+              <label className="block text-[11px] font-bold text-[#1E293B] mb-1">
+                Enter 12-digit UPI Ref / UTR (from PhonePe / GPay screen):
+              </label>
+              <input
+                type="text"
+                maxLength={16}
+                value={paymentRefs["upi"] || ""}
+                onChange={(e) => setPaymentRefs((p) => ({ ...p, upi: e.target.value.trim() }))}
+                placeholder="e.g. 427189104821 (Check PhonePe receipt)"
+                className="w-full px-2.5 py-1.5 bg-white border border-[#94A3B8] rounded font-mono font-bold text-[13px] text-[#0F1624] tracking-wider outline-none"
+              />
+              <span className="text-[10px] text-[#64748B] mt-1 block">
+                💡 Look at your PhonePe/GPay screen for <strong>UPI Ref No</strong>. Type it here so your bill has the 100% real bank UTR!
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowUpiQrModal(false)}
+                className="flex-1 py-2.5 rounded-lg border border-[#E2E8F0] text-[13px] font-semibold text-[#64748B] hover:bg-[#F8FAFC]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const amt = payments["upi"] !== undefined && payments["upi"] > 0 ? payments["upi"] : 1
+                  confirmUpiPayment(amt, paymentRefs["upi"])
+                }}
+                className="flex-1 py-2.5 rounded-lg text-white text-[13px] font-bold bg-[#16a34a] hover:bg-[#15803d] shadow-md transition-colors flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle size={16} /> ✓ Confirm & Record Payment
+              </button>
+            </div>
           </div>
         </div>
       )}

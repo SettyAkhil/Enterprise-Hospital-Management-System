@@ -1,3 +1,5 @@
+import { seedPharmacyHospitalData, seedTestPrescriptionForSelling } from "./pharmacySeedData"
+
 export interface AppUser {
   id: string
   name: string
@@ -13,9 +15,12 @@ export interface AppNotification {
   id: string
   title: string
   message: string
-  type: "alert" | "info" | "success" | "warning"
+  type: "alert" | "info" | "success" | "warning" | "critical"
   timestamp: string
   read: boolean
+  actionPage?: string
+  actionLabel?: string
+  category?: "stock" | "expiry" | "prescription" | "transfer" | "return" | "general"
 }
 
 export interface AppAuditLog {
@@ -73,6 +78,8 @@ export interface AppMedicine {
   controlledSubstanceFlag: boolean
   activeStatus: "Active" | "Inactive"
   createdAt: string
+  mnfCode?: string
+  binNo?: string
 }
 
 // FEFO enabled Batch
@@ -427,6 +434,8 @@ export interface AppStockAdjustment {
 
 const USERS_KEY = "hospai_pharm_users_v4"
 const NOTIFICATIONS_KEY = "hospai_pharm_notifications_v4"
+const DISMISSED_NOTIFICATIONS_KEY = "hospai_pharm_dismissed_notifs_v4"
+const READ_NOTIFICATIONS_KEY = "hospai_pharm_read_notifs_v4"
 const AUDIT_LOGS_KEY = "hospai_pharm_audit_logs_v4"
 
 const CATEGORIES_KEY = "hospai_pharm_categories_v4"
@@ -549,30 +558,10 @@ export function purgeSampleData(): boolean {
         const meds = JSON.parse(storedMeds)
         const isSampleMed = (m: any) => {
           const id = (m.id || "").toLowerCase()
-          if (
+          return (
             SAMPLE_MED_IDS.has(m.id) ||
             id.startsWith("med-00") ||
-            id.startsWith("med-01")
-          )
-            return true
-          const name =
-            `${m.name || ""} ${m.medicineName || ""} ${m.brandName || ""} ${m.genericName || ""} ${m.generic || ""}`.toLowerCase()
-          return (
-            name.includes("dolo") ||
-            name.includes("mox") ||
-            name.includes("azee") ||
-            name.includes("pan 40") ||
-            name.includes("cetzine") ||
-            name.includes("cetizine") ||
-            name.includes("glycomet") ||
-            name.includes("atorva") ||
-            name.includes("limcee") ||
-            name.includes("ascoril") ||
-            name.includes("zenflox") ||
-            name.includes("amoxicillin trihydrate") ||
-            name.includes("pantoprazole sodium") ||
-            name.includes("cetirizine hydrochloride") ||
-            name.includes("metformin hydrochloride")
+            id.startsWith("med-demo")
           )
         }
         const filtered = meds.filter((m: any) => !isSampleMed(m))
@@ -588,91 +577,11 @@ export function purgeSampleData(): boolean {
     if (storedBatches) {
       try {
         const batches = JSON.parse(storedBatches)
-        let validMedIds = new Set<string>()
-        if (storedMeds) {
-          try {
-            const currentMeds = JSON.parse(
-              window.localStorage.getItem(MEDICINES_KEY) || "[]",
-            )
-            validMedIds = new Set(currentMeds.map((m: any) => m.id))
-          } catch {}
-        }
-
         const filtered = batches.filter((b: any) => {
           const id = (b.id || "").toLowerCase()
-          const batchNo = (b.batchNumber || "").toLowerCase()
-          const medId = (b.medicineId || "").toLowerCase()
-          const name =
-            `${b.name || ""} ${b.medicineName || ""} ${b.medicine || ""}`.toLowerCase()
           if (SAMPLE_BATCH_IDS.has(b.id) || SAMPLE_MED_IDS.has(b.medicineId))
             return false
-          // Purge orphan batches if medicine catalog does not contain this medicine
-          if (validMedIds.size > 0 && !validMedIds.has(b.medicineId))
-            return false
-          if (
-            validMedIds.size === 0 &&
-            (medId.startsWith("med-") || batchNo.includes("-2026-"))
-          )
-            return false
-
-          if (
-            id.startsWith("bat-00") ||
-            id.startsWith("bat-01") ||
-            id.startsWith("bat-2026-") ||
-            id.startsWith("bat-demo")
-          )
-            return false
-          if (
-            batchNo.startsWith("bat-00") ||
-            batchNo.startsWith("bat-01") ||
-            batchNo.startsWith("bat-2026-")
-          )
-            return false
-          if (
-            batchNo.startsWith("amx-") ||
-            batchNo.startsWith("pcm-") ||
-            batchNo.startsWith("azm-") ||
-            batchNo.startsWith("ctz-") ||
-            batchNo.startsWith("pan-") ||
-            batchNo.startsWith("vtc-") ||
-            batchNo.startsWith("cof-") ||
-            batchNo.startsWith("met-") ||
-            batchNo.startsWith("atv-")
-          )
-            return false
-          if (
-            medId.startsWith("med-00") ||
-            medId.startsWith("med-01") ||
-            medId.startsWith("med-amx") ||
-            medId.startsWith("med-pcm") ||
-            medId.startsWith("med-azm") ||
-            medId.startsWith("med-ctz") ||
-            medId.startsWith("med-pan") ||
-            medId.startsWith("med-vtc") ||
-            medId.startsWith("med-cof") ||
-            medId.startsWith("med-met") ||
-            medId.startsWith("med-atv")
-          )
-            return false
-          if (
-            name.includes("dolo") ||
-            name.includes("mox") ||
-            name.includes("azee") ||
-            name.includes("pan 40") ||
-            name.includes("cetzine") ||
-            name.includes("cetizine") ||
-            name.includes("glycomet") ||
-            name.includes("atorva") ||
-            name.includes("limcee") ||
-            name.includes("ascoril") ||
-            name.includes("zenflox") ||
-            name.includes("azithromycin") ||
-            name.includes("pantoprazole") ||
-            name.includes("paracetamol") ||
-            name.includes("amoxicillin") ||
-            name.includes("vitamin c")
-          )
-            return false
+          if (id.startsWith("bat-demo")) return false
           return true
         })
         if (filtered.length !== batches.length) {
@@ -1005,41 +914,69 @@ export function purgeSampleData(): boolean {
  */
 export function clearAllPharmacyData(): void {
   if (typeof window === "undefined") return
-  const keys = [
-    CATEGORIES_KEY,
-    SUPPLIERS_KEY,
-    MEDICINES_KEY,
-    BATCHES_KEY,
-    POS_KEY,
-    GRNS_KEY,
-    STOCK_TXS_KEY,
-    PRESCRIPTIONS_KEY,
-    BILLS_KEY,
-    RETURNS_KEY,
-    TRANSFERS_KEY,
-    SUPPLIER_RETURNS_KEY,
-    ADJUSTMENTS_KEY,
-    CLARIFICATIONS_KEY,
-    NOTIFICATIONS_KEY,
-    AUDIT_LOGS_KEY,
-    "hospai_pharm_purchase_orders_v2",
-    "hospai_pharm_prescriptions_v2",
-    "hospai_pharm_supplier_returns_v2",
-    "hospai_pharm_sample_data_v1",
-  ]
-  keys.forEach((k) => window.localStorage.removeItem(k))
-  window.dispatchEvent(new Event("storage"))
-  window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
+  try {
+    // Scan and remove any existing pharmacy keys across all versions
+    const toRemove: string[] = []
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i)
+      if (
+        k &&
+        (k.startsWith("hospai_pharm_") ||
+          k.startsWith("pharm_") ||
+          k.startsWith("pharmacy_") ||
+          k.includes("pharmacy")) &&
+        k !== "hospai_pharmacy_upi_id"
+      ) {
+        toRemove.push(k)
+      }
+    }
+    toRemove.forEach((k) => window.localStorage.removeItem(k))
+
+    // Explicitly initialize all stores to empty lists so zero demo records remain
+    window.localStorage.setItem(CATEGORIES_KEY, "[]")
+    window.localStorage.setItem(SUPPLIERS_KEY, "[]")
+    window.localStorage.setItem(MEDICINES_KEY, "[]")
+    window.localStorage.setItem(BATCHES_KEY, "[]")
+    window.localStorage.setItem(POS_KEY, "[]")
+    window.localStorage.setItem(GRNS_KEY, "[]")
+    window.localStorage.setItem(STOCK_TXS_KEY, "[]")
+    window.localStorage.setItem(PRESCRIPTIONS_KEY, "[]")
+    window.localStorage.setItem(BILLS_KEY, "[]")
+    window.localStorage.setItem(RETURNS_KEY, "[]")
+    window.localStorage.setItem(TRANSFERS_KEY, "[]")
+    window.localStorage.setItem(SUPPLIER_RETURNS_KEY, "[]")
+    window.localStorage.setItem(ADJUSTMENTS_KEY, "[]")
+    window.localStorage.setItem(CLARIFICATIONS_KEY, "[]")
+    window.localStorage.setItem(NOTIFICATIONS_KEY, "[]")
+    window.localStorage.setItem(AUDIT_LOGS_KEY, "[]")
+    window.localStorage.setItem(USERS_KEY, "[]")
+    window.localStorage.setItem("hospai_pharm_fresh_demo_purged_v3", "true")
+
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
+  } catch (e) {
+    console.error("Failed to clear pharmacy data:", e)
+  }
 }
 
-// Automatically run sample data purge on module load
+// Automatically purge demo and seed data once so the application opens completely clean for fresh hospital demo
 if (typeof window !== "undefined") {
-  purgeSampleData()
+  try {
+    const isCleanPurged = window.localStorage.getItem("hospai_pharm_fresh_demo_purged_v3")
+    if (!isCleanPurged) {
+      clearAllPharmacyData()
+      window.localStorage.setItem("hospai_pharm_fresh_demo_purged_v3", "true")
+    }
+  } catch (e) {
+    console.error("Failed to purge demo pharmacy data:", e)
+  }
 }
 
 export class PharmacyDatabase {
   static purgeSampleData = purgeSampleData
   static clearAllPharmacyData = clearAllPharmacyData
+  static seedHospitalTestData = seedPharmacyHospitalData
+  static seedTestPrescriptionForSelling = seedTestPrescriptionForSelling
   // Categories
 
   static getUsers(): AppUser[] {
@@ -1072,6 +1009,101 @@ export class PharmacyDatabase {
     }
   }
 
+  static getDismissedNotificationIds(): string[] {
+    if (typeof window === "undefined") return []
+    try {
+      const stored = window.localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY)
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  }
+
+  static dismissNotification(id: string) {
+    if (typeof window === "undefined") return
+    try {
+      const dismissed = this.getDismissedNotificationIds()
+      if (!dismissed.includes(id)) {
+        dismissed.push(id)
+        window.localStorage.setItem(
+          DISMISSED_NOTIFICATIONS_KEY,
+          JSON.stringify(dismissed),
+        )
+      }
+      let notifs = this.getNotifications()
+      if (notifs.some((n) => n.id === id)) {
+        notifs = notifs.filter((n) => n.id !== id)
+        this.saveNotifications(notifs)
+      } else {
+        window.dispatchEvent(new Event("storage"))
+        window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
+      }
+    } catch (e) {
+      console.error("Failed to dismiss notification", e)
+    }
+  }
+
+  static getReadNotificationIds(): string[] {
+    if (typeof window === "undefined") return []
+    try {
+      const stored = window.localStorage.getItem(READ_NOTIFICATIONS_KEY)
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  }
+
+  static markNotificationRead(id: string, read: boolean = true) {
+    if (typeof window === "undefined") return
+    try {
+      const readIds = this.getReadNotificationIds()
+      if (read) {
+        if (!readIds.includes(id)) readIds.push(id)
+      } else {
+        const idx = readIds.indexOf(id)
+        if (idx > -1) readIds.splice(idx, 1)
+      }
+      window.localStorage.setItem(
+        READ_NOTIFICATIONS_KEY,
+        JSON.stringify(readIds),
+      )
+      const notifs = this.getNotifications()
+      const idx = notifs.findIndex((n) => n.id === id)
+      if (idx > -1) {
+        notifs[idx].read = read
+        this.saveNotifications(notifs)
+      } else {
+        window.dispatchEvent(new Event("storage"))
+        window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
+      }
+    } catch (e) {
+      console.error("Failed to mark notification read", e)
+    }
+  }
+
+  static markAllNotificationsRead(ids?: string[]) {
+    if (typeof window === "undefined") return
+    try {
+      const readIds = this.getReadNotificationIds()
+      if (ids && ids.length > 0) {
+        ids.forEach((id) => {
+          if (!readIds.includes(id)) readIds.push(id)
+        })
+      }
+      window.localStorage.setItem(
+        READ_NOTIFICATIONS_KEY,
+        JSON.stringify(readIds),
+      )
+      const notifs = this.getNotifications()
+      notifs.forEach((n) => {
+        n.read = true
+      })
+      this.saveNotifications(notifs)
+    } catch (e) {
+      console.error("Failed to mark all notifications read", e)
+    }
+  }
+
   static getNotifications(): AppNotification[] {
     if (typeof window === "undefined") return []
     try {
@@ -1081,6 +1113,7 @@ export class PharmacyDatabase {
       return []
     }
   }
+
   static saveNotifications(notifications: AppNotification[]) {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(
@@ -1091,7 +1124,11 @@ export class PharmacyDatabase {
       window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
     }
   }
+
   static updateNotification(id: string, updates: Partial<AppNotification>) {
+    if (updates.read !== undefined) {
+      this.markNotificationRead(id, updates.read)
+    }
     const notifs = this.getNotifications()
     const idx = notifs.findIndex((n) => n.id === id)
     if (idx > -1) {
@@ -1099,16 +1136,18 @@ export class PharmacyDatabase {
       this.saveNotifications(notifs)
     }
   }
+
   static deleteNotification(id: string) {
-    let notifs = this.getNotifications()
-    notifs = notifs.filter((n) => n.id !== id)
-    this.saveNotifications(notifs)
+    this.dismissNotification(id)
   }
 
   static addNotification(
     title: string,
     message: string,
     type: AppNotification["type"],
+    actionPage?: string,
+    actionLabel?: string,
+    category?: AppNotification["category"],
   ) {
     const notifs = this.getNotifications()
     const newNotif: AppNotification = {
@@ -1121,6 +1160,9 @@ export class PharmacyDatabase {
         minute: "2-digit",
       }),
       read: false,
+      actionPage,
+      actionLabel,
+      category,
     }
     notifs.unshift(newNotif)
     this.saveNotifications(notifs)
@@ -1189,7 +1231,8 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return []
     try {
       const stored = window.localStorage.getItem(SUPPLIERS_KEY)
-      return stored ? JSON.parse(stored) : []
+      const list: AppSupplier[] = stored ? JSON.parse(stored) : []
+      return Array.isArray(list) ? list : []
     } catch {
       return []
     }
@@ -1226,36 +1269,8 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return []
     try {
       const stored = window.localStorage.getItem(MEDICINES_KEY)
-      if (!stored) return []
-      const list: AppMedicine[] = JSON.parse(stored)
-      const isSampleMed = (m: any) => {
-        const id = (m.id || "").toLowerCase()
-        if (id.startsWith("med-00") || id.startsWith("med-01")) return true
-        const name =
-          `${m.name || ""} ${m.medicineName || ""} ${m.brandName || ""} ${m.genericName || ""} ${m.generic || ""}`.toLowerCase()
-        return (
-          name.includes("dolo") ||
-          name.includes("mox") ||
-          name.includes("azee") ||
-          name.includes("pan 40") ||
-          name.includes("cetzine") ||
-          name.includes("cetizine") ||
-          name.includes("glycomet") ||
-          name.includes("atorva") ||
-          name.includes("limcee") ||
-          name.includes("ascoril") ||
-          name.includes("zenflox") ||
-          name.includes("amoxicillin trihydrate") ||
-          name.includes("pantoprazole sodium") ||
-          name.includes("cetirizine hydrochloride") ||
-          name.includes("metformin hydrochloride")
-        )
-      }
-      const cleaned = list.filter((m) => !isSampleMed(m))
-      if (cleaned.length !== list.length) {
-        window.localStorage.setItem(MEDICINES_KEY, JSON.stringify(cleaned))
-      }
-      return cleaned
+      const list: AppMedicine[] = stored ? JSON.parse(stored) : []
+      return Array.isArray(list) ? list : []
     } catch {
       return []
     }
@@ -1297,72 +1312,8 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return []
     try {
       const stored = window.localStorage.getItem(BATCHES_KEY)
-      if (!stored) return []
-      const list: AppBatch[] = JSON.parse(stored)
-      const validMeds = this.getMedicines()
-      const validMedIds = new Set(validMeds.map((m) => m.id))
-
-      const isSampleBatch = (b: any) => {
-        const id = (b.id || "").toLowerCase()
-        const batchNo = (b.batchNumber || "").toLowerCase()
-        const medId = (b.medicineId || "").toLowerCase()
-        const name =
-          `${b.name || ""} ${b.medicineName || ""} ${b.medicine || ""}`.toLowerCase()
-
-        // If no medicines exist or medicine not found, it is an orphan batch
-        if (!validMedIds.has(b.medicineId)) return true
-
-        return (
-          id.startsWith("bat-00") ||
-          id.startsWith("bat-01") ||
-          id.startsWith("bat-2026-") ||
-          id.startsWith("bat-demo") ||
-          batchNo.startsWith("bat-00") ||
-          batchNo.startsWith("bat-01") ||
-          batchNo.startsWith("bat-2026-") ||
-          batchNo.startsWith("amx-") ||
-          batchNo.startsWith("pcm-") ||
-          batchNo.startsWith("azm-") ||
-          batchNo.startsWith("ctz-") ||
-          batchNo.startsWith("pan-") ||
-          batchNo.startsWith("vtc-") ||
-          batchNo.startsWith("cof-") ||
-          batchNo.startsWith("met-") ||
-          batchNo.startsWith("atv-") ||
-          medId.startsWith("med-00") ||
-          medId.startsWith("med-01") ||
-          medId.startsWith("med-amx") ||
-          medId.startsWith("med-pcm") ||
-          medId.startsWith("med-azm") ||
-          medId.startsWith("med-ctz") ||
-          medId.startsWith("med-pan") ||
-          medId.startsWith("med-vtc") ||
-          medId.startsWith("med-cof") ||
-          medId.startsWith("med-met") ||
-          medId.startsWith("med-atv") ||
-          name.includes("dolo") ||
-          name.includes("mox") ||
-          name.includes("azee") ||
-          name.includes("pan 40") ||
-          name.includes("cetzine") ||
-          name.includes("cetizine") ||
-          name.includes("glycomet") ||
-          name.includes("atorva") ||
-          name.includes("limcee") ||
-          name.includes("ascoril") ||
-          name.includes("zenflox") ||
-          name.includes("azithromycin") ||
-          name.includes("pantoprazole") ||
-          name.includes("paracetamol") ||
-          name.includes("amoxicillin") ||
-          name.includes("vitamin c")
-        )
-      }
-      const cleaned = list.filter((b) => !isSampleBatch(b))
-      if (cleaned.length !== list.length) {
-        window.localStorage.setItem(BATCHES_KEY, JSON.stringify(cleaned))
-      }
-      return cleaned
+      const list: AppBatch[] = stored ? JSON.parse(stored) : []
+      return Array.isArray(list) ? list : []
     } catch {
       return []
     }
@@ -1395,6 +1346,8 @@ export class PharmacyDatabase {
       quantity: batch.quantity,
       availableQuantity: batch.availableQuantity ?? batch.quantity,
       purchasePrice: batch.purchasePrice,
+      supplierId: batch.supplierId || "SUP-01",
+      invoiceNumber: batch.invoiceNumber || "INV-GEN-01",
       mrp: batch.mrp,
       grnId: batch.grnId || "GRN-SYS",
       location: batch.location || "Main Pharmacy",
@@ -1409,46 +1362,8 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return []
     try {
       const stored = window.localStorage.getItem(POS_KEY)
-      if (!stored) return []
-      const list: AppPurchaseOrder[] = JSON.parse(stored)
-      const isSamplePO = (p: any) => {
-        const id = (p.id || "").toLowerCase()
-        const supId = (p.supplierId || "").toLowerCase()
-        if (
-          id.startsWith("po-2026-") ||
-          id.startsWith("po-demo") ||
-          id.startsWith("po-test")
-        )
-          return true
-        if (supId.startsWith("sup-00") || supId.startsWith("sup-01"))
-          return true
-        if (p.totalOrderValue === 99900) return true
-        if (Array.isArray(p.items)) {
-          const hasSampleItem = p.items.some((item: any) => {
-            const medId = (item.medicineId || "").toLowerCase()
-            return (
-              medId.startsWith("med-00") ||
-              medId.startsWith("med-01") ||
-              medId.startsWith("med-cof") ||
-              medId.startsWith("med-vtc") ||
-              medId.startsWith("med-met") ||
-              medId.startsWith("med-atv") ||
-              medId.startsWith("med-azm") ||
-              medId.startsWith("med-pan") ||
-              medId.startsWith("med-pcm") ||
-              medId.startsWith("med-amx") ||
-              medId.startsWith("med-ctz")
-            )
-          })
-          if (hasSampleItem) return true
-        }
-        return false
-      }
-      const cleaned = list.filter((p) => !isSamplePO(p))
-      if (cleaned.length !== list.length) {
-        window.localStorage.setItem(POS_KEY, JSON.stringify(cleaned))
-      }
-      return cleaned
+      const list: AppPurchaseOrder[] = stored ? JSON.parse(stored) : []
+      return Array.isArray(list) ? list : []
     } catch {
       return []
     }
@@ -1483,31 +1398,7 @@ export class PharmacyDatabase {
       const stored = window.localStorage.getItem(GRNS_KEY)
       if (!stored) return []
       const list: AppGRN[] = JSON.parse(stored)
-      const isSampleGRN = (g: any) => {
-        const id = (g.id || "").toLowerCase()
-        const poId = (g.purchaseOrderId || "").toLowerCase()
-        const supId = (g.supplierId || "").toLowerCase()
-        if (
-          id.startsWith("grn-2026-") ||
-          id.startsWith("grn-demo") ||
-          id.startsWith("grn-test")
-        )
-          return true
-        if (
-          poId.startsWith("po-2026-") ||
-          poId.startsWith("po-demo") ||
-          poId.startsWith("po-test")
-        )
-          return true
-        if (supId.startsWith("sup-00") || supId.startsWith("sup-01"))
-          return true
-        return false
-      }
-      const cleaned = list.filter((g) => !isSampleGRN(g))
-      if (cleaned.length !== list.length) {
-        window.localStorage.setItem(GRNS_KEY, JSON.stringify(cleaned))
-      }
-      return cleaned
+      return Array.isArray(list) ? list : []
     } catch {
       return []
     }
@@ -1575,78 +1466,7 @@ export class PharmacyDatabase {
     try {
       const stored = window.localStorage.getItem(BILLS_KEY)
       let bills: AppPharmacyBill[] = stored ? JSON.parse(stored) : []
-      if (!Array.isArray(bills)) bills = []
-
-      const isSampleBill = (b: any) => {
-        const id = (b.id || "").toLowerCase()
-        const billNo = (b.billNumber || "").toLowerCase()
-        const patient = (b.patientName || "").toLowerCase()
-        if (typeof b.id === "string" && b.id.startsWith("BILL-DEMO-"))
-          return true
-        if (
-          typeof b.billNumber === "string" &&
-          b.billNumber.startsWith("BILL-DEMO-")
-        )
-          return true
-        if (
-          id.startsWith("pb-2026-00") ||
-          billNo === "bill-2026-001245" ||
-          billNo === "inv-2026-8845" ||
-          billNo === "inv-2026-8844"
-        )
-          return true
-        if (
-          patient === "rahul verma" ||
-          patient === "priya sharma" ||
-          patient === "amit kumar"
-        )
-          return true
-        if (
-          b.billNumber === "MOD-BILL-2026-001245" ||
-          (b.originalBillNumber === "BILL-2026-001245" &&
-            b.billNumber?.startsWith("MOD-"))
-        )
-          return true
-        if (
-          b.createdBy === "Pharmacist" &&
-          (b.totalAmount === 115 ||
-            b.totalAmount === 440 ||
-            b.totalAmount === 555)
-        )
-          return true
-        if (Array.isArray(b.items)) {
-          const hasSampleItem = b.items.some((item: any) => {
-            const medId = (item.medicineId || "").toLowerCase()
-            const medName = (item.medicineName || "").toLowerCase()
-            return (
-              medId === "med-azm-500" ||
-              medId === "med-pan-40" ||
-              medId === "med-vtc-500" ||
-              medId === "med-pcm-500" ||
-              medId === "med-amx-500" ||
-              medId === "med-ctz-10" ||
-              medName.includes("azithromycin 500mg") ||
-              medName.includes("pantoprazole 40mg") ||
-              medName.includes("vitamin c 500mg") ||
-              medName.includes("amoxicillin 500mg")
-            )
-          })
-          if (
-            hasSampleItem &&
-            (b.createdBy === "Pharmacist" ||
-              patient === "" ||
-              patient === "walk-in patient")
-          )
-            return true
-        }
-        return false
-      }
-
-      const cleaned = bills.filter((b) => !isSampleBill(b))
-      if (cleaned.length !== bills.length) {
-        window.localStorage.setItem(BILLS_KEY, JSON.stringify(cleaned))
-      }
-      return cleaned
+      return Array.isArray(bills) ? bills : []
     } catch {
       return []
     }
@@ -1671,62 +1491,7 @@ export class PharmacyDatabase {
     try {
       const stored = window.localStorage.getItem(RETURNS_KEY)
       let list: AppPharmacyReturn[] = stored ? JSON.parse(stored) : []
-      const isSampleReturn = (r: any) => {
-        const id = (r.id || "").toLowerCase()
-        const retNo = (r.returnNumber || "").toLowerCase()
-        const billNo = (r.originalBillNumber || "").toLowerCase()
-        const patient = (r.patientName || "").toLowerCase()
-        if (
-          id.startsWith("ret-2026-") ||
-          retNo.startsWith("ret-2026-") ||
-          id.startsWith("ret-demo") ||
-          retNo.startsWith("ret-demo")
-        )
-          return true
-        if (id === "ret-2026-62111" || retNo === "ret-2026-62111") return true
-        if (
-          billNo === "bill-2026-001245" ||
-          billNo === "inv-2026-8845" ||
-          billNo === "inv-2026-8844" ||
-          billNo.startsWith("pb-2026-00")
-        )
-          return true
-        if (
-          patient === "rahul verma" ||
-          patient === "priya sharma" ||
-          patient === "amit kumar"
-        )
-          return true
-        if (Array.isArray(r.items)) {
-          const hasSample = r.items.some((item: any) => {
-            const medId = (item.medicineId || "").toLowerCase()
-            const medName = (item.medicineName || "").toLowerCase()
-            return (
-              medId.startsWith("med-azm") ||
-              medId.startsWith("med-pan") ||
-              medId.startsWith("med-vtc") ||
-              medId.startsWith("med-pcm") ||
-              medId.startsWith("med-amx") ||
-              medId.startsWith("med-ctz") ||
-              medId.startsWith("med-00") ||
-              medId.startsWith("med-01") ||
-              medName.includes("azithromycin") ||
-              medName.includes("pantoprazole") ||
-              medName.includes("vitamin c") ||
-              medName.includes("amoxicillin") ||
-              medName.includes("paracetamol")
-            )
-          })
-          if (hasSample) return true
-        }
-        return false
-      }
-      const cleaned = list.filter((r) => !isSampleReturn(r))
-      if (cleaned.length !== list.length) {
-        this.saveReturns(cleaned)
-        return cleaned
-      }
-      return list
+      return Array.isArray(list) ? list : []
     } catch {
       return []
     }
@@ -2228,7 +1993,7 @@ export class PharmacyDatabase {
     medicineId: string,
     requiredQty: number,
     currentBatches: AppBatch[],
-    location: string = "Main Pharmacy",
+    location?: string,
   ): {
     success: boolean
     splits: { batch: AppBatch ;usedQty: number }[]
@@ -2237,8 +2002,12 @@ export class PharmacyDatabase {
     const availableBatches = currentBatches.filter(
       (b) =>
         b.medicineId === medicineId &&
-        b.availableQuantity > 0 &&
-        (b.location || "Main Pharmacy") === location,
+        (b.availableQuantity ?? b.quantity ?? 0) > 0 &&
+        (!location ||
+          location === "All" ||
+          location === "Main Pharmacy" ||
+          (b.location || "Main Pharmacy") === location ||
+          b.location?.startsWith("Rack")),
     )
 
     // Calculate total available to see if fulfillment is possible

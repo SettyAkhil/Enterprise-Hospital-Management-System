@@ -269,13 +269,8 @@ const NAV: NavItem[] = [
         group: "Procurement & Receiving",
       },
       {
-        key: "pharmacy_grn",
-        label: "Scan Invoice (GRN)",
-        group: "Procurement & Receiving",
-      },
-      {
         key: "pharmacy_ocr",
-        label: "Invoice OCR",
+        label: "Scan Invoice (GRN)",
         group: "Procurement & Receiving",
       },
       { key: "pharmacy_ledger", label: "Inventory Ledger", group: "Inventory" },

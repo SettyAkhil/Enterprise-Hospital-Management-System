@@ -1,5 +1,5 @@
-﻿import { usePharmacyData } from "../data/usePharmacyData"
-import { useState } from "react"
+import { usePharmacyData } from "../data/usePharmacyData"
+import { useState, useEffect } from "react"
 import {
   Search,
   Filter,
@@ -12,9 +12,9 @@ import {
   XCircle,
   MessageSquare,
   ChevronRight,
-  Plus,
+  PlusCircle,
 } from "lucide-react"
-import { PharmacyDatabase, AppPrescription } from "../../../services/pharmacyDb"
+import { PharmacyDatabase } from "../../../services/pharmacyDb"
 
 import PageHeader from "../components/PageHeader"
 import StatusBadge from "../components/StatusBadge"
@@ -40,6 +40,16 @@ export default function PrescriptionQueue({
   const [selected, setSelected] = useState<typeof prescriptions[0] | null>(null)
   const [search, setSearch] = useState("")
 
+  useEffect(() => {
+    // If the queue has no pending prescriptions or lacks Mr. G KUMAR, automatically seed it!
+    const rxList = PharmacyDatabase.getPrescriptions()
+    const hasKumar = rxList.some((r) => r.id === "RX-OPD-112320")
+    if (!hasKumar || rxList.length === 0) {
+      PharmacyDatabase.seedTestPrescriptionForSelling()
+      refresh()
+    }
+  }, [])
+
   const filtered = prescriptions.filter((rx) => {
     const matchStatus =
       activeFilter === "All" || rx.status === activeFilter.toLowerCase()
@@ -50,42 +60,6 @@ export default function PrescriptionQueue({
       rx.doctor.toLowerCase().includes(search.toLowerCase())
     return matchStatus && matchSearch
   })
-
-  const handleGenerateTestPrescription = () => {
-    const p: AppPrescription = {
-      id: "RX" + Date.now(),
-      patientId: "PT123",
-      patientName: "John Doe Test",
-      uhid: "UHID-999",
-      age: 45,
-      gender: "Male",
-      doctorId: "DR1",
-      doctorName: "Dr. Smith",
-      department: "General Medicine",
-      diagnosis: "Fever and Cough",
-      date: new Date().toISOString().split("T")[0],
-      sourceType: "DIGITAL",
-      priority: "Normal",
-      status: "Sent To Pharmacy",
-      dispensingStatus: "Waiting",
-      items: [
-        {
-          id: "RXI" + Date.now(),
-          medicineName: "Paracetamol 500mg",
-          dosage: "1-1-1",
-          frequency: "TID",
-          duration: "5 days",
-          quantity: 15,
-          substitutionAllowed: true,
-        },
-      ],
-      createdAt: new Date().toISOString(),
-    }
-    const rxs = PharmacyDatabase.getPrescriptions()
-    rxs.push(p)
-    PharmacyDatabase.savePrescriptions(rxs)
-    refresh()
-  }
 
   const handleDispense = () => {
     if (selected) {
@@ -105,15 +79,6 @@ export default function PrescriptionQueue({
             ]}
             title="Prescription Queue"
             description="Manage incoming doctor prescriptions"
-            actions={
-              <button
-                onClick={handleGenerateTestPrescription}
-                className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium"
-                style={{ background: "#0F766E" }}
-              >
-                <Plus size={14} /> Add Test Prescription
-              </button>
-            }
             onNavigate={onNavigate}
           />
 
@@ -135,6 +100,17 @@ export default function PrescriptionQueue({
               ))}
             </div>
             <div className="flex items-center gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  PharmacyDatabase.seedTestPrescriptionForSelling()
+                  refresh()
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#0F766E] text-white text-[12px] font-semibold rounded hover:bg-[#0c5e58] transition-colors shadow-sm"
+                title="Seed Mr. G KUMAR prescription with ready batch stock"
+              >
+                <PlusCircle size={14} /> Add Test Prescription (Mr. G KUMAR)
+              </button>
               <div className="flex items-center gap-2 bg-white border border-[#E2E8F0] rounded px-3 py-2">
                 <Search size={14} className="text-[#94A3B8]" />
                 <input
@@ -219,9 +195,31 @@ export default function PrescriptionQueue({
                         )}
                       </td>
                       <td>
-                        <button className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1 rounded border border-[#E2E8F0] text-[#334155] hover:bg-[#F0F2F5] transition-colors">
-                          View <ChevronRight size={12} />
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelected(rx)
+                            }}
+                            className="flex items-center gap-1 text-[12px] font-medium px-2 py-1 rounded border border-[#E2E8F0] text-[#334155] hover:bg-[#F0F2F5] transition-colors"
+                          >
+                            View <ChevronRight size={12} />
+                          </button>
+                          {rx.status !== "dispensed" && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                localStorage.setItem("_v2_pharmacy_dispense_rx", rx.id)
+                                onNavigate("dispensing")
+                              }}
+                              className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded bg-[#0F766E] text-white hover:bg-[#0c5e58] transition-colors shadow-sm"
+                            >
+                              <Play size={11} /> Dispense
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

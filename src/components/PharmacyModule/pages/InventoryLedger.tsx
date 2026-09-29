@@ -48,12 +48,17 @@ export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
       ) ||
       (tx.transactionType === "ADJUSTMENT" && tx.quantity < 0)
 
+    const targetBatch = batches.find(
+      (b) => b.id === tx.batchId || b.batchNumber === tx.batchId,
+    )
+    const batchDisplay = targetBatch ? targetBatch.batchNumber : tx.batchId
+
     ledgerData.push({
       date: new Date(tx.date).toLocaleString(),
       ref:
         tx.billId || tx.reason?.split(":")[1]?.trim() || tx.id.substring(0, 8),
       medicine: med ? med.name : "Unknown",
-      batch: tx.batchId,
+      batch: batchDisplay,
       type: typeName,
       in: isIn ? Math.abs(tx.quantity) : 0,
       out: isOut ? Math.abs(tx.quantity) : 0,
@@ -61,36 +66,35 @@ export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
     })
   })
 
-  // Synthesize legacy data for batches that have no transaction
+  // Ensure all stocked batches have their initial GRN / Opening Stock logged in the ledger
   batches.forEach((b) => {
-    if (!handledBatches.has(b.id)) {
-      const med = medicines.find((m) => m.id === b.medicineId)
-      ledgerData.push({
-        date: new Date(b.createdAt || new Date()).toLocaleString(),
-        ref: b.grnId || "SYS",
-        medicine: med ? med.name : "Unknown",
-        batch: b.batchNumber,
-        type: "Purchase",
-        in: b.quantity,
-        out: 0,
-        user: "SYS",
-      })
-    }
+    const med = medicines.find((m) => m.id === b.medicineId)
+    ledgerData.push({
+      date: new Date(b.createdAt || new Date()).toLocaleString(),
+      ref: b.grnId || "SYS",
+      medicine: med ? med.name : "Unknown",
+      batch: b.batchNumber,
+      type: "Purchase",
+      in: b.quantity,
+      out: 0,
+      user: "SYS",
+    })
   })
 
   // Synthesize legacy data for bills that have no transaction
   bills.forEach((bill) => {
-    if (!handledBills.has(bill.id)) {
+    if (bill.isModifiedReturnBill || bill.billNumber?.startsWith("MOD-")) return
+    if (!handledBills.has(bill.id) && !handledBills.has(bill.billNumber)) {
       bill.items.forEach((item) => {
         ledgerData.push({
           date: new Date(bill.createdAt).toLocaleString(),
-          ref: bill.id,
+          ref: bill.billNumber || bill.id,
           medicine: item.medicineName,
           batch: item.batchNumber,
           type: "Sale",
           in: 0,
           out: item.quantity,
-          user: bill.pharmacistId,
+          user: bill.pharmacistId || bill.createdBy || "Pharmacist",
         })
       })
     }
@@ -156,6 +160,13 @@ export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
   const totalOut = ledgerData
     .filter((r) => r.type === "Sale")
     .reduce((sum, r) => sum + r.out, 0)
+  const totalReturnedIn = ledgerData
+    .filter((r) => r.type === "Return")
+    .reduce((sum, r) => sum + r.in, 0)
+  const currentStockOnHand = batches.reduce(
+    (sum, b) => sum + (b.availableQuantity ?? 0),
+    0,
+  )
 
   return (
     <div className="p-6 space-y-5">
@@ -179,36 +190,45 @@ export default function InventoryLedger({ onNavigate }: InventoryLedgerProps) {
       />
 
       {/* Summary strip */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           {
-            label: "Total IN (All Time)",
+            label: "Current Stock On Hand",
+            value: currentStockOnHand + " units",
+            sub: "Live available inventory",
+            color: "#0F766E",
+          },
+          {
+            label: "Total IN (Received)",
             value: totalIn + " units",
+            sub: "Initial & Purchase Receipts",
             color: "#15803d",
           },
           {
-            label: "Total OUT (All Time)",
+            label: "Total OUT (Dispensed)",
             value: totalOut + " units",
+            sub: "Sales to patients",
             color: "#dc2626",
           },
-          { label: "Adjustments", value: "0 entries", color: "#d97706" },
           {
-            label: "Transactions Logged",
-            value: ledgerData.length + " entries",
-            color: "#0F766E",
+            label: "Returns Restocked",
+            value: "+" + totalReturnedIn + " units",
+            sub: "Restocked from patient returns",
+            color: "#7c3aed",
           },
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white rounded p-4 border border-[#E2E8F0]"
+            className="bg-white rounded-xl shadow-sm p-4 border border-[#E2E8F0]"
           >
-            <p className="text-[11px] text-[#64748B] font-medium">{s.label}</p>
+            <p className="text-[11px] text-[#64748B] font-bold uppercase tracking-wide">{s.label}</p>
             <p
-              className="text-[18px] font-bold mt-1"
+              className="text-[20px] font-extrabold mt-1"
               style={{ color: s.color }}
             >
               {s.value}
             </p>
+            <p className="text-[11px] text-[#94A3B8] mt-0.5">{s.sub}</p>
           </div>
         ))}
       </div>
