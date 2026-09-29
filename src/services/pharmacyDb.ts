@@ -1026,15 +1026,32 @@ export function clearAllPharmacyData(): void {
     "hospai_pharm_prescriptions_v2",
     "hospai_pharm_supplier_returns_v2",
     "hospai_pharm_sample_data_v1",
+    "_v2_pharmacy_dispense_rx",
   ]
   keys.forEach((k) => window.localStorage.removeItem(k))
+
+  // Also remove any dynamic pharmacy keys
+  try {
+    Object.keys(window.localStorage).forEach((k) => {
+      if (k.startsWith("hospai_pharm_") && k !== "hospai_pharm_clean_slate_20260929") {
+        window.localStorage.removeItem(k)
+      }
+    })
+  } catch {}
+
   window.dispatchEvent(new Event("storage"))
   window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
 }
 
-// Automatically run sample data purge on module load
+// Automatically wipe all test/manually added data once for a completely clean UI
 if (typeof window !== "undefined") {
-  purgeSampleData()
+  const CLEAN_KEY = "hospai_pharm_clean_slate_20260929"
+  if (!window.localStorage.getItem(CLEAN_KEY)) {
+    clearAllPharmacyData()
+    window.localStorage.setItem(CLEAN_KEY, "true")
+  } else {
+    purgeSampleData()
+  }
 }
 
 export class PharmacyDatabase {
@@ -1555,76 +1572,7 @@ export class PharmacyDatabase {
     if (typeof window === "undefined") return []
     try {
       const stored = window.localStorage.getItem(PRESCRIPTIONS_KEY)
-      let prescriptions: AppPrescription[] = stored ? JSON.parse(stored) : []
-      if (!Array.isArray(prescriptions)) prescriptions = []
-
-      const stockItems: AppPrescriptionItem[] = [
-        {
-          id: "item-azm-500",
-          medicineName: "Azithral 500",
-          dosage: "1-0-0",
-          frequency: "OD",
-          duration: "5 days",
-          quantity: 5,
-          substitutionAllowed: true,
-        },
-        {
-          id: "item-bnd-syr",
-          medicineName: "Benadryl Syrup",
-          dosage: "10ml",
-          frequency: "BD",
-          duration: "5 days",
-          quantity: 1,
-          substitutionAllowed: true,
-        },
-        {
-          id: "item-aug-625",
-          medicineName: "Augmentin 625 Duo",
-          dosage: "1-0-1",
-          frequency: "BD",
-          duration: "5 days",
-          quantity: 10,
-          substitutionAllowed: true,
-        },
-      ]
-
-      const stockRxIndex = prescriptions.findIndex((p) => p.id === "RX-2026-102")
-      if (stockRxIndex === -1) {
-        prescriptions.unshift({
-          id: "RX-2026-102",
-          patientId: "PAT-2026-089",
-          patientName: "Rahul Sharma",
-          uhid: "UHID-89211",
-          age: 34,
-          gender: "Male",
-          visitId: "OP-2026-4412",
-          doctorId: "DOC-001",
-          doctorName: "Dr. Sarah Jenkins",
-          department: "General Medicine",
-          diagnosis: "Upper Respiratory Tract Infection",
-          date: new Date().toISOString().split("T")[0],
-          sourceType: "DIGITAL",
-          priority: "Normal",
-          status: "Ready For Dispensing",
-          dispensingStatus: "Waiting",
-          items: stockItems,
-          createdAt: new Date().toISOString(),
-        })
-        window.localStorage.setItem(PRESCRIPTIONS_KEY, JSON.stringify(prescriptions))
-      } else {
-        const rx = prescriptions[stockRxIndex]
-        const needsUpdate =
-          rx.items.length !== 3 ||
-          !rx.items.some((i) => i.medicineName === "Augmentin 625 Duo") ||
-          rx.items.some((i) => i.medicineName.includes("mg"))
-        if (needsUpdate) {
-          rx.items = stockItems
-          rx.status = "Ready For Dispensing"
-          rx.dispensingStatus = "Waiting"
-          window.localStorage.setItem(PRESCRIPTIONS_KEY, JSON.stringify(prescriptions))
-        }
-      }
-
+      const prescriptions: AppPrescription[] = stored ? JSON.parse(stored) : []
       return prescriptions
     } catch {
       return []
