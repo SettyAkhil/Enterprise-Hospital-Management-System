@@ -1,6 +1,6 @@
 import { usePharmacyData } from "../data/usePharmacyData"
 import { PharmacyDatabase } from "../../../services/pharmacyDb"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import {
   Search,
   X,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import PageHeader from "../components/PageHeader"
 import StatusBadge from "../components/StatusBadge"
+import SupplierInvoiceModal from "../components/SupplierInvoiceModal"
 import toast from "react-hot-toast"
 
 const RETURN_REASONS = [
@@ -53,6 +54,7 @@ export default function SupplierReturns({
 
   // Create Form State
   const [selectedSupplierId, setSelectedSupplierId] = useState("")
+  const [selectedMedicineId, setSelectedMedicineId] = useState("")
   const [selectedBatchId, setSelectedBatchId] = useState("")
   const [returnQuantity, setReturnQuantity] = useState("")
   const [returnReason, setReturnReason] = useState(RETURN_REASONS[0])
@@ -62,12 +64,101 @@ export default function SupplierReturns({
 
   // Print State
   const [printReturnId, setPrintReturnId] = useState("")
+  const [invoiceModalData, setInvoiceModalData] = useState<any | null>(null)
 
-  const activeBatches = batches.filter(
-    (b) =>
-      b.availableQuantity > 0 &&
-      (!selectedSupplierId || b.supplierId === selectedSupplierId),
-  )
+  const openOriginalInvoice = (customInvNo?: string, customSupId?: string) => {
+    const invNo = customInvNo || invoiceNumber
+    const supId = customSupId || selectedSupplierId
+    if (!invNo) {
+      toast.error("No original supplier invoice recorded for this batch.")
+      return
+    }
+
+    const sup = suppliers.find((s) => s.id === supId)
+    const med = medicines.find((m) => m.id === selectedMedicineId)
+    const rate = selectedBatch?.purchasePrice || purchaseRate || 0
+    const qty = selectedBatch?.quantity || 1
+    const gross = rate * qty
+    const gstRate = med?.gst || 5
+    const gstAmt = (gross * gstRate) / 100
+    const total = gross + gstAmt
+
+    setInvoiceModalData({
+      supplierName: (sup?.supplierName || sup?.name || "SUPPLIER").toUpperCase(),
+      supplierAddress: sup?.address || "Registered Supplier Depot",
+      supplierPhone: sup?.phone || "",
+      supplierLicence: sup?.licenseDetails || "",
+      supplierGstin: sup?.gstInformation || sup?.gstin || "",
+      partyName: "VH PHARMACY",
+      partyAddress: "In the premises of Varma Hospitals, Bhimavaram",
+      partyLicence: "",
+      partyGstin: "",
+      invoiceNo: invNo,
+      invoiceDate: new Date().toLocaleDateString("en-IN"),
+      dueDate: new Date().toLocaleDateString("en-IN"),
+      paymentMode: "CREDIT",
+      items: [
+        {
+          sNo: 1,
+          qty: qty,
+          discountPercent: 0,
+          mfr: med?.manufacturer || "",
+          pack: med?.strength || "1 Unit",
+          productName: (med?.name || "MEDICINE").toUpperCase(),
+          oMrp: 0,
+          batch: selectedBatch?.batchNumber || "BATCH",
+          exp: selectedBatch?.expiryDate || "N/A",
+          hsn: (med as any)?.hsnCode || "300490",
+          mrp: (selectedBatch?.mrp || rate).toString(),
+          rate: rate,
+          dis: 0,
+          sgstPercent: gstRate / 2,
+          sgstVal: (gstAmt / 2).toFixed(2),
+          cgstPercent: gstRate / 2,
+          cgstVal: (gstAmt / 2).toFixed(2),
+          amount: gross.toFixed(2),
+          netAmount: total.toFixed(2),
+        },
+      ],
+      gstRate: `${gstRate}%`,
+      totalGross: gross.toFixed(2),
+      totalDiscount: "0.00",
+      taxableAmt: gross.toFixed(2),
+      sgstAmt: (gstAmt / 2).toFixed(2),
+      cgstAmt: (gstAmt / 2).toFixed(2),
+      totalGst: gstAmt.toFixed(2),
+      roundOff: 0,
+      grandTotal: total.toFixed(2),
+      amountInWords: `₹${total.toFixed(2)}`,
+      bankName: "",
+      ifscCode: "",
+    })
+  }
+
+  // Batches strictly bought from the selected supplier with available stock
+  const supplierBatches = useMemo(() => {
+    if (!selectedSupplierId) return []
+    return batches.filter(
+      (b) => b.supplierId === selectedSupplierId && b.availableQuantity > 0,
+    )
+  }, [batches, selectedSupplierId])
+
+  // Distinct medicines bought from the selected supplier
+  const supplierMedicines = useMemo(() => {
+    if (!selectedSupplierId) return []
+    const medIds = new Set(supplierBatches.map((b) => b.medicineId))
+    return medicines.filter((m) => medIds.has(m.id))
+  }, [supplierBatches, medicines, selectedSupplierId])
+
+  // Active batches for the chosen medicine from this supplier
+  const activeBatches = useMemo(() => {
+    if (!selectedSupplierId) return []
+    if (selectedMedicineId) {
+      return supplierBatches.filter((b) => b.medicineId === selectedMedicineId)
+    }
+    return supplierBatches
+  }, [supplierBatches, selectedMedicineId])
+
   const selectedBatch = batches.find((b) => b.id === selectedBatchId)
   const purchaseRate = selectedBatch?.purchasePrice || 0
   const returnAmountPreview =
@@ -111,6 +202,7 @@ export default function SupplierReturns({
       toast.success("Draft Return Created (Stock not deducted yet)")
       setViewState("list")
       setSelectedSupplierId("")
+      setSelectedMedicineId("")
       setSelectedBatchId("")
       setReturnQuantity("")
       setPoNumber("")
@@ -140,78 +232,6 @@ export default function SupplierReturns({
     }
   }
 
-  const seedTestData = () => {
-    try {
-      const sId = "SUP-TEST-" + Date.now()
-      const mId = "MED-TEST-" + Date.now()
-      const bId = "BAT-TEST-" + Date.now()
-
-      const newSuppliers = PharmacyDatabase.getSuppliers()
-      newSuppliers.push({
-        id: sId,
-        supplierName: "Apollo Demo Pharma",
-        contactInformation: "John Doe",
-        phone: "9876543210",
-        email: "demo@apollo.com",
-        gstInformation: "29ABCDE1234F1Z5",
-        licenseDetails: "DL-12345",
-        status: "Active",
-        createdAt: new Date().toISOString(),
-        address: "123 Pharma St",
-        paymentTerms: "Net 30",
-      })
-      PharmacyDatabase.saveSuppliers(newSuppliers)
-
-      const newMedicines = PharmacyDatabase.getMedicines()
-      newMedicines.push({
-        id: mId,
-        medicineName: "DemoAmoxicillin 500mg",
-        genericName: "Amoxicillin",
-        manufacturer: "Apollo Demo Pharma",
-        reorderLevel: 20,
-        activeStatus: "Active",
-        createdAt: new Date().toISOString(),
-        brandName: "Amox",
-        dosageForm: "Tablet",
-        strength: "500mg",
-        unit: "Strip",
-        barcode: "12345",
-        taxPercentage: 12,
-        hsnCode: "3004",
-        scheduleType: "H",
-        storageCondition: "Room Temperature",
-        controlledSubstanceFlag: false,
-      })
-      PharmacyDatabase.saveMedicines(newMedicines)
-
-      const newBatches = PharmacyDatabase.getBatches()
-      newBatches.push({
-        id: bId,
-        medicineId: mId,
-        supplierId: sId,
-        batchNumber: "TX-2026A",
-        expiryDate: new Date(
-          Date.now() + 180 * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-        availableQuantity: 100,
-        purchasePrice: 12,
-        mrp: 20,
-        status: "Active",
-        createdAt: new Date().toISOString(),
-        manufacturingDate: new Date().toISOString(),
-        quantity: 100,
-      })
-      PharmacyDatabase.saveBatches(newBatches)
-
-      toast.success(
-        "Test Data Injected successfully! You can now initiate a return.",
-      )
-      refresh()
-    } catch (e: any) {
-      toast.error("Failed to inject data")
-    }
-  }
-
   const getSupplierName = (id: string) =>
     suppliers.find((s) => s.id === id)?.name || id
   const getMedicineName = (id: string) =>
@@ -221,7 +241,7 @@ export default function SupplierReturns({
 
   if (viewState === "create") {
     return (
-      <div className="p-6 space-y-6">
+      <div className="space-y-6 font-sans text-[#0F1624]">
         <PageHeader
           breadcrumbs={[
             { label: "Pharmacy" },
@@ -235,24 +255,25 @@ export default function SupplierReturns({
         />
 
         <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-6 space-y-8">
-          {/* Section 1: Supplier & Batch */}
+          {/* Section 1: Supplier & Product */}
           <div className="space-y-4">
             <h3 className="font-semibold text-[14px] text-[#0F1624] flex items-center gap-2">
               <Building2 size={16} className="text-[#0F766E]" /> 1. Select
               Supplier & Product
             </h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">
-                  Supplier
+                  1. Supplier *
                 </label>
                 <select
                   value={selectedSupplierId}
                   onChange={(e) => {
                     setSelectedSupplierId(e.target.value)
+                    setSelectedMedicineId("")
                     setSelectedBatchId("")
                   }}
-                  className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px] rounded focus:border-[#0F766E] focus:outline-none"
+                  className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px] rounded focus:border-[#0F766E] focus:outline-none bg-white"
                 >
                   <option value="">-- Choose Supplier --</option>
                   {suppliers.map((s) => (
@@ -262,27 +283,74 @@ export default function SupplierReturns({
                   ))}
                 </select>
               </div>
+
               <div>
                 <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">
-                  Select Batch (In Stock)
+                  2. Purchased Medicine *
+                </label>
+                <select
+                  value={selectedMedicineId}
+                  onChange={(e) => {
+                    const mId = e.target.value
+                    setSelectedMedicineId(mId)
+                    setSelectedBatchId("")
+                  }}
+                  disabled={!selectedSupplierId}
+                  className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px] rounded disabled:bg-[#F8FAFC] focus:border-[#0F766E] focus:outline-none bg-white"
+                >
+                  <option value="">
+                    {!selectedSupplierId
+                      ? "-- Select Supplier First --"
+                      : supplierMedicines.length === 0
+                      ? "-- No medicines purchased from this supplier --"
+                      : "-- Choose Medicine --"}
+                  </option>
+                  {supplierMedicines.map((m) => {
+                    const totalStock = supplierBatches
+                      .filter((b) => b.medicineId === m.id)
+                      .reduce((sum, b) => sum + (b.availableQuantity || 0), 0)
+                    return (
+                      <option key={m.id} value={m.id}>
+                        {(m as any).medicineName || m.name} (In-Stock: {totalStock})
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">
+                  3. Batch (In Stock) *
                 </label>
                 <select
                   value={selectedBatchId}
-                  onChange={(e) => setSelectedBatchId(e.target.value)}
-                  disabled={!selectedSupplierId}
-                  className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px] rounded disabled:bg-[#F8FAFC]"
+                  onChange={(e) => {
+                    const bId = e.target.value
+                    setSelectedBatchId(bId)
+                    const b = batches.find((x) => x.id === bId)
+                    if (b) {
+                      if (b.invoiceNumber && !invoiceNumber) setInvoiceNumber(b.invoiceNumber)
+                      if (b.grnId && !grnNumber) setGrnNumber(b.grnId)
+                    }
+                  }}
+                  disabled={!selectedMedicineId}
+                  className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px] rounded disabled:bg-[#F8FAFC] focus:border-[#0F766E] focus:outline-none bg-white"
                 >
-                  <option value="">-- Choose Batch --</option>
+                  <option value="">
+                    {!selectedMedicineId
+                      ? "-- Select Medicine First --"
+                      : activeBatches.length === 0
+                      ? "-- No active batches found --"
+                      : "-- Choose Batch --"}
+                  </option>
                   {activeBatches.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {getMedicineName(b.medicineId)} - {b.batchNumber} (Stock:{" "}
-                      {b.availableQuantity})
+                      {b.batchNumber} (Exp: {b.expiryDate} | Stock: {b.availableQuantity} | Rate: ₹{b.purchasePrice})
                     </option>
                   ))}
                 </select>
               </div>
             </div>
-
           </div>
 
           <hr className="border-[#F0F2F5]" />
@@ -319,9 +387,20 @@ export default function SupplierReturns({
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide mb-1">
-                  Supplier Invoice
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-semibold text-[#64748B] uppercase tracking-wide">
+                    Supplier Invoice
+                  </label>
+                  {invoiceNumber && (
+                    <button
+                      type="button"
+                      onClick={() => openOriginalInvoice()}
+                      className="text-[11px] font-semibold text-[#0F766E] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <FileText size={12} /> View Original Receipt
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={invoiceNumber}
@@ -517,7 +596,7 @@ export default function SupplierReturns({
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="space-y-6 font-sans text-[#0F1624]">
       <PageHeader
         breadcrumbs={[
           { label: "Pharmacy" },
@@ -527,21 +606,13 @@ export default function SupplierReturns({
         title="Purchase Returns (Debit Notes)"
         description={`${supplierReturns.length} historical returns tracking`}
         actions={
-          <div className="flex gap-2">
-            <button
-              onClick={seedTestData}
-              className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium bg-emerald-600 hover:bg-emerald-700"
-            >
-              Inject Test Data
-            </button>
-            <button
-              onClick={() => setViewState("create")}
-              className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium"
-              style={{ background: "#0F766E" }}
-            >
-              <Plus size={14} /> Initiate Return
-            </button>
-          </div>
+          <button
+            onClick={() => setViewState("create")}
+            className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium"
+            style={{ background: "#0F766E" }}
+          >
+            <Plus size={14} /> Initiate Return
+          </button>
         }
         onNavigate={onNavigate}
       />
@@ -603,7 +674,10 @@ export default function SupplierReturns({
                       </p>
                     </td>
                     <td className="text-[13px] font-bold text-[#dc2626]">
-                      ₹{rtn.returnAmount}
+                      ₹{Number(rtn.returnAmount || 0).toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </td>
                     <td className="text-[13px] text-[#64748B]">{rtn.reason}</td>
                     <td>
@@ -635,6 +709,15 @@ export default function SupplierReturns({
                             <ArrowRight size={15} />
                           </button>
                         )}
+                        {rtn.invoiceNumber && (
+                          <button
+                            onClick={() => openOriginalInvoice(rtn.invoiceNumber, rtn.supplierId)}
+                            className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#0F766E]"
+                            title={`View Original Supplier Invoice (${rtn.invoiceNumber})`}
+                          >
+                            <FileText size={15} />
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setPrintReturnId(rtn.id)
@@ -654,6 +737,14 @@ export default function SupplierReturns({
           </tbody>
         </table>
       </div>
+
+      {/* Original Supplier Invoice Modal */}
+      {invoiceModalData && (
+        <SupplierInvoiceModal
+          invoice={typeof invoiceModalData === "object" ? invoiceModalData : undefined}
+          onClose={() => setInvoiceModalData(null)}
+        />
+      )}
     </div>
   )
 }

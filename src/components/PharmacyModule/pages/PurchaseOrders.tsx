@@ -110,7 +110,7 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
               className="flex items-center gap-1.5 px-4 py-2 rounded text-white text-[13px] font-medium"
               style={{ background: "#0F766E" }}
             >
-              <Plus size={14} /> Create PO
+              <Plus size={14} /> Order More Medicines
             </button>
           </div>
         }
@@ -186,19 +186,6 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
                 </td>
                 <td>
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() =>
-                        window.dispatchEvent(
-                          new CustomEvent("hospai_pharmacy_toast", {
-                            detail: { message: "Opened PO Details!" },
-                          }),
-                        )
-                      }
-                      className="p-1.5 rounded hover:bg-[#F0F2F5] text-[#64748B] transition-colors"
-                      title="View"
-                    >
-                      <Eye size={13} />
-                    </button>
                     {po.status === "Draft" && (
                       <button
                         onClick={() => {
@@ -305,35 +292,64 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[12px] font-semibold text-[#64748B] uppercase tracking-wide">
-                    Medicines
+                    Medicines to Order ({items.length})
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById("po-medicine-search-input")
+                      input?.focus()
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold text-white bg-[#0F766E] hover:bg-[#0d655e] transition-colors cursor-pointer"
+                  >
+                    <Plus size={14} /> Order More Medicines
+                  </button>
                 </div>
 
                 <div className="mb-4 relative">
                   <input
+                    id="po-medicine-search-input"
                     value={medicineSearch}
                     onChange={(e) => setMedicineSearch(e.target.value)}
-                    placeholder="Search medicine to add…"
-                    className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px]"
+                    placeholder="Search medicine to add to purchase order…"
+                    className="w-full px-3 py-2 border border-[#E2E8F0] text-[13px] rounded focus:border-[#0F766E] focus:outline-none"
                   />
                   {medicineSearch && (
-                    <div className="absolute top-full left-0 right-0 bg-white border border-[#E2E8F0] shadow-xl max-h-48 overflow-y-auto z-10">
+                    <div className="absolute top-full left-0 right-0 bg-white border border-[#E2E8F0] shadow-xl max-h-56 overflow-y-auto z-10 rounded-b">
                       {medicines
                         .filter((m) =>
                           m.name
                             .toLowerCase()
-                            .includes(medicineSearch.toLowerCase()),
+                            .includes(medicineSearch.toLowerCase()) ||
+                          (m.generic &&
+                            m.generic
+                              .toLowerCase()
+                              .includes(medicineSearch.toLowerCase())),
                         )
                         .map((m) => (
                           <div
                             key={m.id}
                             onClick={() => addItem(m)}
-                            className="px-3 py-2 hover:bg-[#F5F7FA] cursor-pointer text-[13px] flex justify-between"
+                            className="px-3 py-2.5 hover:bg-[#F0FDFA] cursor-pointer text-[13px] flex justify-between items-center border-b border-[#F0F2F5] last:border-b-0"
                           >
-                            <span>{m.name}</span>
-                            <span className="text-[#94A3B8]">
-                              Stock: {m.stock}
-                            </span>
+                            <div>
+                              <span className="font-semibold text-[#0F1624]">
+                                {m.name}
+                              </span>
+                              {m.generic && (
+                                <span className="text-[11px] text-[#64748B] ml-2">
+                                  ({m.generic})
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-[11px] text-[#94A3B8]">
+                                Stock: {m.stock}
+                              </span>
+                              <span className="text-[11px] font-semibold text-[#0F766E] bg-[#E8EDF5] px-2.5 py-1 rounded hover:bg-[#0F766E] hover:text-white transition-colors">
+                                + Add to Order
+                              </span>
+                            </div>
                           </div>
                         ))}
                     </div>
@@ -353,7 +369,18 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item, idx) => (
+                      {items.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="text-center py-6 text-[#94A3B8] text-[13px]"
+                          >
+                            No medicines added yet. Search above or click{" "}
+                            <strong>+ Order More Medicines</strong> to add items.
+                          </td>
+                        </tr>
+                      ) : (
+                        items.map((item, idx) => (
                         <tr className="hover:bg-[#F0FDFA] transition-colors" key={idx}>
                           <td className="text-[13px] font-semibold">
                             {item.name}
@@ -413,7 +440,7 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                   {items.length > 0 && (
@@ -428,6 +455,17 @@ export default function PurchaseOrders({ onNavigate }: PurchaseOrdersProps) {
                     </div>
                   )}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.getElementById("po-medicine-search-input")
+                    input?.focus()
+                  }}
+                  className="w-full mt-3 py-2.5 border-2 border-dashed border-[#0F766E]/40 rounded-lg text-[13px] font-semibold text-[#0F766E] hover:bg-[#F0FDFA] flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Plus size={16} /> Order More Medicines
+                </button>
               </div>
             </div>
             <div className="p-5 border-t border-[#E2E8F0] flex gap-3">

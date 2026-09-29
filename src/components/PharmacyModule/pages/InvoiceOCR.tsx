@@ -691,6 +691,29 @@ Output strictly valid JSON only without markdown formatting.`
     const grnId = "GRN-" + Date.now()
     const grnItems: any[] = []
 
+    // Resolve or auto-register supplier from invoice header
+    const currentSuppliers = PharmacyDatabase.getSuppliers()
+    const supName = (invoiceHeader.supplierName || "Supplier").trim()
+    let matchedSupplier = currentSuppliers.find(
+      (s) => (s.supplierName || (s as any).name || "").toLowerCase() === supName.toLowerCase()
+    )
+    if (!matchedSupplier && supName) {
+      matchedSupplier = {
+        id: "SUP-" + Date.now(),
+        supplierName: supName,
+        gstInformation: invoiceHeader.gstin || "",
+        contactInformation: "Invoice Purchase",
+        phone: "",
+        email: "",
+        licenseDetails: "",
+        status: "Active",
+        createdAt: new Date().toISOString(),
+        address: "Bhimavaram",
+        paymentTerms: invoiceHeader.paymentTerms || "Credit",
+      }
+      PharmacyDatabase.saveSuppliers([...currentSuppliers, matchedSupplier])
+    }
+
     extractedItems.forEach((item) => {
       let medId = ""
       const existing = medicines.find(
@@ -702,16 +725,21 @@ Output strictly valid JSON only without markdown formatting.`
         PharmacyDatabase.addMedicine({
           id: medId,
           medicineName: item.matched,
+          brandName: item.matched,
           genericName: item.matched,
           categoryId: "General",
-          manufacturer: item.mfr,
-          stock: item.quantity,
-          mrp: item.mrp,
-          price: item.rate,
-          rack: "A-1",
-          batch: item.batch,
-          expiry: item.expiry,
+          manufacturer: item.mfr || "Standard Pharma",
+          dosageForm: "Tablet",
+          strength: "Standard",
+          unit: item.pack || "Strip",
+          barcode: "890" + Math.floor(10000000 + Math.random() * 90000000),
+          taxPercentage: item.gst || 12,
+          reorderLevel: 20,
+          storageCondition: "Room Temperature",
+          scheduleType: "H",
+          controlledSubstanceFlag: false,
           activeStatus: "Active",
+          createdAt: new Date().toISOString(),
         } as any)
         PharmacyDatabase.logAudit(
           "System",
@@ -730,17 +758,19 @@ Output strictly valid JSON only without markdown formatting.`
         })
       }
 
-      // Add Batch
+      // Add Batch with supplier & invoice references
       const batchId = "BAT-" + Math.floor(Math.random() * 100000)
       PharmacyDatabase.addBatch({
         id: batchId,
         medicineId: medId,
-        batchNumber: item.batch,
-        expiryDate: item.expiry,
+        batchNumber: item.batch || "B" + Math.floor(100000 + Math.random() * 900000),
+        expiryDate: item.expiry || "2027-12-31",
         quantity: item.quantity,
         availableQuantity: item.quantity,
         mrp: item.mrp,
         purchasePrice: item.rate,
+        supplierId: matchedSupplier ? matchedSupplier.id : undefined,
+        invoiceNumber: invoiceHeader.invoiceNumber || undefined,
         grnId: grnId,
         createdAt: new Date().toISOString(),
         manufacturingDate: "2025-01-01",
@@ -755,16 +785,16 @@ Output strictly valid JSON only without markdown formatting.`
         quantity: item.quantity,
         transactionType: "PURCHASE_RECEIVED",
         userId: "SYS",
-        reason: `Received via Invoice OCR GRN: ${grnId} (${invoiceHeader.supplierName})`,
+        reason: `Received via Invoice OCR GRN: ${grnId} (${invoiceHeader.supplierName || "Supplier"})`,
       })
 
       grnItems.push({
         medicineId: medId,
         orderedQty: item.quantity,
         receivedQty: item.quantity,
-        batchNumber: item.batch,
+        batchNumber: item.batch || "B" + Math.floor(100000 + Math.random() * 900000),
         manufacturingDate: "2025-01-01",
-        expiryDate: item.expiry,
+        expiryDate: item.expiry || "2027-12-31",
         purchasePrice: item.rate,
         sellingPrice: item.mrp,
       })
@@ -774,8 +804,8 @@ Output strictly valid JSON only without markdown formatting.`
     const newGrn = {
       id: grnId,
       purchaseOrderId: invoiceHeader.poNumber || "DIRECT_INVOICE",
-      supplierId: invoiceHeader.supplierName,
-      invoiceNumber: invoiceHeader.invoiceNumber,
+      supplierId: matchedSupplier ? matchedSupplier.id : (invoiceHeader.supplierName || "Supplier"),
+      invoiceNumber: invoiceHeader.invoiceNumber || `INV-${Date.now()}`,
       grnDate: invoiceHeader.invoiceDate || new Date().toISOString(),
       items: grnItems,
       receivedBy: "Chief Pharmacist",
@@ -783,11 +813,12 @@ Output strictly valid JSON only without markdown formatting.`
     }
     PharmacyDatabase.addGRN(newGrn)
 
+    window.dispatchEvent(new CustomEvent("hospai_pharmacy_updated"))
     window.dispatchEvent(
       new CustomEvent("hospai_pharmacy_toast", {
         detail: {
           type: "success",
-          message: `GRN ${grnId} posted successfully! Items added to Inventory Ledger.`,
+          message: `GRN ${grnId} posted successfully! ${extractedItems.length} items added to Inventory.`,
         },
       }),
     )

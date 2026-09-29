@@ -24,13 +24,10 @@ import {
   RefreshCcw,
   BarChart3,
   ArrowRight,
-  Trash2,
 } from "lucide-react"
-import toast from "react-hot-toast"
 
 import StatusBadge from "../components/StatusBadge"
 import PageHeader from "../components/PageHeader"
-import { PharmacyDatabase } from "../../../services/pharmacyDb"
 
 const quickActions = [
   {
@@ -71,6 +68,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     expiringMedicines,
     bills,
     supplierReturns,
+    returns,
   } = usePharmacyData()
   const [chartView, setChartView] = useState<"weekly" | "monthly">("weekly")
   const [selectedDate, setSelectedDate] = useState(
@@ -86,9 +84,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
   const chartData = last7Days.map((dateStr) => {
     const dayBills = bills.filter(
-      (b) => (b.billDate || "").startsWith(dateStr) && !b.isModifiedReturnBill,
+      (b) =>
+        (b.billDate || "").startsWith(dateStr) &&
+        !b.isModifiedReturnBill &&
+        !b.billNumber?.startsWith("MOD-"),
     )
-    const dayReturns = PharmacyDatabase.getReturns().filter((r) =>
+    const dayReturns = returns.filter((r) =>
       (r.createdAt || "").startsWith(dateStr),
     )
     const dayGross = dayBills.reduce((acc, b) => acc + (b.totalAmount || 0), 0)
@@ -125,10 +126,16 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const kpis = [
     {
       title: isToday ? "Today's Total Sales" : "Selected Date Total Sales",
-      value: `₹${selectedDateNet.toLocaleString()}`,
-      change: "0%",
-      up: true,
-      sub: "Total revenue (Gross - Refunds)",
+      value: `₹${selectedDateNet.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      change:
+        selectedDateStats?.refunds > 0
+          ? `-₹${selectedDateStats.refunds.toLocaleString("en-IN")}`
+          : "Active",
+      up: !selectedDateStats?.refunds,
+      sub:
+        selectedDateStats?.refunds > 0
+          ? `Gross: ₹${selectedDateStats.gross.toLocaleString("en-IN")} · Refunds: ₹${selectedDateStats.refunds.toLocaleString("en-IN")}`
+          : "Net revenue (Gross - Refunds)",
       icon: ShoppingCart,
       color: "#0F766E",
       borderColor: "#0F766E",
