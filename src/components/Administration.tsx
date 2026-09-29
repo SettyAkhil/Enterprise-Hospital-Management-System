@@ -176,8 +176,8 @@ export default function Administration() {
 
   // Settings State
   const [mfaEnforced, setMfaEnforced] = useState(true)
-  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(30)
-  const [minPasswordLength, setMinPasswordLength] = useState(10)
+  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number | "">(30)
+  const [minPasswordLength, setMinPasswordLength] = useState<number | "">(10)
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [settingsNotice, setSettingsNotice] = useState("")
 
@@ -357,9 +357,13 @@ export default function Administration() {
   const toggleModuleForSelectedRole = (moduleKey: string) => {
     if (!selectedRole) return
     const currentModules = selectedRole.allowedModules
-    let newModules: string[]
+    const isCurrentlyActive =
+      currentModules.includes(moduleKey) ||
+      currentModules.includes("*") ||
+      getGrantedActionsForModule(currentModules, moduleKey).length > 0
 
-    if (currentModules.includes(moduleKey)) {
+    let newModules: string[]
+    if (isCurrentlyActive) {
       newModules = currentModules.filter(
         (m) => m !== moduleKey && !m.startsWith(`${moduleKey}:`),
       )
@@ -376,8 +380,20 @@ export default function Administration() {
     action: PermissionAction,
   ) => {
     if (!selectedRole) return
+    let currentModules = [...selectedRole.allowedModules]
+
+    // If top-level module permission exists, expand it into 4 granular actions first
+    if (currentModules.includes(moduleKey)) {
+      currentModules = currentModules.filter((m) => m !== moduleKey)
+      ACTIONS_LIST.forEach((act) => {
+        const key = `${moduleKey}:${act.key}`
+        if (!currentModules.includes(key)) {
+          currentModules.push(key)
+        }
+      })
+    }
+
     const targetKey = `${moduleKey}:${action}`
-    const currentModules = selectedRole.allowedModules
     let newModules: string[]
 
     if (currentModules.includes(targetKey)) {
@@ -1005,15 +1021,7 @@ export default function Administration() {
                                   title="Edit Doctor Profile"
                                   className="bg-white hover:bg-gray-100 text-[#334155] border border-[#CBD5E1] px-2.5 py-1 text-[11.5px] font-semibold cursor-pointer"
                                 >
-                                  ✏️ Edit
-                                </button>
-
-                                <button
-                                  onClick={() => handleOpenCredentialsModal(d)}
-                                  title="Edit Login Credentials"
-                                  className="bg-[#1B4FD8] hover:bg-[#1740B4] text-white border border-blue-600 px-2.5 py-1 text-[11.5px] font-semibold cursor-pointer"
-                                >
-                                  🔑 Credentials
+                                  ✏️ Edit Profile
                                 </button>
 
                                 <button
@@ -1407,7 +1415,7 @@ export default function Administration() {
                                 </div>
 
                                 {isExpanded && (
-                                  <div className="mt-3 pt-2 border-t border-gray-100 grid grid-cols-2 gap-1.5 bg-gray-50 p-2 text-[11px]">
+                                  <div className="mt-3 pt-2.5 border-t border-slate-200 grid grid-cols-2 gap-2 bg-slate-50/80 p-2.5 rounded-xs">
                                     {ACTIONS_LIST.map((act) => {
                                       const hasAction = grantedActions.includes(
                                         act.key,
@@ -1415,20 +1423,27 @@ export default function Administration() {
                                       return (
                                         <button
                                           key={act.key}
-                                          onClick={() =>
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
                                             toggleActionForSelectedRole(
                                               modKey,
                                               act.key,
                                             )
-                                          }
-                                          className={`px-2 py-1 flex items-center gap-1 border font-semibold cursor-pointer ${
+                                          }}
+                                          className={`px-2.5 py-1.5 flex items-center justify-between text-[11.5px] font-bold border transition-all cursor-pointer rounded-xs shadow-2xs ${
                                             hasAction
-                                              ? "bg-blue-600 text-white border-blue-600"
-                                              : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                                              ? "bg-[#1B4FD8] text-white border-blue-700 shadow-xs"
+                                              : "bg-white text-slate-600 border-slate-300 hover:bg-slate-100 hover:text-slate-900"
                                           }`}
                                         >
-                                          <span>{act.icon}</span>
-                                          <span>{act.label}</span>
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-[12px]">{act.icon}</span>
+                                            <span>{act.label}</span>
+                                          </div>
+                                          <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${hasAction ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-400"}`}>
+                                            {hasAction ? "ON" : "OFF"}
+                                          </span>
                                         </button>
                                       )
                                     })}
@@ -1567,33 +1582,29 @@ export default function Administration() {
                           </td>
 
                           <td className="px-4 py-3 font-medium text-[#0F172A] whitespace-nowrap">
-                            {isLoginSession ? (log.device || detectDevice()) : "—"}
+                            {log.device || detectDevice()}
                           </td>
 
                           <td className="px-4 py-3 font-mono text-[12px] text-[#334155] whitespace-nowrap">
-                            {isLoginSession ? (log.loginTime || "—") : "—"}
+                            {log.loginTime || "—"}
                           </td>
 
                           <td className="px-4 py-3 font-mono text-[12px] whitespace-nowrap">
-                            {isLoginSession ? (
-                              log.logoutTime === "Active" ? (
-                                <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 border border-emerald-200 font-bold rounded">
-                                  Active
-                                </span>
-                              ) : log.logoutTime === "Session Expired" ? (
-                                <span className="text-amber-800 bg-amber-50 px-2 py-0.5 border border-amber-200 font-semibold rounded">
-                                  Session Expired
-                                </span>
-                              ) : (
-                                log.logoutTime || "—"
-                              )
+                            {log.logoutTime === "Active" ? (
+                              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 border border-emerald-200 font-bold rounded">
+                                Active
+                              </span>
+                            ) : log.logoutTime === "Session Expired" ? (
+                              <span className="text-amber-800 bg-amber-50 px-2 py-0.5 border border-amber-200 font-semibold rounded">
+                                Session Expired
+                              </span>
                             ) : (
-                              "—"
+                              log.logoutTime || "—"
                             )}
                           </td>
 
                           <td className="px-4 py-3 font-mono font-bold text-[#1B4FD8] whitespace-nowrap">
-                            {isLoginSession ? (log.duration || "—") : "—"}
+                            {log.duration || "—"}
                           </td>
 
                           <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -1695,10 +1706,27 @@ export default function Administration() {
                   </label>
                   <input
                     type="number"
+                    min="0"
+                    placeholder="e.g. 30"
                     value={sessionTimeoutMinutes}
-                    onChange={(e) =>
-                      setSessionTimeoutMinutes(Number(e.target.value))
-                    }
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      if (raw === "") {
+                        setSessionTimeoutMinutes("")
+                      } else {
+                        const val = parseInt(raw, 10)
+                        if (isNaN(val)) {
+                          setSessionTimeoutMinutes("")
+                        } else {
+                          setSessionTimeoutMinutes(Math.max(0, Math.abs(val)))
+                        }
+                      }
+                    }}
+                    onBlur={() => {
+                      if (sessionTimeoutMinutes === "") {
+                        setSessionTimeoutMinutes(0)
+                      }
+                    }}
                     className="w-full bg-white border border-[#DDE2EC] px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
                   />
                 </div>
@@ -1709,10 +1737,27 @@ export default function Administration() {
                   </label>
                   <input
                     type="number"
+                    min="0"
+                    placeholder="e.g. 10"
                     value={minPasswordLength}
-                    onChange={(e) =>
-                      setMinPasswordLength(Number(e.target.value))
-                    }
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      if (raw === "") {
+                        setMinPasswordLength("")
+                      } else {
+                        const val = parseInt(raw, 10)
+                        if (isNaN(val)) {
+                          setMinPasswordLength("")
+                        } else {
+                          setMinPasswordLength(Math.max(0, Math.abs(val)))
+                        }
+                      }
+                    }}
+                    onBlur={() => {
+                      if (minPasswordLength === "") {
+                        setMinPasswordLength(0)
+                      }
+                    }}
                     className="w-full bg-white border border-[#DDE2EC] px-3.5 py-2 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#1B4FD8]"
                   />
                 </div>

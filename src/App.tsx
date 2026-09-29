@@ -2234,6 +2234,7 @@ export default function App() {
                   onNavigate={(m) => setModule(m as any)}
                 />
               )}
+              {module === "revenue_reports" && <RevenueReports />}
               {(module === "reports_patients" ||
                 module === "reports_er" ||
                 module === "reports_inpatient" ||
@@ -2246,10 +2247,10 @@ export default function App() {
                 module === "reports_admissions" ||
                 module === "reports_discharges" ||
                 module === "reports_staff" ||
-                module === "revenue_reports" ||
                 module === "reports_pharmacy_damaged" ||
                 module === "reports_supplier_returns") && (
                 <GenericReportPage
+                  key={module}
                   reportType={module as ReportType}
                   onNavigate={(m) => setModule(m as any)}
                 />
