@@ -2004,10 +2004,11 @@ export class PharmacyDatabase {
         b.medicineId === medicineId &&
         (b.availableQuantity ?? b.quantity ?? 0) > 0 &&
         (!location ||
-          location === "All" ||
+          location.toLowerCase() === "all" ||
           location === "Main Pharmacy" ||
           (b.location || "Main Pharmacy") === location ||
-          b.location?.startsWith("Rack")),
+          b.location?.startsWith("Rack") ||
+          Boolean(b.location))
     )
 
     // Calculate total available to see if fulfillment is possible
