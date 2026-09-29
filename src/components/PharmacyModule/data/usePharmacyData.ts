@@ -25,16 +25,13 @@ import type {
 
 // entry for the stored "alert"/"success", so those rendered an undefined icon).
 
-const NOTIFICATION_SEVERITY: Record<AppNotification["type"], "critical" | "warning" | "info"> =
-  {
-    alert: "critical",
-
-    warning: "warning",
-
-    info: "info",
-
-    success: "info",
-  }
+const NOTIFICATION_SEVERITY: Record<string, "critical" | "warning" | "info"> = {
+  alert: "critical",
+  critical: "critical",
+  warning: "warning",
+  info: "info",
+  success: "info",
+}
 
 // "Transferred" is the in-transit leg; the transfers screen tests for it by that
 
@@ -159,6 +156,8 @@ export function usePharmacyData() {
     PharmacyDatabase.getAdjustments(),
   )
 
+  const [returns, setReturns] = useState(() => PharmacyDatabase.getReturns())
+
   const mappedMedicines = medicines.map((m) => {
     const mBatches = batches.filter((b) => b.medicineId === m.id)
 
@@ -195,6 +194,12 @@ export function usePharmacyData() {
       status: m.activeStatus === "Active" ? "active" : "inactive",
 
       sku: m.hsnCode || m.id,
+
+      hsnCode: m.hsnCode || "3004 039",
+
+      mnfCode: (m as any).mnfCode || (m.manufacturer ? m.manufacturer.substring(0, 3).toUpperCase() : "MAN"),
+
+      binNo: (latestBatch as any)?.location || (m as any).binNo || "",
 
       barcode: m.barcode || "89000000000",
 
@@ -266,11 +271,9 @@ export function usePharmacyData() {
         !b.billNumber?.startsWith("MOD-") &&
         !(b as any).isModifiedReturnBill,
     )
-    const dayReturns = (
-      typeof PharmacyDatabase.getReturns === "function"
-        ? PharmacyDatabase.getReturns()
-        : []
-    ).filter((r: any) => (r.createdAt || "").startsWith(dateStr))
+    const dayReturns = returns.filter((r: any) =>
+      (r.createdAt || "").startsWith(dateStr),
+    )
     const dayGross = dayBills.reduce((acc, b) => acc + (b.totalAmount || 0), 0)
     const dayRefunds = dayReturns.reduce(
       (acc: number, r: any) => acc + (r.refundAmount || 0),
@@ -303,15 +306,27 @@ export function usePharmacyData() {
     setGrns(PharmacyDatabase.getGRNs())
     setSupplierReturns(PharmacyDatabase.getSupplierReturns())
     setAdjustments(PharmacyDatabase.getAdjustments())
+    setReturns(PharmacyDatabase.getReturns())
   }
 
   useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      !window.localStorage.getItem("hospai_pharm_fresh_demo_purged_v3")
+    ) {
+      PharmacyDatabase.clearAllPharmacyData()
+    }
+    refresh()
+
     const handleUpdate = () => refresh()
 
     window.addEventListener("hospai_pharmacy_updated", handleUpdate)
+    window.addEventListener("storage", handleUpdate)
 
-    return () =>
+    return () => {
       window.removeEventListener("hospai_pharmacy_updated", handleUpdate)
+      window.removeEventListener("storage", handleUpdate)
+    }
   }, [])
 
   const mappedSupplierReturns = supplierReturns.map((r) => {
@@ -380,6 +395,182 @@ export function usePharmacyData() {
       lossValue,
     }
   })
+
+  const dismissedIds = PharmacyDatabase.getDismissedNotificationIds()
+  const readIds = PharmacyDatabase.getReadNotificationIds()
+
+  const dynamicNotifications: Array<{
+    id: string
+    title: string
+    message: string
+    type: "critical" | "warning" | "info"
+    timestamp: string
+    time: string
+    read: boolean
+    actionPage?: string
+    actionLabel?: string
+    category?: "stock" | "expiry" | "prescription" | "transfer" | "return" | "general"
+  }> = []
+
+  // 1. Stockout Alerts (Critical)
+  mappedMedicines
+    .filter((m) => m.status === "active" && m.stock === 0)
+    .forEach((m) => {
+      const id = `sys-stockout-${m.id}`
+      if (!dismissedIds.includes(id)) {
+        dynamicNotifications.push({
+          id,
+          title: `Stockout: ${m.name}`,
+          message: `Zero units in stock. Immediate purchase order replenishment required.`,
+          type: "critical",
+          timestamp: "Urgent",
+          time: "Urgent",
+          read: readIds.includes(id),
+          actionPage: "purchase-orders",
+          actionLabel: "Create PO",
+          category: "stock",
+        })
+      }
+    })
+
+  // 2. Expired Batches (Critical)
+  expiringMedicines
+    .filter((b) => b.status === "expired" && b.stock > 0)
+    .forEach((b) => {
+      const id = `sys-expired-${b.id}`
+      if (!dismissedIds.includes(id)) {
+        dynamicNotifications.push({
+          id,
+          title: `Expired Drug: ${b.name} (Batch ${b.batch})`,
+          message: `Batch expired on ${b.expiry} with ${b.stock} units remaining. Quarantine & initiate return.`,
+          type: "critical",
+          timestamp: "Urgent",
+          time: "Urgent",
+          read: readIds.includes(id),
+          actionPage: "expiry-low-stock",
+          actionLabel: "Inspect Expiry",
+          category: "expiry",
+        })
+      }
+    })
+
+  // 3. Low Stock Alerts (Warning)
+  mappedMedicines
+    .filter(
+      (m) =>
+        m.status === "active" &&
+        m.stock > 0 &&
+        m.stock <= (m.reorderLevel || 10),
+    )
+    .forEach((m) => {
+      const id = `sys-lowstock-${m.id}`
+      if (!dismissedIds.includes(id)) {
+        dynamicNotifications.push({
+          id,
+          title: `Low Stock: ${m.name}`,
+          message: `Current stock (${m.stock} units) has reached reorder threshold (${m.reorderLevel || 10} units).`,
+          type: "warning",
+          timestamp: "Warning",
+          time: "Warning",
+          read: readIds.includes(id),
+          actionPage: "purchase-orders",
+          actionLabel: "Order Stock",
+          category: "stock",
+        })
+      }
+    })
+
+  // 4. Near-Expiry Batches (Warning)
+  expiringMedicines
+    .filter((b) => b.status === "expiring" && b.daysLeft <= 30 && b.stock > 0)
+    .forEach((b) => {
+      const id = `sys-near-expiry-${b.id}`
+      if (!dismissedIds.includes(id)) {
+        dynamicNotifications.push({
+          id,
+          title: `Near Expiry: ${b.name} (${b.daysLeft}d left)`,
+          message: `Batch ${b.batch} expires on ${b.expiry} (${b.stock} units). Dispense under FEFO protocol.`,
+          type: "warning",
+          timestamp: `${b.daysLeft}d left`,
+          time: `${b.daysLeft}d left`,
+          read: readIds.includes(id),
+          actionPage: "expiry-low-stock",
+          actionLabel: "View Batches",
+          category: "expiry",
+        })
+      }
+    })
+
+  // 5. Pending Doctor Prescriptions (Info)
+  const pendingRxCount = prescriptions.filter(
+    (p) => isAwaitingVerification(p.status) || p.status === "Sent To Pharmacy",
+  ).length
+  if (pendingRxCount > 0) {
+    const id = "sys-pending-rx"
+    if (!dismissedIds.includes(id)) {
+      dynamicNotifications.push({
+        id,
+        title: `${pendingRxCount} Doctor Prescription${pendingRxCount > 1 ? "s" : ""} Pending`,
+        message: `${pendingRxCount} clinical prescription(s) dispatched from doctor consultation queue.`,
+        type: "info",
+        timestamp: "Live Queue",
+        time: "Live Queue",
+        read: readIds.includes(id),
+        actionPage: "prescriptions",
+        actionLabel: "Dispense Queue",
+        category: "prescription",
+      })
+    }
+  }
+
+  // 6. Pending Ward Stock Transfers (Info)
+  const pendingTransfersCount = stockTransfers.filter(
+    (t) => t.status === "Requested",
+  ).length
+  if (pendingTransfersCount > 0) {
+    const id = "sys-pending-transfers"
+    if (!dismissedIds.includes(id)) {
+      dynamicNotifications.push({
+        id,
+        title: `${pendingTransfersCount} Ward Transfer Request${pendingTransfersCount > 1 ? "s" : ""}`,
+        message: `Inpatient departments have requested urgent stock replenishment.`,
+        type: "info",
+        timestamp: "Live Transfer",
+        time: "Live Transfer",
+        read: readIds.includes(id),
+        actionPage: "stock-transfers",
+        actionLabel: "Review Requests",
+        category: "transfer",
+      })
+    }
+  }
+
+  // 7. Persisted custom notifications from database (e.g. Sales Returns, Supplier Credits)
+  const persistedNotifications = notifications
+    .filter((n) => !dismissedIds.includes(n.id))
+    .map((n) => ({
+      ...n,
+      type: (NOTIFICATION_SEVERITY[n.type] || "info") as
+        | "critical"
+        | "warning"
+        | "info",
+      time: n.timestamp,
+      read: n.read || readIds.includes(n.id),
+      actionPage: n.actionPage,
+      actionLabel: n.actionLabel,
+      category: (n.category || "general") as
+        | "stock"
+        | "expiry"
+        | "prescription"
+        | "transfer"
+        | "return"
+        | "general",
+    }))
+
+  const combinedNotifications = [
+    ...dynamicNotifications,
+    ...persistedNotifications,
+  ]
 
   return {
     medicines: mappedMedicines,
@@ -466,13 +657,7 @@ export function usePharmacyData() {
       status: u.status === "Active" ? "active" : "inactive",
     })),
 
-    notifications: notifications.map((n) => ({
-      ...n,
-
-      type: NOTIFICATION_SEVERITY[n.type],
-
-      time: n.timestamp,
-    })),
+    notifications: combinedNotifications,
 
     auditLogs,
 
@@ -523,6 +708,8 @@ export function usePharmacyData() {
     damagedStock: mappedDamagedStock,
 
     adjustments,
+
+    returns,
 
     refresh,
   }

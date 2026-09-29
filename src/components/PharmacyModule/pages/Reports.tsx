@@ -237,6 +237,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
   }, [purchaseOrders, startDate, endDate])
 
   // 1. Overview KPIs
+  // 1. Overview KPIs
   // Total Revenue = Completed pharmacy sales revenue before refunds
   const totalRevenue = useMemo(() => {
     return filteredBills.reduce((sum, b) => sum + (b.totalAmount || 0), 0)
@@ -244,10 +245,6 @@ export default function Reports({ onNavigate }: ReportsProps) {
 
   // Total Transactions = Number of completed pharmacy sales transactions
   const totalTransactions = filteredBills.length
-
-  // Average Bill = Average transaction value
-  const averageBill =
-    totalTransactions > 0 ? totalRevenue / totalTransactions : 0
 
   // Total Refund = Total refund amount issued for returned medicines
   const totalRefund = useMemo(() => {
@@ -257,10 +254,16 @@ export default function Reports({ onNavigate }: ReportsProps) {
   // Net Revenue = Total Revenue - Total Refund
   const netRevenue = Math.max(0, totalRevenue - totalRefund)
 
+  // Average Bill = Average net transaction value
+  const averageBill =
+    totalTransactions > 0 ? netRevenue / totalTransactions : 0
+
   // 2. Sales Analytics Calculations
   const salesTrendData = useMemo(() => {
-    const map: Record<string, { date: string ;revenue: number ;orders: number }> =
-      {}
+    const map: Record<
+      string,
+      { date: string ;revenue: number ;gross: number ;refunds: number ;orders: number }
+    > = {}
 
     filteredBills.forEach((b) => {
       const rawDate = (b.billDate || b.createdAt || "").split("T")[0]
@@ -271,41 +274,100 @@ export default function Reports({ onNavigate }: ReportsProps) {
           })
         : "Recent"
       if (!map[displayDate]) {
-        map[displayDate] = { date: displayDate, revenue: 0, orders: 0 }
+        map[displayDate] = { date: displayDate, revenue: 0, gross: 0, refunds: 0, orders: 0 }
       }
+      map[displayDate].gross += b.totalAmount || 0
       map[displayDate].revenue += b.totalAmount || 0
       map[displayDate].orders += 1
     })
 
+    filteredReturns.forEach((r) => {
+      const rawDate = (r.createdAt || "").split("T")[0]
+      const displayDate = rawDate
+        ? new Date(rawDate).toLocaleDateString("en-IN", {
+            month: "short",
+            day: "numeric",
+          })
+        : "Recent"
+      if (!map[displayDate]) {
+        map[displayDate] = { date: displayDate, revenue: 0, gross: 0, refunds: 0, orders: 0 }
+      }
+      map[displayDate].refunds += r.refundAmount || 0
+      map[displayDate].revenue = Math.max(0, map[displayDate].gross - map[displayDate].refunds)
+    })
+
     const result = Object.values(map)
     if (result.length === 0) {
-      return [{ date: "No Sales", revenue: 0, orders: 0 }]
+      return [{ date: "No Sales", revenue: 0, gross: 0, refunds: 0, orders: 0 }]
     }
     return result
-  }, [filteredBills])
+  }, [filteredBills, filteredReturns])
 
   const topMedicinesSales = useMemo(() => {
-    const map: Record<string, { name: string ;quantity: number ;sales: number }> =
-      {}
+    const map: Record<
+      string,
+      {
+        name: string
+        grossQuantity: number
+        returnedQuantity: number
+        quantity: number
+        grossSales: number
+        refundAmount: number
+        sales: number
+      }
+    > = {}
 
     filteredBills.forEach((b) => {
       ;(b.items || []).forEach((item) => {
         const name = item.medicineName || "Unknown Medicine"
         if (!map[name]) {
-          map[name] = { name, quantity: 0, sales: 0 }
+          map[name] = {
+            name,
+            grossQuantity: 0,
+            returnedQuantity: 0,
+            quantity: 0,
+            grossSales: 0,
+            refundAmount: 0,
+            sales: 0,
+          }
         }
-        map[name].quantity += item.quantity || 0
-        map[name].sales +=
+        const itemSales =
           item.grossAmount ||
           item.totalPrice ||
-          item.quantity * (item.unitPrice || 0)
+          (item.quantity || 0) * (item.unitPrice || 0)
+        map[name].grossQuantity += item.quantity || 0
+        map[name].grossSales += itemSales
       })
+    })
+
+    filteredReturns.forEach((r) => {
+      ;(r.items || []).forEach((item: any) => {
+        const name = item.medicineName || "Unknown Medicine"
+        if (!map[name]) {
+          map[name] = {
+            name,
+            grossQuantity: 0,
+            returnedQuantity: 0,
+            quantity: 0,
+            grossSales: 0,
+            refundAmount: 0,
+            sales: 0,
+          }
+        }
+        map[name].returnedQuantity += item.returnQuantity || 0
+        map[name].refundAmount += item.refundAmount || 0
+      })
+    })
+
+    Object.values(map).forEach((m) => {
+      m.quantity = Math.max(0, m.grossQuantity - m.returnedQuantity)
+      m.sales = Math.max(0, m.grossSales - m.refundAmount)
     })
 
     return Object.values(map)
       .sort((a, b) => b.sales - a.sales)
       .slice(0, 5)
-  }, [filteredBills])
+  }, [filteredBills, filteredReturns])
 
   // 3. Inventory Overview Calculations
   const totalStockItems = medicines.length
@@ -2308,11 +2370,11 @@ export default function Reports({ onNavigate }: ReportsProps) {
             <div className="space-y-6">
               {/* SECTION 4: 4-CARD OVERVIEW KPI SECTION */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* 1. Total Revenue */}
+                {/* 1. Total / Net Revenue */}
                 <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-4 shadow-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-[#64748B] uppercase tracking-wide">
-                      Total Revenue
+                      Net Revenue
                     </span>
                     <div className="w-7 h-7 rounded bg-teal-50 text-[#0F766E] flex items-center justify-center">
                       <ShoppingCart size={15} />
@@ -2320,14 +2382,15 @@ export default function Reports({ onNavigate }: ReportsProps) {
                   </div>
                   <p className="text-[22px] font-extrabold text-[#0F1624] mt-2">
                     ₹
-                    {totalRevenue.toLocaleString("en-IN", {
+                    {netRevenue.toLocaleString("en-IN", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
                   </p>
                   <p className="text-[11px] text-[#64748B] mt-1 line-clamp-2">
-                    Total value of completed pharmacy sales during the selected
-                    period.
+                    {totalRefund > 0
+                      ? `Gross: ₹${totalRevenue.toLocaleString("en-IN")} · Refunds: -₹${totalRefund.toLocaleString("en-IN")}`
+                      : "Total net sales revenue for the selected period."}
                   </p>
                 </div>
 
@@ -3095,12 +3158,14 @@ export default function Reports({ onNavigate }: ReportsProps) {
                             <td className="p-3 text-center">{d.orders}</td>
                             <td className="p-3 text-right">
                               ₹
-                              {d.revenue.toLocaleString("en-IN", {
+                              {(d.gross || d.revenue).toLocaleString("en-IN", {
                                 minimumFractionDigits: 2,
                               })}
                             </td>
-                            <td className="p-3 text-right text-amber-700">
-                              ₹0.00
+                            <td className="p-3 text-right text-amber-700 font-medium">
+                              {d.refunds > 0
+                                ? `-₹${d.refunds.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                                : "₹0.00"}
                             </td>
                             <td className="p-3 text-right font-bold text-[#0F766E]">
                               ₹

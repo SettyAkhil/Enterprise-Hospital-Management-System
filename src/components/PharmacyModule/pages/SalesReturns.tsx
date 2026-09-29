@@ -20,6 +20,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
   const [printInv, setPrintInv] = useState<any | null>(null);
   const [printReturnModal, setPrintReturnModal] = useState<{ bill: any; returnRecord: any } | null>(null);
   const [search, setSearch] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
 
   // Returns tab states
   const [searchBillNo, setSearchBillNo] = useState("");
@@ -34,9 +35,11 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
   const [recentReturns, setRecentReturns] = useState<AppPharmacyReturn[]>(() => PharmacyDatabase.getReturns());
 
   const filtered = useMemo(() => {
-    const matched = bills.filter(inv =>
-      !search || inv.billNumber.toLowerCase().includes(search.toLowerCase()) || inv.patientName.toLowerCase().includes(search.toLowerCase())
-    );
+    const matched = bills.filter(inv => {
+      const matchesSearch = !search || inv.billNumber.toLowerCase().includes(search.toLowerCase()) || inv.patientName.toLowerCase().includes(search.toLowerCase());
+      const matchesDate = !dateFilter || (inv.billDate || (inv as any).createdAt || "").startsWith(dateFilter);
+      return matchesSearch && matchesDate;
+    });
     // Deduplicate by billNumber so we only see the latest version in the table
     const seen = new Set<string>();
     return matched.filter(inv => {
@@ -45,14 +48,28 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
       seen.add(key);
       return true;
     });
-  }, [bills, search]);
+  }, [bills, search, dateFilter]);
   
   // Net Revenue = Gross Sales Revenue (original bills only) - Total Refunds
-  const originalBills = useMemo(() => bills.filter(b => !b.isModifiedReturnBill), [bills]);
-  const grossSales = useMemo(() => originalBills.reduce((sum, b) => sum + (b.totalAmount || 0), 0), [originalBills]);
-  const totalRefunds = useMemo(() => recentReturns.reduce((sum, r) => sum + (r.refundAmount || 0), 0), [recentReturns]);
-  const todayRevenue = grossSales - totalRefunds;
-  const avgBill = originalBills.length > 0 ? (todayRevenue / originalBills.length) : 0;
+  const originalBills = useMemo(() => bills.filter(b => !b.isModifiedReturnBill && !b.billNumber?.startsWith("MOD-")), [bills]);
+  
+  // Scoped bills: if dateFilter is provided, match date; otherwise include all
+  const scopedOriginalBills = useMemo(() => {
+    if (!dateFilter) return originalBills;
+    return originalBills.filter(b => (b.billDate || (b as any).createdAt || "").startsWith(dateFilter));
+  }, [originalBills, dateFilter]);
+
+  // Scoped returns: if dateFilter is provided, match date; otherwise include all
+  const scopedReturns = useMemo(() => {
+    if (!dateFilter) return recentReturns;
+    return recentReturns.filter(r => (r.createdAt || "").startsWith(dateFilter));
+  }, [recentReturns, dateFilter]);
+
+  const grossRevenue = useMemo(() => scopedOriginalBills.reduce((sum, b) => sum + (b.totalAmount || 0), 0), [scopedOriginalBills]);
+  const totalRefunds = useMemo(() => scopedReturns.reduce((sum, r) => sum + (r.refundAmount || 0), 0), [scopedReturns]);
+  const netRevenue = Math.max(0, grossRevenue - totalRefunds);
+  const totalSaleBills = scopedOriginalBills.length;
+  const avgBill = totalSaleBills > 0 ? (netRevenue / totalSaleBills) : 0;
 
   // Reset to clean Returns view
   const handleResetToReturns = () => {
@@ -105,9 +122,10 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
 
   // Start return from sales history
   const handleStartReturnFromSales = (bill: AppPharmacyBill) => {
+    const targetBillNumber = bill.originalBillNumber || bill.billNumber;
     setView("returns");
-    setSearchBillNo(bill.billNumber);
-    handleSearchBill(bill.billNumber);
+    setSearchBillNo(targetBillNumber);
+    handleSearchBill(targetBillNumber);
   };
 
   // Calculate past returns for the searched bill
@@ -329,7 +347,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#F4F6F9] relative">
+    <div className="space-y-6 font-sans text-[#0F1624]">
       {printInv && <InvoicePrintModal bill={printInv} onClose={() => setPrintInv(null)} />}
       {printReturnModal && (
         <InvoicePrintModal 
@@ -352,17 +370,35 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
           </button>
         }
         onNavigate={onNavigate}
-        icon={RefreshCcw} iconBg="bg-amber-600"
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Summary KPI Cards */}
-        <div className="grid grid-cols-4 gap-4">
+      {/* Summary KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Net Revenue (Today)", value: "₹" + todayRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#1B4FD8", bg: "bg-blue-50", border: "border-blue-200" },
-            { label: "Total Sale Bills", value: originalBills.length.toString(), color: "#16a34a", bg: "bg-emerald-50", border: "border-emerald-200" },
-            { label: "Total Refunds Processed", value: "₹" + totalRefunds.toLocaleString("en-IN", { minimumFractionDigits: 2 }), color: "#dc2626", bg: "bg-red-50", border: "border-red-200" },
-            { label: "Avg. Ticket Value", value: "₹" + avgBill.toLocaleString("en-IN", { maximumFractionDigits: 0 }), color: "#7c3aed", bg: "bg-purple-50", border: "border-purple-200" },
+            { 
+              label: dateFilter ? `Net Revenue (${dateFilter})` : "Net Revenue", 
+              value: "₹" + netRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 }), 
+              subtext: `Gross: ₹${grossRevenue.toLocaleString("en-IN", { minimumFractionDigits: 0 })} · Returns: -₹${totalRefunds.toLocaleString("en-IN", { minimumFractionDigits: 0 })}`,
+              color: "#1B4FD8", bg: "bg-blue-50", border: "border-blue-200" 
+            },
+            { 
+              label: "Total Sale Bills", 
+              value: totalSaleBills.toString(), 
+              subtext: `${totalSaleBills} transaction${totalSaleBills === 1 ? "" : "s"}`,
+              color: "#16a34a", bg: "bg-emerald-50", border: "border-emerald-200" 
+            },
+            { 
+              label: "Total Refunds Processed", 
+              value: "₹" + totalRefunds.toLocaleString("en-IN", { minimumFractionDigits: 2 }), 
+              subtext: `${scopedReturns.length} return${scopedReturns.length === 1 ? "" : "s"} processed`,
+              color: "#dc2626", bg: "bg-red-50", border: "border-red-200" 
+            },
+            { 
+              label: "Avg. Ticket Value", 
+              value: "₹" + avgBill.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
+              subtext: "Net average per invoice",
+              color: "#7c3aed", bg: "bg-purple-50", border: "border-purple-200" 
+            },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-xl p-4 border border-[#E2E8F0] shadow-sm flex flex-col justify-between">
               <div className="flex items-center justify-between">
@@ -370,6 +406,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
                 <span className={`w-2.5 h-2.5 rounded-full ${s.bg} border ${s.border}`} />
               </div>
               <p className="text-[20px] font-bold mt-2 font-mono tracking-tight" style={{ color: s.color }}>{s.value}</p>
+              <p className="text-[11px] text-[#94A3B8] mt-1 truncate">{s.subtext}</p>
             </div>
           ))}
         </div>
@@ -405,7 +442,21 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <input type="date" defaultValue="2026-09-15" className="px-3 py-1.5 rounded border border-[#E2E8F0] text-[12px] bg-white shadow-sm focus:border-[#0F766E] focus:outline-none text-[#475569]" />
+              <input 
+                type="date" 
+                value={dateFilter} 
+                onChange={e => setDateFilter(e.target.value)}
+                className="px-3 py-1.5 rounded border border-[#E2E8F0] text-[12px] bg-white shadow-sm focus:border-[#0F766E] focus:outline-none text-[#475569]" 
+                title="Filter by Bill Date"
+              />
+              {dateFilter && (
+                <button
+                  onClick={() => setDateFilter("")}
+                  className="px-2 py-1 text-[11px] font-medium text-[#64748B] hover:text-[#0F1624] bg-[#F1F5F9] rounded hover:bg-[#E2E8F0] transition-colors"
+                >
+                  All Dates
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -487,16 +538,14 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
                           >
                             <Printer size={14} />
                           </button>
-                          {!isModifiedBill && (
-                            <button 
-                              onClick={() => handleStartReturnFromSales(inv)} 
-                              title="Process Return for this Bill"
-                              className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded transition-colors" 
-                              style={{ background: "#faf5ff", color: "#7c3aed" }}
-                            >
-                              <RefreshCcw size={11} /> Return
-                            </button>
-                          )}
+                          <button 
+                            onClick={() => handleStartReturnFromSales(inv)} 
+                            title="Process Return for this Bill"
+                            className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded transition-colors" 
+                            style={{ background: "#faf5ff", color: "#7c3aed" }}
+                          >
+                            <RefreshCcw size={11} /> Return
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -512,7 +561,7 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
         <div className="space-y-6">
           {/* Section 1: Search Original Bill */}
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 space-y-5 shadow-sm">
-            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-4">
+            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-4 flex-wrap gap-2">
               <div>
                 <h3 className="font-bold text-[16px] text-[#0F1624] flex items-center gap-2">
                   <RotateCcw size={16} className="text-amber-600" /> Process Medicine Return
@@ -521,20 +570,25 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
                   Enter the original Bill Number below to retrieve billed medicines and process customer returns
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-[12px] text-[#64748B]">
-                <span className="font-medium text-[11px] uppercase tracking-wider text-[#94A3B8]">Sample Bills:</span>
-                <button 
-                  onClick={() => { setSearchBillNo("BILL-2026-001245"); handleSearchBill("BILL-2026-001245"); }}
-                  className="px-2.5 py-1 bg-blue-50 text-blue-700 font-mono text-[11px] font-bold rounded-lg border border-blue-200/60 hover:bg-blue-100 transition-colors"
-                >
-                  BILL-2026-001245 (Rahul Verma)
-                </button>
-                <button 
-                  onClick={() => { setSearchBillNo("INV-2026-8845"); handleSearchBill("INV-2026-8845"); }}
-                  className="px-2.5 py-1 bg-purple-50 text-purple-700 font-mono text-[11px] font-bold rounded-lg border border-purple-200/60 hover:bg-purple-100 transition-colors"
-                >
-                  INV-2026-8845 (Priya Sharma)
-                </button>
+              <div className="flex items-center gap-2 text-[12px] text-[#64748B] flex-wrap">
+                <span className="font-medium text-[11px] uppercase tracking-wider text-[#94A3B8]">Quick Select:</span>
+                {originalBills.length > 0 ? (
+                  originalBills.slice(0, 3).map((ob, idx) => (
+                    <button 
+                      key={ob.billNumber}
+                      onClick={() => { setSearchBillNo(ob.billNumber); handleSearchBill(ob.billNumber); }}
+                      className={`px-2.5 py-1 font-mono text-[11px] font-bold rounded-lg border transition-colors ${
+                        idx === 0 
+                          ? "bg-blue-50 text-blue-700 border-blue-200/60 hover:bg-blue-100" 
+                          : "bg-purple-50 text-purple-700 border-purple-200/60 hover:bg-purple-100"
+                      }`}
+                    >
+                      {ob.billNumber} ({ob.patientName})
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-[12px] text-[#94A3B8] italic">No active bills found</span>
+                )}
               </div>
             </div>
 
@@ -947,7 +1001,6 @@ export default function SalesReturns({ onNavigate }: SalesReturnsProps) {
           </div>
         </div>
       )}
-      </div>
 
       {/* Invoice Detail Modal for Sales History */}
       {selectedInv && (
