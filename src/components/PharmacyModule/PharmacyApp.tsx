@@ -68,7 +68,7 @@ export default function PharmacyApp({ page, onNavigate }: PharmacyAppProps) {
 
     const handleToast = (e: any) => {
       const notif = e.detail
-      if (notif.type === "critical") {
+      if (notif.type === "critical" || notif.type === "alert") {
         toast.error(notif.message, {
           duration: 5000,
           style: { minWidth: "300px" },

@@ -66,6 +66,18 @@ export function numberToWords(num: number): string {
   return str.trim()
 }
 
+export function formatExpDate(exp?: string): string {
+  if (!exp) return "Dec-26"
+  const trimmed = exp.trim()
+  if (/^[A-Za-z]{3}-\d{2}$/.test(trimmed)) return trimmed
+  const d = new Date(trimmed)
+  if (isNaN(d.getTime())) return trimmed
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const m = months[d.getMonth()]
+  const y = String(d.getFullYear()).slice(-2)
+  return `${m}-${y}`
+}
+
 interface InvoicePrintModalProps {
   bill: any
   returnRecord?: any
@@ -363,8 +375,8 @@ export default function InvoicePrintModal({
                       <td className="p-1 text-left font-mono">
                         {item.batchNumber || "-"}
                       </td>
-                      <td className="p-1 text-left">
-                        {item.expiryDate || "2027-12"}
+                      <td className="p-1 text-left font-medium">
+                        {formatExpDate(item.expiryDate)}
                       </td>
                       <td className="p-1 text-right">{origQty}</td>
                       <td className="p-1 text-right font-bold text-amber-700">
@@ -507,23 +519,23 @@ export default function InvoicePrintModal({
 
                   return (
                     <tr key={i} className="align-top">
-                      <td className="p-1 text-left break-words pr-2">
+                      <td className="p-1 text-left break-words pr-2 font-medium">
                         {medName}
                       </td>
-                      <td className="p-1 text-left">{c.hsnCode || "300490"}</td>
-                      <td className="p-1 text-left">
-                        {medName.substring(0, 3)}
+                      <td className="p-1 text-left font-mono">{c.hsnCode || "3004 039"}</td>
+                      <td className="p-1 text-left font-mono uppercase">
+                        {c.mnf || (medName ? medName.substring(0, 3).toUpperCase() : "MAN")}
                       </td>
-                      <td className="p-1 text-left">
-                        {(c.batchNumber || c.batch || "H").charAt(0)}
+                      <td className="p-1 text-left font-semibold">
+                        {c.sh || "H"}
                       </td>
-                      <td className="p-1 text-left break-all">
-                        {c.batchNumber || c.batch}
+                      <td className="p-1 text-left break-all font-mono">
+                        {c.batchNumber || c.batch || "-"}
                       </td>
-                      <td className="p-1 text-left">
-                        {c.expiryDate || c.expiry || "2026-12"}
+                      <td className="p-1 text-left font-medium">
+                        {formatExpDate(c.expiryDate || c.expiry)}
                       </td>
-                      <td className="p-1 text-left"></td>
+                      <td className="p-1 text-left">{c.binNo || ""}</td>
                       <td className="p-1 text-right">{qty}</td>
                       <td className="p-1 text-right">{mrp.toFixed(2)}</td>
                       <td className="p-1 text-right">{amount.toFixed(2)}</td>
@@ -641,34 +653,48 @@ export default function InvoicePrintModal({
                   <p>
                     Received sum of{" "}
                     <span className="font-bold uppercase">
-                      {numberToWords(effectiveBill.totalAmount || 0)} Rupees
+                      {numberToWords(effectiveBill.totalPaid || effectiveBill.totalAmount || 0)} Rupees
                       Only
                     </span>{" "}
                     towards Above Bill
                   </p>
-                  <div className="mt-6 border-t border-dashed border-black pt-2">
-                    <p className="font-bold mb-1">Payment Breakdown:</p>
-                    {Object.entries(
-                      effectiveBill.paymentsData?.amounts || {
-                        Cash: effectiveBill.totalAmount,
-                      },
-                    ).map(([method, amount]) => (
-                      <div
-                        key={method}
-                        className="flex justify-between w-48 text-[9px] uppercase"
-                      >
-                        <span>
-                          {method}{" "}
-                          {(effectiveBill.paymentsData?.refs as any)?.[method]
-                            ? `(${(effectiveBill.paymentsData?.refs as any)[method]})`
-                            : ""}
-                          :
-                        </span>
-                        <span className="font-bold">
-                          {(Number(amount) || 0).toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="mt-4 border-t border-dashed border-black pt-2">
+                    <p className="font-bold mb-1 text-[10px]">Payment Mode & Breakdown:</p>
+                    <div className="space-y-1 w-64 text-[9px] uppercase font-mono">
+                      {Object.entries(
+                        effectiveBill.paymentsData?.amounts || {
+                          Cash: effectiveBill.totalAmount,
+                        },
+                      ).map(([method, amount]) => (
+                        <div
+                          key={method}
+                          className="flex justify-between"
+                        >
+                          <span>
+                            {method === "upi" ? "UPI (8790689532@ibl)" : method}{" "}
+                            {(effectiveBill.paymentsData?.refs as any)?.[method]
+                              ? `[${(effectiveBill.paymentsData?.refs as any)[method]}]`
+                              : ""}
+                            :
+                          </span>
+                          <span className="font-bold">
+                            ₹{(Number(amount) || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                      {(effectiveBill.balanceDue > 0) && (
+                        <div className="flex justify-between font-bold text-red-700 border-t border-gray-400 pt-0.5">
+                          <span>Balance Due:</span>
+                          <span>₹{(Number(effectiveBill.balanceDue) || 0).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {(effectiveBill.balanceDue <= 0 || !effectiveBill.balanceDue) && (
+                        <div className="flex justify-between font-bold text-emerald-800 border-t border-gray-400 pt-0.5">
+                          <span>Balance:</span>
+                          <span>PAID IN FULL (₹0.00)</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
