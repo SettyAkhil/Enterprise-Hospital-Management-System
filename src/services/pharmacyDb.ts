@@ -970,7 +970,6 @@ if (typeof window !== "undefined") {
   } catch (e) {
     console.error("Failed to purge demo pharmacy data:", e)
   }
-  }
 }
 
 export class PharmacyDatabase {
