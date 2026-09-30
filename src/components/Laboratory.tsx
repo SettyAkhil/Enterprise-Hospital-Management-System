@@ -16,6 +16,7 @@ import {
 import TestResultModal from "./laboratory/TestResultModal"
 import ImportAllResultsModal from "./laboratory/ImportAllResultsModal"
 import CompleteLabReportModal from "./laboratory/CompleteLabReportModal"
+import AddTestModal from "./laboratory/AddTestModal"
 import { AuditDatabase } from "../services/auditDb"
 
 const QUEUE_TABS = [
@@ -44,6 +45,7 @@ export default function Laboratory({
   } | null>(null)
   const [showImportAllModal, setShowImportAllModal] = useState<LabOrder | null>(null)
   const [showCompleteReportModal, setShowCompleteReportModal] = useState<LabOrder | null>(null)
+  const [showAddTestModal, setShowAddTestModal] = useState<LabOrder | null>(null)
   const [showNewOrderModal, setShowNewOrderModal] = useState(false)
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null)
 
@@ -76,14 +78,32 @@ export default function Laboratory({
     return LabOrderDatabase.getLabWorklist()
   }, [tick])
 
+  // Helper to determine if an order is completed
+  const isOrderCompleted = (order: LabOrder): boolean => {
+    if (order.status === "Completed") return true
+    if (
+      order.tests.length > 0 &&
+      order.tests.every(
+        (t) => t.status === "Completed" || t.status === "Verified"
+      )
+    ) {
+      return true
+    }
+    return false
+  }
+
   // Filter orders by active queue tab, search query, and category
   const filteredOrders = useMemo(() => {
     return allOrders.filter((order) => {
+      const isCompleted = isOrderCompleted(order)
+
       // 1. Queue filter
-      if (activeQueue === "paid" && order.billing.status !== "Paid") return false
-      if (activeQueue === "pending" && order.billing.status !== "Pending") return false
-      if (activeQueue === "collected" && order.status !== "Sample Collected") return false
-      if (activeQueue === "processing" && order.status !== "In Progress") return false
+      // Active queues: completed orders are hidden so they ONLY appear under "Completed & Verified"
+      if (activeQueue === "all" && isCompleted) return false
+      if (activeQueue === "paid" && (order.billing.status !== "Paid" || isCompleted)) return false
+      if (activeQueue === "pending" && (order.billing.status !== "Pending" || isCompleted)) return false
+      if (activeQueue === "collected" && (order.status !== "Sample Collected" || isCompleted)) return false
+      if (activeQueue === "processing" && (order.status !== "In Progress" || isCompleted)) return false
       if (activeQueue === "critical") {
         const hasCritical = order.tests.some(
           (t) =>
@@ -92,7 +112,7 @@ export default function Laboratory({
         )
         if (!hasCritical) return false
       }
-      if (activeQueue === "completed" && order.status !== "Completed") return false
+      if (activeQueue === "completed" && !isCompleted) return false
 
       // 2. Search query filter
       if (searchQuery.trim()) {
@@ -125,10 +145,13 @@ export default function Laboratory({
 
   // Quick statistics
   const stats = useMemo(() => {
-    const total = allOrders.length
-    const paid = allOrders.filter((o) => o.billing.status === "Paid").length
-    const pending = allOrders.filter((o) => o.billing.status === "Pending").length
-    const processing = allOrders.filter((o) => o.status === "In Progress" || o.status === "Sample Collected").length
+    const activeOrders = allOrders.filter((o) => !isOrderCompleted(o))
+    const total = activeOrders.length
+    const paid = activeOrders.filter((o) => o.billing.status === "Paid").length
+    const pending = activeOrders.filter((o) => o.billing.status === "Pending").length
+    const processing = activeOrders.filter(
+      (o) => o.status === "In Progress" || o.status === "Sample Collected"
+    ).length
     const critical = allOrders.filter((o) =>
       o.tests.some(
         (t) =>
@@ -136,7 +159,7 @@ export default function Laboratory({
           Object.values(t.results || {}).some((r) => r.flag === "Critical")
       )
     ).length
-    const completed = allOrders.filter((o) => o.status === "Completed").length
+    const completed = allOrders.filter(isOrderCompleted).length
     return { total, paid, pending, processing, critical, completed }
   }, [allOrders])
 
@@ -167,10 +190,11 @@ export default function Laboratory({
 
     if (updated) {
       setActiveTestForResult(null)
+      const isNowCompleted = isOrderCompleted(updated)
       showToast(
-        status === "Completed" || status === "Verified"
-          ? `✓ ${activeTestForResult.test.name} verified and officially signed out.`
-          : `✓ Draft results for ${activeTestForResult.test.name} saved.`,
+        isNowCompleted
+          ? `✓ All tests completed! Order ${updated.id} moved to Completed & Verified.`
+          : `✓ Results for ${activeTestForResult.test.name} saved.`,
         "success"
       )
     }
@@ -206,6 +230,38 @@ export default function Laboratory({
       `✓ All ${updatedTestsData.length} test results successfully imported & updated for ${showImportAllModal.patientName}!`,
       "success"
     )
+  }
+
+  // Add test manually to patient order
+  const handleAddTestManually = (testData: {
+    name: string
+    category?: string
+    urgency?: "Routine" | "Urgent" | "STAT"
+    price?: number
+    clinicalNotes?: string
+  }) => {
+    if (!showAddTestModal) return
+    const orderId = showAddTestModal.id
+
+    const updated = LabOrderDatabase.addTestToOrder(
+      orderId,
+      testData,
+      technician
+    )
+
+    if (updated) {
+      setShowAddTestModal(null)
+      showToast(
+        `✓ "${testData.name}" successfully added to order ${orderId}!`,
+        "success"
+      )
+      AuditDatabase.logEvent(
+        "Test Added Manually",
+        "Laboratory",
+        `${technician} manually added test ${testData.name} to order ${orderId} for ${updated.patientName} (${updated.umr}).`,
+        "Success"
+      )
+    }
   }
 
   // Advance test status directly (e.g. Sample Collected -> Processing)
@@ -327,16 +383,6 @@ export default function Laboratory({
             </span>
           </div>
           <button
-            onClick={() => {
-              LabOrderDatabase.resetToCleanDemoData()
-              showToast("✓ Reset to 4 clean demo patient orders", "success")
-            }}
-            title="Reset to 4 clean demo orders for testing"
-            className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg shadow-2xs transition-colors flex items-center gap-1.5"
-          >
-            <span>🔄</span> Reset Demo Data (4 Orders)
-          </button>
-          <button
             onClick={() => setShowNewOrderModal(true)}
             className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
           >
@@ -348,7 +394,7 @@ export default function Laboratory({
       {/* Quick Statistics Strip */}
       <div className="bg-white border-b border-gray-200 px-6 py-2.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs">
         <div className="p-2 rounded-lg bg-gray-50 border border-gray-100">
-          <span className="text-gray-400 block text-[10.5px]">Total Orders</span>
+          <span className="text-gray-400 block text-[10.5px]">Active Orders</span>
           <strong className="text-base font-bold text-gray-900">{stats.total}</strong>
         </div>
         <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-100">
@@ -372,8 +418,15 @@ export default function Laboratory({
       {/* Primary Work Area */}
       <div className="flex-1 flex flex-col overflow-hidden p-6 space-y-4">
         
-        {/* CONDITIONAL: If a patient is selected, show PATIENT DETAILS view; otherwise PATIENT LIST */}
-        {selectedOrder ? (
+        {/* CONDITIONAL: If entering test result, show FULL PAGE RESULT VIEW; else if patient selected, show PATIENT DETAILS; otherwise PATIENT LIST */}
+        {activeTestForResult ? (
+          <TestResultModal
+            order={activeTestForResult.order}
+            test={activeTestForResult.test}
+            onClose={() => setActiveTestForResult(null)}
+            onSave={handleSaveTestResult}
+          />
+        ) : selectedOrder ? (
           /* ========================================================================= */
           /* PATIENT DETAILS & ORDERED TESTS VIEW                                      */
           /* ========================================================================= */
@@ -415,6 +468,12 @@ export default function Laboratory({
               {/* Action Buttons */}
               <div className="flex items-center gap-3">
                 <button
+                  onClick={() => setShowAddTestModal(selectedOrder)}
+                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                >
+                  <span>➕</span> Add Test
+                </button>
+                <button
                   onClick={() => setShowImportAllModal(selectedOrder)}
                   className="px-4 py-2 text-xs font-bold text-emerald-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
                 >
@@ -426,6 +485,11 @@ export default function Laboratory({
                 >
                   <span>📋</span> Complete Laboratory Report
                 </button>
+                {isOrderCompleted(selectedOrder) && (
+                  <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 flex items-center gap-1">
+                    ✓ Completed & Verified
+                  </span>
+                )}
               </div>
             </div>
 
@@ -476,12 +540,20 @@ export default function Laboratory({
             {/* Ordered Tests Table */}
             <div className="flex-1 overflow-y-auto p-6">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
-                  Doctor-Ordered Investigations ({selectedOrder.tests.length})
-                </h3>
-                <span className="text-xs text-gray-500">
-                  Tests dispatched automatically from Doctor Consultation Portal
-                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
+                    Ordered Investigations ({selectedOrder.tests.length})
+                  </h3>
+                  <span className="text-xs text-gray-500">
+                    Doctor prescribed & specimen bench add-on investigations
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowAddTestModal(selectedOrder)}
+                  className="px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+                >
+                  <span>➕</span> Add Test
+                </button>
               </div>
 
               <div className="border border-gray-200 rounded-lg overflow-hidden shadow-2xs">
@@ -606,11 +678,9 @@ export default function Laboratory({
                                       : "text-white bg-blue-600 hover:bg-blue-700 shadow-xs"
                                   }`}
                                 >
-                                  {test.status === "Completed" || test.status === "Verified"
+                                  {test.status === "Completed" || test.status === "Verified" || test.status === "Result Entered"
                                     ? "View / Edit"
-                                    : test.status === "Result Entered"
-                                    ? "Review & Sign"
-                                    : "Open Report"}
+                                    : "Enter Results"}
                                 </button>
                               </div>
                             )}
@@ -636,13 +706,13 @@ export default function Laboratory({
                 {QUEUE_TABS.map((tab) => {
                   const isActive = activeQueue === tab.key
                   let count = 0
-                  if (tab.key === "all") count = allOrders.length
-                  if (tab.key === "paid") count = stats.paid
-                  if (tab.key === "pending") count = stats.pending
-                  if (tab.key === "collected") count = allOrders.filter((o) => o.status === "Sample Collected").length
-                  if (tab.key === "processing") count = stats.processing
+                  if (tab.key === "all") count = allOrders.filter((o) => !isOrderCompleted(o)).length
+                  if (tab.key === "paid") count = allOrders.filter((o) => o.billing.status === "Paid" && !isOrderCompleted(o)).length
+                  if (tab.key === "pending") count = allOrders.filter((o) => o.billing.status === "Pending" && !isOrderCompleted(o)).length
+                  if (tab.key === "collected") count = allOrders.filter((o) => o.status === "Sample Collected" && !isOrderCompleted(o)).length
+                  if (tab.key === "processing") count = allOrders.filter((o) => o.status === "In Progress" && !isOrderCompleted(o)).length
                   if (tab.key === "critical") count = stats.critical
-                  if (tab.key === "completed") count = stats.completed
+                  if (tab.key === "completed") count = allOrders.filter(isOrderCompleted).length
 
                   return (
                     <button
@@ -792,9 +862,14 @@ export default function Laboratory({
                               {order.tests.slice(0, 3).map((t) => (
                                 <span
                                   key={t.id}
-                                  className="px-2 py-0.5 rounded text-[10.5px] font-semibold bg-gray-100 text-gray-700 border border-gray-200"
+                                  className={`px-2 py-0.5 rounded text-[10.5px] font-semibold border ${
+                                    t.status === "Completed" || t.status === "Verified"
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                      : "bg-gray-100 text-gray-700 border border-gray-200"
+                                  }`}
                                 >
                                   {t.name}
+                                  {(t.status === "Completed" || t.status === "Verified") && " ✓"}
                                 </span>
                               ))}
                               {order.tests.length > 3 && (
@@ -855,15 +930,6 @@ export default function Laboratory({
       {/* MODALS                                                                    */}
       {/* ========================================================================= */}
 
-      {/* 1. Test-Specific Result Modal */}
-      {activeTestForResult && (
-        <TestResultModal
-          order={activeTestForResult.order}
-          test={activeTestForResult.test}
-          onClose={() => setActiveTestForResult(null)}
-          onSave={handleSaveTestResult}
-        />
-      )}
 
       {/* 2. Import All Test Results Modal */}
       {showImportAllModal && (
@@ -879,6 +945,15 @@ export default function Laboratory({
         <CompleteLabReportModal
           order={showCompleteReportModal}
           onClose={() => setShowCompleteReportModal(null)}
+        />
+      )}
+
+      {/* 4. Add Test Manually Modal */}
+      {showAddTestModal && (
+        <AddTestModal
+          order={showAddTestModal}
+          onClose={() => setShowAddTestModal(null)}
+          onAddTest={handleAddTestManually}
         />
       )}
 

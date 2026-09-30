@@ -244,7 +244,7 @@ export default function CompleteLabReportModal({
                           </div>
                         ) : (
                           <div className="py-2 text-xs text-gray-500 italic">
-                            Result: <strong>{test.result || "Processing on automated bench"}</strong>
+                            Result: <strong>{test.result || "Awaiting result entry"}</strong>
                             {test.referenceRange && ` (Ref: ${test.referenceRange})`}
                           </div>
                         )}
