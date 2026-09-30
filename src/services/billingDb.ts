@@ -2347,6 +2347,8 @@ const INITIAL_HOSPITAL_CLAIMS: ClaimRecord[] = [
     amountPaid: 0,
     balanceDue: 1000,
     payments: [],
+    createdAt: "2026-09-01T10:00:00Z",
+    updatedAt: "2026-09-01T10:00:00Z",
   },
 
   // ── INPATIENT: Bed 204-A (John Smith - 3N Medical/Surgical) ──
