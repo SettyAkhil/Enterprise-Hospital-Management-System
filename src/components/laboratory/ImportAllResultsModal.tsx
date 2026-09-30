@@ -24,8 +24,8 @@ export default function ImportAllResultsModal({
   onSaveAll,
 }: ImportAllResultsModalProps) {
   const [activeTab, setActiveTab] = useState<number>(0)
-  const [technician, setTechnician] = useState<string>("Ananya Sen, MLT")
-  const [verifier, setVerifier] = useState<string>("Dr. Rajesh Gupta, MD (Path)")
+  const [technician, setTechnician] = useState<string>("Lab Technician")
+  const [verifier, setVerifier] = useState<string>("")
 
   // Initialize test data map for all ordered tests
   const [testsData, setTestsData] = useState<
@@ -44,11 +44,9 @@ export default function ImportAllResultsModal({
       if (def && def.parameters.length > 0) {
         def.parameters.forEach((param) => {
           const existing = test.results?.[param.name]
-          const val = existing ? existing.value : (param.defaultValue || "")
+          const val = existing ? existing.value : ""
           const flag = existing
             ? existing.flag
-            : param.inputType === "numeric"
-            ? evaluateFlag(val, param.referenceRange)
             : ""
 
           results[param.name] = {
@@ -62,9 +60,9 @@ export default function ImportAllResultsModal({
         Object.assign(results, test.results)
       } else {
         results[test.name] = {
-          value: test.result || "Normal",
+          value: test.result || "",
           unit: test.resultUnit || "",
-          referenceRange: test.referenceRange || "Normal",
+          referenceRange: test.referenceRange || "",
           flag: test.flag || "",
         }
       }
@@ -74,9 +72,7 @@ export default function ImportAllResultsModal({
         testName: test.name,
         category: def?.category || test.category,
         results,
-        clinicalComments:
-          test.clinicalComments ||
-          "Diagnostic parameters verified against calibrated automated laboratory analyzers.",
+        clinicalComments: test.clinicalComments || "",
       }
     })
   })
@@ -107,14 +103,14 @@ export default function ImportAllResultsModal({
     })
   }
 
-  const handleSaveAll = (markVerified: boolean) => {
+  const handleSaveAll = () => {
     const payload = testsData.map((t) => ({
       testId: t.testId,
-      status: (markVerified ? "Completed" : "Result Entered") as "Completed" | "Result Entered",
+      status: "Completed" as const,
       results: t.results,
       clinicalComments: t.clinicalComments,
       technician,
-      verifier: markVerified ? verifier : undefined,
+      verifier: verifier || technician,
     }))
 
     onSaveAll(payload)
@@ -122,7 +118,7 @@ export default function ImportAllResultsModal({
     AuditDatabase.logEvent(
       "Import All Test Results",
       "Laboratory",
-      `${technician} imported & ${markVerified ? "verified" : "drafted"} results for all ${order.tests.length} investigations for patient ${order.patientName} (${order.umr}) - Lab Order ${order.id}.`,
+      `${technician} saved results for all ${order.tests.length} investigations for patient ${order.patientName} (${order.umr}) - Lab Order ${order.id}.`,
       "Success"
     )
   }
@@ -204,7 +200,7 @@ export default function ImportAllResultsModal({
             {currentDef && currentDef.parameters.length > 0 ? (
               currentDef.parameters.map((param) => {
                 const cur = currentTest.results[param.name] || {
-                  value: param.defaultValue || "",
+                  value: "",
                   unit: param.unit || "",
                   referenceRange: param.referenceRange?.text || "",
                   flag: "",
@@ -342,17 +338,10 @@ export default function ImportAllResultsModal({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => handleSaveAll(false)}
-              className="px-4 py-2 text-xs font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-lg border border-emerald-300 transition-colors"
+              onClick={handleSaveAll}
+              className="px-6 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
             >
-              Save Draft All Tests
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSaveAll(true)}
-              className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
-            >
-              <span>✓</span> Import, Verify & Complete All ({testsData.length} Tests)
+              <span>💾</span> Save All Results ({testsData.length} Tests)
             </button>
           </div>
         </div>
