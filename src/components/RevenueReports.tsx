@@ -65,7 +65,7 @@ export default function RevenueReports() {
 
   const prepareExportData = () => ({
     reportTitle: "Revenue & Financial Reports",
-    dateRangeLabel: preset === "today" ? "Today" : preset === "yesterday" ? "Yesterday" : preset === "last7" ? "Last 7 Days" : preset === "thisMonth" ? "This Month MTD" : preset === "lastMonth" ? "Last Month" : preset === "thisQuarter" ? "This Quarter" : "This Financial Year",
+    dateRangeLabel: preset === "today" ? "Today" : preset === "yesterday" ? "Yesterday" : preset === "last7" ? "Last 7 Days" : preset === "thisMonth" ? "This Month MTD" : preset === "lastMonth" ? "Last Month" : (preset as string) === "thisQuarter" ? "This Quarter" : "This Financial Year",
     departmentFilter: "All Departments",
     kpis: reportData.kpis ? reportData.kpis.map((k: any) => ({ label: k.label, value: k.value, change: k.change })) : [
       { label: "Total Revenue (MTD)", value: "₹2.40 Cr", change: "+8.2%" },

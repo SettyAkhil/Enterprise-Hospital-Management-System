@@ -3,6 +3,7 @@ import { Btn } from "../shared";
 import { formatElapsed } from "../../hooks/useLiveClinic";
 import { DoctorAccount } from "../../services/doctorPortalDb";
 import { LabOrderDatabase } from "../../services/labOrdersDb";
+import { InsuranceEngineService } from "../../services/insuranceDb";
 import {
   acknowledgeAlert,
   acknowledgeAll,
@@ -95,6 +96,23 @@ export default function LiveBoard({
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-4">
       <LivePulse board={board} now={now} />
+
+      {InsuranceEngineService.getClaims()
+        .filter((c) => InsuranceEngineService.checkThresholdWarning(c).isWarning)
+        .map((c) => {
+          const warn = InsuranceEngineService.checkThresholdWarning(c);
+          return (
+            <div key={c.id} className="bg-amber-50 border border-amber-300 text-amber-900 text-[12.5px] px-4 py-3 rounded-xl shadow-2xs flex items-center justify-between font-medium">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-amber-800">⚠️ Pre-Auth Threshold Alert:</span>
+                <span>{c.patientName} ({c.mrn}) — {warn.message}</span>
+              </div>
+              <span className="text-xs font-bold bg-amber-200 text-amber-900 px-2.5 py-1 rounded-full font-mono">
+                {warn.percentageConsumed}% Limit
+              </span>
+            </div>
+          );
+        })}
 
       {feedback && (
         <div className="bg-[#EFF6FF] border border-[#BFDBFE] text-[#1E40AF] text-[12.5px] px-3.5 py-2.5 rounded flex items-start gap-2">
