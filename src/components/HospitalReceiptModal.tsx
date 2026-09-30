@@ -9,6 +9,7 @@ import {
   groupReceiptItems,
   numberToWordsINR,
 } from "../utils/receiptFormatter"
+import { RECEIPT_LOGO_BASE64 } from "../assets/receiptLogoBase64"
 
 interface HospitalReceiptModalProps {
   claim: ClaimRecord
@@ -414,7 +415,7 @@ export default function HospitalReceiptModal({
               {/* Background Watermark Logo */}
               <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center overflow-hidden z-0 opacity-[0.22] print:opacity-[0.25] select-none">
                 <img
-                  src="/receipt_backside_logo.png"
+                  src={RECEIPT_LOGO_BASE64}
                   alt="Hospital Logo Watermark"
                   className="w-[400px] max-w-full object-contain filter brightness-110 contrast-105"
                 />
