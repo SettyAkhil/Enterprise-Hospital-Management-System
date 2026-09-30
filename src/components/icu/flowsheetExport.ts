@@ -263,12 +263,14 @@ export async function downloadFlowsheetPdf(
   meta: ExportMeta,
 ) {
   // Loaded on demand: ~400 kB that only matters when someone exports.
+  const pkgJsPdf = "jspdf"
+  const pkgAutoTable = "jspdf-autotable"
   // @ts-ignore
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
     // @ts-ignore
-    import(/* @vite-ignore */ "jspdf"),
+    import(/* @vite-ignore */ pkgJsPdf),
     // @ts-ignore
-    import(/* @vite-ignore */ "jspdf-autotable"),
+    import(/* @vite-ignore */ pkgAutoTable),
   ])
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
   const pageW = doc.internal.pageSize.getWidth()
