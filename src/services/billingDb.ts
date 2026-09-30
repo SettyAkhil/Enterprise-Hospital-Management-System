@@ -143,9 +143,77 @@ export interface ClaimRecord {
 
   finalizedByNurse?: string
 
+  /** Insurance / TPA workflow for the bill (mainly inpatient stays). */
+  tpa?: TpaWorkflow
+
   createdAt: string
 
   updatedAt: string
+}
+
+// ── Who can be billed to insurance ─────────────────────────────────────────
+//
+// Cashless insurance in Indian hospitals covers hospitalisation. OP visits
+// (consultation, walk-in lab / radiology / pharmacy) are paid by the patient
+// at the counter; an emergency visit is covered only when it ends in an
+// admission. This rule is the single source of truth for every screen.
+
+export const CASHLESS_DEPARTMENTS: DepartmentType[] = ["Inpatient", "ICU", "Surgery"]
+
+/** An emergency visit that became an admission (ICU / ward / cath lab / OT). */
+const ADMITTED_PATHWAY = /\b(icu|ccu|nicu|picu|ward|admi(t|ssion)|inpatient|cath|ot|surgery|theatre|hdu)\b/i
+
+export function isCashlessEligible(c: Pick<ClaimRecord, "department" | "carePathway">): boolean {
+  if (CASHLESS_DEPARTMENTS.includes(c.department)) return true
+  return c.department === "Emergency" && ADMITTED_PATHWAY.test(c.carePathway || "")
+}
+
+export type PreAuthStatus =
+  | "Not Raised"
+  | "Requested"
+  | "Approved"
+  | "Enhancement Requested"
+  | "Rejected"
+
+export interface TpaEvent {
+  at: string
+  action: string
+  detail?: string
+  amount?: number
+}
+
+/**
+ * The cashless-insurance lifecycle of one bill: pre-authorisation (and any
+ * enhancement while the stay runs), claim submission, TPA queries, the final
+ * approval -- whose deductions move from the insurer's share to the
+ * patient's -- and the insurer's settlement.
+ */
+export interface TpaWorkflow {
+  tpaName?: string
+  preAuthStatus?: PreAuthStatus
+  preAuthRequested?: number
+  preAuthSanctioned?: number
+  enhancementRequested?: number
+  queryOpen?: boolean
+  queryNote?: string
+  /** Set when the billing counter hands the whole bill to insurance. */
+  billedAt?: string
+  billedBy?: string
+  /** Amount claimed from the insurer (the bill as handed over). */
+  claimAmount?: number
+  approvedAmount?: number
+  /** Amount the insurer disallowed. */
+  deduction?: number
+  deductionReason?: string
+  /**
+   * Who absorbs a deduction. The patient left with nothing to pay, so by
+   * default the hospital writes it off; "patient" reopens their balance.
+   */
+  shortfallTo?: "writeoff" | "patient"
+  settledAmount?: number
+  settlementRef?: string
+  settledAt?: string
+  events?: TpaEvent[]
 }
 
 // ── Department Charge Record (Clinical Running Ledger / Digital K-Sheet) ─────
@@ -4319,8 +4387,8 @@ export class BillingDatabase {
                 discount: 0,
                 tax: 0,
                 payments: [],
-                diagnosisCodes: [],
-                attendingDoctor: "Dr. Admin",
+                diagnosisCodes: ["Z00.00"],
+                attendingDoctor: "Dr. On-Duty",
                 createdAt: c.created_at || new Date().toISOString(),
                 updatedAt: c.updated_at || new Date().toISOString(),
               })
@@ -4373,6 +4441,41 @@ export class BillingDatabase {
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
     )
+
+    // Open OP / non-admitted bills that carry insurance are patient-pay.
+    // Settled ("Paid") history is left exactly as it happened.
+    {
+      let changed = false
+      claims = claims.map((c) => {
+        const insured =
+          (c.insuranceProvider && c.insuranceProvider !== "Self-Pay") ||
+          (c.insurancePortion || 0) > 0 ||
+          !!c.tpa
+        if (!insured || c.status === "Paid" || isCashlessEligible(c)) return c
+        changed = true
+        const items = c.items.map((it) => ({
+          ...it,
+          insuranceCovered: 0,
+          patientPayable: Number(it.total || 0),
+        }))
+        const patientPortion = c.totalAmount
+        return {
+          ...c,
+          items,
+          insuranceProvider: "Self-Pay",
+          policyNumber: "",
+          preAuthCode: undefined,
+          tpa: undefined,
+          denialReason: undefined,
+          insurancePortion: 0,
+          patientPortion,
+          balanceDue: Math.max(0, patientPortion - (c.amountPaid || 0)),
+          status: (c.amountPaid || 0) >= patientPortion ? "Paid" : "Ready",
+          updatedAt: new Date().toISOString(),
+        }
+      })
+      if (changed) this.save(STORAGE_KEY_CLAIMS, claims)
+    }
 
     // Ensure Priya Sharma exists in claims list
     if (!claims.some((c) => c.patientName?.toLowerCase().includes("priya sharma") || c.invoiceNo === "INV-2026-0002")) {
@@ -4542,6 +4645,27 @@ export class BillingDatabase {
       STORAGE_KEY_CLAIMS,
       INITIAL_HOSPITAL_CLAIMS,
     )
+
+    // OP / non-admitted bills never carry insurance: the patient's policy on
+    // their registration is irrelevant to an OP visit.
+    if (
+      data.department &&
+      !isCashlessEligible({ department: data.department, carePathway: data.carePathway }) &&
+      data.insuranceProvider &&
+      data.insuranceProvider !== "Self-Pay"
+    ) {
+      data = {
+        ...data,
+        insuranceProvider: "Self-Pay",
+        policyNumber: "",
+        preAuthCode: undefined,
+        items: (data.items || []).map((it) => ({
+          ...it,
+          insuranceCovered: 0,
+          patientPayable: Number(it.total || 0),
+        })),
+      }
+    }
 
     const maxClaimNum = claims.reduce((max, c) => {
       const num = parseInt((c.id || "").replace(/\D/g, ""), 10);
@@ -4820,9 +4944,19 @@ export class BillingDatabase {
     const isSelfPay =
       (updates.insuranceProvider || current.insuranceProvider) === "Self-Pay"
 
+    const tpa = updates.tpa !== undefined ? updates.tpa : current.tpa
+    const covered = items.reduce(
+      (sum, it) => sum + Number(it.insuranceCovered || 0),
+      0,
+    )
+    // An insurer deduction only lands on the patient when the insurance
+    // department chose to recover it; otherwise the hospital writes it off
+    // and the patient's share stays as billed.
+    const recoveredFromPatient =
+      tpa?.shortfallTo === "patient" ? Number(tpa?.deduction || 0) : 0
     const insurancePortion = isSelfPay
       ? 0
-      : items.reduce((sum, it) => sum + Number(it.insuranceCovered || 0), 0)
+      : Math.max(0, covered - recoveredFromPatient)
 
     const patientPortion = isSelfPay
       ? totalAmount
@@ -5120,6 +5254,386 @@ export class BillingDatabase {
     return updated
   }
 
+  // ── Insurance / TPA workflow ────────────────────────────────────────────
+
+  private static tpaStep(
+    id: string,
+    patch: Partial<TpaWorkflow>,
+    event: TpaEvent,
+    extra: Partial<ClaimRecord> = {},
+    audit?: {
+      action: Parameters<typeof BillingRbacManager.logEvent>[0]["action"]
+      amount?: number
+    },
+  ): ClaimRecord {
+    const claim = this.getClaimById(id)
+    if (!claim) throw new Error("Claim not found")
+    const tpa: TpaWorkflow = {
+      ...(claim.tpa ?? {}),
+      ...patch,
+      events: [...(claim.tpa?.events ?? []), event],
+    }
+    const updated = this.updateClaim(claim.id, { ...extra, tpa })
+    if (audit) {
+      BillingRbacManager.logEvent({
+        action: audit.action,
+        patientId: claim.patientId,
+        patientName: claim.patientName,
+        mrn: claim.mrn,
+        invoiceNo: claim.invoiceNo,
+        claimId: claim.id,
+        financialAmount: audit.amount ?? claim.insurancePortion,
+        department: claim.department,
+        reason: `${event.action}${event.detail ? ` — ${event.detail}` : ""}`,
+      })
+    }
+    this.emitUpdate()
+    return updated
+  }
+
+  /**
+   * Cashless billing: the counter hands the bill to insurance. The insurer
+   * takes everything the patient has not already paid, so the patient's
+   * balance becomes zero and the bill leaves the counter's queue. From here
+   * the insurance department owns it (see the Insurance > Claims Desk).
+   */
+  static billToInsurance(
+    id: string,
+    input?: {
+      provider?: string
+      tpaName?: string
+      policyNumber?: string
+      preAuthCode?: string
+      note?: string
+      billedBy?: string
+      /**
+       * Insurer's share per charge line (item id -> amount). Whatever is not
+       * covered is the patient's co-pay, collected at the counter. Omit it and
+       * insurance takes everything the patient has not already paid.
+       */
+      coverage?: Record<string, number>
+    },
+  ): ClaimRecord {
+    const claim = this.getClaimById(id)
+    if (!claim) throw new Error("Claim not found")
+    if (!isCashlessEligible(claim))
+      throw new Error("Insurance covers admitted patients only — an OP visit is paid by the patient.")
+    if (input?.coverage) return this.applyInsuranceSplit(claim, input.coverage, "handover", input)
+
+    const provider =
+      input?.provider?.trim() ||
+      (claim.insuranceProvider && claim.insuranceProvider !== "Self-Pay"
+        ? claim.insuranceProvider
+        : "Pending Insurance Assignment")
+    const policyNumber =
+      input?.policyNumber?.trim() ||
+      claim.policyNumber ||
+      "Pending KYC"
+
+    const claimAmount = Math.max(0, claim.totalAmount - (claim.amountPaid || 0))
+    if (claimAmount <= 0) throw new Error("Nothing left on this bill to claim.")
+
+    // Spread the claim across the lines in proportion; the last line takes
+    // the rounding so the lines add up to the claim exactly.
+    const ratio = claim.totalAmount > 0 ? claimAmount / claim.totalAmount : 0
+    let assigned = 0
+    const items = claim.items.map((it, i) => {
+      const insuranceCovered =
+        i === claim.items.length - 1
+          ? claimAmount - assigned
+          : Math.round(it.total * ratio)
+      assigned += insuranceCovered
+      return {
+        ...it,
+        insuranceCovered,
+        patientPayable: Math.max(0, it.total - insuranceCovered),
+      }
+    })
+
+    const now = new Date().toISOString()
+    const detail = input?.provider
+      ? `${provider}${input.tpaName ? ` via ${input.tpaName}` : ""} · policy ${policyNumber}${input.note ? ` · ${input.note}` : ""}`
+      : "Pushed to Insurance Department from billing counter"
+
+    return this.tpaStep(
+      claim.id,
+      {
+        tpaName: input?.tpaName,
+        billedAt: now,
+        billedBy: input?.billedBy || "Billing Counter",
+        claimAmount,
+        preAuthStatus: input?.preAuthCode ? "Approved" : claim.tpa?.preAuthStatus || "Not Raised",
+        shortfallTo: "writeoff",
+      },
+      {
+        at: now,
+        action: "Billed to insurance at counter",
+        detail,
+        amount: claimAmount,
+      },
+      {
+        items,
+        insuranceProvider: provider,
+        policyNumber: policyNumber,
+        preAuthCode: input?.preAuthCode || claim.preAuthCode,
+        status: "Ready",
+      },
+      { action: "INSURANCE_ATTACHED", amount: claimAmount },
+    )
+  }
+
+  /**
+   * Change how a bill is split between insurer and patient. Allowed until the
+   * claim is submitted to the insurer -- after that the insurer's decision
+   * governs and the split is locked.
+   */
+  static setInsuranceSplit(id: string, coverage: Record<string, number>): ClaimRecord {
+    const claim = this.getClaimById(id)
+    if (!claim) throw new Error("Claim not found")
+    if (!claim.tpa?.billedAt) throw new Error("This bill has not been billed to insurance.")
+    if (claim.status !== "Ready" && claim.status !== "Draft")
+      throw new Error("The claim is already with the insurer; its split can no longer be edited.")
+    return this.applyInsuranceSplit(claim, coverage, "edit")
+  }
+
+  private static applyInsuranceSplit(
+    claim: ClaimRecord,
+    coverage: Record<string, number>,
+    mode: "handover" | "edit",
+    input?: { provider?: string ;tpaName?: string ;policyNumber?: string ;preAuthCode?: string ;note?: string ;billedBy?: string },
+  ): ClaimRecord {
+    // Clamp every line to 0..line total, in whole rupees.
+    const items = claim.items.map((it) => {
+      const raw = coverage[it.id]
+      const insuranceCovered =
+        raw === undefined ? Number(it.insuranceCovered || 0) : Math.max(0, Math.min(it.total, Math.round(Number(raw) || 0)))
+      return { ...it, insuranceCovered, patientPayable: Math.max(0, it.total - insuranceCovered) }
+    })
+    const claimAmount = items.reduce((a, it) => a + it.insuranceCovered, 0)
+    if (claimAmount <= 0) throw new Error("Insurance must cover at least one charge.")
+    // The patient's share cannot fall below what they have already paid.
+    const patientShare = claim.totalAmount - claimAmount
+    if (patientShare < (claim.amountPaid || 0))
+      throw new Error(
+        `The patient has already paid ₹${(claim.amountPaid || 0).toLocaleString("en-IN")}; insurance can cover at most ₹${(claim.totalAmount - (claim.amountPaid || 0)).toLocaleString("en-IN")}.`,
+      )
+
+    const now = new Date().toISOString()
+    const provider =
+      input?.provider?.trim() ||
+      (claim.insuranceProvider && claim.insuranceProvider !== "Self-Pay"
+        ? claim.insuranceProvider
+        : "Pending Insurance Assignment")
+    const copay = Math.max(0, patientShare)
+    return this.tpaStep(
+      claim.id,
+      mode === "handover"
+        ? {
+            tpaName: input?.tpaName ?? claim.tpa?.tpaName,
+            billedAt: now,
+            billedBy: input?.billedBy || "Billing Counter",
+            claimAmount,
+            preAuthStatus: input?.preAuthCode ? "Approved" : claim.tpa?.preAuthStatus || "Not Raised",
+            shortfallTo: "writeoff",
+          }
+        : { claimAmount },
+      {
+        at: now,
+        action: mode === "handover" ? "Billed to insurance at counter" : "Insurance split edited",
+        detail: `Insurance ₹${claimAmount.toLocaleString("en-IN")} · patient co-pay ₹${copay.toLocaleString("en-IN")}${input?.note ? ` · ${input.note}` : ""}`,
+        amount: claimAmount,
+      },
+      mode === "handover"
+        ? {
+            items,
+            insuranceProvider: provider,
+            policyNumber: input?.policyNumber?.trim() || claim.policyNumber || "Pending KYC",
+            preAuthCode: input?.preAuthCode || claim.preAuthCode,
+            status: "Ready",
+          }
+        : { items },
+      { action: "INSURANCE_ATTACHED", amount: claimAmount },
+    )
+  }
+
+  static updateInsuranceDetails(
+    id: string,
+    details: {
+      insuranceProvider?: string
+      tpaName?: string
+      policyNumber?: string
+      preAuthCode?: string
+    },
+  ): ClaimRecord {
+    const claim = this.getClaimById(id)
+    if (!claim) throw new Error("Claim not found")
+    const now = new Date().toISOString()
+    const provider = details.insuranceProvider || claim.insuranceProvider
+    const policy = details.policyNumber || claim.policyNumber
+    return this.tpaStep(
+      id,
+      {
+        tpaName: details.tpaName !== undefined ? details.tpaName : claim.tpa?.tpaName,
+      },
+      {
+        at: now,
+        action: "Insurance details updated by Insurance Desk",
+        detail: `${provider} · policy ${policy}`,
+      },
+      {
+        insuranceProvider: provider,
+        policyNumber: policy,
+        preAuthCode: details.preAuthCode !== undefined ? details.preAuthCode : claim.preAuthCode,
+      },
+      { action: "INSURANCE_ATTACHED" },
+    )
+  }
+
+  static requestPreAuth(id: string, amount: number, note?: string): ClaimRecord {
+    return this.tpaStep(
+      id,
+      { preAuthStatus: "Requested", preAuthRequested: amount },
+      {
+        at: new Date().toISOString(),
+        action: "Pre-authorisation requested",
+        detail: note,
+        amount,
+      },
+      {},
+      { action: "PREAUTH_REQUESTED", amount },
+    )
+  }
+
+  static approvePreAuth(
+    id: string,
+    sanctioned: number,
+    code: string,
+  ): ClaimRecord {
+    return this.tpaStep(
+      id,
+      {
+        preAuthStatus: "Approved",
+        preAuthSanctioned: sanctioned,
+        enhancementRequested: undefined,
+      },
+      {
+        at: new Date().toISOString(),
+        action: "Pre-authorisation approved",
+        detail: code,
+        amount: sanctioned,
+      },
+      { preAuthCode: code },
+      { action: "PREAUTH_APPROVED", amount: sanctioned },
+    )
+  }
+
+  /** Ask the TPA to raise the sanction because the stay has grown. */
+  static requestEnhancement(
+    id: string,
+    amount: number,
+    reason: string,
+  ): ClaimRecord {
+    return this.tpaStep(
+      id,
+      { preAuthStatus: "Enhancement Requested", enhancementRequested: amount },
+      {
+        at: new Date().toISOString(),
+        action: "Enhancement requested",
+        detail: reason,
+        amount,
+      },
+      {},
+      { action: "PREAUTH_ENHANCEMENT", amount },
+    )
+  }
+
+  static recordTpaQuery(id: string, note: string): ClaimRecord {
+    return this.tpaStep(
+      id,
+      { queryOpen: true, queryNote: note },
+      { at: new Date().toISOString(), action: "TPA query raised", detail: note },
+      {},
+      { action: "TPA_QUERY" },
+    )
+  }
+
+  static answerTpaQuery(id: string, reply: string): ClaimRecord {
+    return this.tpaStep(
+      id,
+      { queryOpen: false },
+      { at: new Date().toISOString(), action: "Query answered", detail: reply },
+    )
+  }
+
+  /**
+   * Final approval. Whatever the insurer does not approve is a deduction:
+   * written off by the hospital by default, or -- if the insurance desk says
+   * so -- recovered from the patient, which reopens their balance at billing.
+   */
+  static recordTpaApproval(
+    id: string,
+    approvedAmount: number,
+    deductionReason?: string,
+    shortfallTo: "writeoff" | "patient" = "writeoff",
+  ): ClaimRecord {
+    const claim = this.getClaimById(id)
+    if (!claim) throw new Error("Claim not found")
+    const covered = claim.items.reduce(
+      (a, it) => a + Number(it.insuranceCovered || 0),
+      0,
+    )
+    const deduction = Math.max(0, covered - approvedAmount)
+    return this.tpaStep(
+      id,
+      { approvedAmount, deduction, deductionReason, shortfallTo, queryOpen: false },
+      {
+        at: new Date().toISOString(),
+        action: "Claim approved by insurer",
+        detail:
+          deduction > 0
+            ? `₹${deduction.toLocaleString("en-IN")} deducted (${
+                shortfallTo === "patient" ? "recover from patient" : "hospital write-off"
+              }) — ${deductionReason || "not payable"}`
+            : "Approved in full",
+        amount: approvedAmount,
+      },
+      { status: "Accepted", denialReason: undefined },
+      { action: "TPA_APPROVED", amount: approvedAmount },
+    )
+  }
+
+  static recordTpaDenial(id: string, reason: string): ClaimRecord {
+    return this.tpaStep(
+      id,
+      { queryOpen: false },
+      { at: new Date().toISOString(), action: "Claim denied", detail: reason },
+      { status: "Denied", denialReason: reason },
+      { action: "TPA_DENIED" },
+    )
+  }
+
+  /** The insurer's money has arrived (UTR / NEFT reference). */
+  static recordTpaSettlement(id: string, amount: number, ref: string): ClaimRecord {
+    const claim = this.getClaimById(id)
+    if (!claim) throw new Error("Claim not found")
+    return this.tpaStep(
+      id,
+      {
+        settledAmount: amount,
+        settlementRef: ref,
+        settledAt: new Date().toISOString(),
+      },
+      {
+        at: new Date().toISOString(),
+        action: "Insurer settlement received",
+        detail: ref,
+        amount,
+      },
+      { status: claim.balanceDue > 0 ? "Accepted" : "Paid" },
+      { action: "TPA_SETTLED", amount },
+    )
+  }
+
   static recordPayment(
     invoiceId: string,
 
@@ -5194,9 +5708,13 @@ export class BillingDatabase {
     let newStatus = claim.status
 
     if (newBalanceDue === 0) {
+      // A bill handed to insurance is only "Paid" once the insurer has
+      // settled too -- a patient paying their co-pay must not make the
+      // Claims Desk read the claim as settled.
+      const awaitingInsurer = !!claim.tpa?.billedAt && !claim.tpa?.settledAt
       if (
         claim.insuranceProvider === "Self-Pay" ||
-        claim.status === "Accepted" ||
+        (claim.status === "Accepted" && !awaitingInsurer) ||
         claim.insurancePortion === 0
       ) {
         newStatus = "Paid"

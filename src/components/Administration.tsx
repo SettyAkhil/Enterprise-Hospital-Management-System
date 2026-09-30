@@ -1643,7 +1643,7 @@ export default function Administration() {
 
         {/* ── TAB 5: SYSTEM & GOVERNANCE SETTINGS ────────────────────────── */}
         {activeTab === "settings" && (
-          <div className="space-y-6 max-w-4xl">
+          <div className="space-y-6 w-full">
             <div className="bg-white border border-[#DDE2EC] p-6 space-y-6 shadow-sm">
               <div className="border-b border-[#E2E8F0] pb-4">
                 <h3 className="text-base font-bold text-[#0F172A]">

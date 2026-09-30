@@ -47,6 +47,10 @@ import Pharmacy from "./components/Pharmacy"
 import EmergencyUI from "./components/Emergency"
 
 import Billing from "./components/Billing"
+import LabBillingQueue from "./components/LabBillingQueue"
+import ClaimsDesk from "./components/insurance/ClaimsDesk"
+import BillingDashboard from "./components/billing/BillingDashboard"
+import RevenueDashboard from "./components/billing/RevenueDashboard"
 
 import Inpatient from "./components/Inpatient"
 
@@ -135,10 +139,13 @@ import {
 } from "./services/doctorPortalDb"
 
 import { LabOrderDatabase } from "./services/labOrdersDb"
-
 import { PharmacyDatabase, isAwaitingVerification } from "./services/pharmacyDb"
+import { ErDatabase } from "./services/erDb"
+import { BedDatabase } from "./services/bedDb"
+import { db } from "./services/db"
+import { getDischargedIcuPatients } from "./components/icu/IcuDischargeModal"
 
-type Module = "dashboard" | "patients" | "appointments" | "emergency" | "emergency_ui" | "clinical" | "inpatient" | "nursing" | "laboratory" | "radiology" | "pharmacy" | "pharmacy_dispensing" | "pharmacy_rx" | "pharmacy_ocr" | "pharmacy_returns" | "pharmacy_supplier_returns" | "pharmacy_medicine" | "pharmacy_category" | "pharmacy_suppliers" | "pharmacy_po" | "pharmacy_grn" | "pharmacy_ledger" | "pharmacy_transfers" | "pharmacy_expiry" | "pharmacy_analytics" | "pharmacy_notifications" | "pharmacy_users" | "pharmacy_audit" | "pharmacy_settings" | "surgery" | "billing" | "icu" | "discharge" | "triage" | "insurance" | "analytics" | "reports" | "reports_overview" | "reports_patients" | "reports_op" | "reports_er" | "reports_inpatient" | "reports_appointments" | "reports_doctors" | "reports_pharmacy" | "reports_laboratory" | "reports_radiology" | "reports_beds" | "reports_admissions" | "reports_discharges" | "reports_staff" | "admin" | "chart" | "register" | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow" | "op_nurse" | "opd_procedures" | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing" | "admissions" | "readmission" | "payments" | "revenue_reports" | "reports_pharmacy_damaged" | "reports_supplier_returns" | "hrms" | "employees" | "patient_exp" | "intelligence" | "ocr" | "dpi_ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering" | "beds"
+type Module = "dashboard" | "patients" | "appointments" | "emergency" | "emergency_ui" | "clinical" | "inpatient" | "nursing" | "laboratory" | "radiology" | "pharmacy" | "pharmacy_dispensing" | "pharmacy_rx" | "pharmacy_ocr" | "pharmacy_returns" | "pharmacy_supplier_returns" | "pharmacy_medicine" | "pharmacy_category" | "pharmacy_suppliers" | "pharmacy_po" | "pharmacy_grn" | "pharmacy_ledger" | "pharmacy_transfers" | "pharmacy_expiry" | "pharmacy_analytics" | "pharmacy_notifications" | "pharmacy_users" | "pharmacy_audit" | "pharmacy_settings" | "surgery" | "billing" | "billing_op" | "billing_ip" | "billing_er" | "billing_unified" | "billing_revenue" | "icu" | "icu_micu" | "icu_sicu" | "icu_ccu" | "icu_nicu" | "icu_picu" | "discharge" | "triage" | "insurance" | "insurance_eligibility" | "analytics" | "reports" | "reports_overview" | "reports_patients" | "reports_op" | "reports_er" | "reports_inpatient" | "reports_appointments" | "reports_doctors" | "reports_pharmacy" | "reports_laboratory" | "reports_radiology" | "reports_beds" | "reports_admissions" | "reports_discharges" | "reports_staff" | "admin" | "chart" | "register" | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow" | "op_nurse" | "opd_procedures" | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing" | "admissions" | "readmission" | "payments" | "revenue_reports" | "reports_pharmacy_damaged" | "reports_supplier_returns" | "hrms" | "employees" | "patient_exp" | "intelligence" | "ocr" | "dpi_ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering" | "beds"
 
 interface NavItem {
   key: Module
@@ -222,7 +229,22 @@ const NAV: NavItem[] = [
     ],
   },
 
-  { key: "icu", label: "ICU", Icon: HeartPulse },
+  {
+    // Each ICU unit is its own sub-page of one Critical Care workspace; the
+    // sub-keys inherit the "icu" grant, so no role needs updating.
+    key: "icu",
+    label: "Critical Care",
+    Icon: HeartPulse,
+
+    children: [
+      { key: "icu", label: "All ICUs" },
+      { key: "icu_micu", label: "Medical ICU (MICU)" },
+      { key: "icu_sicu", label: "Surgical ICU (SICU)" },
+      { key: "icu_ccu", label: "Cardiac ICU (CCU)" },
+      { key: "icu_nicu", label: "Neuro ICU (NICU)" },
+      { key: "icu_picu", label: "Pediatric ICU (PICU)" },
+    ],
+  },
 
   { key: "nursing", label: "Nursing", Icon: Syringe },
 
@@ -304,14 +326,35 @@ const NAV: NavItem[] = [
     label: "Billing",
     Icon: CreditCard,
 
+    // One page per counter. Grouped children render under a caption, so the
+    // counters, the lab desk and the records read as three short lists.
     children: [
-      { key: "billing", label: "Invoices" },
-
-      { key: "payments", label: "Payment History" },
+      // "billing" is the Billing Dashboard -- the module's landing page, as
+      // Dashboard is for the app. Screens that deep-link to "billing" with a
+      // bill preselected are forwarded by the dashboard to that bill's counter.
+      { key: "billing", label: "Billing Dashboard" },
+      { key: "billing_op", label: "OP Billing", group: "Counters" },
+      { key: "billing_ip", label: "IP Billing", group: "Counters" },
+      { key: "billing_er", label: "Emergency Billing", group: "Counters" },
+      { key: "lab_billing", label: "Lab Test Billing", group: "Counters" },
+      { key: "billing_unified", label: "Unified Patient Bill", group: "Records" },
+      { key: "payments", label: "Payment History", group: "Records" },
+      { key: "billing_revenue", label: "Revenue & Dues", group: "Records" },
     ],
   },
 
-  { key: "insurance", label: "Insurance", Icon: ShieldCheck },
+  {
+    // The insurance department. Bills a counter bills to insurance land on
+    // the Claims Desk, which claims them from each insurance company.
+    key: "insurance",
+    label: "Insurance",
+    Icon: ShieldCheck,
+
+    children: [
+      { key: "insurance", label: "Claims Desk" },
+      { key: "insurance_eligibility", label: "Eligibility & Pre-auth" },
+    ],
+  },
 
   {
     key: "hrms",
@@ -536,99 +579,205 @@ function moduleTrail(module: string): string[] {
   return [module]
 }
 
-function NotificationPanel({ onClose }: { onClose: () => void }) {
+function NotificationPanel({
+  onClose,
+  onNavigate,
+}: {
+  onClose: () => void
+  onNavigate: (module: string, sub?: string) => void
+}) {
+  const [readState, setReadState] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem("hospai_dashboard_notifs_read")
+      return raw ? JSON.parse(raw) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  const items = React.useMemo(() => {
+    const list: {
+      id: string
+      type: "critical" | "warning" | "info"
+      icon: string
+      title: string
+      body: string
+      time: string
+      target: string
+      sub?: string
+    }[] = []
+
+    // 1. Bed Transfer notifications
+    const transfers = BedDatabase.getTransferNotifications()
+    transfers.slice(0, 3).forEach((tr) => {
+      list.push({
+        id: `tr-${tr.id}`,
+        type: tr.priority.includes("Stat") ? "critical" : "warning",
+        icon: "🛏️",
+        title: `Bed Transfer: ${tr.patient_name}`,
+        body: `${tr.source_department} → ${tr.target_destination}`,
+        time: "Just now",
+        target: "inpatient",
+        sub: tr.target_ward,
+      })
+    })
+
+    // 2. Critical & Pending Labs
+    const labs = LabOrderDatabase.getOrders()
+    labs
+      .filter((l) => l.status === "Awaiting Billing" || l.status === "Sample Collected" || l.status === "In Progress" || l.tests?.some(t => t.flag === "Critical"))
+      .slice(0, 3)
+      .forEach((l) => {
+        const isCrit = l.tests?.some((t) => t.flag === "Critical" || t.urgency === "STAT")
+        const testName = l.tests && l.tests[0] ? l.tests[0].name : "Diagnostic Order"
+        list.push({
+          id: `lab-${l.id}`,
+          type: isCrit ? "critical" : "info",
+          icon: "🧪",
+          title: isCrit ? `Critical Lab: ${l.patientName}` : `Pending Lab: ${testName}`,
+          body: `${testName} (${l.umr}) · Status: ${l.status}`,
+          time: "10m ago",
+          target: "laboratory",
+        })
+      })
+
+    // 3. ER Active Visits / Census
+    const erVisits = ErDatabase.getVisits("active")
+    const criticalEr = erVisits.filter(
+      (v) => v.triage_category === "B1" || v.triage_category === "ESI-1",
+    )
+    if (erVisits.length > 0) {
+      list.push({
+        id: "er-census",
+        type: criticalEr.length > 0 ? "warning" : "info",
+        icon: "🚨",
+        title: `ER Census: ${erVisits.length} Active Patients`,
+        body: `${criticalEr.length} critical patient(s) in resuscitation/emergency bay`,
+        time: "5m ago",
+        target: "emergency",
+      })
+    }
+
+    // 4. ICU Discharges
+    const icuDis = getDischargedIcuPatients()
+    if (icuDis.length > 0) {
+      list.push({
+        id: "icu-discharge",
+        type: "info",
+        icon: "📋",
+        title: `ICU Discharge Handoffs (${icuDis.length})`,
+        body: `${icuDis[0].patientName} ready for reception bed allocation`,
+        time: "15m ago",
+        target: "discharge",
+      })
+    }
+
+    // 5. Today's Appointments
+    const encs = db.getEncounters()
+    if (encs.length > 0) {
+      list.push({
+        id: "op-appointments",
+        type: "info",
+        icon: "📅",
+        title: `Appointments: ${encs.length} Booked Today`,
+        body: `Next: ${encs[0].patientName} with ${encs[0].assignedDoctor}`,
+        time: "Today",
+        target: "appointments",
+      })
+    }
+
+    return list
+  }, [])
+
+  const markAllRead = () => {
+    const updated: Record<string, boolean> = { ...readState }
+    items.forEach((item) => {
+      updated[item.id] = true
+    })
+    setReadState(updated)
+    try {
+      localStorage.setItem(
+        "hospai_dashboard_notifs_read",
+        JSON.stringify(updated),
+      )
+    } catch {}
+  }
+
+  const markSingleRead = (id: string, target: string, sub?: string) => {
+    const updated = { ...readState, [id]: true }
+    setReadState(updated)
+    try {
+      localStorage.setItem(
+        "hospai_dashboard_notifs_read",
+        JSON.stringify(updated),
+      )
+    } catch {}
+    onNavigate(target, sub)
+    onClose()
+  }
+
+  const unreadCount = items.filter((i) => !readState[i.id]).length
+
   return (
-    <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-[#DDE2EC] rounded shadow-xl z-50">
-      <div className="px-3.5 py-2.5 border-b border-[#DDE2EC] flex items-center justify-between">
-        <span className="text-[12.5px] font-semibold text-gray-900">
-          Notifications
-        </span>
+    <div className="absolute right-0 top-full mt-1 w-84 bg-white border border-[#DDE2EC] rounded shadow-xl z-50 overflow-hidden">
+      <div className="px-3.5 py-2.5 border-b border-[#DDE2EC] bg-[#FAFCFF] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[12.5px] font-bold text-gray-900">
+            Notifications
+          </span>
+          {unreadCount > 0 && (
+            <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-mono">
+              {unreadCount} New
+            </span>
+          )}
+        </div>
         <button
-          onClick={onClose}
-          className="text-[11px] text-[#1B4FD8] font-medium"
+          onClick={markAllRead}
+          className="text-[11px] text-[#1B4FD8] font-semibold hover:underline cursor-pointer"
         >
           Mark all read
         </button>
       </div>
-      <div className="max-h-72 overflow-y-auto">
-        {[
-          {
-            type: "critical",
-            icon: "⚠",
-            title: "Critical lab result",
-            body: "Potassium 6.2 — John Smith",
-            time: "2m ago",
-            read: false,
-          },
-
-          {
-            type: "warning",
-            icon: "⚠",
-            title: "ED capacity alert",
-            body: "8 patients waiting > 30 min",
-            time: "8m ago",
-            read: false,
-          },
-
-          {
-            type: "info",
-            icon: "🧪",
-            title: "Lab results ready",
-            body: "CBC results for Mary Jones",
-            time: "15m ago",
-            read: false,
-          },
-
-          {
-            type: "info",
-            icon: "📅",
-            title: "Appointment reminder",
-            body: "Elena Torres arriving at 10:00",
-            time: "30m ago",
-            read: true,
-          },
-
-          {
-            type: "info",
-            icon: "💊",
-            title: "Pharmacy ready",
-            body: "Metformin ready for pickup — Rm 204",
-            time: "42m ago",
-            read: true,
-          },
-        ].map((n, i) => (
-          <div
-            key={i}
-            className={`flex gap-3 px-3.5 py-2.5 border-b border-[#F1F5F9] last:border-0 cursor-pointer hover:bg-[#F8FAFC] ${
-              !n.read ? "bg-[#FAFBFF]" : ""
-            }`}
-          >
-            <span className="text-base mt-0.5">{n.icon}</span>
-            <div className="flex-1 min-w-0">
+      <div className="max-h-80 overflow-y-auto divide-y divide-[#F1F5F9]">
+        {items.length === 0 ? (
+          <div className="p-4 text-center text-xs text-gray-500">
+            No active notifications
+          </div>
+        ) : (
+          items.map((n) => {
+            const isRead = Boolean(readState[n.id])
+            return (
               <div
-                className={`text-[12px] ${
-                  !n.read ? "font-semibold text-gray-900" : "text-gray-700"
+                key={n.id}
+                onClick={() => markSingleRead(n.id, n.target, n.sub)}
+                className={`flex gap-3 px-3.5 py-2.5 cursor-pointer hover:bg-blue-50/60 transition-colors ${
+                  !isRead ? "bg-[#F4F7FF]" : "bg-white"
                 }`}
               >
-                {n.title}
+                <span className="text-base mt-0.5">{n.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span
+                      className={`text-[12px] truncate ${
+                        !isRead
+                          ? "font-bold text-gray-900"
+                          : "font-medium text-gray-700"
+                      }`}
+                    >
+                      {n.title}
+                    </span>
+                    <span className="text-[10px] text-gray-400 shrink-0 font-mono">
+                      {n.time}
+                    </span>
+                  </div>
+                  <div className="text-[11.5px] text-[#64748B] truncate mt-0.5">
+                    {n.body}
+                  </div>
+                </div>
               </div>
-              <div className="text-[11.5px] text-[#64748B] truncate">
-                {n.body}
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <span className="text-[10.5px] text-[#94A3B8] whitespace-nowrap">
-                {n.time}
-              </span>
-              {!n.read && <div className="w-2 h-2 rounded-full bg-[#1B4FD8]" />}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="px-3.5 py-2 border-t border-[#DDE2EC] text-center">
-        <button className="text-[11.5px] text-[#1B4FD8] font-medium hover:underline">
-          View all notifications
-        </button>
+            )
+          })
+        )}
       </div>
     </div>
   )
@@ -1217,8 +1366,11 @@ export default function App() {
     return () => window.removeEventListener("keydown", h)
   }, [])
 
+  const [subModule, setSubModule] = useState<string | undefined>(undefined)
+
   const navigate = (m: string, sub?: string) => {
     setModule(m as Module)
+    setSubModule(sub)
 
     if (sub === "register") setModule("register")
 
@@ -1541,11 +1693,14 @@ export default function App() {
                 >
                   <Icon.Bell />
                   <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-[#DC2626] rounded-full text-[9px] text-white font-bold flex items-center justify-center">
-                    7
+                    !
                   </span>
                 </button>
                 {notifOpen && (
-                  <NotificationPanel onClose={() => setNotifOpen(false)} />
+                  <NotificationPanel
+                    onClose={() => setNotifOpen(false)}
+                    onNavigate={(m, s) => navigate(m, s)}
+                  />
                 )}
               </div>
 
@@ -2184,6 +2339,7 @@ export default function App() {
                   navigate={navigate}
                   onOpenPatientClinical={openPatientClinical}
                   permissions={userPermissions}
+                  initialWard={subModule}
                 />
               )}
               {module === "beds" && (
@@ -2204,9 +2360,38 @@ export default function App() {
                 />
               )}
               {module === "surgery" && <Surgery />}
-              {module === "billing" && <Billing />}
+              {(module === "billing_op" ||
+                module === "billing_ip" ||
+                module === "billing_er" ||
+                module === "billing_unified") && (
+                <Billing
+                  view={module === "billing_unified" ? "unified" : "counter"}
+                  scope={
+                    module === "billing_op"
+                      ? "op"
+                      : module === "billing_ip"
+                        ? "ip"
+                        : "er"
+                  }
+                />
+              )}
+              {module === "lab_billing" && <LabBillingQueue />}
+              {module === "billing_revenue" && (
+                <RevenueDashboard onNavigate={(m) => setModule(m as Module)} />
+              )}
+              {module === "billing" && (
+                <BillingDashboard onNavigate={(m) => setModule(m as Module)} />
+              )}
               {module === "radiology" && <Radiology />}
-              {module === "icu" && <ICU />}
+              {(module === "icu" || module.startsWith("icu_")) && (
+                <ICU
+                  unit={
+                    module === "icu"
+                      ? "All"
+                      : module.slice("icu_".length).toUpperCase()
+                  }
+                />
+              )}
               {module === "analytics" && <Analytics />}
               {module === "discharge" && (
                 <Discharge
@@ -2222,7 +2407,8 @@ export default function App() {
                 />
               )}
 
-              {module === "insurance" && <Insurance />}
+              {module === "insurance" && <ClaimsDesk />}
+              {module === "insurance_eligibility" && <Insurance />}
               {(module === "reports" || module === "reports_overview") && (
                 <GeneralReportsOverviewPage
                   onNavigate={(m) => setModule(m as any)}

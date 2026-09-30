@@ -379,7 +379,7 @@ export default function Registration({
       />
 
       {/* Main Workspace */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 w-full space-y-6">
         {/* ── GENERATION AUDIT BANNER ─────────────────────────────────── */}
         {bookingOpen && (
           <AppointmentBookingModal

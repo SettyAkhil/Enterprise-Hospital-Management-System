@@ -12,6 +12,8 @@
     "dev:stop": "node scripts/dev-stop.mjs"
   },
   "dependencies": {
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.46.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

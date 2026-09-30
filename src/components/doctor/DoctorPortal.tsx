@@ -67,7 +67,7 @@ import LiveBoard from "./LiveBoard"
  * -- it is what stops a misheard word in a recording from turning into a
  * dispensed drug.
  */
-type PortalTab = "patient" | "voice" | "sheet" | "review" | "charges"
+type PortalTab = "patient" | "voice" | "sheet" | "review"
 type SheetMode = "type" | "write" | "upload"
 
 const TABS: {
@@ -104,13 +104,6 @@ const TABS: {
     short: "Review",
     label: "Review & Send",
     hint: "Check medicines and investigations before they leave the room",
-  },
-  {
-    key: "charges",
-    stepNum: "5",
-    short: "Charges",
-    label: "Charges & Billing",
-    hint: "Procedures done in the room, raised as one invoice for reception",
   },
 ]
 
@@ -980,7 +973,6 @@ export default function DoctorPortal({
                     dispatchResult={dispatchResult}
                     onDispatch={handleDispatch}
                     onBackToSheet={() => setTab("sheet")}
-                    onGoToCharges={() => setTab("charges")}
                     onNextPatient={() => {
                       const nextWaiting = notifications.find(
                         (n) =>
@@ -994,16 +986,6 @@ export default function DoctorPortal({
                         setView("live")
                       }
                     }}
-                  />
-                )}
-
-                {tab === "charges" && (
-                  <ConsultationCharges
-                    doctor={doctor}
-                    patient={selected}
-                    investigations={labTests}
-                    diagnosis={diagnosis}
-                    onBack={() => setTab("review")}
                   />
                 )}
               </div>
@@ -1103,20 +1085,24 @@ function PortalHeader({
             my queue
           </span>
         </div>
-        <div className="text-right hidden sm:block">
-          <div className="text-[12px] font-semibold text-[#334155] font-mono">
-            {new Date(now).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </div>
-          <div className="text-[11px] text-[#94A3B8]">
-            {new Date(now).toLocaleDateString(undefined, {
-              weekday: "short",
-              day: "numeric",
-              month: "short",
-            })}{" "}
-            · clinic session
+        <div className="text-right flex items-center gap-2 bg-[#0F172A] text-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-700">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <div>
+            <div className="text-[12.5px] font-bold tracking-wider font-mono text-emerald-300">
+              {new Date(now).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </div>
+            <div className="text-[10px] text-slate-300 font-medium">
+              {new Date(now).toLocaleDateString(undefined, {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -1292,55 +1278,6 @@ function PatientInbox({
           })
         )}
 
-        {/* Waiting in this doctor's department with nobody assigned yet.
-            Registration leaves `assignedDoctor` empty on purpose -- triage is
-            meant to fill it -- so without this these patients are visible on the
-            hospital-wide board and in no doctor's portal at all. */}
-        {unassigned.length > 0 && (
-          <div className="border-t-4 border-[#F1F5F9]">
-            <div className="px-4 py-2 bg-[#FFFBEB] border-b border-[#FDE68A]">
-              <p className="text-[11.5px] font-bold text-[#92400E]">
-                Waiting, no doctor assigned ({unassigned.length})
-              </p>
-              <p className="text-[10.5px] text-[#B45309] mt-0.5">
-                In your department. Take one to add it to your queue.
-              </p>
-            </div>
-            {unassigned.map((notification) => (
-              <div
-                key={notification.id}
-                className="px-4 py-3 border-b border-[#F1F5F9] hover:bg-[#F8FAFC]"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <span className="font-semibold text-[13px] text-gray-900 truncate">
-                      {notification.patientName}
-                    </span>
-                    <div className="text-[11px] font-mono text-[#64748B] mt-0.5">
-                      {notification.umr} · {notification.age}
-                      {notification.sex?.[0]} ·{" "}
-                      {notification.dept || "Awaiting triage"}
-                    </div>
-                  </div>
-                  <span className="text-[10.5px] font-mono text-[#94A3B8] flex-shrink-0">
-                    {formatElapsed(notification.arrivedAt, now)}
-                  </span>
-                </div>
-                <p className="text-[11.5px] text-[#475569] mt-1.5 line-clamp-2">
-                  {notification.chiefComplaint || "No chief complaint recorded"}
-                </p>
-                <Btn
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 w-full"
-                  onClick={() => onClaim(notification)}
-                >
-                  Take patient
-                </Btn>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </aside>
   )
@@ -1471,17 +1408,29 @@ function PatientContextPanel({
   const { patient, previousVisits, consultations, isNewPatient } = context
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-4 w-full">
       <section className="bg-white border border-[#DDE2EC] rounded">
-        <div className="px-4 py-2.5 border-b border-[#DDE2EC] flex items-center justify-between">
-          <h3 className="text-[13px] font-bold text-gray-900">
-            {isNewPatient ? "New Patient Admit Card" : "Patient Record"}
-          </h3>
-          <span className="text-[11px] text-[#94A3B8]">
-            {isNewPatient
-              ? "First visit on record"
-              : `${previousVisits.length} previous visit(s)`}
-          </span>
+        <div className="px-4 py-2.5 bg-slate-50 border-b border-[#DDE2EC] flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-[13px] font-bold text-gray-900">
+              {isNewPatient ? "New Patient Admit Card" : "Patient Record"}
+            </h3>
+            <span className="text-[11px] text-[#94A3B8]">
+              {isNewPatient
+                ? "First visit on record"
+                : `${previousVisits.length} previous visit(s)`}
+            </span>
+          </div>
+          {!hideProceedButton && (
+            <Btn
+              variant="primary"
+              size="sm"
+              onClick={onProceed}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xs transition-all"
+            >
+              ⚡ Start Consultation →
+            </Btn>
+          )}
         </div>
 
         <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-4">
@@ -1921,6 +1870,7 @@ function ConsultationConversation({
 }) {
   const [listening, setListening] = useState(false)
   const [speakerMode, setSpeakerMode] = useState<"auto" | Speaker>("auto")
+  const [speakerViewFilter, setSpeakerViewFilter] = useState<"all" | "doctor" | "patient">("all")
   const [language, setLanguage] =
     useState<"auto" | "en-IN" | "te-IN" | "hi-IN" | "ta-IN" | "kn-IN">("auto")
   const [elapsed, setElapsed] = useState(durationSeconds)
@@ -2256,7 +2206,12 @@ function ConsultationConversation({
               <button
                 key={option.key}
                 type="button"
-                onClick={() => setSpeakerMode(option.key)}
+                onClick={() => {
+                  setSpeakerMode(option.key)
+                  if (option.key === "doctor") setSpeakerViewFilter("doctor")
+                  else if (option.key === "patient") setSpeakerViewFilter("patient")
+                  else setSpeakerViewFilter("all")
+                }}
                 title={option.hint}
                 className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition-colors cursor-pointer ${
                   speakerMode === option.key
@@ -2332,16 +2287,47 @@ function ConsultationConversation({
         {/* Transcript */}
         <section className="xl:col-span-7 bg-white border border-[#E2E8F0] rounded-xl shadow-sm flex flex-col min-h-[420px]">
           <header className="px-4 py-3 border-b border-[#F1F5F9] flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-[13px] font-bold text-[#0F172A]">
                 Separated transcript
               </h3>
-              {turns.length > 0 && (
-                <span className="text-[10.5px] font-mono font-bold bg-[#F1F5F9] text-[#475569] px-1.5 py-0.5 rounded">
-                  {turns.filter((t) => t.speaker === "doctor").length}D ·{" "}
-                  {turns.filter((t) => t.speaker === "patient").length}P
-                </span>
-              )}
+              
+              {/* Filter view tabs */}
+              <div className="flex bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSpeakerViewFilter("all")}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors cursor-pointer ${
+                    speakerViewFilter === "all"
+                      ? "bg-white text-[#0F172A] shadow-2xs"
+                      : "text-[#64748B] hover:text-[#0F172A]"
+                  }`}
+                >
+                  All ({turns.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSpeakerViewFilter("doctor")}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors cursor-pointer ${
+                    speakerViewFilter === "doctor"
+                      ? "bg-[#1B4FD8] text-white shadow-2xs"
+                      : "text-[#64748B] hover:text-[#0F172A]"
+                  }`}
+                >
+                  Doctor ({turns.filter((t) => t.speaker === "doctor").length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSpeakerViewFilter("patient")}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors cursor-pointer ${
+                    speakerViewFilter === "patient"
+                      ? "bg-[#16A34A] text-white shadow-2xs"
+                      : "text-[#64748B] hover:text-[#0F172A]"
+                  }`}
+                >
+                  Patient ({turns.filter((t) => t.speaker === "patient").length})
+                </button>
+              </div>
             </div>
             {uncertain > 0 && (
               <span className="text-[11px] font-semibold text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] px-2 py-0.5 rounded">
@@ -2351,38 +2337,53 @@ function ConsultationConversation({
           </header>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-2.5 max-h-[560px]">
-            {turns.length === 0 && !interim ? (
-              <div className="h-full flex flex-col items-center justify-center text-center py-12 px-6">
-                <div className="w-12 h-12 rounded-full bg-[#F1F5F9] flex items-center justify-center mb-3">
-                  <Icon.Stethoscope className="w-5 h-5 text-[#94A3B8]" />
-                </div>
-                <p className="text-[13px] font-semibold text-[#334155]">
-                  Nothing recorded yet
-                </p>
-                <p className="text-[11.5px] text-[#94A3B8] mt-1 max-w-xs">
-                  Press record and talk to the patient as you normally would.
-                  Each utterance lands here under whoever said it, and you can
-                  move any of them.
-                </p>
-              </div>
-            ) : (
-              <>
-                {turns.map((turn) => {
-                  const style = SPEAKER_STYLE[turn.speaker]
-                  const shaky =
-                    turn.basis !== "manual" &&
-                    turn.basis !== "label" &&
-                    turn.confidence < 0.5
-                  const other: Speaker =
-                    turn.speaker === "doctor" ? "patient" : "doctor"
-                  const mine = turn.speaker === "doctor"
-                  return (
-                    <article
-                      key={turn.id}
-                      className={`flex gap-2.5 ${
-                        mine ? "" : "flex-row-reverse"
-                      }`}
-                    >
+            {(() => {
+              const displayedTurns = turns.filter((turn) => {
+                if (speakerViewFilter === "doctor") return turn.speaker === "doctor"
+                if (speakerViewFilter === "patient") return turn.speaker === "patient"
+                return true
+              })
+
+              if (displayedTurns.length === 0 && !interim) {
+                return (
+                  <div className="h-full flex flex-col items-center justify-center text-center py-12 px-6">
+                    <div className="w-12 h-12 rounded-full bg-[#F1F5F9] flex items-center justify-center mb-3">
+                      <Icon.Stethoscope className="w-5 h-5 text-[#94A3B8]" />
+                    </div>
+                    <p className="text-[13px] font-semibold text-[#334155]">
+                      {speakerViewFilter === "doctor"
+                        ? "No doctor conversation recorded yet"
+                        : speakerViewFilter === "patient"
+                          ? "No patient conversation recorded yet"
+                          : "Nothing recorded yet"}
+                    </p>
+                    <p className="text-[11.5px] text-[#94A3B8] mt-1 max-w-xs">
+                      {speakerViewFilter !== "all"
+                        ? `Click "All" or speak as ${speakerViewFilter === "doctor" ? "Doctor" : "Patient"} to view conversation.`
+                        : "Press record and talk to the patient as you normally would. Each utterance lands here under whoever said it."}
+                    </p>
+                  </div>
+                )
+              }
+
+              return (
+                <>
+                  {displayedTurns.map((turn) => {
+                    const style = SPEAKER_STYLE[turn.speaker]
+                    const shaky =
+                      turn.basis !== "manual" &&
+                      turn.basis !== "label" &&
+                      turn.confidence < 0.5
+                    const other: Speaker =
+                      turn.speaker === "doctor" ? "patient" : "doctor"
+                    const mine = turn.speaker === "doctor"
+                    return (
+                      <article
+                        key={turn.id}
+                        className={`flex gap-2.5 ${
+                          mine ? "" : "flex-row-reverse"
+                        }`}
+                      >
                       <div
                         className={`w-7 h-7 rounded-full ${style.rail} text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5`}
                         title={style.label}
@@ -2488,7 +2489,8 @@ function ConsultationConversation({
                 )}
                 <div ref={transcriptEndRef} />
               </>
-            )}
+            )
+          })()}
           </div>
         </section>
 
@@ -3345,8 +3347,8 @@ function PrescriptionSheetStep({
                         )}
                       </div>
                     </div>
-                    <span className="text-[10.5px] font-mono text-[#92400E] flex-shrink-0">
-                      ₹{priceForTest(test.name).toLocaleString("en-IN")}
+                    <span className="text-[10.5px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded flex-shrink-0">
+                      Lab Order
                     </span>
                   </li>
                 ))}
@@ -3630,7 +3632,7 @@ function ReviewAndDispatch({
   }
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-4 w-full">
       {split && (
         <div
           className={`border rounded px-4 py-3 ${
@@ -3913,53 +3915,52 @@ function ReviewAndDispatch({
                           </button>
                         )}
                       </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* Lab tests -> reception billing -> lab */}
-      <section className="bg-white border border-[#DDE2EC] rounded">
-        <div className="px-4 py-2.5 border-b border-[#DDE2EC] flex items-center justify-between gap-2 flex-wrap">
-          <div>
-            <h3 className="text-[13px] font-bold text-gray-900">
-              🧪 Lab tests → Reception billing → Laboratory
-            </h3>
-            <p className="text-[11px] text-[#64748B]">
-              The lab sees these only once reception has collected payment.
-            </p>
-          </div>
-          {!labSent && (
-            <Btn
-              variant="outline"
-              size="xs"
-              onClick={() =>
-                onLabTests([
-                  ...labTests,
-                  { name: "", category: "Pathology", urgency: "Routine" },
-                ])
-              }
-            >
-              + Add test
-            </Btn>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
-        </div>
+        </section>
 
-        {labTests.length === 0 ? (
-          <p className="px-4 py-6 text-center text-[12px] text-[#94A3B8]">
-            No investigations on this sheet.
-          </p>
-        ) : (
-          <>
+        {/* Lab tests -> reception billing -> lab */}
+        <section className="bg-white border border-[#DDE2EC] rounded">
+          <div className="px-4 py-2.5 border-b border-[#DDE2EC] flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <h3 className="text-[13px] font-bold text-gray-900">
+                🧪 Lab tests → Reception billing → Laboratory
+              </h3>
+              <p className="text-[11px] text-[#64748B]">
+                The lab sees these only once reception has collected payment.
+              </p>
+            </div>
+            {!labSent && (
+              <Btn
+                variant="outline"
+                size="xs"
+                onClick={() =>
+                  onLabTests([
+                    ...labTests,
+                    { name: "", category: "Pathology", urgency: "Routine" },
+                  ])
+                }
+              >
+                + Add test
+              </Btn>
+            )}
+          </div>
+
+          {labTests.length === 0 ? (
+            <p className="px-4 py-6 text-center text-[12px] text-[#94A3B8]">
+              No investigations on this sheet.
+            </p>
+          ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-[12px]">
                 <thead className="bg-[#F8FAFC] text-[10.5px] uppercase tracking-wide text-[#94A3B8]">
                   <tr>
-                    {["Investigation", "Category", "Urgency", "Charge", ""].map(
+                    {["Investigation", "Category", "Urgency", "Order Status", ""].map(
                       (header) => (
                         <th
                           key={header}
@@ -4006,7 +4007,7 @@ function ReviewAndDispatch({
                               "Radiology",
                               "Cardiology",
                               "Other",
-                            ].map((option) => (
+                              ].map((option) => (
                               <option key={option} value={option}>
                                 {option}
                               </option>
@@ -4028,8 +4029,10 @@ function ReviewAndDispatch({
                             <option value="STAT">STAT</option>
                           </select>
                         </td>
-                        <td className="px-3 py-1.5 w-24 font-mono text-[#475569]">
-                          ₹{priceForTest(test.name).toLocaleString("en-IN")}
+                        <td className="px-3 py-1.5 w-28 font-medium text-[#475569]">
+                          <span className="text-[11px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded">
+                            {labSent ? "Sent to Billing" : "Ready"}
+                          </span>
                         </td>
                         <td className="px-3 py-1.5 w-8">
                           {!labSent && (
@@ -4053,17 +4056,8 @@ function ReviewAndDispatch({
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-2.5 border-t border-[#DDE2EC] bg-[#F8FAFC] flex items-center justify-between">
-              <span className="text-[11.5px] text-[#64748B]">
-                Estimated charge raised at reception
-              </span>
-              <span className="text-[14px] font-bold text-gray-900 font-mono">
-                ₹{labTotal.toLocaleString("en-IN")}
-              </span>
-            </div>
-          </>
-        )}
-      </section>
+          )}
+        </section>
 
       {/* Dispatch -- each half on its own button, because a consultation often
           produces only one of them and neither should wait on the other. */}
@@ -4110,7 +4104,7 @@ function ReviewAndDispatch({
             emptyLabel="No investigations on this sheet"
             note={
               labTestCount > 0 && !labSent
-                ? `₹${labTotal.toLocaleString("en-IN")} raised at reception.`
+                ? "Sent to reception for patient lab billing."
                 : undefined
             }
             onSend={() => onDispatch({ pharmacy: false, lab: true })}
@@ -4123,11 +4117,6 @@ function ReviewAndDispatch({
           </Btn>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {onGoToCharges && (
-              <Btn variant="outline" size="sm" onClick={onGoToCharges}>
-                Charges & billing →
-              </Btn>
-            )}
             {dispatchResult &&
               !dispatchResult.errors.length &&
               onNextPatient && (
@@ -4182,10 +4171,9 @@ function ReviewAndDispatch({
                 <span className="font-mono font-bold">
                   {dispatchResult.labOrderId}
                 </span>{" "}
-                — {dispatchResult.labTestCount} investigation(s), ₹
-                {dispatchResult.labTotal.toLocaleString("en-IN")}, are with
-                reception for billing. They reach the laboratory as soon as
-                payment is collected.
+                — {dispatchResult.labTestCount} investigation(s) sent to reception
+                for patient lab billing. They reach the laboratory as soon as
+                payment is collected at reception.
               </li>
             )}
             {pending.pharmacy && (

@@ -24,7 +24,11 @@ export interface AppUser {
   status?: "Active" | "Inactive"
 }
 
-const ROLES_STORAGE_KEY = "hospai_rbac_roles_v11"
+// v12: billing split into per-counter pages (billing_op/ip/er/unified/revenue).
+// v14: insurance claims moved to the Insurance department (insurance_eligibility
+//      sub-page); the short-lived billing_insurance desk is gone.
+// v15: "billing" became the Billing Dashboard.
+const ROLES_STORAGE_KEY = "hospai_rbac_roles_v15"
 
 const USERS_STORAGE_KEY = "hospai_rbac_users_v2"
 
@@ -65,11 +69,17 @@ export const ALL_SYSTEM_MODULES = [
 
   "surgery",
   "billing",
+  "billing_op",
+  "billing_ip",
+  "billing_er",
+  "billing_unified",
+  "billing_revenue",
 
   "icu",
   "discharge",
   "triage",
   "insurance",
+  "insurance_eligibility",
   "analytics",
 
   "reports",
@@ -197,6 +207,10 @@ const INITIAL_ROLES: AppRole[] = [
 
       "op_registration",
       "billing",
+      "billing_op",
+      "billing_ip",
+      "billing_er",
+      "billing_unified",
       "payments",
       "lab_billing",
       "laboratory",

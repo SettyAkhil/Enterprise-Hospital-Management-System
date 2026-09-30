@@ -169,7 +169,7 @@ export default function Admissions({ setNotice, navigate }: Props) {
           ].map((stat) => (
             <div
               key={stat.label}
-              className="bg-white border border-[#DDE2EC] px-4 py-3 rounded-md"
+              className="bg-white border border-[#DDE2EC] px-4 py-3 rounded-none"
             >
               <div className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
                 {stat.label}
@@ -184,7 +184,7 @@ export default function Admissions({ setNotice, navigate }: Props) {
           ))}
         </div>
 
-        <div className="bg-white border border-[#DDE2EC] rounded-md flex flex-col overflow-hidden">
+        <div className="bg-white border border-[#DDE2EC] rounded-none flex flex-col overflow-hidden">
           <div className="border-b border-[#DDE2EC] flex px-4">
             <button
               onClick={() => setActiveTab("requests")}

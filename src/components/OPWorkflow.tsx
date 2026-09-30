@@ -1372,7 +1372,7 @@ export default function OPWorkflow({
 
       {/* Stepper Progress Bar */}
       <div className="bg-[#0C1524] px-6 py-3 border-b border-[#1E2D42] flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-1 sm:gap-2 w-full max-w-5xl mx-auto justify-between">
+        <div className="flex items-center gap-1 sm:gap-2 w-full justify-between">
           {steps.map((s, idx) => {
             const isCurrent = s.nums.includes(currentStep)
             const isCompleted = !isCurrent && currentStep > Math.max(...s.nums)
@@ -1492,7 +1492,7 @@ export default function OPWorkflow({
       )}
 
       {/* Main Step Workspace */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 w-full space-y-6">
         {/* ── STEP 1: DIGITAL OP BOOK & PASS ─────────────────────────── */}
         {currentStep === 1 && (
           <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6">
@@ -2165,7 +2165,7 @@ export default function OPWorkflow({
 
         {/* ── STEP 4: DOCTOR & LIVE QUEUE ALLOCATION ─────────────────── */}
         {currentStep === 4 && (
-          <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6 max-w-4xl mx-auto">
+          <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6 w-full">
             {/* 1. Header & Assigned Doctor Card */}
             <div className="bg-[#F8FAFC] border-2 border-[#CBD5E1] rounded p-5 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2482,7 +2482,7 @@ export default function OPWorkflow({
         {currentStep === 5 &&
           (() => {
             return (
-              <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6 max-w-5xl mx-auto">
+              <div className="bg-white border border-[#DDE2EC] rounded p-6 space-y-6 w-full">
                 {/* Header with Doctor & Patient Meta */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
                   <div>
@@ -3081,7 +3081,7 @@ export default function OPWorkflow({
             }
 
             return (
-              <div className="space-y-6 max-w-5xl mx-auto">
+              <div className="space-y-6 w-full">
                 {/* Header */}
                 <div className="bg-white border border-[#DDE2EC] rounded p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
@@ -3250,7 +3250,7 @@ export default function OPWorkflow({
 
                 {/* Main Settlement Worksheet */}
                 {!isPaid ? (
-                  <div className="max-w-3xl mx-auto bg-white border border-[#CBD5E1] rounded p-6 space-y-5 shadow-xs">
+                  <div className="w-full bg-white border border-[#CBD5E1] rounded p-6 space-y-5 shadow-xs">
                     <div className="border-b border-[#E2E8F0] pb-3 flex justify-between items-center">
                       <div>
                         <div className="text-[15px] font-bold text-gray-900">

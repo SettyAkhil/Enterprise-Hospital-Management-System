@@ -123,7 +123,7 @@ function PatientDirectory({
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F0F2F5] p-5">
-      <div className="max-w-5xl mx-auto">
+      <div className="w-full">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-base font-semibold text-gray-900">Clinical — Patient Directory</h1>
@@ -1006,7 +1006,7 @@ export default function PatientChart({
             )}
 
             {tab === "Day-wise" && (
-              <div className="max-w-4xl mx-auto space-y-4">
+              <div className="w-full space-y-4">
                 {sortedDates.length === 0 ? (
                   <div className="bg-white border border-[#DDE2EC] rounded p-8 text-center">
                     <p className="text-[13px] font-semibold text-gray-800">No evaluations recorded yet</p>

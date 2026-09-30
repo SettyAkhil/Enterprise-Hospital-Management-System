@@ -118,7 +118,7 @@ export default function Employees() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 flex max-w-7xl mx-auto w-full">
+      <div className="flex-1 overflow-auto p-6 flex w-full">
         {view === "grid" ? (
           <div className="grid grid-cols-4 gap-6 w-full">
             {employees.map((emp, i) => (

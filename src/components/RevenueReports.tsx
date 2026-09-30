@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react"
+import React, { useState, useMemo, useEffect, useRef } from "react"
 import {
   AreaChart,
   Area,
@@ -19,6 +19,7 @@ import {
   exportGenericReportPdf,
   printGenericReport,
 } from "../utils/generalReportsExporter"
+import { GeneralReportsService, DateRangePreset } from "../services/generalReportsDb"
 
 const REVENUE_MONTHLY_TREND = [
   { month: "Jan", revenue: 1.85, insurance: 0.65, cash: 0.25 },
@@ -47,6 +48,13 @@ const AGING_CLAIMS_DATA = [
 
 export default function RevenueReports() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [preset, setPreset] = useState<DateRangePreset>("thisMonth")
+
+  const reportData = useMemo(() => {
+    return GeneralReportsService.getReportPayload("revenue_reports", {
+      preset,
+    })
+  }, [preset])
 
   useEffect(() => {
     if (containerRef.current) containerRef.current.scrollTop = 0
@@ -57,9 +65,9 @@ export default function RevenueReports() {
 
   const prepareExportData = () => ({
     reportTitle: "Revenue & Financial Reports",
-    dateRangeLabel: "August 2026",
+    dateRangeLabel: preset === "today" ? "Today" : preset === "yesterday" ? "Yesterday" : preset === "last7" ? "Last 7 Days" : preset === "thisMonth" ? "This Month MTD" : preset === "lastMonth" ? "Last Month" : preset === "thisQuarter" ? "This Quarter" : "This Financial Year",
     departmentFilter: "All Departments",
-    kpis: [
+    kpis: reportData.kpis ? reportData.kpis.map((k: any) => ({ label: k.label, value: k.value, change: k.change })) : [
       { label: "Total Revenue (MTD)", value: "₹2.40 Cr", change: "+8.2%" },
       { label: "Pending Insurance Claims", value: "₹84.50 L", change: "-2.1%" },
       { label: "Out of Pocket (Cash/UPI)", value: "₹32.00 L", change: "+5.4%" },
@@ -98,14 +106,22 @@ export default function RevenueReports() {
             Revenue &amp; Financial Reports
           </h1>
           <p className="text-[12.5px] text-[#64748B] mt-0.5">
-            Analyze hospital revenue, insurance claims, and department financial performance (INR ₹).
+            Real-time multi-department revenue, insurance claims, and billing analytics (INR ₹).
           </p>
         </div>
         <div className="flex gap-2">
-          <select className="border border-[#DDE2EC] rounded-lg bg-white text-[12px] font-semibold px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] cursor-pointer">
-            <option>August 2026</option>
-            <option>July 2026</option>
-            <option>Q3 2026</option>
+          <select
+            value={preset}
+            onChange={(e) => setPreset(e.target.value as DateRangePreset)}
+            className="border border-[#DDE2EC] rounded-lg bg-white text-[12px] font-semibold px-3 py-1.5 focus:outline-none focus:border-[#1B4FD8] cursor-pointer"
+          >
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="last7">Last 7 Days</option>
+            <option value="thisMonth">This Month MTD</option>
+            <option value="lastMonth">Last Month</option>
+            <option value="thisQuarter">This Quarter</option>
+            <option value="thisYear">This Financial Year</option>
           </select>
           <button
             onClick={handlePrint}
@@ -125,36 +141,7 @@ export default function RevenueReports() {
       <div className="p-6 space-y-6 w-full">
         {/* KPI Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            {
-              label: "Total Revenue (MTD)",
-              val: "₹2.40 Cr",
-              sub: "vs last month ₹2.31 Cr",
-              trend: "+8.2%",
-              color: "text-emerald-700",
-            },
-            {
-              label: "Pending Insurance Claims",
-              val: "₹84.50 L",
-              sub: "42 claims in processing",
-              trend: "-2.1%",
-              color: "text-[#1B4FD8]",
-            },
-            {
-              label: "Out of Pocket (Cash/UPI)",
-              val: "₹32.00 L",
-              sub: "Direct patient settlement",
-              trend: "+5.4%",
-              color: "text-slate-900",
-            },
-            {
-              label: "Average Revenue / Patient",
-              val: "₹18,500",
-              sub: "Across OP, IP & ER",
-              trend: "+1.2%",
-              color: "text-slate-900",
-            },
-          ].map((stat, i) => (
+          {(reportData.kpis || []).map((stat: any, i: number) => (
             <div
               key={i}
               className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-2xs hover:shadow-md transition-all duration-300"
@@ -164,20 +151,21 @@ export default function RevenueReports() {
               </div>
               <div className="flex items-end justify-between">
                 <div>
-                  <div className={`text-2xl font-black tracking-tight ${stat.color}`}>
-                    {stat.val}
+                  <div className={`text-2xl font-black tracking-tight text-slate-900`}>
+                    {stat.value}
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-1 font-medium">{stat.sub}</div>
                 </div>
-                <div
-                  className={`text-[12px] font-bold px-2.5 py-1 rounded-full ${
-                    stat.trend.startsWith("+")
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-rose-50 text-rose-700 border border-rose-200"
-                  }`}
-                >
-                  {stat.trend}
-                </div>
+                {stat.change && (
+                  <div
+                    className={`text-[12px] font-bold px-2.5 py-1 rounded-full ${
+                      stat.change.startsWith("+")
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-rose-50 text-rose-700 border border-rose-200"
+                    }`}
+                  >
+                    {stat.change}
+                  </div>
+                )}
               </div>
             </div>
           ))}

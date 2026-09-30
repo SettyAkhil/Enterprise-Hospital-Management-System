@@ -21,7 +21,7 @@ export default function HRMS() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 flex flex-col gap-6 max-w-7xl mx-auto w-full">
+      <div className="flex-1 overflow-auto p-6 flex flex-col gap-6 w-full">
         {/* Top KPI Cards */}
         <div className="grid grid-cols-4 gap-4">
           {[

@@ -494,10 +494,14 @@ export default function QueueManagement({
     let targetEncounter: DBOPEncounter | undefined
 
     if (tokenPatientMode === "existing") {
-      targetPatient =
-        patients.find((p) => p.umr === tokenSelectedUmr) || patients[0]
+      const umrToUse = tokenSelectedUmr || patients[0]?.umr
+      if (!umrToUse) {
+        alert("Please select a registered patient.")
+        return
+      }
+      targetPatient = patients.find((p) => p.umr === umrToUse)
       if (!targetPatient) {
-        alert("Please select a patient or create a new patient.")
+        alert("Selected patient not found.")
         return
       }
 
@@ -1063,26 +1067,30 @@ export default function QueueManagement({
                                 </button>
                               )}
 
-                              <button
-                                type="button"
-                                onClick={() => handleOpenTransfer(enc)}
-                                className="px-2 py-1 text-[11px] font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-none transition-colors cursor-pointer whitespace-nowrap shadow-xs"
-                                title="Transfer department / doctor"
-                              >
-                                Transfer
-                              </button>
+                              {!isCompleted && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenTransfer(enc)}
+                                    className="px-2 py-1 text-[11px] font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-none transition-colors cursor-pointer whitespace-nowrap shadow-xs"
+                                    title="Transfer department / doctor"
+                                  >
+                                    Transfer
+                                  </button>
 
-                              {onNavigateToDoctorWorkflow && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    onNavigateToDoctorWorkflow(enc.id)
-                                  }
-                                  className="px-2 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-none transition-colors cursor-pointer whitespace-nowrap shadow-xs"
-                                  title="Open Doctor Consultation Workspace"
-                                >
-                                  Doctor
-                                </button>
+                                  {onNavigateToDoctorWorkflow && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        onNavigateToDoctorWorkflow(enc.id)
+                                      }
+                                      className="px-2 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-none transition-colors cursor-pointer whitespace-nowrap shadow-xs"
+                                      title="Open Doctor Consultation Workspace"
+                                    >
+                                      Doctor
+                                    </button>
+                                  )}
+                                </>
                               )}
 
                               <button

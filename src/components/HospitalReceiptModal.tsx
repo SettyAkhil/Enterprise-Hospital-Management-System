@@ -151,6 +151,9 @@ export default function HospitalReceiptModal({
   )
 
   // Payment Rows (Receipt / Payment Details Table)
+  const isInsuranceClaim =
+    !!claim.tpa?.billedAt ||
+    (!!claim.insuranceProvider && claim.insuranceProvider !== "Self-Pay" && (claim.amountPaid || 0) === 0)
 
   const paymentsList = useMemo(() => {
     if (claim.payments && claim.payments.length > 0) {
@@ -161,23 +164,31 @@ export default function HospitalReceiptModal({
       return [payment]
     }
 
+    if (isInsuranceClaim) {
+      return [
+        {
+          id: `INS-${claim.id}`,
+          invoiceId: claim.id,
+          receiptNo: `INS-${Math.floor(1000 + Math.random() * 9000)}`,
+          amount: 0,
+          paymentDate: claim.tpa?.billedAt || claim.dateOfService || new Date().toISOString(),
+          paymentMethod: "Insurance / Cashless",
+          collectedBy: "INS-DESK",
+          notes: `Billed to ${claim.insuranceProvider || "Insurance"} - Cashless (Patient Pays ₹0)`,
+        },
+      ]
+    }
+
     return [
       {
         id: `PAY-${claim.id}`,
-
         invoiceId: claim.id,
-
         receiptNo: `59${Math.floor(8500 + Math.random() * 900)}`,
-
-        amount: claim.amountPaid || claim.totalAmount,
-
+        amount: claim.amountPaid || 0,
         paymentDate: claim.dateOfService || new Date().toISOString(),
-
-        paymentMethod: "Credit Card",
-
+        paymentMethod: "Cash",
         collectedBy: "VHC70251",
-
-        notes: "Settlement",
+        notes: claim.amountPaid ? "Payment Collection" : "Pending Bill",
       },
     ]
   }, [
@@ -187,6 +198,9 @@ export default function HospitalReceiptModal({
     claim.amountPaid,
     claim.totalAmount,
     claim.dateOfService,
+    claim.insuranceProvider,
+    claim.tpa?.billedAt,
+    isInsuranceClaim,
   ])
 
   const totalReceiptAmount = paymentsList.reduce(
@@ -196,7 +210,10 @@ export default function HospitalReceiptModal({
 
   const grossAmount = claim.totalAmount || totalReceiptAmount
 
-  const totalReceivedWords = numberToWordsINR(totalReceiptAmount)
+  const totalReceivedWords =
+    totalReceiptAmount === 0 && isInsuranceClaim
+      ? "Zero Rupees Only (Cashless Insurance Claim — Patient Payable: ₹0.00)"
+      : numberToWordsINR(totalReceiptAmount)
 
   const grossAmountWords = numberToWordsINR(grossAmount)
 

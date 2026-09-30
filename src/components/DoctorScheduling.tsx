@@ -158,7 +158,7 @@ export default function DoctorScheduling() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 flex gap-6 max-w-7xl mx-auto w-full relative">
+      <div className="flex-1 overflow-auto p-6 flex gap-6 w-full relative">
         {/* Left Side: Filter and Settings */}
         <div className="w-80 flex flex-col gap-6">
           <div className="bg-white border border-[#DDE2EC] rounded-xl shadow-sm p-4">
