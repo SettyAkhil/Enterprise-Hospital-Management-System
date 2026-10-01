@@ -11,6 +11,7 @@ import {
   type IcuDischargeRecord,
 } from "./icu/IcuDischargeModal"
 import { BedDatabase } from "../services/bedDb"
+import { DischargeInsuranceCheck } from "./insurance/integrations"
 
 const STEPS = ["Select Patient", "Review Checklist", "Confirm & Discharge"]
 
@@ -388,6 +389,11 @@ export default function Discharge({
               {selectedBed.ward} · Room {selectedBed.room_no} · Bed{" "}
               {selectedBed.bed_no}
             </p>
+
+            {/* Insured patients: is the insurance side ready for the claim? */}
+            <div className="mb-4">
+              <DischargeInsuranceCheck patientId={selectedBed.patient_id || undefined} patientName={occupantName(selectedBed)} />
+            </div>
 
             {checklistLoading ? (
               <p className="text-[12.5px] text-[#64748B]">

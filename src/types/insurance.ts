@@ -1,8 +1,15 @@
 // Enterprise Hospital Management System (HMS) - Insurance & Claims Domain Types
+//
+// One insurance case per admitted, insured encounter. The case is linked to
+// the encounter's IP bill (billingClaimId) -- insurance is never an isolated
+// record -- and moves through a controlled state machine (see
+// INSURANCE_TRANSITIONS in services/insuranceDb.ts).
 
-export type PolicyRelationship = "Self" | "Spouse" | "Child" | "Parent" | "Other";
+export type PolicyRelationship = "Self" | "Spouse" | "Child" | "Parent" | "Other"
 
-export type ClaimEncounterType = "OP" | "IP" | "ER" | "OT" | "ICU";
+export type ClaimEncounterType = "OP" | "IP" | "ER" | "OT" | "ICU"
+
+export type PaymentType = "Insurance / Cashless" | "Corporate" | "Government Scheme"
 
 export type InsuranceClaimStatus =
   | "DRAFT"
@@ -26,197 +33,383 @@ export type InsuranceClaimStatus =
   | "SETTLEMENT_PENDING"
   | "PAYMENT_RECEIVED"
   | "RECONCILED"
-  | "CLOSED";
+  | "CLOSED"
 
 export interface InsurancePolicyDetails {
-  insurerId: string;
-  insurerName: string;
-  tpaId?: string;
-  tpaName?: string;
-  policyNumber: string;
-  memberId: string;
-  groupPolicyNo?: string;
-  policyHolderName: string;
-  relationship: PolicyRelationship;
-  validUntil: string;
-  sumInsured: number;
-  balanceAvailable: number;
-  roomCategoryEligible: string; // e.g. "Deluxe Private", "Semi-Private", "General Ward"
-  copayPercentage: number;
-  deductibleAmount: number;
-  preAuthRequired: boolean;
+  paymentType: PaymentType
+  insurerId: string
+  insurerName: string
+  tpaId?: string
+  tpaName?: string
+  policyNumber: string
+  memberId: string
+  groupPolicyNo?: string
+  policyHolderName: string
+  relationship: PolicyRelationship
+  validUntil: string
+  sumInsured: number
+  balanceAvailable: number
+  roomCategoryEligible: string
+  copayPercentage: number
+  deductibleAmount: number
+  preAuthRequired: boolean
 }
+
+export type EligibilityOutcome = "Eligible" | "Partially Eligible" | "Not Eligible" | "Verification Required"
 
 export interface EligibilityResult {
-  status: "Eligible" | "Partially Eligible" | "Not Eligible" | "Verification Required";
-  verifiedAt: string;
-  verifiedBy: string;
-  roomEligibilityNote: string;
-  copayApplicable: boolean;
-  copayValue: string;
-  deductibleRemaining: number;
-  preAuthRequired: boolean;
-  notes?: string;
+  status: EligibilityOutcome
+  method: "Portal" | "Phone" | "API" | "Email"
+  reference?: string
+  policyActive: boolean
+  inNetwork: boolean
+  sumInsured: number
+  balanceAvailable: number
+  roomEligibilityNote: string
+  copayApplicable: boolean
+  copayValue: string
+  deductibleRemaining: number
+  preAuthRequired: boolean
+  verifiedAt: string
+  verifiedBy: string
+  notes?: string
 }
+
+export type DocumentCategory =
+  | "Patient"
+  | "Insurance"
+  | "Pre-Auth"
+  | "Clinical"
+  | "Billing"
+  | "Discharge"
+  | "Query"
+  | "Settlement"
 
 export interface DocumentChecklistItem {
-  id: string;
-  documentType: string;
-  label: string;
-  isMandatory: boolean;
-  isUploaded: boolean;
-  fileUrl?: string;
-  fileName?: string;
-  uploadedAt?: string;
+  id: string
+  category: DocumentCategory
+  documentType: string
+  label: string
+  isMandatory: boolean
+  isUploaded: boolean
+  status: "Pending" | "Uploaded" | "Verified" | "Rejected"
+  version: number
+  fileName?: string
+  fileUrl?: string
+  uploadedAt?: string
+  uploadedBy?: string
 }
 
+export interface PreAuthProcedureLine {
+  packageCode: string
+  procedureName: string
+  sequence: number
+  ratePercent: number
+  baseAmount: number
+  amount: number
+}
+
+export type PreAuthStatusName =
+  | "Draft"
+  | "Submitted"
+  | "Under Review"
+  | "Query"
+  | "Approved"
+  | "Partially Approved"
+  | "Rejected"
+
 export interface PreAuthRequest {
-  id: string; // e.g. "PA-2026-00098"
-  encounterId: string;
-  patientId: string;
-  patientName: string;
-  mrn: string;
-  encounterType: ClaimEncounterType;
-  proposedProcedureCode: string; // e.g. "B-11"
-  proposedProcedureName: string; // e.g. "Appendectomy"
-  packagePrice: number;
-  estimatedHospitalStayDays: number;
-  estimatedTotalCost: number;
-  requestedAmount: number;
-  approvedAmount: number;
-  status: "Draft" | "Submitted" | "Under Review" | "Query" | "Approved" | "Rejected";
-  checklist: DocumentChecklistItem[];
-  submissionHistory: {
-    timestamp: string;
-    action: string;
-    user: string;
-    notes?: string;
-  }[];
-  createdAt: string;
-  updatedAt: string;
+  id: string // "PA-2026-00098"
+  status: PreAuthStatusName
+  diagnosis: string
+  icdCode?: string
+  clinicalSummary: string
+  treatingDoctor: string
+  admissionType: "Planned" | "Emergency"
+  procedures: PreAuthProcedureLine[]
+  packageSubtotal: number
+  gstRate: number
+  gstAmount: number
+  estimatedOtherCharges: number
+  estimatedHospitalStayDays: number
+  estimatedTotalCost: number
+  requestedAmount: number
+  approvedAmount: number
+  approvalCode?: string
+  submissionMethod?: "Portal" | "API" | "Email" | "Manual"
+  externalReference?: string
+  submittedAt?: string
+  submittedBy?: string
+  responseNote?: string
+  proposedTreatment?: string
+  enhancements: { at: string ;amount: number ;reason: string ;status: "Requested" | "Approved" | "Rejected" }[]
+  createdAt: string
+  updatedAt: string
 }
 
 export interface ClaimQuery {
-  id: string;
-  claimId: string;
-  queryDate: string;
-  dueDate: string;
-  requestedBy: string; // Insurer / TPA Name
-  queryText: string;
-  status: "Open" | "Draft Response" | "Response Submitted" | "Closed";
-  hospitalResponseText?: string;
-  attachedDocumentUrls?: string[];
-  respondedAt?: string;
-  respondedBy?: string;
+  id: string // "Q-1024"
+  claimId: string
+  stage: "Pre-Auth" | "Claim"
+  queryDate: string
+  dueDate: string
+  requestedBy: string
+  queryText: string
+  status: "Open" | "Draft Response" | "Response Submitted" | "Closed"
+  hospitalResponseText?: string
+  attachedDocuments?: string[]
+  respondedAt?: string
+  respondedBy?: string
 }
 
 export interface SurgeryPricingRule {
-  sequenceOrder: number; // 1 = 100%, 2 = 50%, 3 = 25%...
-  discountPercentage: number; // 100, 50, 25
-  description: string;
+  sequenceOrder: number
+  discountPercentage: number
+  description: string
 }
 
+export type PackageComponent =
+  | "Surgeon"
+  | "OT"
+  | "Room"
+  | "Nursing"
+  | "Investigations"
+  | "Pharmacy"
+  | "Consumables"
+  | "Implants"
+  | "HighCostDrugs"
+  | "SpecialConsultations"
+
 export interface PackageMaster {
-  id: string;
-  code: string; // e.g. "B-11"
-  procedureName: string; // e.g. "Appendectomy"
-  basePrice: number; // 32700
-  applicableGstRate: number; // 5%
-  department: string; // "General Surgery"
-  includedComponents: ("Surgeon" | "OT" | "Room" | "Nursing" | "Investigations" | "Pharmacy")[];
-  excludedComponents: ("Implants" | "HighCostDrugs" | "SpecialConsultations")[];
-  pricingRules: SurgeryPricingRule[];
-  effectiveDate: string;
-  status: "Active" | "Inactive";
+  id: string
+  code: string
+  procedureName: string
+  basePrice: number
+  applicableGstRate: number
+  department: string
+  includedComponents: PackageComponent[]
+  excludedComponents: PackageComponent[]
+  pricingRules: SurgeryPricingRule[]
+  /** When set, the shared rule set from Masters -> Pricing Rules is used instead of pricingRules. */
+  pricingRuleSetId?: string
+  applicableInsurerIds?: string[]
+  effectiveDate: string
+  status: "Active" | "Inactive"
 }
 
 export interface InsuranceCompanyConfig {
-  id: string;
-  companyName: string; // e.g. "Star Health", "HDFC ERGO"
-  companyCode: string; // e.g. "STAR-01"
-  tpaName?: string; // e.g. "Family Health Plan TPA"
-  contactPhone: string;
-  contactEmail: string;
-  preAuthEmail: string;
-  claimsEmail: string;
-  networkStatus: "Empaneled / In-Network" | "Non-Network" | "Preferred Provider";
-  documentRequirements: string[]; // List of mandatory doc types
-  slaDaysForPreAuth: number; // e.g. 2
-  slaDaysForClaimSettlement: number; // e.g. 15
-  status: "Active" | "Inactive";
+  id: string
+  companyName: string
+  companyCode: string
+  tpaName?: string
+  contactPhone: string
+  contactEmail: string
+  preAuthEmail: string
+  claimsEmail: string
+  networkStatus: "Empaneled / In-Network" | "Non-Network" | "Preferred Provider"
+  integrationType?: "Portal" | "API" | "Email" | "Manual"
+  preAuthFormTemplate?: string
+  preAuthFormCode?: string
+  preAuthFormDocumentName?: string
+  preAuthPdfDataUrl?: string
+  preAuthPageCount?: number
+  portalUrl?: string
+  documentRequirements: string[]
+  slaDaysForPreAuth: number
+  slaDaysForClaimSettlement: number
+  alertThresholdPct?: number
+  status: "Active" | "Inactive"
+}
+
+export interface TpaConfig {
+  id: string
+  name: string
+  code: string
+  contactPhone: string
+  email: string
+  portalUrl?: string
+  integrationType: "Portal" | "API" | "Email" | "Manual"
+  insurerIds: string[]
+  slaDaysForPreAuth: number
+  status: "Active" | "Inactive"
+}
+
+export interface PricingRuleSet {
+  id: string
+  name: string
+  category: string
+  rules: SurgeryPricingRule[]
+  status: "Active" | "Inactive"
+}
+
+export type DocumentStage = "Pre-Auth" | "Discharge" | "Query" | "Settlement"
+
+export interface DocumentRule {
+  id: string
+  documentType: string
+  category: DocumentCategory
+  stage: DocumentStage
+  mandatory: boolean
+  /** Empty = every encounter type. */
+  encounterTypes: ClaimEncounterType[]
+  /** Empty = every insurer. */
+  insurerIds: string[]
+  status: "Active" | "Inactive"
+}
+
+/** A policy on the patient's record; a patient can hold several. */
+export interface PatientPolicy {
+  id: string
+  patientId: string
+  patientName: string
+  insurerId: string
+  insurerName: string
+  tpaName?: string
+  policyNumber: string
+  memberId: string
+  policyHolderName: string
+  relationship: PolicyRelationship
+  validUntil: string
+  sumInsured: number
+  balanceAvailable: number
+  copayPercentage: number
+  status: "Active" | "Inactive"
+  lastVerification?: { status: EligibilityOutcome ;at: string ;by: string ;balanceAvailable: number ;inNetwork: boolean }
+  createdAt: string
+}
+
+/** A procedure the OT scheduled for this encounter, offered to the pre-auth. */
+export interface ProcedureLink {
+  packageCode: string
+  procedureName: string
+  surgeon?: string
+  scheduledAt?: string
+  source: "OT" | "Doctor" | "Insurance Desk"
+  linkedAt: string
+}
+
+export type MailPurpose = "Eligibility" | "Pre-Auth" | "Enhancement" | "Claim" | "Query Response" | "General"
+
+/** An email exchanged with the insurer / TPA, kept on the case. */
+export interface MailRecord {
+  id: string
+  direction: "out" | "in"
+  purpose: MailPurpose
+  at: string
+  from: string
+  to: string
+  cc?: string
+  subject: string
+  body: string
+  attachments: string[]
+  by: string
+  queryId?: string
+}
+
+export interface DischargeReadiness {
+  ready: boolean
+  items: { key: string ;label: string ;ok: boolean ;detail?: string }[]
+  missingDocuments: string[]
 }
 
 export interface ClaimDeductionReason {
-  id: string;
-  category: "Non-Payable Consumables" | "Room Rent Capping" | "Co-pay Deduction" | "Unapproved Excess" | "Other";
-  amount: number;
-  remark: string;
+  id: string
+  category:
+    | "Non-Payable Consumables"
+    | "Room Rent Capping"
+    | "Co-pay Deduction"
+    | "Unapproved Excess"
+    | "Package Difference"
+    | "Other"
+  amount: number
+  remark: string
 }
 
+export type ReconciliationStatus =
+  | "Expected"
+  | "Partially Received"
+  | "Received"
+  | "Short Payment"
+  | "Unmatched"
+  | "Reconciled"
+
 export interface ClaimSettlementRecord {
-  id: string;
-  claimId: string;
-  settlementAdviceNo: string;
-  approvedAmount: number;
-  deductionsAmount: number;
-  deductionReasons: ClaimDeductionReason[];
-  netSettlementAmount: number;
-  paymentReferenceNo: string; // UTR / Cheque No
-  paymentDate: string;
-  bankAccountName: string;
-  reconciliationStatus: "Pending" | "Matched" | "Discrepancy" | "Reconciled";
-  reconciledAt?: string;
-  reconciledBy?: string;
+  id: string
+  claimId: string
+  settlementAdviceNo: string
+  approvedAmount: number
+  deductionsAmount: number
+  deductionReasons: ClaimDeductionReason[]
+  expectedAmount: number
+  expectedBy?: string
+  receivedAmount: number
+  netSettlementAmount: number
+  paymentReferenceNo: string
+  bankReference?: string
+  paymentDate: string
+  bankAccountName: string
+  reconciliationStatus: ReconciliationStatus
+  reconciledAt?: string
+  reconciledBy?: string
 }
 
 export interface AuditTrailLog {
-  id: string;
-  timestamp: string;
-  user: string;
-  role: string;
-  action: string;
-  oldStatus?: string;
-  newStatus?: string;
-  comments?: string;
+  id: string
+  timestamp: string
+  user: string
+  role: string
+  action: string
+  oldStatus?: string
+  newStatus?: string
+  comments?: string
+  device?: string
 }
 
 export interface ComprehensiveClaimRecord {
-  id: string; // "CLM-2026-001245"
-  encounterId: string;
-  patientId: string;
-  patientName: string;
-  mrn: string;
-  age: number;
-  gender: string;
-  phone: string;
-  encounterType: ClaimEncounterType;
-  department: string;
-  dateOfService: string;
-  admissionDate?: string;
-  dischargeDate?: string;
-  
-  // Insurance policy details
-  policy: InsurancePolicyDetails;
-  eligibility?: EligibilityResult;
-  preAuth?: PreAuthRequest;
-  
-  // Financial breakdown
-  packageApplied?: PackageMaster;
-  totalHospitalBill: number; // ₹2,50,000
-  packageBaseAmount: number; // ₹32,700
-  approvedPreAuthAmount: number; // ₹2,10,000
-  consumedBillAmount: number; // Current ongoing bill total ₹1,72,000
-  nonPayableAmount: number; // ₹15,000
-  patientShareAmount: number; // ₹25,000
-  finalClaimAmount: number; // ₹2,10,000
-  
-  // State machine and workflow
-  status: InsuranceClaimStatus;
-  documents: DocumentChecklistItem[];
-  queries: ClaimQuery[];
-  settlement?: ClaimSettlementRecord;
-  auditTrail: AuditTrailLog[];
-  
-  createdAt: string;
-  updatedAt: string;
+  id: string // insurance claim no, e.g. "CLM-2026-8923"
+  billingClaimId: string // the bill this case is claimed against; "" until billing raises one for the encounter
+  invoiceNo: string
+  encounterId: string
+  patientId: string
+  patientName: string
+  mrn: string
+  age: number
+  gender: string
+  phone: string
+  encounterType: ClaimEncounterType
+  department: string
+  attendingDoctor?: string
+  carePathway?: string
+  dateOfService: string
+  admissionDate?: string
+  dischargeDate?: string
+
+  /** Captured quickly (ER) with the minimum details; the rest is completed later. */
+  quickCapture?: boolean
+  procedureLinks?: ProcedureLink[]
+  /** Email correspondence with the insurer / TPA, newest last. */
+  mails?: MailRecord[]
+
+  policy: InsurancePolicyDetails
+  eligibility?: EligibilityResult
+  preAuth?: PreAuthRequest
+
+  // Financials, refreshed from the IP bill on every read.
+  totalHospitalBill: number
+  packageBaseAmount: number
+  approvedPreAuthAmount: number
+  consumedBillAmount: number
+  nonPayableAmount: number
+  patientShareAmount: number
+  finalClaimAmount: number
+  approvedClaimAmount?: number
+
+  status: InsuranceClaimStatus
+  documents: DocumentChecklistItem[]
+  queries: ClaimQuery[]
+  settlement?: ClaimSettlementRecord
+  auditTrail: AuditTrailLog[]
+
+  createdAt: string
+  updatedAt: string
 }

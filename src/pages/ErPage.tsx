@@ -87,6 +87,7 @@ import {
 } from "../services/billingDb"
 
 import { db, type DBOPEncounter } from "../services/db"
+import { ErQuickInsurance } from "../components/insurance/integrations"
 
 // apiFetch always sends Content-Type: application/json, which breaks a
 
@@ -1891,6 +1892,21 @@ export default function ErPage({
   if (selectedVisitId && detail) {
     return (
       <div className="flex-1 bg-[#F0F2F5] p-5 sm:p-6 min-h-full">
+        {/* Fast insurance registration for ER: minimum details now, the insurance
+            desk completes the case once treatment is under way. */}
+        {!detail.is_unknown_patient && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 bg-white border border-[#DDE2EC] px-3 py-2">
+            <span className="text-[12px] font-semibold text-gray-700">Payment / insurance</span>
+            <ErQuickInsurance
+              patientId={detail.patient_id || detail.visit_no}
+              patientName={`${detail.patient_name || ""} ${detail.patient_last_name || ""}`.trim() || detail.patient_id || detail.visit_no}
+              age={detail.patient_age ?? undefined}
+              gender={detail.patient_gender ?? undefined}
+              doctor={detail.assigned_doctor_name ?? undefined}
+            />
+            <span className="text-[11px] text-[#64748B]">Insurance applies once the patient is admitted from ER; OP-style ER visits are paid by the patient.</span>
+          </div>
+        )}
         <ErErrorBoundary onReset={refreshAfterAction}>
           <VisitDetailPanel
             key={detail.id}

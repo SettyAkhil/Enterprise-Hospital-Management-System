@@ -24,6 +24,8 @@ const ROLES_LIST = [
   { value: "lab", label: "Lab Technician", sub: "Clinical Laboratory" },
   { value: "reception", label: "Receptionist", sub: "Front Desk & OPD" },
   { value: "billing", label: "Billing Specialist", sub: "Revenue Cycle" },
+  { value: "insurance", label: "Insurance Officer", sub: "TPA & Claims Desk" },
+  { value: "finance", label: "Finance", sub: "Settlements & Accounts" },
   { value: "superadmin", label: "Super Admin", sub: "Executive Suite" },
 ]
 

@@ -28,7 +28,13 @@ export interface AppUser {
 // v14: insurance claims moved to the Insurance department (insurance_eligibility
 //      sub-page); the short-lived billing_insurance desk is gone.
 // v15: "billing" became the Billing Dashboard.
-const ROLES_STORAGE_KEY = "hospai_rbac_roles_v15"
+// v16: Insurance department split into dashboard, eligibility & pre-auth,
+//      claims, queries, settlement and masters pages.
+// v17: Insurance Desk became the landing page; old dashboard moved to insurance_overview.
+// v18: Insurance split into dashboard, work desk, pre-auth, claims, queries,
+//      settlements, reconciliation and five master pages.
+// v19: insurance.* action permissions; Insurance Officer, Finance and Billing roles.
+const ROLES_STORAGE_KEY = "hospai_rbac_roles_v19"
 
 const USERS_STORAGE_KEY = "hospai_rbac_users_v2"
 
@@ -79,7 +85,19 @@ export const ALL_SYSTEM_MODULES = [
   "discharge",
   "triage",
   "insurance",
+  "insurance_overview",
+  "insurance_desk",
+  "insurance_preauth",
+  "insurance_reconciliation",
+  "insurance_tpas",
+  "insurance_packages",
+  "insurance_pricing",
+  "insurance_docrules",
   "insurance_eligibility",
+  "insurance_claims",
+  "insurance_queries",
+  "insurance_settlement",
+  "insurance_masters",
   "analytics",
 
   "reports",
@@ -138,6 +156,30 @@ export const ALL_SYSTEM_MODULES = [
   "beds",
 ]
 
+/**
+ * Insurance action permissions. They live in a role's allowedModules next to
+ * the module keys. A role that has the "insurance" module but none of these
+ * keeps full insurance access (as before they existed); a role that lists any
+ * of them gets exactly those. Enforced by the insurance engine itself.
+ */
+export const INSURANCE_PERMISSIONS = {
+  "insurance.view": "View insurance cases",
+  "insurance.create": "Capture insurance / open a case",
+  "insurance.verify": "Verify eligibility",
+  "insurance.preauth.create": "Prepare pre-authorisation",
+  "insurance.preauth.submit": "Submit pre-auth & record insurer replies",
+  "insurance.claim.create": "Prepare claim, documents and discharge",
+  "insurance.claim.submit": "Submit claim & record decisions",
+  "insurance.query.respond": "Respond to insurer queries",
+  "insurance.settlement.view": "View settlements",
+  "insurance.reconciliation.manage": "Record payments & reconcile",
+  "insurance.master.manage": "Manage insurance masters",
+} as const
+export type InsurancePermission = keyof typeof INSURANCE_PERMISSIONS
+const ALL_INSURANCE_PERMISSIONS = Object.keys(INSURANCE_PERMISSIONS) as InsurancePermission[]
+const INSURANCE_PAGES = ["insurance", "insurance_desk", "insurance_preauth", "insurance_claims", "insurance_queries", "insurance_settlement", "insurance_reconciliation"]
+const INSURANCE_MASTER_PAGES = ["insurance_masters", "insurance_tpas", "insurance_packages", "insurance_pricing", "insurance_docrules"]
+
 // Super admin role gets everything
 
 const INITIAL_ROLES: AppRole[] = [
@@ -186,6 +228,12 @@ const INITIAL_ROLES: AppRole[] = [
       "dpi_ocr",
       "discharge",
       "surgery",
+
+      // Clinical side of insurance: the pre-auth's diagnosis, notes and procedures.
+      "insurance_preauth",
+      "insurance.view",
+      "insurance.preauth.create",
+      "insurance.claim.create",
     ],
   },
 
@@ -214,7 +262,31 @@ const INITIAL_ROLES: AppRole[] = [
       "payments",
       "lab_billing",
       "laboratory",
+
+      // Insurance: view and basic capture at registration / admission.
+      "insurance",
+      "insurance_desk",
+      "insurance.view",
+      "insurance.create",
     ],
+  },
+
+  {
+    id: "ROLE_INSURANCE",
+    name: "Insurance Officer / TPA Desk",
+    allowedModules: ["dashboard", "patients", "chart", "inpatient", "discharge", "billing_ip", "billing_unified", ...INSURANCE_PAGES, ...ALL_INSURANCE_PERMISSIONS.filter((p) => p !== "insurance.master.manage")],
+  },
+
+  {
+    id: "ROLE_FINANCE",
+    name: "Finance / Accounts",
+    allowedModules: ["dashboard", "billing", "billing_revenue", "payments", "insurance", "insurance_claims", "insurance_settlement", "insurance_reconciliation", "insurance.view", "insurance.settlement.view", "insurance.reconciliation.manage"],
+  },
+
+  {
+    id: "ROLE_BILLING",
+    name: "Billing Specialist",
+    allowedModules: ["dashboard", "patients", "billing", "billing_op", "billing_ip", "billing_er", "billing_unified", "billing_revenue", "payments", "lab_billing", "insurance", "insurance_claims", "insurance_packages", "insurance.view", "insurance.claim.create"],
   },
 
   {
@@ -444,6 +516,36 @@ export function getInitialUsers(): AppUser[] {
     },
 
     {
+      id: "U_INSURANCE",
+      username: "insurance",
+      password: "password123",
+      roleId: "ROLE_INSURANCE",
+      name: "Priya Nair",
+      staffId: "INS-210",
+      status: "Active",
+    },
+
+    {
+      id: "U_FINANCE",
+      username: "finance",
+      password: "password123",
+      roleId: "ROLE_FINANCE",
+      name: "Rahul Mehta",
+      staffId: "FIN-118",
+      status: "Active",
+    },
+
+    {
+      id: "U_BILLING",
+      username: "billing",
+      password: "password123",
+      roleId: "ROLE_BILLING",
+      name: "Anita Rao",
+      staffId: "BIL-305",
+      status: "Active",
+    },
+
+    {
       id: "U_NURSE",
       username: "nurse",
       password: "password123",
@@ -523,7 +625,16 @@ export class RoleDatabase {
         return initial
       }
 
-      return JSON.parse(stored)
+      // Seeded accounts added in a later release (e.g. insurance, finance)
+      // join an existing store; accounts already there are left as edited.
+      const users: AppUser[] = JSON.parse(stored)
+      const missing = initial.filter((u) => !users.some((x) => x.id === u.id || x.username === u.username))
+      if (missing.length) {
+        const merged = [...users, ...missing]
+        window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(merged))
+        return merged
+      }
+      return users
     } catch {
       return initial
     }
@@ -644,3 +755,24 @@ export function getGrantedActionsForModule(
 
   return actions
 }
+
+/** Can the signed-in user perform this insurance action? */
+export function insuranceCan(perm: InsurancePermission): boolean {
+  if (typeof window === "undefined") return true
+  let username = ""
+  try {
+    username = String(JSON.parse(localStorage.getItem("hospai_current_user") || "null")?.user || "")
+  } catch {}
+  if (!username) return true // no session (tests, background sync) -- nothing to check against
+  const user = RoleDatabase.getUsers().find((u) => u.username.toLowerCase() === username.toLowerCase())
+  const role = user && RoleDatabase.getRoles().find((r) => r.id === user.roleId)
+  if (!role) return true
+  const mods = role.allowedModules
+  if (role.id === "ROLE_SUPERADMIN" || role.id === "ROLE_ADMIN" || mods.includes("*")) return true
+  const explicit = mods.filter((m) => m.startsWith("insurance."))
+  if (!explicit.length) return mods.includes("insurance") || INSURANCE_PAGES.some((p) => mods.includes(p))
+  return mods.includes(perm)
+}
+
+export { INSURANCE_MASTER_PAGES }
+

@@ -48,8 +48,20 @@ import EmergencyUI from "./components/Emergency"
 
 import Billing from "./components/Billing"
 import LabBillingQueue from "./components/LabBillingQueue"
-import ClaimsDesk from "./components/insurance/ClaimsDesk"
+import InsuranceClaims from "./components/insurance/ClaimsHome"
+import InsuranceSettlementPage from "./components/insurance/SettlementPage"
+import InsuranceMastersPage from "./components/insurance/MastersPage"
+import InsuranceDashboardView from "./components/insurance/InsuranceDashboardView"
+import InsuranceCommandDashboard from "./components/insurance/InsuranceCommandDashboard"
+import CashlessCaseBoard from "./components/insurance/CashlessCaseBoard"
+import InsuranceCaseDetailView from "./components/insurance/InsuranceCaseDetailView"
+import DischargeFinalizationView from "./components/insurance/DischargeFinalizationView"
+import InsuranceReportsView from "./components/insurance/InsuranceReportsView"
+import InsuranceIntakeView from "./components/insurance/InsuranceIntakeView"
+import PreAuthRequestView from "./components/insurance/PreAuthRequestView"
+import { InsuranceEngineService } from "./services/insuranceDb"
 import BillingDashboard from "./components/billing/BillingDashboard"
+
 import RevenueDashboard from "./components/billing/RevenueDashboard"
 
 import Inpatient from "./components/Inpatient"
@@ -68,7 +80,6 @@ import Discharge from "./components/Discharge"
 
 import Triage from "./components/Triage"
 
-import Insurance from "./components/Insurance"
 
 import OrderDrawer from "./components/OrderDrawer"
 
@@ -145,7 +156,18 @@ import { BedDatabase } from "./services/bedDb"
 import { db } from "./services/db"
 import { getDischargedIcuPatients } from "./components/icu/IcuDischargeModal"
 
-type Module = "dashboard" | "patients" | "appointments" | "emergency" | "emergency_ui" | "clinical" | "inpatient" | "nursing" | "laboratory" | "radiology" | "pharmacy" | "pharmacy_dispensing" | "pharmacy_rx" | "pharmacy_ocr" | "pharmacy_returns" | "pharmacy_supplier_returns" | "pharmacy_medicine" | "pharmacy_category" | "pharmacy_suppliers" | "pharmacy_po" | "pharmacy_grn" | "pharmacy_ledger" | "pharmacy_transfers" | "pharmacy_expiry" | "pharmacy_analytics" | "pharmacy_notifications" | "pharmacy_users" | "pharmacy_audit" | "pharmacy_settings" | "surgery" | "billing" | "billing_op" | "billing_ip" | "billing_er" | "billing_unified" | "billing_revenue" | "icu" | "icu_micu" | "icu_sicu" | "icu_ccu" | "icu_nicu" | "icu_picu" | "discharge" | "triage" | "insurance" | "insurance_eligibility" | "analytics" | "reports" | "reports_overview" | "reports_patients" | "reports_op" | "reports_er" | "reports_inpatient" | "reports_appointments" | "reports_doctors" | "reports_pharmacy" | "reports_laboratory" | "reports_radiology" | "reports_beds" | "reports_admissions" | "reports_discharges" | "reports_staff" | "admin" | "chart" | "register" | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow" | "op_nurse" | "opd_procedures" | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing" | "admissions" | "readmission" | "payments" | "revenue_reports" | "reports_pharmacy_damaged" | "reports_supplier_returns" | "hrms" | "employees" | "patient_exp" | "intelligence" | "ocr" | "dpi_ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering" | "beds"
+/** Insurance sub-modules and legacy key mappings */
+const insuranceModule = (m: string): string =>
+  m === "insurance_reconciliation"
+    ? "insurance_settlement"
+    : m === "insurance_desk"
+      ? "insurance_overview"
+      : m === "insurance" || m === "insurance_claims"
+        ? "insurance_board"
+        : m
+
+
+type Module = "dashboard" | "patients" | "appointments" | "emergency" | "emergency_ui" | "clinical" | "inpatient" | "nursing" | "laboratory" | "radiology" | "pharmacy" | "pharmacy_dispensing" | "pharmacy_rx" | "pharmacy_ocr" | "pharmacy_returns" | "pharmacy_supplier_returns" | "pharmacy_medicine" | "pharmacy_category" | "pharmacy_suppliers" | "pharmacy_po" | "pharmacy_grn" | "pharmacy_ledger" | "pharmacy_transfers" | "pharmacy_expiry" | "pharmacy_analytics" | "pharmacy_notifications" | "pharmacy_users" | "pharmacy_audit" | "pharmacy_settings" | "surgery" | "billing" | "billing_op" | "billing_ip" | "billing_er" | "billing_unified" | "billing_revenue" | "icu" | "icu_micu" | "icu_sicu" | "icu_ccu" | "icu_nicu" | "icu_picu" | "discharge" | "triage" | "insurance" | "insurance_overview" | "insurance_desk" | "insurance_board" | "insurance_case" | "insurance_discharge" | "insurance_reports" | "insurance_preauth" | "insurance_eligibility" | "insurance_claims" | "insurance_queries" | "insurance_settlement" | "insurance_reconciliation" | "insurance_masters" | "insurance_tpas" | "insurance_packages" | "insurance_pricing" | "insurance_docrules" | "analytics" | "reports" | "reports_overview" | "reports_patients" | "reports_op" | "reports_er" | "reports_inpatient" | "reports_appointments" | "reports_doctors" | "reports_pharmacy" | "reports_laboratory" | "reports_radiology" | "reports_beds" | "reports_admissions" | "reports_discharges" | "reports_staff" | "admin" | "chart" | "register" | "outpatient" | "queue" | "op_management" | "op_registration" | "op_workflow" | "op_nurse" | "opd_procedures" | "doctor_workflow" | "doctor_portal" | "scheduling" | "lab_billing" | "admissions" | "readmission" | "payments" | "revenue_reports" | "reports_pharmacy_damaged" | "reports_supplier_returns" | "hrms" | "employees" | "patient_exp" | "intelligence" | "ocr" | "dpi_ocr" | "symptom_ai" | "clinical_rag" | "clinical_summaries" | "bulk_ai" | "nl_filtering" | "beds"
 
 interface NavItem {
   key: Module
@@ -344,16 +366,27 @@ const NAV: NavItem[] = [
   },
 
   {
-    // The insurance department. Bills a counter bills to insurance land on
-    // the Claims Desk, which claims them from each insurance company.
+    // The insurance engine shared by OP / IP / ER / OT / ICU: one case per
+    // insured encounter, from
+    // eligibility and pre-auth through claim, queries and settlement.
     key: "insurance",
     label: "Insurance",
     Icon: ShieldCheck,
 
     children: [
-      { key: "insurance", label: "Claims Desk" },
-      { key: "insurance_eligibility", label: "Eligibility & Pre-auth" },
+      { key: "insurance_overview", label: "Command Dashboard" },
+      { key: "insurance_board", label: "Cashless Case Board" },
+      { key: "insurance_eligibility", label: "New Patient / Intake" },
+      { key: "insurance_preauth", label: "Pre-Authorization" },
+      { key: "insurance_claims", label: "Claims & Queries" },
+      { key: "insurance_settlement", label: "Settlements" },
+      { key: "insurance_packages", label: "Billing & Packages" },
+      { key: "insurance_masters", label: "Master Data" },
+      { key: "insurance_reports", label: "Reports" },
+      { key: "insurance_docrules", label: "Audit Log & Rules" },
     ],
+
+
   },
 
   {
@@ -700,7 +733,7 @@ function NotificationPanel({
         "hospai_dashboard_notifs_read",
         JSON.stringify(updated),
       )
-    } catch {}
+    } catch { }
   }
 
   const markSingleRead = (id: string, target: string, sub?: string) => {
@@ -711,7 +744,7 @@ function NotificationPanel({
         "hospai_dashboard_notifs_read",
         JSON.stringify(updated),
       )
-    } catch {}
+    } catch { }
     onNavigate(target, sub)
     onClose()
   }
@@ -750,19 +783,17 @@ function NotificationPanel({
               <div
                 key={n.id}
                 onClick={() => markSingleRead(n.id, n.target, n.sub)}
-                className={`flex gap-3 px-3.5 py-2.5 cursor-pointer hover:bg-blue-50/60 transition-colors ${
-                  !isRead ? "bg-[#F4F7FF]" : "bg-white"
-                }`}
+                className={`flex gap-3 px-3.5 py-2.5 cursor-pointer hover:bg-blue-50/60 transition-colors ${!isRead ? "bg-[#F4F7FF]" : "bg-white"
+                  }`}
               >
                 <span className="text-base mt-0.5">{n.icon}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
                     <span
-                      className={`text-[12px] truncate ${
-                        !isRead
+                      className={`text-[12px] truncate ${!isRead
                           ? "font-bold text-gray-900"
                           : "font-medium text-gray-700"
-                      }`}
+                        }`}
                     >
                       {n.title}
                     </span>
@@ -859,13 +890,12 @@ function NursingDashboard() {
           ].map((p, i) => (
             <div
               key={i}
-              className={`bg-white border rounded p-4 ${
-                p.status === "Concern"
+              className={`bg-white border rounded p-4 ${p.status === "Concern"
                   ? "border-[#FECACA]"
                   : p.status === "Isolation"
                     ? "border-[#FED7AA]"
                     : "border-[#DDE2EC]"
-              }`}
+                }`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div>
@@ -874,13 +904,12 @@ function NursingDashboard() {
                       Rm {p.room}
                     </span>
                     <span
-                      className={`text-[10.5px] font-semibold px-1.5 py-px rounded ${
-                        p.acuity === 2
+                      className={`text-[10.5px] font-semibold px-1.5 py-px rounded ${p.acuity === 2
                           ? "bg-[#FEE2E2] text-[#B91C1C]"
                           : p.acuity === 3
                             ? "bg-[#FEF3C7] text-[#B45309]"
                             : "bg-[#DCFCE7] text-[#15803D]"
-                      }`}
+                        }`}
                     >
                       Acuity {p.acuity}
                     </span>
@@ -893,15 +922,14 @@ function NursingDashboard() {
                   </div>
                 </div>
                 <span
-                  className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
-                    p.status === "Concern"
+                  className={`text-[11px] font-semibold px-2 py-0.5 rounded ${p.status === "Concern"
                       ? "bg-[#FEE2E2] text-[#B91C1C]"
                       : p.status === "Isolation"
                         ? "bg-[#FEF3C7] text-[#B45309]"
                         : p.status === "Active"
                           ? "bg-[#EFF6FF] text-[#1D4ED8]"
                           : "bg-[#F0FDF4] text-[#15803D]"
-                  }`}
+                    }`}
                 >
                   {p.status}
                 </span>
@@ -910,13 +938,12 @@ function NursingDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="text-[#64748B]">Vitals</span>
                   <span
-                    className={`font-medium ${
-                      p.vitals.includes("Overdue")
+                    className={`font-medium ${p.vitals.includes("Overdue")
                         ? "text-[#DC2626]"
                         : p.vitals.includes("Due")
                           ? "text-[#D97706]"
                           : "text-[#16A34A]"
-                    }`}
+                      }`}
                   >
                     {p.vitals}
                   </span>
@@ -924,13 +951,12 @@ function NursingDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="text-[#64748B]">Medications</span>
                   <span
-                    className={`font-medium ${
-                      p.meds.includes("Overdue")
+                    className={`font-medium ${p.meds.includes("Overdue")
                         ? "text-[#DC2626]"
                         : p.meds.includes("▲")
                           ? "text-[#D97706]"
                           : "text-[#16A34A]"
-                    }`}
+                      }`}
                   >
                     {p.meds}
                   </span>
@@ -1075,6 +1101,12 @@ export default function App() {
   const stableSetNotice = useCallback((n: Notice | null) => setNotice(n), [])
 
   const [module, setModule] = useState<Module>("dashboard")
+  // Insurance pages link to one another by case, e.g. a query row -> its claim.
+  const [insuranceCaseId, setInsuranceCaseId] = useState<string | undefined>()
+  const openInsurance = (m: string, caseId?: string) => {
+    setInsuranceCaseId(caseId)
+    setModule(insuranceModule(m) as Module)
+  }
 
   // Set alongside setModule("chart") when another page (e.g. a bed card's
 
@@ -1160,7 +1192,7 @@ export default function App() {
       const saved = parseFloat(localStorage.getItem("hms.zoomLevel") ?? "")
 
       if (Number.isFinite(saved)) return Math.min(1.2, Math.max(0.7, saved))
-    } catch {}
+    } catch { }
 
     return 1
   })
@@ -1168,7 +1200,7 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem("hms.zoomLevel", String(zoomLevel))
-    } catch {}
+    } catch { }
   }, [zoomLevel])
 
   const [newMenuOpen, setNewMenuOpen] = useState(false)
@@ -1226,7 +1258,7 @@ export default function App() {
         const u = JSON.parse(curData)
         if (u && u.user) curUsername = u.user
       }
-    } catch {}
+    } catch { }
 
     AuditDatabase.logEvent(
       "Logout",
@@ -1239,7 +1271,7 @@ export default function App() {
 
     try {
       localStorage.removeItem("hospai_current_user")
-    } catch {}
+    } catch { }
 
     setLoggedIn(false)
   }
@@ -1271,7 +1303,7 @@ export default function App() {
         "hospai_current_user",
         JSON.stringify({ user: targetUsername, staffId: targetRole }),
       )
-    } catch {}
+    } catch { }
   }
 
   const handleLogin = (userData: {
@@ -1290,7 +1322,7 @@ export default function App() {
         "hospai_current_user",
         JSON.stringify({ user: userData.user, staffId: userData.staffId, role: userData.role }),
       )
-    } catch {}
+    } catch { }
 
     setUserRole(userData.role)
 
@@ -1302,10 +1334,10 @@ export default function App() {
 
     const doctor = isDoctor
       ? resolveDoctorAccount({
-          doctorId: userData.doctorId,
-          username: userData.user,
-          name: userData.user,
-        })
+        doctorId: userData.doctorId,
+        username: userData.user,
+        name: userData.user,
+      })
       : null
 
     setActiveDoctor(doctor)
@@ -1313,16 +1345,16 @@ export default function App() {
     setActiveStaff(
       doctor
         ? {
-            id: doctor.staffId,
+          id: doctor.staffId,
 
-            name: doctor.name,
+          name: doctor.name,
 
-            role: "ROLE_DOCTOR",
+          role: "ROLE_DOCTOR",
 
-            title: doctor.qualification,
+          title: doctor.qualification,
 
-            department: `${doctor.specialty} · ${doctor.room}`,
-          }
+          department: `${doctor.specialty} · ${doctor.room}`,
+        }
         : getRoleProfile(userData.role, userData.user),
     )
 
@@ -1340,13 +1372,13 @@ export default function App() {
       document.documentElement
         .requestFullscreen()
         .then(() => setIsFullscreen(true))
-        .catch(() => {})
+        .catch(() => { })
     } else {
       if (document.exitFullscreen) {
         document
           .exitFullscreen()
           .then(() => setIsFullscreen(false))
-          .catch(() => {})
+          .catch(() => { })
       }
     }
   }
@@ -1367,6 +1399,25 @@ export default function App() {
   }, [])
 
   const [subModule, setSubModule] = useState<string | undefined>(undefined)
+
+  // Any module (patient chart, admissions, ER, OT, discharge, bed board) can
+  // open an insurance page on a case without threading a prop down to it.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent<{ module: string; caseId?: string }>).detail
+      if (!d?.module) return
+      setInsuranceCaseId(d.caseId)
+      if (d.caseId && (d.module === "insurance" || d.module === "insurance_case" || d.module === "insurance_claims")) {
+        setModule("insurance_case")
+      } else if (d.module === "insurance_preauth") {
+        setModule("insurance_preauth")
+      } else {
+        setModule(insuranceModule(d.module) as Module)
+      }
+    }
+    window.addEventListener("hms:open-insurance", onOpen)
+    return () => window.removeEventListener("hms:open-insurance", onOpen)
+  }, [])
 
   const navigate = (m: string, sub?: string) => {
     setModule(m as Module)
@@ -1656,11 +1707,10 @@ export default function App() {
                 <button
                   title="Reset text size to 100%"
                   onClick={() => setZoomLevel(1)}
-                  className={`h-6 min-w-6 px-1 flex items-center justify-center font-bold hover:text-white ${
-                    zoomLevel === 1
+                  className={`h-6 min-w-6 px-1 flex items-center justify-center font-bold hover:text-white ${zoomLevel === 1
                       ? "text-[#94A3B8] text-[12px]"
                       : "text-[#F59E0B] text-[10px]"
-                  }`}
+                    }`}
                 >
                   {zoomLevel === 1 ? "A" : `${Math.round(zoomLevel * 100)}%`}
                 </button>
@@ -1800,11 +1850,11 @@ export default function App() {
                     ].map((r) => {
                       const permissions =
                         r.roleId === "ROLE_SUPERADMIN" ||
-                        r.roleId === "ROLE_ADMIN"
+                          r.roleId === "ROLE_ADMIN"
                           ? ALL_SYSTEM_MODULES
                           : RoleDatabase.getRoles().find(
-                              (role) => role.id === r.roleId,
-                            )?.allowedModules || ["dashboard"]
+                            (role) => role.id === r.roleId,
+                          )?.allowedModules || ["dashboard"]
 
                       return (
                         <button
@@ -1813,11 +1863,10 @@ export default function App() {
                           onClick={() =>
                             switchRole(r.roleId, r.username, permissions)
                           }
-                          className={`w-full text-left px-2.5 py-1.5 rounded flex items-center justify-between transition-colors cursor-pointer ${
-                            userRole === r.roleId
+                          className={`w-full text-left px-2.5 py-1.5 rounded flex items-center justify-between transition-colors cursor-pointer ${userRole === r.roleId
                               ? "bg-[#EFF6FF] text-[#1B4FD8] font-bold"
                               : "hover:bg-[#F8FAFC] text-[#334155]"
-                          }`}
+                            }`}
                         >
                           <span className="flex items-center gap-2">
                             <span>{r.icon}</span>
@@ -1847,13 +1896,12 @@ export default function App() {
 
           {notice && (
             <div
-              className={`px-4 py-2 text-[12.5px] font-medium flex items-center justify-between flex-shrink-0 ${
-                notice.type === "error"
+              className={`px-4 py-2 text-[12.5px] font-medium flex items-center justify-between flex-shrink-0 ${notice.type === "error"
                   ? "bg-red-50 text-red-800 border-b border-red-200"
                   : notice.type === "success"
                     ? "bg-green-50 text-green-800 border-b border-green-200"
                     : "bg-blue-50 text-blue-800 border-b border-blue-200"
-              }`}
+                }`}
             >
               <span>{notice.message}</span>
               <button className="underline" onClick={() => setNotice(null)}>
@@ -1866,18 +1914,16 @@ export default function App() {
           <div className="flex flex-1 overflow-hidden">
             {/* ── Sidebar ──────────────────────────────────────────────── */}
             <aside
-              className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${
-                sidebarCollapsed ? "w-14" : "w-72"
-              }`}
+              className={`bg-[#0C1524] border-r border-[#1E2D42] flex-shrink-0 flex flex-col transition-all duration-200 overflow-y-auto ${sidebarCollapsed ? "w-14" : "w-72"
+                }`}
             >
               {/* Top Logo Section */}
               <div className="flex items-center justify-center py-2.5 px-2 border-b border-[#1E2D42]/60 flex-shrink-0">
                 <img
                   src="/logo.png"
                   alt="HospAI Logo"
-                  className={`${
-                    sidebarCollapsed ? "w-8 h-8" : "w-40 h-40"
-                  } object-contain pointer-events-none transition-all duration-200`}
+                  className={`${sidebarCollapsed ? "w-8 h-8" : "w-40 h-40"
+                    } object-contain pointer-events-none transition-all duration-200`}
                 />
               </div>
               <div
@@ -1932,11 +1978,10 @@ export default function App() {
                       <div
                         className={
                           sidebarCollapsed
-                            ? `w-10 h-10 mx-auto my-1 flex items-center justify-center rounded-xl cursor-pointer transition-all duration-150 relative ${
-                                isActive
-                                  ? "bg-[#1B4FD8] text-white shadow-md shadow-blue-500/25 ring-1 ring-blue-400/40"
-                                  : "hover:bg-white/10 text-white"
-                              }`
+                            ? `w-10 h-10 mx-auto my-1 flex items-center justify-center rounded-xl cursor-pointer transition-all duration-150 relative ${isActive
+                              ? "bg-[#1B4FD8] text-white shadow-md shadow-blue-500/25 ring-1 ring-blue-400/40"
+                              : "hover:bg-white/10 text-white"
+                            }`
                             : `nav-item ${isActive ? "active" : ""}`
                         }
                         onClick={() => {
@@ -1966,11 +2011,10 @@ export default function App() {
                       >
                         <item.Icon
                           size={sidebarCollapsed ? 20 : 18}
-                          className={`${
-                            sidebarCollapsed
+                          className={`${sidebarCollapsed
                               ? "w-5 h-5 transition-transform duration-150 group-hover:scale-110 flex-shrink-0"
                               : "w-4.5 h-4.5 mr-3 flex-shrink-0"
-                          } ${isActive ? "text-white" : "text-[#94A3B8] group-hover:text-white"}`}
+                            } ${isActive ? "text-white" : "text-[#94A3B8] group-hover:text-white"}`}
                         />
 
                         {/* Collapsed Badge Dot */}
@@ -2003,9 +2047,8 @@ export default function App() {
                             {filteredChildren &&
                               filteredChildren.length > 0 && (
                                 <span
-                                  className={`transition-transform ${
-                                    isExpanded ? "rotate-90" : ""
-                                  }`}
+                                  className={`transition-transform ${isExpanded ? "rotate-90" : ""
+                                    }`}
                                 >
                                   <Icon.ChevronRight />
                                 </span>
@@ -2024,11 +2067,10 @@ export default function App() {
                               .map((child) => (
                                 <div
                                   key={`${child.key}_${child.label}`}
-                                  className={`nav-item sub ${
-                                    module === child.key && isActive
+                                  className={`nav-item sub ${module === child.key && isActive
                                       ? "active"
                                       : ""
-                                  }`}
+                                    }`}
                                   onClick={() => setModule(child.key)}
                                 >
                                   {child.label}
@@ -2071,9 +2113,8 @@ export default function App() {
                                   >
                                     {/* Category Header: exactly like Inpatient */}
                                     <div
-                                      className={`nav-item category ${
-                                        isGroupActive ? "active" : ""
-                                      }`}
+                                      className={`nav-item category ${isGroupActive ? "active" : ""
+                                        }`}
                                       onClick={(e) => {
                                         e.stopPropagation()
 
@@ -2096,9 +2137,8 @@ export default function App() {
                                         {group}
                                       </span>
                                       <span
-                                        className={`transition-transform duration-200 ${
-                                          isGroupExpanded ? "rotate-90" : ""
-                                        }`}
+                                        className={`transition-transform duration-200 ${isGroupExpanded ? "rotate-90" : ""
+                                          }`}
                                       >
                                         <Icon.ChevronRight />
                                       </span>
@@ -2114,9 +2154,8 @@ export default function App() {
                                           return (
                                             <div
                                               key={`${child.key}_${child.label}`}
-                                              className={`nav-item sub justify-between ${
-                                                isChildActive ? "active" : ""
-                                              }`}
+                                              className={`nav-item sub justify-between ${isChildActive ? "active" : ""
+                                                }`}
                                               onClick={() =>
                                                 setModule(child.key)
                                               }
@@ -2151,9 +2190,9 @@ export default function App() {
                                       setCollapsedGroups((prev) =>
                                         prev.includes(`${item.key}:${group}`)
                                           ? prev.filter(
-                                              (g) =>
-                                                g !== `${item.key}:${group}`,
-                                            )
+                                            (g) =>
+                                              g !== `${item.key}:${group}`,
+                                          )
                                           : [...prev, `${item.key}:${group}`],
                                       )
                                     }
@@ -2162,13 +2201,12 @@ export default function App() {
                                       {group}
                                     </span>
                                     <span
-                                      className={`text-[#64748B] transition-transform ${
-                                        collapsedGroups.includes(
-                                          `${item.key}:${group}`,
-                                        )
+                                      className={`text-[#64748B] transition-transform ${collapsedGroups.includes(
+                                        `${item.key}:${group}`,
+                                      )
                                           ? "-rotate-90"
                                           : ""
-                                      }`}
+                                        }`}
                                     >
                                       <Icon.ChevronDown size={14} />
                                     </span>
@@ -2179,11 +2217,10 @@ export default function App() {
                                     groupChildren.map((child) => (
                                       <div
                                         key={`${child.key}_${child.label}`}
-                                        className={`nav-item sub justify-between ${
-                                          module === child.key && isActive
+                                        className={`nav-item sub justify-between ${module === child.key && isActive
                                             ? "active"
                                             : ""
-                                        }`}
+                                          }`}
                                         onClick={() => setModule(child.key)}
                                       >
                                         <span className="flex-1 truncate">
@@ -2364,17 +2401,17 @@ export default function App() {
                 module === "billing_ip" ||
                 module === "billing_er" ||
                 module === "billing_unified") && (
-                <Billing
-                  view={module === "billing_unified" ? "unified" : "counter"}
-                  scope={
-                    module === "billing_op"
-                      ? "op"
-                      : module === "billing_ip"
-                        ? "ip"
-                        : "er"
-                  }
-                />
-              )}
+                  <Billing
+                    view={module === "billing_unified" ? "unified" : "counter"}
+                    scope={
+                      module === "billing_op"
+                        ? "op"
+                        : module === "billing_ip"
+                          ? "ip"
+                          : "er"
+                    }
+                  />
+                )}
               {module === "lab_billing" && <LabBillingQueue />}
               {module === "billing_revenue" && (
                 <RevenueDashboard onNavigate={(m) => setModule(m as Module)} />
@@ -2407,8 +2444,100 @@ export default function App() {
                 />
               )}
 
-              {module === "insurance" && <ClaimsDesk />}
-              {module === "insurance_eligibility" && <Insurance />}
+              {/* Insurance Command Dashboard — new Page 1 */}
+              {module === "insurance_overview" && (
+                <InsuranceCommandDashboard
+                  onNavigate={(page, caseId) => {
+                    if (page === "board") setModule("insurance_board" as any)
+                    else if (page === "preauth") setModule("insurance_preauth" as any)
+                    else if (page === "intake") setModule("insurance_eligibility" as any)
+                    else if (page === "claims") setModule("insurance_claims" as any)
+                    else if (page === "settlements") setModule("insurance_settlement" as any)
+                    else if (page === "masters") setModule("insurance_masters" as any)
+                    else if (page === "case" && caseId) {
+                      setInsuranceCaseId(caseId)
+                      setModule("insurance_case" as any)
+                    }
+                    else setModule("insurance_claims" as any)
+                  }}
+                />
+              )}
+              {/* Legacy overview key */}
+              {module === "insurance_desk" && (
+                <InsuranceDashboardView
+                  onOpenCase={(id) => openInsurance("insurance", id)}
+                  onOpenIntake={() => setModule("insurance_eligibility" as any)}
+                />
+              )}
+              {/* Page 2: Cashless Case Board */}
+              {(module === "insurance_board" as any) && (
+                <CashlessCaseBoard
+                  onOpenCase={(id) => { setInsuranceCaseId(id); setModule("insurance_case" as any) }}
+                  onOpenIntake={() => setModule("insurance_eligibility" as any)}
+                />
+              )}
+              {/* Page 3: Intake */}
+              {module === "insurance_eligibility" && (
+                <InsuranceIntakeView
+                  onBack={() => setModule("insurance_overview" as any)}
+                  onComplete={(id) => {
+                    setInsuranceCaseId(id)
+                    setModule("insurance_preauth" as any)
+                  }}
+                />
+              )}
+              {/* Page 4/5: Pre-Auth */}
+              {module === "insurance_preauth" && (
+                <PreAuthRequestView
+                  onBack={() => setModule("insurance_overview" as any)}
+                  onSubmitted={(id) => {
+                    setInsuranceCaseId(id)
+                    setModule("insurance_case" as any)
+                  }}
+                />
+              )}
+              {/* Page 6: Full Case Detail Hub */}
+              {module === "insurance_case" && (() => {
+                const allCasesForDetail = InsuranceEngineService.getClaims()
+                const detailCase = allCasesForDetail.find((c) => c.id === insuranceCaseId) || allCasesForDetail[0]
+                return detailCase ? (
+                  <InsuranceCaseDetailView
+                    c={detailCase}
+                    onBack={() => setModule("insurance_board")}
+                    onOpenBilling={() => setModule("billing_ip")}
+                  />
+                ) : (
+                  <div className="p-6 text-slate-500 text-sm">Case not found. <button className="text-blue-600 underline" onClick={() => setModule("insurance_board")}>Back to board</button></div>
+                )
+              })()}
+              {/* Page 8: Discharge & Final Approval */}
+              {module === "insurance_discharge" && (() => {
+                const allCasesForDischarge = InsuranceEngineService.getClaims()
+                const dischargeCase = allCasesForDischarge.find((c) => c.id === insuranceCaseId) || allCasesForDischarge[0]
+                return dischargeCase ? (
+                  <DischargeFinalizationView
+                    c={dischargeCase}
+                    onBack={() => setModule("insurance_board")}
+                  />
+                ) : null
+              })()}
+              {/* Pages: Legacy claim / settlement / masters */}
+              {(module === "insurance" || module === "insurance_claims" || module === "insurance_queries") && (
+                <InsuranceClaims onNavigate={openInsurance} initialCaseId={insuranceCaseId} initialView="needs" />
+              )}
+              {(module === "insurance_settlement" || module === "insurance_reconciliation") && (
+                <InsuranceSettlementPage onNavigate={openInsurance} initialCaseId={insuranceCaseId} />
+              )}
+              {module === "insurance_masters" && <InsuranceMastersPage section="insurers" />}
+              {module === "insurance_tpas" && <InsuranceMastersPage section="tpas" />}
+              {module === "insurance_packages" && <InsuranceMastersPage section="packages" />}
+              {module === "insurance_pricing" && <InsuranceMastersPage section="pricing" />}
+              {module === "insurance_docrules" && <InsuranceMastersPage section="docrules" />}
+              {/* Page 15: Insurance Reports */}
+              {(module === "insurance_reports" as any) && (
+                <InsuranceReportsView onBack={() => setModule("insurance_overview" as any)} />
+              )}
+
               {(module === "reports" || module === "reports_overview") && (
                 <GeneralReportsOverviewPage
                   onNavigate={(m) => setModule(m as any)}
@@ -2435,12 +2564,12 @@ export default function App() {
                 module === "reports_staff" ||
                 module === "reports_pharmacy_damaged" ||
                 module === "reports_supplier_returns") && (
-                <GenericReportPage
-                  key={module}
-                  reportType={module as ReportType}
-                  onNavigate={(m) => setModule(m as any)}
-                />
-              )}
+                  <GenericReportPage
+                    key={module}
+                    reportType={module as ReportType}
+                    onNavigate={(m) => setModule(m as any)}
+                  />
+                )}
               {module === "op_nurse" && (
                 <NurseStation
                   nurseName={activeStaff?.name || "OP Nurse"}
@@ -2475,10 +2604,10 @@ export default function App() {
                     !canOpenConsultation
                       ? undefined
                       : (encId) => {
-                          if (encId) setSelectedWorkflowEncounterId(encId)
+                        if (encId) setSelectedWorkflowEncounterId(encId)
 
-                          setModule("doctor_portal")
-                        }
+                        setModule("doctor_portal")
+                      }
                   }
                   onNavigateToOPRegistration={() => {
                     setModule("op_registration")
@@ -2503,10 +2632,10 @@ export default function App() {
                     !canOpenConsultation
                       ? undefined
                       : (encId) => {
-                          if (encId) setSelectedWorkflowEncounterId(encId)
+                        if (encId) setSelectedWorkflowEncounterId(encId)
 
-                          setModule("doctor_portal")
-                        }
+                        setModule("doctor_portal")
+                      }
                   }
                   onNavigateToOPRegistration={() => {
                     setModule("op_registration")
@@ -2527,10 +2656,10 @@ export default function App() {
                     !canOpenConsultation
                       ? undefined
                       : (encId) => {
-                          if (encId) setSelectedWorkflowEncounterId(encId)
+                        if (encId) setSelectedWorkflowEncounterId(encId)
 
-                          setModule("doctor_portal")
-                        }
+                        setModule("doctor_portal")
+                      }
                   }
                 />
               )}
