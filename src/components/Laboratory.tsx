@@ -16,7 +16,7 @@ import {
 import TestResultModal from "./laboratory/TestResultModal"
 import ImportAllResultsModal from "./laboratory/ImportAllResultsModal"
 import CompleteLabReportModal from "./laboratory/CompleteLabReportModal"
-import AddTestModal from "./laboratory/AddTestModal"
+import TestCatalogView from "./laboratory/TestCatalogView"
 import { AuditDatabase } from "../services/auditDb"
 
 const QUEUE_TABS = [
@@ -37,6 +37,7 @@ export default function Laboratory({
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<"orders" | "catalog">("orders")
   
   // Modals state
   const [activeTestForResult, setActiveTestForResult] = useState<{
@@ -45,7 +46,6 @@ export default function Laboratory({
   } | null>(null)
   const [showImportAllModal, setShowImportAllModal] = useState<LabOrder | null>(null)
   const [showCompleteReportModal, setShowCompleteReportModal] = useState<LabOrder | null>(null)
-  const [showAddTestModal, setShowAddTestModal] = useState<LabOrder | null>(null)
   const [showNewOrderModal, setShowNewOrderModal] = useState(false)
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null)
 
@@ -212,6 +212,10 @@ export default function Laboratory({
     }>
   ) => {
     if (!showImportAllModal) return
+    if (showImportAllModal.billing.status !== "Paid") {
+      showToast("Action restricted: Billing payment is pending for this patient.", "error")
+      return
+    }
     const orderId = showImportAllModal.id
 
     updatedTestsData.forEach((item) => {
@@ -230,38 +234,6 @@ export default function Laboratory({
       `✓ All ${updatedTestsData.length} test results successfully imported & updated for ${showImportAllModal.patientName}!`,
       "success"
     )
-  }
-
-  // Add test manually to patient order
-  const handleAddTestManually = (testData: {
-    name: string
-    category?: string
-    urgency?: "Routine" | "Urgent" | "STAT"
-    price?: number
-    clinicalNotes?: string
-  }) => {
-    if (!showAddTestModal) return
-    const orderId = showAddTestModal.id
-
-    const updated = LabOrderDatabase.addTestToOrder(
-      orderId,
-      testData,
-      technician
-    )
-
-    if (updated) {
-      setShowAddTestModal(null)
-      showToast(
-        `✓ "${testData.name}" successfully added to order ${orderId}!`,
-        "success"
-      )
-      AuditDatabase.logEvent(
-        "Test Added Manually",
-        "Laboratory",
-        `${technician} manually added test ${testData.name} to order ${orderId} for ${updated.patientName} (${updated.umr}).`,
-        "Success"
-      )
-    }
   }
 
   // Advance test status directly (e.g. Sample Collected -> Processing)
@@ -374,14 +346,17 @@ export default function Laboratory({
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="text-right border-r pr-3 border-gray-200 hidden sm:block">
-            <span className="text-[10.5px] text-gray-400 block font-medium">
-              Logged in Technician
-            </span>
-            <span className="text-xs font-bold text-gray-800">
-              {technician}
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setViewMode(viewMode === "catalog" ? "orders" : "catalog")}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 border cursor-pointer ${
+              viewMode === "catalog"
+                ? "bg-slate-800 text-white border-slate-700"
+                : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300"
+            }`}
+          >
+            <span>📖</span> Test Catalog
+          </button>
           <button
             onClick={() => setShowNewOrderModal(true)}
             className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
@@ -418,8 +393,14 @@ export default function Laboratory({
       {/* Primary Work Area */}
       <div className="flex-1 flex flex-col overflow-hidden p-6 space-y-4">
         
-        {/* CONDITIONAL: If entering test result, show FULL PAGE RESULT VIEW; else if patient selected, show PATIENT DETAILS; otherwise PATIENT LIST */}
-        {activeTestForResult ? (
+        {/* CONDITIONAL:
+            1. If viewing Test Catalog, show dedicated TEST CATALOG VIEW
+            2. If entering test result, show FULL PAGE RESULT VIEW
+            3. If patient selected, show PATIENT DETAILS view
+            4. Otherwise PATIENT LIST view */}
+        {viewMode === "catalog" ? (
+          <TestCatalogView onBackToOrders={() => setViewMode("orders")} />
+        ) : activeTestForResult ? (
           <TestResultModal
             order={activeTestForResult.order}
             test={activeTestForResult.test}
@@ -468,14 +449,21 @@ export default function Laboratory({
               {/* Action Buttons */}
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setShowAddTestModal(selectedOrder)}
-                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-                >
-                  <span>➕</span> Add Test
-                </button>
-                <button
-                  onClick={() => setShowImportAllModal(selectedOrder)}
-                  className="px-4 py-2 text-xs font-bold text-emerald-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                  disabled={selectedOrder.billing.status !== "Paid"}
+                  onClick={() => {
+                    if (selectedOrder.billing.status !== "Paid") return
+                    setShowImportAllModal(selectedOrder)
+                  }}
+                  title={
+                    selectedOrder.billing.status !== "Paid"
+                      ? "Action Restricted: Billing payment is pending at reception desk"
+                      : "Batch enter results for all ordered tests"
+                  }
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm ${
+                    selectedOrder.billing.status === "Paid"
+                      ? "text-emerald-950 bg-emerald-400 hover:bg-emerald-300 cursor-pointer"
+                      : "text-gray-400 bg-slate-800 border border-slate-700 cursor-not-allowed opacity-60"
+                  }`}
                 >
                   <span>⚡</span> Import All Test Results
                 </button>
@@ -545,15 +533,9 @@ export default function Laboratory({
                     Ordered Investigations ({selectedOrder.tests.length})
                   </h3>
                   <span className="text-xs text-gray-500">
-                    Doctor prescribed & specimen bench add-on investigations
+                    Doctor prescribed investigations
                   </span>
                 </div>
-                <button
-                  onClick={() => setShowAddTestModal(selectedOrder)}
-                  className="px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
-                >
-                  <span>➕</span> Add Test
-                </button>
               </div>
 
               <div className="border border-gray-200 rounded-lg overflow-hidden shadow-2xs">
@@ -945,15 +927,6 @@ export default function Laboratory({
         <CompleteLabReportModal
           order={showCompleteReportModal}
           onClose={() => setShowCompleteReportModal(null)}
-        />
-      )}
-
-      {/* 4. Add Test Manually Modal */}
-      {showAddTestModal && (
-        <AddTestModal
-          order={showAddTestModal}
-          onClose={() => setShowAddTestModal(null)}
-          onAddTest={handleAddTestManually}
         />
       )}
 
