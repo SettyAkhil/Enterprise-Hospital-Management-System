@@ -1954,6 +1954,8 @@ export default function App() {
                       c.key === item.key ||
                       (item.key === "reports" &&
                         userPermissions.includes("reports")) ||
+                      (item.key === "insurance" &&
+                        userPermissions.includes("insurance")) ||
                       !subModulesGranted ||
                       userPermissions.includes(c.key),
                   )

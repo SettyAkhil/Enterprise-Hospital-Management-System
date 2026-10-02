@@ -34,7 +34,8 @@ export interface AppUser {
 // v18: Insurance split into dashboard, work desk, pre-auth, claims, queries,
 //      settlements, reconciliation and five master pages.
 // v19: insurance.* action permissions; Insurance Officer, Finance and Billing roles.
-const ROLES_STORAGE_KEY = "hospai_rbac_roles_v19"
+// v20: Added dedicated Email & TPA Decision Hub (insurance_emails) to Insurance suite.
+const ROLES_STORAGE_KEY = "hospai_rbac_roles_v20"
 
 const USERS_STORAGE_KEY = "hospai_rbac_users_v2"
 
