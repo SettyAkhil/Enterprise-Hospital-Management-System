@@ -2454,6 +2454,7 @@ export default function App() {
                     else if (page === "preauth") setModule("insurance_preauth" as any)
                     else if (page === "intake") setModule("insurance_eligibility" as any)
                     else if (page === "claims") setModule("insurance_claims" as any)
+                    else if (page === "emails") setModule("insurance_emails" as any)
                     else if (page === "settlements") setModule("insurance_settlement" as any)
                     else if (page === "masters") setModule("insurance_masters" as any)
                     else if (page === "case" && caseId) {
