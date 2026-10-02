@@ -10,7 +10,10 @@ import { AuditTable, BillLines, Consumption, Readiness } from "./widgets"
 // One claim. Left: where it is in the 8-stage process. Right: the one thing
 // to do now, with documents, emails, details and history a tab away.
 
-const TABS = ["Current step", "Documents", "Emails", "Details", "History"] as const
+import ClaimPharmacyBillsView from "./ClaimPharmacyBillsView"
+import ClaimPatientJourneyView from "./ClaimPatientJourneyView"
+
+const TABS = ["Current step", "Bills & Pharmacy", "Patient Journey", "Documents", "Emails", "Details", "History"] as const
 type Tab = (typeof TABS)[number]
 
 export default function ClaimWorkspace({ c, notify, onBack, onOpenBilling }: { c: ComprehensiveClaimRecord; notify: Notify; onBack: () => void; onOpenBilling?: () => void }) {
@@ -120,6 +123,18 @@ export default function ClaimWorkspace({ c, notify, onBack, onOpenBilling }: { c
                 {["TREATMENT_IN_PROGRESS", "DISCHARGE_INITIATED", "FINAL_BILL_READY"].includes(c.status) && <Readiness c={c} />}
                 <NextStep key={`${c.id}-${c.status}`} c={c} notify={notify} onOpenBilling={onOpenBilling} />
               </div>
+            )}
+
+            {tab === "Bills & Pharmacy" && (
+              <ClaimPharmacyBillsView
+                c={c}
+                notify={notify}
+                onOpenEnhancement={() => setTab("Current step")}
+              />
+            )}
+
+            {tab === "Patient Journey" && (
+              <ClaimPatientJourneyView c={c} />
             )}
 
             {tab === "Documents" && <DocumentChecklist c={c} notify={notify} />}
