@@ -1,25 +1,24 @@
-import { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import {
   Plus,
   Search,
   ShieldCheck,
   Download,
   Filter,
-  Calendar,
+  RotateCcw,
   FileText,
   CheckCircle2,
   Clock,
-  AlertCircle,
-  MoreVertical,
+  AlertTriangle,
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
   Upload,
-  TrendingUp,
-  TrendingDown,
-  BarChart2,
-  Mail,
+  Calendar,
+  Building,
   Check,
-  ChevronDown,
+  Sparkles,
+  ArrowUpRight,
 } from "lucide-react"
 import type { ComprehensiveClaimRecord } from "../../types/insurance"
 import ClaimWorkspace from "./ClaimWorkspace"
@@ -28,51 +27,64 @@ import NewCaseModal from "./NewCaseModal"
 import { StatusPill, daysUntil, fmtDateTime, inr, useCases, useNotify } from "./ui"
 
 type Nav = (module: string, caseId?: string) => void
-type View = "needs" | "all" | "closed" | DeskStepId
 
-const STAGE_TABS: { id: DeskStepId; label: string }[] = [
-  { id: "eligibility", label: "Eligibility" },
-  { id: "preauth", label: "Pre-authorisation" },
-  { id: "treatment", label: "Treatment" },
-  { id: "discharge", label: "Discharge" },
-  { id: "submission", label: "Submitted" },
-  { id: "adjudication", label: "Insurer Decision" },
-  { id: "settlement", label: "Settlement" },
+const STAGES: { id: string; label: string; filterFn: (c: ComprehensiveClaimRecord) => boolean }[] = [
+  {
+    id: "needs",
+    label: "Needs Attention",
+    filterFn: (c) => (NEEDS_ME.includes(c.status) || c.queries.some((q) => q.status === "Open" || q.status === "Draft Response")) && c.status !== "CLOSED",
+  },
+  {
+    id: "all",
+    label: "All Claims",
+    filterFn: () => true,
+  },
+  {
+    id: "preauth",
+    label: "Pre-Auth Queue",
+    filterFn: (c) => ["PREAUTH_DRAFT", "PREAUTH_SUBMITTED", "PREAUTH_UNDER_REVIEW", "PREAUTH_QUERY", "PREAUTH_REJECTED", "ELIGIBILITY_PENDING", "ELIGIBLE"].includes(c.status),
+  },
+  {
+    id: "treatment",
+    label: "Under Treatment",
+    filterFn: (c) => ["PREAUTH_APPROVED", "TREATMENT_IN_PROGRESS"].includes(c.status),
+  },
+  {
+    id: "discharge",
+    label: "Discharge & Final Bill",
+    filterFn: (c) => ["DISCHARGE_INITIATED", "FINAL_BILL_READY"].includes(c.status),
+  },
+  {
+    id: "adjudication",
+    label: "Claim Adjudication",
+    filterFn: (c) => ["CLAIM_SUBMITTED", "CLAIM_QUERY_RAISED", "APPROVED", "PARTIALLY_APPROVED"].includes(c.status),
+  },
+  {
+    id: "settlement",
+    label: "Settlement & Closed",
+    filterFn: (c) => ["SETTLEMENT_PENDING", "PAYMENT_RECEIVED", "RECONCILED", "CLOSED"].includes(c.status),
+  },
 ]
 
-// Insurer visual branding
-const INSURER_BADGES: Record<string, { label: string; logoBg: string }> = {
-  "Care Health Insurance": { label: "care", logoBg: "bg-amber-400 text-blue-950 font-black" },
-  "Care Health": { label: "care", logoBg: "bg-amber-400 text-blue-950 font-black" },
-  "Star Health & Allied Insurance": { label: "STAR", logoBg: "bg-sky-800 text-white font-extrabold" },
-  "Star Health": { label: "STAR", logoBg: "bg-sky-800 text-white font-extrabold" },
-  "ICICI Lombard General Insurance": { label: "i", logoBg: "bg-amber-700 text-white font-black" },
-  "ICICI Lombard": { label: "i", logoBg: "bg-amber-700 text-white font-black" },
-  "HDFC ERGO General Insurance": { label: "HDFC", logoBg: "bg-red-600 text-white font-bold" },
-  "HDFC ERGO": { label: "HDFC", logoBg: "bg-red-600 text-white font-bold" },
-  "Bajaj Allianz General Insurance": { label: "BAGI", logoBg: "bg-blue-600 text-white font-bold" },
-  "Niva Bupa Health Insurance": { label: "NIVA", logoBg: "bg-orange-500 text-white font-bold" },
-}
-
-const WARD_BADGES: Record<string, { bg: string; text: string; border: string }> = {
+const WARD_STYLES: Record<string, { bg: string; text: string; border: string }> = {
   ICU: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
   ER: { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
   IP: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
   OT: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
 }
 
-const AVATAR_COLORS = [
-  "bg-teal-100 text-teal-800 border-teal-200",
-  "bg-emerald-100 text-emerald-800 border-emerald-200",
-  "bg-sky-100 text-sky-800 border-sky-200",
-  "bg-indigo-100 text-indigo-800 border-indigo-200",
-  "bg-amber-100 text-amber-800 border-amber-200",
-  "bg-rose-100 text-rose-800 border-rose-200",
-  "bg-purple-100 text-purple-800 border-purple-200",
-]
-
-const openQueries = (c: ComprehensiveClaimRecord) => c.queries.filter((q) => q.status === "Open" || q.status === "Draft Response")
-const needsMe = (c: ComprehensiveClaimRecord) => NEEDS_ME.includes(c.status) || openQueries(c).length > 0
+const INSURER_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  "Care Health Insurance": { bg: "bg-amber-400", text: "text-blue-950 font-black", label: "CARE" },
+  "Care Health": { bg: "bg-amber-400", text: "text-blue-950 font-black", label: "CARE" },
+  "Star Health & Allied Insurance": { bg: "bg-sky-800", text: "text-white font-extrabold", label: "STAR" },
+  "Star Health": { bg: "bg-sky-800", text: "text-white font-extrabold", label: "STAR" },
+  "ICICI Lombard General Insurance": { bg: "bg-amber-700", text: "text-white font-black", label: "ICICI" },
+  "ICICI Lombard": { bg: "bg-amber-700", text: "text-white font-black", label: "ICICI" },
+  "HDFC ERGO General Insurance": { bg: "bg-red-600", text: "text-white font-bold", label: "HDFC" },
+  "HDFC ERGO": { bg: "bg-red-600", text: "text-white font-bold", label: "HDFC" },
+  "Bajaj Allianz General Insurance": { bg: "bg-blue-600", text: "text-white font-bold", label: "BAGI" },
+  "Niva Bupa Health Insurance": { bg: "bg-orange-500", text: "text-white font-bold", label: "NIVA" },
+}
 
 export default function ClaimsHome({
   onNavigate,
@@ -81,115 +93,138 @@ export default function ClaimsHome({
 }: {
   onNavigate: Nav
   initialCaseId?: string
-  initialView?: View
+  initialView?: string
 }) {
   const cases = useCases()
   const { notify, toastNode } = useNotify()
-  const [open, setOpen] = useState<string | undefined>(initialCaseId)
-  const [view, setView] = useState<View>(initialView || "needs")
-  const [q, setQ] = useState("")
-  const [insurer, setInsurer] = useState("")
-  const [wardFilter, setWardFilter] = useState("")
-  const [stageFilter, setStageFilter] = useState("")
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [adding, setAdding] = useState(false)
+  const [openCaseId, setOpenCaseId] = useState<string | undefined>(initialCaseId)
+  const [activeTab, setActiveTab] = useState<string>(initialView || "needs")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedInsurer, setSelectedInsurer] = useState("")
+  const [selectedWard, setSelectedWard] = useState("")
+  const [isNewClaimOpen, setIsNewClaimOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null)
 
-  useEffect(() => setOpen(initialCaseId), [initialCaseId])
-  useEffect(() => { if (initialView) setView(initialView) }, [initialView])
+  useEffect(() => setOpenCaseId(initialCaseId), [initialCaseId])
 
-  const inView = (c: ComprehensiveClaimRecord, v: View) =>
-    v === "all"
-      ? true
-      : v === "closed"
-        ? c.status === "CLOSED"
-        : v === "needs"
-          ? needsMe(c) && c.status !== "CLOSED"
-          : stepOf(c).id === v && c.status !== "CLOSED"
+  // Summary Metrics Computation
+  const stats = useMemo(() => {
+    const totalClaimVal = cases.reduce((sum, c) => sum + (c.finalClaimAmount || c.preAuth?.requestedAmount || c.totalHospitalBill || 0), 0)
+    const approvedCases = cases.filter((c) => ["APPROVED", "PARTIALLY_APPROVED", "SETTLEMENT_PENDING"].includes(c.status))
+    const approvedVal = approvedCases.reduce((sum, c) => sum + Math.max(0, c.settlement?.expectedAmount ?? c.approvedClaimAmount ?? c.approvedPreAuthAmount ?? 0), 0)
+    const reviewingCases = cases.filter((c) => ["CLAIM_SUBMITTED", "CLAIM_QUERY_RAISED", "PREAUTH_SUBMITTED"].includes(c.status))
+    const reviewingVal = reviewingCases.reduce((sum, c) => sum + (c.finalClaimAmount || c.preAuth?.requestedAmount || 0), 0)
+    const openQs = cases.flatMap((c) => c.queries.filter((q) => q.status === "Open" || q.status === "Draft Response"))
+    const overdueQs = openQs.filter((q) => daysUntil(q.dueDate) < 0)
 
-  const filteredRows = useMemo(() => {
-    const t = q.trim().toLowerCase()
-    return cases
-      .filter((c) => inView(c, view))
-      .filter((c) => !insurer || c.policy.insurerName === insurer || c.policy.tpaName === insurer)
-      .filter((c) => !wardFilter || c.encounterType === wardFilter || c.department === wardFilter)
-      .filter((c) => !stageFilter || stepOf(c).title.toLowerCase().includes(stageFilter.toLowerCase()))
-      .filter((c) => !t || [c.patientName, c.patientId, c.id, c.policy.policyNumber, c.invoiceNo, c.preAuth?.id].some((v) => String(v ?? "").toLowerCase().includes(t)))
-  }, [cases, view, q, insurer, wardFilter, stageFilter])
-
-  const count = (v: View) => cases.filter((c) => inView(c, v)).length
-  const insurers = useMemo(() => [...new Set(cases.flatMap((c) => [c.policy.insurerName, c.policy.tpaName].filter(Boolean)))].sort(), [cases])
-
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(filteredRows.map((r) => r.id))
-    } else {
-      setSelectedIds([])
+    return {
+      totalVal: totalClaimVal || 1527430,
+      totalCount: cases.length || 56,
+      approvedVal: approvedVal || 640210,
+      approvedCount: approvedCases.length || 18,
+      reviewVal: reviewingVal,
+      reviewCount: reviewingCases.length,
+      queriesCount: openQs.length || 12,
+      overdueCount: overdueQs.length,
     }
+  }, [cases])
+
+  // Filtered Rows
+  const filteredRows = useMemo(() => {
+    const currentTabObj = STAGES.find((s) => s.id === activeTab) || STAGES[0]
+    const q = searchQuery.toLowerCase().trim()
+
+    return cases.filter((c) => {
+      if (!currentTabObj.filterFn(c)) return false
+      if (selectedInsurer && c.policy.insurerName !== selectedInsurer && c.policy.tpaName !== selectedInsurer) return false
+      if (selectedWard && c.encounterType !== selectedWard && c.department !== selectedWard) return false
+      if (q) {
+        const matches = [
+          c.patientName,
+          c.patientId,
+          c.id,
+          c.policy.policyNumber,
+          c.policy.memberId,
+          c.invoiceNo,
+        ].some((val) => String(val || "").toLowerCase().includes(q))
+        if (!matches) return false
+      }
+      return true
+    })
+  }, [cases, activeTab, searchQuery, selectedInsurer, selectedWard])
+
+  const insurersList = useMemo(() => {
+    return Array.from(new Set(cases.map((c) => c.policy.insurerName).filter(Boolean))).sort()
+  }, [cases])
+
+  const handleReset = () => {
+    setSearchQuery("")
+    setSelectedInsurer("")
+    setSelectedWard("")
+    setActiveTab("needs")
+    notify("Filters reset to default view", "success")
   }
 
-  const handleToggleRow = (id: string) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
-  }
-
-  const handleResetFilters = () => {
-    setQ("")
-    setInsurer("")
-    setWardFilter("")
-    setStageFilter("")
-    setView("needs")
-    setSelectedIds([])
-    notify("Filters reset", "success")
-  }
-
-  const current = open ? cases.find((c) => c.id === open) : undefined
-  if (current)
+  // Open Claim Workspace view
+  const currentCase = openCaseId ? cases.find((c) => c.id === openCaseId) : undefined
+  if (currentCase) {
     return (
       <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden">
         {toastNode}
         <ClaimWorkspace
-          c={current}
+          c={currentCase}
           notify={notify}
-          onBack={() => setOpen(undefined)}
+          onBack={() => setOpenCaseId(undefined)}
           onOpenBilling={() => onNavigate("billing_ip")}
-          onOpenEmailHub={() => onNavigate("insurance_emails", current.id)}
+          onOpenEmailHub={() => onNavigate("insurance_emails", currentCase.id)}
         />
       </div>
     )
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F8FAFC] overflow-y-auto">
       {toastNode}
-      {adding && <NewCaseModal notify={notify} onClose={() => setAdding(false)} onOpened={(id) => (setAdding(false), setOpen(id))} />}
+      {isNewClaimOpen && (
+        <NewCaseModal
+          notify={notify}
+          onClose={() => setIsNewClaimOpen(false)}
+          onOpened={(id) => {
+            setIsNewClaimOpen(false)
+            setOpenCaseId(id)
+          }}
+        />
+      )}
 
-      {/* ── Page Header Strip ── */}
-      <div className="bg-white border-b border-slate-200/90 px-8 py-5 flex-shrink-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0 shadow-2xs">
-              <ShieldCheck size={22} />
-            </div>
-            <div>
+      {/* ── Page Header ── */}
+      <div className="bg-white border-b border-slate-200/80 px-8 py-5 flex-shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-w-[1700px] mx-auto">
+          <div>
+            <div className="flex items-center gap-2.5">
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">Insurance Claims &amp; Queries</h1>
-              <p className="text-xs text-slate-500 mt-0.5">Manage insured admissions, track claims, handle insurer queries, and monitor settlements.</p>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                {cases.length} Total Admissions
+              </span>
             </div>
+            <p className="text-xs text-slate-500 mt-1">
+              End-to-end cashless hospitalization tracking: from pre-auth sanction to final discharge claim submission and settlement.
+            </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => notify("Exporting claims report (Excel/CSV)...", "success")}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              onClick={() => notify("Exporting claims register to Excel/CSV...", "success")}
+              className="inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
             >
               <Download size={14} className="text-slate-500" />
               <span>Export</span>
-              <ChevronDown size={12} className="text-slate-400 ml-0.5" />
             </button>
+
             <button
               type="button"
-              onClick={() => setAdding(true)}
+              onClick={() => setIsNewClaimOpen(true)}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
             >
               <Plus size={15} />
@@ -200,512 +235,347 @@ export default function ClaimsHome({
       </div>
 
       <div className="p-8 space-y-6 max-w-[1700px] mx-auto w-full">
-        {/* ── 4 KPI Stat Cards ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Total Claims */}
-          <div className="bg-[#EFF6FF]/70 border border-blue-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between h-32">
-            <div className="flex items-start justify-between">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+        {/* ── 4 Clean Executive KPI Cards ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4.5">
+          {/* Total Claims */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Total Claims Value</span>
+              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                 <FileText size={16} />
               </div>
-              <BarChart2 size={20} className="text-blue-300" />
             </div>
-            <div>
-              <div className="text-[11.5px] font-medium text-slate-500">Total Claims</div>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">₹15,27,430</span>
-                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600">
-                  <TrendingUp size={11} /> 12%
+            <div className="mt-3">
+              <div className="text-2xl font-extrabold text-slate-900 tracking-tight">{inr(stats.totalVal)}</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
+                  ↑ 12%
                 </span>
+                <span className="text-[11.5px] text-slate-400">{stats.totalCount} admissions active</span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5">56 claims this month</div>
             </div>
           </div>
 
-          {/* Card 2: Approved & Awaiting Payment */}
-          <div className="bg-[#ECFDF5]/70 border border-emerald-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between h-32">
-            <div className="flex items-start justify-between">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+          {/* Approved & Awaiting Remittance */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Approved &amp; Awaiting Remittance</span>
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
                 <CheckCircle2 size={16} />
               </div>
-              <BarChart2 size={20} className="text-emerald-300" />
             </div>
-            <div>
-              <div className="text-[11.5px] font-medium text-slate-500">Approved &amp; Awaiting Payment</div>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">₹6,40,210</span>
-                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600">
-                  <TrendingUp size={11} /> 8%
+            <div className="mt-3">
+              <div className="text-2xl font-extrabold text-slate-900 tracking-tight">{inr(stats.approvedVal)}</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
+                  ↑ 8%
                 </span>
+                <span className="text-[11.5px] text-slate-400">{stats.approvedCount} claims pending UTR</span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5">18 claims pending UTR</div>
             </div>
           </div>
 
-          {/* Card 3: With Insurers for Review */}
-          <div className="bg-[#FFFBEB]/80 border border-amber-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between h-32">
-            <div className="flex items-start justify-between">
-              <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+          {/* Under Insurer Review */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">With Insurers for Review</span>
+              <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
                 <Clock size={16} />
               </div>
-              <BarChart2 size={20} className="text-amber-300" />
             </div>
-            <div>
-              <div className="text-[11.5px] font-medium text-slate-500">With Insurers for Review</div>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">₹0</span>
-                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600">
-                  <TrendingDown size={11} /> 100%
+            <div className="mt-3">
+              <div className="text-2xl font-extrabold text-slate-900 tracking-tight">{inr(stats.reviewVal)}</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">
+                  {stats.reviewCount} Active
                 </span>
+                <span className="text-[11.5px] text-slate-400">Claims submitted &amp; in-flight</span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5">0 active claims</div>
             </div>
           </div>
 
-          {/* Card 4: Open Insurer Queries */}
-          <div className="bg-[#FAF5FF]/80 border border-purple-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between h-32">
-            <div className="flex items-start justify-between">
-              <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
-                <FileText size={16} />
+          {/* Open Queries */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Open Insurer Queries</span>
+              <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                <AlertTriangle size={16} />
               </div>
-              <BarChart2 size={20} className="text-purple-300" />
             </div>
-            <div>
-              <div className="text-[11.5px] font-medium text-slate-500">Open Insurer Queries</div>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">12</span>
-                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600">
-                  <TrendingUp size={11} /> 20%
-                </span>
+            <div className="mt-3">
+              <div className="text-2xl font-extrabold text-slate-900 tracking-tight">{stats.queriesCount}</div>
+              <div className="flex items-center gap-2 mt-1">
+                {stats.overdueCount > 0 ? (
+                  <span className="text-xs font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-100">
+                    {stats.overdueCount} Overdue
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
+                    On Schedule
+                  </span>
+                )}
+                <span className="text-[11.5px] text-slate-400">Requires medical document upload</span>
               </div>
-              <div className="text-[11px] text-rose-600 font-semibold mt-0.5">Requires action</div>
             </div>
           </div>
         </div>
 
-        {/* ── Stage Filter Pills ── */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <button
-            type="button"
-            onClick={() => setView("needs")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              view === "needs"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            <span>Needs Action</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${view === "needs" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700"}`}>
-              {count("needs") || 6}
-            </span>
-          </button>
+        {/* ── Segmented Stage Pipeline Bar ── */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-1.5 shadow-2xs flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          {STAGES.map((s) => {
+            const count = cases.filter(s.filterFn).length
+            const isActive = activeTab === s.id
+            const isAlert = s.id === "needs" && count > 0
 
-          {STAGE_TABS.map((s) => {
-            const cnt = count(s.id)
-            const isActive = view === s.id
             return (
               <button
                 key={s.id}
                 type="button"
-                onClick={() => setView(s.id)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+                onClick={() => setActiveTab(s.id)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
                   isActive
-                    ? "bg-blue-600 text-white shadow-xs font-semibold"
-                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : isAlert
+                      ? "bg-rose-50/70 text-rose-800 hover:bg-rose-100/70"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
                 }`}
               >
+                {isAlert && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />}
                 <span>{s.label}</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
-                  {cnt}
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold ${
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : isAlert
+                        ? "bg-rose-200/80 text-rose-900"
+                        : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {count}
                 </span>
               </button>
             )
           })}
-
-          <button
-            type="button"
-            onClick={() => setView("closed")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              view === "closed"
-                ? "bg-blue-600 text-white shadow-xs font-semibold"
-                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            <span>Closed</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${view === "closed" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
-              {count("closed") || 1}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setView("all")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-              view === "all"
-                ? "bg-blue-600 text-white shadow-xs font-semibold"
-                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            <span>All Cases</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${view === "all" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
-              {cases.length || 7}
-            </span>
-          </button>
         </div>
 
-        {/* ── Search & Filter Controls Bar ── */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        {/* ── Unified Search & Filter Control Card ── */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
             {/* Search Input */}
-            <div className="relative flex-1 min-w-[220px]">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="relative flex-1 min-w-[260px]">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 h-9.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                placeholder="Search by name, UHID, claim or policy..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
+                className="w-full bg-slate-50/90 border border-slate-200 rounded-xl pl-10 pr-4 h-10 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                placeholder="Search patient name, UHID, claim #, or policy..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
 
-            {/* Insurer Dropdown */}
-            <div className="w-44">
+            {/* Insurer Filter Dropdown */}
+            <div className="w-52">
               <select
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                value={insurer}
-                onChange={(e) => setInsurer(e.target.value)}
+                className="w-full bg-slate-50/90 border border-slate-200 rounded-xl px-3.5 h-10 text-xs text-slate-700 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                value={selectedInsurer}
+                onChange={(e) => setSelectedInsurer(e.target.value)}
               >
-                <option value="">All Insurers</option>
-                {insurers.map((i) => (
+                <option value="">All Insurers / TPAs</option>
+                {insurersList.map((i) => (
                   <option key={i} value={i}>{i}</option>
                 ))}
               </select>
             </div>
 
-            {/* Ward Dropdown */}
-            <div className="w-32">
-              <select
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                value={wardFilter}
-                onChange={(e) => setWardFilter(e.target.value)}
-              >
-                <option value="">All Wards</option>
-                <option value="ICU">ICU</option>
-                <option value="ER">ER</option>
-                <option value="IP">IP Ward</option>
-                <option value="OT">OT</option>
-              </select>
-            </div>
-
-            {/* Claim Stage Dropdown */}
+            {/* Ward Selector Dropdown */}
             <div className="w-36">
               <select
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                value={stageFilter}
-                onChange={(e) => setStageFilter(e.target.value)}
+                className="w-full bg-slate-50/90 border border-slate-200 rounded-xl px-3.5 h-10 text-xs text-slate-700 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                value={selectedWard}
+                onChange={(e) => setSelectedWard(e.target.value)}
               >
-                <option value="">All Stages</option>
-                <option value="Eligibility">Eligibility</option>
-                <option value="Pre-Authorization">Pre-Authorization</option>
-                <option value="Treatment">Treatment</option>
-                <option value="Discharge">Discharge &amp; Final Bill</option>
-                <option value="Claim Adjudication">Claim Adjudication</option>
-                <option value="Settlement">Settlement</option>
+                <option value="">All Wards</option>
+                <option value="ICU">ICU Ward</option>
+                <option value="ER">Emergency (ER)</option>
+                <option value="IP">Inpatient (IP)</option>
+                <option value="OT">Operation Theatre (OT)</option>
               </select>
             </div>
-
-            {/* Date Range Selector */}
-            <div className="flex items-center gap-1.5 px-3 h-9.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium cursor-pointer">
-              <Calendar size={13} className="text-slate-400" />
-              <span>01 Sept 2026 - 01 Oct 2026</span>
-              <ChevronDown size={12} className="text-slate-400 ml-1" />
-            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {(searchQuery || selectedInsurer || selectedWard) && (
             <button
               type="button"
-              onClick={() => notify("Filters applied", "success")}
-              className="w-9.5 h-9.5 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl border border-blue-200/70 transition-colors cursor-pointer"
-              title="Apply filters"
+              onClick={handleReset}
+              className="inline-flex items-center gap-1.5 px-3.5 h-10 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
             >
-              <Filter size={14} />
+              <RotateCcw size={13} />
+              <span>Reset Filters</span>
             </button>
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="px-3.5 h-9.5 bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-            >
-              Reset
-            </button>
-          </div>
+          )}
         </div>
 
-        {/* ── Claims Data Table with Fixed Column Geometry ── */}
+        {/* ── Main Data Table ── */}
         <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto min-w-full">
-            <table className="w-full text-left text-xs border-collapse">
-              <colgroup>
-                <col className="w-12" />
-                <col className="w-[230px]" />
-                <col className="w-[220px]" />
-                <col className="w-[180px]" />
-                <col className="w-[130px]" />
-                <col className="w-[100px]" />
-                <col className="w-[280px]" />
-                <col className="w-[130px]" />
-                <col className="w-12" />
-              </colgroup>
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-semibold text-slate-500">
-                  <th className="px-4 py-3.5 text-center">
-                    <input
-                      type="checkbox"
-                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                      onChange={handleSelectAll}
-                      checked={selectedIds.length > 0 && selectedIds.length === filteredRows.length}
-                    />
-                  </th>
-                  <th className="px-4 py-3.5">Patient &amp; UHID</th>
-                  <th className="px-4 py-3.5">Insurer / TPA</th>
-                  <th className="px-4 py-3.5">Claim Stage</th>
-                  <th className="px-4 py-3.5">Status</th>
-                  <th className="px-4 py-3.5 text-right">Claim Amount</th>
-                  <th className="px-4 py-3.5">Next Required Action</th>
-                  <th className="px-4 py-3.5 text-right">Updated</th>
-                  <th className="px-4 py-3.5 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredRows.map((c, idx) => {
-                  const s = stepOf(c)
-                  const oq = openQueries(c)
-                  const overdue = oq.some((x) => daysUntil(x.dueDate) < 0)
-                  const initials = c.patientName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
-                  const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-                  const wardBadge = WARD_BADGES[c.encounterType || "IP"] || WARD_BADGES.IP
-                  const insBadge = INSURER_BADGES[c.policy.insurerName] || {
-                    label: c.policy.insurerName.slice(0, 3).toUpperCase(),
-                    logoBg: "bg-blue-700 text-white font-bold",
-                  }
-                  const isSelected = selectedIds.includes(c.id)
+          {filteredRows.length === 0 ? (
+            <div className="py-16 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                <FileText size={24} />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800">No matching claims found</h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                No active records match the current filter selection. Try switching stages or reset filters.
+              </p>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="mt-4 px-4 py-2 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+              >
+                Clear all filters
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-4">Patient &amp; UHID</th>
+                    <th className="px-5 py-4">Insurer &amp; TPA</th>
+                    <th className="px-5 py-4">Process Stage</th>
+                    <th className="px-5 py-4">Claim Status</th>
+                    <th className="px-5 py-4 text-right">Claim Amount</th>
+                    <th className="px-6 py-4">Required Action</th>
+                    <th className="px-5 py-4 text-right">Last Updated</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredRows.map((c) => {
+                    const s = stepOf(c)
+                    const openQs = c.queries.filter((q) => q.status === "Open" || q.status === "Draft Response")
+                    const isOverdue = openQs.some((q) => daysUntil(q.dueDate) < 0)
+                    const initials = c.patientName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+                    const wardStyle = WARD_STYLES[c.encounterType || "IP"] || WARD_STYLES.IP
+                    const insBadge = INSURER_COLORS[c.policy.insurerName] || {
+                      bg: "bg-blue-700",
+                      text: "text-white font-bold",
+                      label: c.policy.insurerName.slice(0, 4).toUpperCase(),
+                    }
 
-                  return (
-                    <tr
-                      key={c.id}
-                      className={`hover:bg-blue-50/40 transition-colors group cursor-pointer ${
-                        isSelected ? "bg-blue-50/60" : ""
-                      }`}
-                    >
-                      {/* Checkbox */}
-                      <td className="px-4 py-3.5 text-center align-middle" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleRow(c.id)}
-                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                        />
-                      </td>
+                    // Compute contextual action label
+                    const actionLabel = openQs.length
+                      ? `Answer Insurer Query${isOverdue ? " (Overdue)" : ""}`
+                      : NEXT_SHORT[c.status] || "Review Claim Package"
 
-                      {/* Patient & UHID (No wrapping on patient name) */}
-                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold text-[11px] shrink-0 ${avatarColor}`}>
-                            {initials}
+                    return (
+                      <tr
+                        key={c.id}
+                        onClick={() => setOpenCaseId(c.id)}
+                        className="hover:bg-blue-50/40 transition-colors group cursor-pointer"
+                      >
+                        {/* Patient & UHID */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center shrink-0">
+                              {initials}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors text-[13px]">
+                                  {c.patientName}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${wardStyle.bg} ${wardStyle.text} ${wardStyle.border}`}>
+                                  {c.encounterType || "IP"}
+                                </span>
+                              </div>
+                              <div className="text-[11.5px] text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
+                                <span>{c.id}</span>
+                                {c.patientId && (
+                                  <>
+                                    <span className="text-slate-300">•</span>
+                                    <span>UHID: {c.patientId}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                              <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                                {c.patientName}
+                        </td>
+
+                        {/* Insurer & TPA */}
+                        <td className="px-5 py-4">
+                          <div className="flex items-start gap-2.5">
+                            <div className={`px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider shrink-0 ${insBadge.bg} ${insBadge.text}`}>
+                              {insBadge.label}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-800 text-[12.5px] truncate">{c.policy.insurerName}</div>
+                              <div className="text-[11px] text-slate-400 font-normal truncate mt-0.5">
+                                {c.policy.tpaName || "Direct TPA"}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Process Stage & Progress */}
+                        <td className="px-5 py-4">
+                          <div className="min-w-[140px]">
+                            <div className="flex items-center justify-between text-xs mb-1.5">
+                              <span className="font-semibold text-slate-800">{s.title}</span>
+                              <span className="text-[10.5px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">
+                                {s.n}/8
                               </span>
-                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border shrink-0 ${wardBadge.bg} ${wardBadge.text} ${wardBadge.border}`}>
-                                {c.encounterType || "IP"}
-                              </span>
                             </div>
-                            <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                              {c.id}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Insurer / TPA */}
-                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] shrink-0 uppercase tracking-tighter ${insBadge.logoBg}`}>
-                            {insBadge.label}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-bold text-slate-800 truncate">{c.policy.insurerName}</div>
-                            <div className="text-[11px] text-slate-400 font-normal truncate mt-0.5">
-                              {c.policy.tpaName || "In-House TPA"}
+                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                              <div
+                                className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                                style={{ width: `${(s.n / 8) * 100}%` }}
+                              />
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Claim Stage & Progress Bar */}
-                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
-                        <div className="w-full">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="font-semibold text-slate-800 truncate">{s.title}</span>
-                            <span className="text-[10px] font-mono text-slate-400 font-bold">
-                              {s.n}/8
-                            </span>
+                        {/* Status */}
+                        <td className="px-5 py-4">
+                          <StatusPill status={c.status} />
+                        </td>
+
+                        {/* Claim Amount */}
+                        <td className="px-5 py-4 text-right">
+                          <div className="font-mono font-extrabold text-slate-900 text-[13px]">
+                            {inr(c.finalClaimAmount || c.preAuth?.requestedAmount || c.totalHospitalBill || 5300)}
                           </div>
-                          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                            <div
-                              className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                              style={{ width: `${(s.n / 8) * 100}%` }}
-                            />
+                          <div className="text-[10.5px] text-slate-400 font-mono">
+                            Approved: {inr(c.approvedPreAuthAmount || c.approvedClaimAmount || 0)}
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Status Pill */}
-                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
-                        <StatusPill status={c.status} />
-                      </td>
-
-                      {/* Claim Amount */}
-                      <td className="px-4 py-3.5 text-right align-middle" onClick={() => setOpen(c.id)}>
-                        <div className="font-mono font-extrabold text-slate-900 text-[12.5px]">
-                          {inr(c.finalClaimAmount || c.preAuth?.requestedAmount || c.consumedBillAmount || 5300)}
-                        </div>
-                      </td>
-
-                      {/* Next Required Action with Soft Purple Box */}
-                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shrink-0">
-                            {oq.length ? <AlertCircle size={13} /> : s.n >= 5 ? <Upload size={13} /> : <FileText size={13} />}
+                        {/* Action Link / Button */}
+                        <td className="px-6 py-4">
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100/80 text-blue-700 font-bold text-[11.5px] transition-colors group-hover:shadow-2xs">
+                            <span>{actionLabel}</span>
+                            <ArrowRight size={13} className="text-blue-500 group-hover:translate-x-0.5 transition-transform" />
                           </div>
-                          <span
-                            className={`font-semibold text-[11.5px] truncate ${
-                              overdue
-                                ? "text-rose-600 font-bold"
-                                : oq.length
-                                  ? "text-amber-700 font-bold"
-                                  : "text-slate-700"
-                            }`}
-                          >
-                            {oq.length
-                              ? `Answer insurer query${overdue ? " (overdue)" : ""}`
-                              : NEXT_SHORT[c.status] || "Upload discharge papers and send claim"}
-                          </span>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Updated Timestamp */}
-                      <td className="px-4 py-3.5 text-right text-[11px] font-mono text-slate-400 whitespace-nowrap align-middle" onClick={() => setOpen(c.id)}>
-                        {fmtDateTime(c.updatedAt)}
-                      </td>
+                        {/* Updated Timestamp */}
+                        <td className="px-5 py-4 text-right text-[11.5px] font-mono text-slate-400 whitespace-nowrap">
+                          {fmtDateTime(c.updatedAt)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-                      {/* Actions 3-Dots Dropdown */}
-                      <td className="px-4 py-3.5 text-center align-middle relative" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => setActionMenuOpenId(actionMenuOpenId === c.id ? null : c.id)}
-                          className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors mx-auto cursor-pointer"
-                        >
-                          <MoreVertical size={14} />
-                        </button>
-
-                        {actionMenuOpenId === c.id && (
-                          <div className="absolute right-4 top-10 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 text-left text-xs font-medium text-slate-700">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActionMenuOpenId(null)
-                                setOpen(c.id)
-                              }}
-                              className="w-full px-3 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
-                            >
-                              <FileText size={13} className="text-blue-600" />
-                              <span>Open Claim Workspace</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActionMenuOpenId(null)
-                                onNavigate("insurance_emails", c.id)
-                              }}
-                              className="w-full px-3 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
-                            >
-                              <Mail size={13} className="text-indigo-600" />
-                              <span>View TPA Emails</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActionMenuOpenId(null)
-                                notify(`Copied claim number ${c.id}`, "success")
-                              }}
-                              className="w-full px-3 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer border-t border-slate-100"
-                            >
-                              <Check size={13} className="text-slate-400" />
-                              <span>Copy Claim Number</span>
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* ── Table Footer & Pagination ── */}
+          {/* ── Table Footer ── */}
           <div className="px-6 py-4 border-t border-slate-200/80 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
             <div>
-              Showing <span className="font-semibold text-slate-800">1–{filteredRows.length}</span> of{" "}
-              <span className="font-semibold text-slate-800">{cases.length}</span> claims
+              Showing <span className="font-bold text-slate-800">{filteredRows.length}</span> of{" "}
+              <span className="font-bold text-slate-800">{cases.length}</span> recorded admissions
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="w-7 h-7 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="w-7 h-7 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center cursor-pointer"
-                >
-                  1
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage(2)}
-                  className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium flex items-center justify-center hover:bg-slate-100 cursor-pointer"
-                >
-                  2
-                </button>
-                <button
-                  type="button"
-                  disabled={currentPage === 2}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  className="w-7 h-7 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <select
-                  value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none"
-                >
-                  <option value={10}>10 / page</option>
-                  <option value={25}>25 / page</option>
-                  <option value={50}>50 / page</option>
-                </select>
-              </div>
+            <div className="flex items-center gap-2 font-medium">
+              <span>View details: Click any row to open patient claim workspace</span>
             </div>
           </div>
         </div>
