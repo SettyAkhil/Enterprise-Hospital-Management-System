@@ -70,18 +70,29 @@ export default function ClaimWorkspace({
   return (
     <div className="flex-1 overflow-y-auto bg-[#F8FAFC]">
       {/* ── Top Header & Actions Bar ── */}
-      <div className="bg-white border-b border-slate-200/80 px-8 py-4">
-        <div className="flex items-center justify-between gap-4 mb-3">
-          {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-[12px] text-slate-400 font-medium">
-            <Home size={13} className="text-slate-400" />
-            <span className="text-slate-600 cursor-pointer hover:underline" onClick={onBack}>Home</span>
-            <span className="text-slate-300">&gt;</span>
-            <span className="text-slate-600 cursor-pointer hover:underline" onClick={onBack}>Insurance</span>
-            <span className="text-slate-300">&gt;</span>
-            <span className="text-slate-600 cursor-pointer hover:underline" onClick={onBack}>Claims &amp; Queries</span>
-            <span className="text-slate-300">&gt;</span>
-            <span className="text-slate-900 font-semibold">Claim Details</span>
+      <div className="bg-white border-b border-slate-200/80 px-8 py-4.5 sticky top-0 z-30 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-4 max-w-[1700px] mx-auto">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="w-9 h-9 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              title="Back to Claims Register"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">{c.patientName}</h1>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                  {c.id}
+                </span>
+                <StatusPill status={c.status} />
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {c.policy.insurerName} • Policy: <span className="font-mono text-slate-700 font-medium">{policyNum}</span> • Stage {stage.n}/8: {stage.title}
+              </p>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -89,38 +100,28 @@ export default function ClaimWorkspace({
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
             >
-              <Printer size={13} className="text-slate-500" />
-              <span>Print</span>
+              <Printer size={14} className="text-slate-500" />
+              <span>Print Dossier</span>
             </button>
             <button
               type="button"
               onClick={() => notify("Additional claim options opened", "success")}
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
             >
-              <MoreHorizontal size={14} className="text-slate-500" />
-              <span>More</span>
+              <MoreHorizontal size={15} className="text-slate-500" />
             </button>
             <button
               type="button"
               onClick={() => notify("Claim package sent to insurer gateway!", "success")}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
             >
               <span>Send to Insurer</span>
               <ArrowRight size={14} />
             </button>
           </div>
         </div>
-
-        {/* Back Link */}
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer mb-2"
-        >
-          <ArrowLeft size={13} /> Back to Claims
-        </button>
       </div>
 
       <div className="p-8 space-y-6 max-w-[1700px] mx-auto w-full">

@@ -436,6 +436,15 @@ export default function ClaimsHome({
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
+                <colgroup>
+                  <col style={{ width: "24%" }} />
+                  <col style={{ width: "18%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "8%" }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <th className="px-6 py-4">Patient &amp; UHID</th>
