@@ -164,8 +164,8 @@ const insuranceModule = (m: string): string =>
     ? "insurance_settlement"
     : m === "insurance_desk"
       ? "insurance_overview"
-      : m === "insurance" || m === "insurance_claims"
-        ? "insurance_board"
+      : m === "insurance" || m === "insurance_board"
+        ? "insurance_claims"
         : m
 
 
@@ -377,16 +377,11 @@ const NAV: NavItem[] = [
 
     children: [
       { key: "insurance_overview", label: "Command Dashboard" },
-      { key: "insurance_board", label: "Cashless Case Board" },
-      { key: "insurance_eligibility", label: "New Patient / Intake" },
-      { key: "insurance_preauth", label: "Pre-Authorization" },
       { key: "insurance_claims", label: "Claims & Queries" },
       { key: "insurance_emails", label: "Email & TPA Decision Hub" },
       { key: "insurance_settlement", label: "Settlements" },
-      { key: "insurance_packages", label: "Billing & Packages" },
       { key: "insurance_masters", label: "Master Data" },
       { key: "insurance_reports", label: "Reports" },
-      { key: "insurance_docrules", label: "Audit Log & Rules" },
     ],
 
 
