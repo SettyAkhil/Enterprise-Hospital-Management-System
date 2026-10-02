@@ -36,12 +36,12 @@ export function HospAILogo({
     return (
       <div
         style={containerStyle}
-        className={`inline-flex items-center shrink-0 select-none ${className}`}
+        className={`inline-flex items-center justify-center shrink-0 select-none ${className}`}
       >
         <img
           src={hospaiLogoImg}
           alt="HospAI"
-          className="h-full w-auto max-h-full object-contain drop-shadow-sm"
+          className="h-full w-auto max-h-full object-contain mx-auto drop-shadow-sm"
         />
       </div>
     )
