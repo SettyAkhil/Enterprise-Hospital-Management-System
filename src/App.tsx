@@ -246,8 +246,6 @@ const NAV: NavItem[] = [
     ],
   },
 
-  { key: "nursing", label: "Nursing", Icon: Syringe },
-
   { key: "laboratory", label: "Laboratory", Icon: FlaskConical },
 
   { key: "radiology", label: "Radiology", Icon: Scan },
