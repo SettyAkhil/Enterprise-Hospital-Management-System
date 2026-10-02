@@ -377,6 +377,7 @@ const NAV: NavItem[] = [
 
     children: [
       { key: "insurance_overview", label: "Command Dashboard" },
+      { key: "insurance_preauth", label: "Pre-Authorization" },
       { key: "insurance_claims", label: "Claims & Queries" },
       { key: "insurance_emails", label: "Email & TPA Decision Hub" },
       { key: "insurance_settlement", label: "Settlements" },
