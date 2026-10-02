@@ -2000,6 +2000,7 @@ export default function App() {
                               toggleExpand(item.key)
 
                               if (!expanded.includes(item.key)) {
+                                setInsuranceCaseId(undefined)
                                 if (item.key === "intelligence") {
                                   setModule("intelligence")
                                 } else {
@@ -2008,6 +2009,7 @@ export default function App() {
                               }
                             }
                           } else {
+                            setInsuranceCaseId(undefined)
                             setModule(item.key)
                           }
                         }}
@@ -2075,7 +2077,10 @@ export default function App() {
                                     ? "active"
                                     : ""
                                     }`}
-                                  onClick={() => setModule(child.key)}
+                                  onClick={() => {
+                                    setInsuranceCaseId(undefined)
+                                    setModule(child.key)
+                                  }}
                                 >
                                   {child.label}
                                 </div>
