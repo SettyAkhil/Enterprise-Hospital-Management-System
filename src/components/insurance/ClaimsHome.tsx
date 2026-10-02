@@ -5,7 +5,6 @@ import {
   ShieldCheck,
   Download,
   Filter,
-  RotateCcw,
   Calendar,
   FileText,
   CheckCircle2,
@@ -15,19 +14,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Upload,
-  ArrowUpRight,
   TrendingUp,
   TrendingDown,
   BarChart2,
   Mail,
   Home,
   Check,
+  ChevronDown,
 } from "lucide-react"
 import type { ComprehensiveClaimRecord } from "../../types/insurance"
 import ClaimWorkspace from "./ClaimWorkspace"
 import { NEEDS_ME, NEXT_SHORT, stepOf, type DeskStepId } from "./deskGuide"
 import NewCaseModal from "./NewCaseModal"
-import { StatusPill, btn, daysUntil, fieldBase, fmtDateTime, inr, useCases, useNotify } from "./ui"
+import { StatusPill, daysUntil, fmtDateTime, inr, useCases, useNotify } from "./ui"
 
 type Nav = (module: string, caseId?: string) => void
 type View = "needs" | "all" | "closed" | DeskStepId
@@ -42,28 +41,35 @@ const STAGE_TABS: { id: DeskStepId; label: string }[] = [
   { id: "settlement", label: "Settlement" },
 ]
 
-// Insurer visual badge styling
-const INSURER_BADGES: Record<string, { bg: string; text: string; label: string; logoBg: string }> = {
-  "Care Health Insurance": { bg: "bg-amber-400", text: "text-blue-950", label: "care", logoBg: "bg-amber-400 text-blue-950 font-black" },
-  "Care Health": { bg: "bg-amber-400", text: "text-blue-950", label: "care", logoBg: "bg-amber-400 text-blue-950 font-black" },
-  "Star Health & Allied Insurance": { bg: "bg-sky-800", text: "text-white", label: "STAR", logoBg: "bg-sky-800 text-white font-extrabold" },
-  "Star Health": { bg: "bg-sky-800", text: "text-white", label: "STAR", logoBg: "bg-sky-800 text-white font-extrabold" },
-  "ICICI Lombard General Insurance": { bg: "bg-amber-700", text: "text-white", label: "i", logoBg: "bg-amber-700 text-white font-black" },
-  "ICICI Lombard": { bg: "bg-amber-700", text: "text-white", label: "i", logoBg: "bg-amber-700 text-white font-black" },
-  "HDFC ERGO General Insurance": { bg: "bg-red-600", text: "text-white", label: "HDFC", logoBg: "bg-red-600 text-white font-bold" },
-  "HDFC ERGO": { bg: "bg-red-600", text: "text-white", label: "HDFC", logoBg: "bg-red-600 text-white font-bold" },
-  "Bajaj Allianz General Insurance": { bg: "bg-blue-600", text: "text-white", label: "BAGI", logoBg: "bg-blue-600 text-white font-bold" },
-  "Niva Bupa Health Insurance": { bg: "bg-orange-500", text: "text-white", label: "NIVA", logoBg: "bg-orange-500 text-white font-bold" },
+// Insurer visual branding
+const INSURER_BADGES: Record<string, { label: string; logoBg: string }> = {
+  "Care Health Insurance": { label: "care", logoBg: "bg-amber-400 text-blue-950 font-black" },
+  "Care Health": { label: "care", logoBg: "bg-amber-400 text-blue-950 font-black" },
+  "Star Health & Allied Insurance": { label: "STAR", logoBg: "bg-sky-800 text-white font-extrabold" },
+  "Star Health": { label: "STAR", logoBg: "bg-sky-800 text-white font-extrabold" },
+  "ICICI Lombard General Insurance": { label: "i", logoBg: "bg-amber-700 text-white font-black" },
+  "ICICI Lombard": { label: "i", logoBg: "bg-amber-700 text-white font-black" },
+  "HDFC ERGO General Insurance": { label: "HDFC", logoBg: "bg-red-600 text-white font-bold" },
+  "HDFC ERGO": { label: "HDFC", logoBg: "bg-red-600 text-white font-bold" },
+  "Bajaj Allianz General Insurance": { label: "BAGI", logoBg: "bg-blue-600 text-white font-bold" },
+  "Niva Bupa Health Insurance": { label: "NIVA", logoBg: "bg-orange-500 text-white font-bold" },
+}
+
+const WARD_BADGES: Record<string, { bg: string; text: string; border: string }> = {
+  ICU: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200/80" },
+  ER: { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200/80" },
+  IP: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200/80" },
+  OT: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200/80" },
 }
 
 const AVATAR_COLORS = [
-  "bg-teal-100 text-teal-800 border-teal-200",
-  "bg-emerald-100 text-emerald-800 border-emerald-200",
-  "bg-sky-100 text-sky-800 border-sky-200",
-  "bg-indigo-100 text-indigo-800 border-indigo-200",
-  "bg-amber-100 text-amber-800 border-amber-200",
-  "bg-rose-100 text-rose-800 border-rose-200",
-  "bg-purple-100 text-purple-800 border-purple-200",
+  "bg-teal-50 text-teal-700 border-teal-200",
+  "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "bg-sky-50 text-sky-700 border-sky-200",
+  "bg-indigo-50 text-indigo-700 border-indigo-200",
+  "bg-amber-50 text-amber-700 border-amber-200",
+  "bg-rose-50 text-rose-700 border-rose-200",
+  "bg-purple-50 text-purple-700 border-purple-200",
 ]
 
 const openQueries = (c: ComprehensiveClaimRecord) => c.queries.filter((q) => q.status === "Open" || q.status === "Draft Response")
@@ -86,7 +92,6 @@ export default function ClaimsHome({
   const [insurer, setInsurer] = useState("")
   const [wardFilter, setWardFilter] = useState("")
   const [stageFilter, setStageFilter] = useState("")
-  const [dateRange, setDateRange] = useState("01 Sept 2026 - 01 Oct 2026")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -181,29 +186,31 @@ export default function ClaimsHome({
       {toastNode}
       {adding && <NewCaseModal notify={notify} onClose={() => setAdding(false)} onOpened={(id) => (setAdding(false), setOpen(id))} />}
 
-      {/* ── Top Breadcrumb & Page Header ── */}
+      {/* ── Top Header Strip ── */}
       <div className="bg-white border-b border-slate-200/80 px-8 py-5">
-        <div className="flex items-center gap-1.5 text-[12px] text-slate-400 font-medium mb-3">
+        {/* Breadcrumbs */}
+        <div className="flex items-center gap-2 text-[12px] text-slate-400 font-medium mb-3">
           <Home size={13} className="text-slate-400" />
-          <span>Home</span>
-          <span>&gt;</span>
-          <span className="text-slate-500">Insurance</span>
-          <span>&gt;</span>
-          <span className="text-blue-600 font-semibold">Claims &amp; Queries</span>
+          <span className="text-slate-600">Home</span>
+          <span className="text-slate-300">&gt;</span>
+          <span className="text-slate-600">Insurance</span>
+          <span className="text-slate-300">&gt;</span>
+          <span className="text-slate-900 font-semibold">Claims &amp; Queries</span>
         </div>
 
+        {/* Page Title & Actions */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0 shadow-2xs">
-              <ShieldCheck size={22} />
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-blue-50/80 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+              <ShieldCheck size={20} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Insurance Claims &amp; Queries</h1>
-              <p className="text-xs text-slate-500 mt-1">Manage insured admissions, track claims, handle insurer queries, and monitor settlements.</p>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Insurance Claims &amp; Queries</h1>
+              <p className="text-xs text-slate-500 mt-0.5">Manage insured admissions, track claims, handle insurer queries, and monitor settlements.</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => notify("Exporting claims report (Excel/CSV)...", "success")}
@@ -211,6 +218,7 @@ export default function ClaimsHome({
             >
               <Download size={14} className="text-slate-500" />
               <span>Export</span>
+              <ChevronDown size={12} className="text-slate-400 ml-0.5" />
             </button>
             <button
               type="button"
@@ -228,20 +236,20 @@ export default function ClaimsHome({
         {/* ── 4 Premium KPI Stat Cards ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4.5">
           {/* Card 1: Total Claims */}
-          <div className="bg-gradient-to-br from-blue-50/60 to-white border border-blue-100/90 rounded-2xl p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+          <div className="bg-[#EFF6FF]/60 border border-blue-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
             <div className="flex items-start justify-between">
-              <div className="w-10 h-10 rounded-xl bg-blue-100/80 text-blue-700 flex items-center justify-center font-bold">
-                <FileText size={20} />
+              <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                <FileText size={18} />
               </div>
               <div className="text-blue-300">
-                <BarChart2 size={24} />
+                <BarChart2 size={20} />
               </div>
             </div>
             <div className="mt-4">
               <div className="text-[12px] font-medium text-slate-500">Total Claims</div>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{inr(summary.totalClaims)}</span>
-                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600">
                   <TrendingUp size={11} /> 12%
                 </span>
               </div>
@@ -250,20 +258,20 @@ export default function ClaimsHome({
           </div>
 
           {/* Card 2: Approved & Awaiting Payment */}
-          <div className="bg-gradient-to-br from-emerald-50/60 to-white border border-emerald-100/90 rounded-2xl p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+          <div className="bg-[#ECFDF5]/60 border border-emerald-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
             <div className="flex items-start justify-between">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-700 flex items-center justify-center font-bold">
-                <CheckCircle2 size={20} />
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 size={18} />
               </div>
               <div className="text-emerald-300">
-                <BarChart2 size={24} />
+                <BarChart2 size={20} />
               </div>
             </div>
             <div className="mt-4">
               <div className="text-[12px] font-medium text-slate-500">Approved &amp; Awaiting Payment</div>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{inr(summary.approvedAwaitingVal)}</span>
-                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600">
                   <TrendingUp size={11} /> 8%
                 </span>
               </div>
@@ -272,20 +280,20 @@ export default function ClaimsHome({
           </div>
 
           {/* Card 3: With Insurers for Review */}
-          <div className="bg-gradient-to-br from-amber-50/60 to-white border border-amber-100/90 rounded-2xl p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+          <div className="bg-[#FFFBEB]/70 border border-amber-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
             <div className="flex items-start justify-between">
-              <div className="w-10 h-10 rounded-xl bg-amber-100/80 text-amber-700 flex items-center justify-center font-bold">
-                <Clock size={20} />
+              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                <Clock size={18} />
               </div>
               <div className="text-amber-300">
-                <BarChart2 size={24} />
+                <BarChart2 size={20} />
               </div>
             </div>
             <div className="mt-4">
               <div className="text-[12px] font-medium text-slate-500">With Insurers for Review</div>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{inr(summary.withInsurerVal)}</span>
-                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md">
+                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600">
                   <TrendingDown size={11} /> 100%
                 </span>
               </div>
@@ -294,37 +302,37 @@ export default function ClaimsHome({
           </div>
 
           {/* Card 4: Open Insurer Queries */}
-          <div className="bg-gradient-to-br from-purple-50/60 to-white border border-purple-100/90 rounded-2xl p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+          <div className="bg-[#FAF5FF]/70 border border-purple-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
             <div className="flex items-start justify-between">
-              <div className="w-10 h-10 rounded-xl bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold">
-                <FileText size={20} />
+              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                <FileText size={18} />
               </div>
               <div className="text-purple-300">
-                <BarChart2 size={24} />
+                <BarChart2 size={20} />
               </div>
             </div>
             <div className="mt-4">
               <div className="text-[12px] font-medium text-slate-500">Open Insurer Queries</div>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{summary.queriesCount}</span>
-                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md">
+                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600">
                   <TrendingUp size={11} /> 20%
                 </span>
               </div>
-              <div className="text-[11.5px] text-rose-600 font-semibold mt-1">Requires action</div>
+              <div className="text-[11.5px] text-slate-400 mt-1">Requires action</div>
             </div>
           </div>
         </div>
 
-        {/* ── Stage Filter Pills (Full Horizontal Flow) ── */}
+        {/* ── Stage Filter Pills ── */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           <button
             type="button"
             onClick={() => setView("needs")}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-2 shadow-2xs cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
               view === "needs"
-                ? "bg-blue-600 text-white shadow-blue-500/20"
-                : "bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-50"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
             }`}
           >
             <span>Needs Action</span>
@@ -341,14 +349,14 @@ export default function ClaimsHome({
                 key={s.id}
                 type="button"
                 onClick={() => setView(s.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                   isActive
                     ? "bg-blue-600 text-white shadow-xs font-semibold"
-                    : "bg-white border border-slate-200/90 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >
                 <span>{s.label}</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
                   {cnt}
                 </span>
               </button>
@@ -358,14 +366,14 @@ export default function ClaimsHome({
           <button
             type="button"
             onClick={() => setView("closed")}
-            className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
               view === "closed"
                 ? "bg-blue-600 text-white shadow-xs font-semibold"
-                : "bg-white border border-slate-200/90 text-slate-600 hover:bg-slate-50"
+                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
           >
             <span>Closed</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${view === "closed" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${view === "closed" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
               {count("closed") || 1}
             </span>
           </button>
@@ -373,27 +381,27 @@ export default function ClaimsHome({
           <button
             type="button"
             onClick={() => setView("all")}
-            className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
               view === "all"
                 ? "bg-blue-600 text-white shadow-xs font-semibold"
-                : "bg-white border border-slate-200/90 text-slate-600 hover:bg-slate-50"
+                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
           >
             <span>All Cases</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${view === "all" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${view === "all" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
               {cases.length || 7}
             </span>
           </button>
         </div>
 
         {/* ── Search & Filter Controls Bar ── */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
             {/* Search Input */}
-            <div className="relative flex-1 min-w-[240px]">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="relative flex-1 min-w-[220px]">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                className="w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-9.5 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 h-9 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 placeholder="Search by name, UHID, claim or policy..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -401,9 +409,9 @@ export default function ClaimsHome({
             </div>
 
             {/* Insurer Dropdown */}
-            <div className="w-48">
+            <div className="w-44">
               <select
-                className="w-full bg-slate-50/80 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 value={insurer}
                 onChange={(e) => setInsurer(e.target.value)}
               >
@@ -415,9 +423,9 @@ export default function ClaimsHome({
             </div>
 
             {/* Ward Dropdown */}
-            <div className="w-36">
+            <div className="w-32">
               <select
-                className="w-full bg-slate-50/80 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 value={wardFilter}
                 onChange={(e) => setWardFilter(e.target.value)}
               >
@@ -430,9 +438,9 @@ export default function ClaimsHome({
             </div>
 
             {/* Claim Stage Dropdown */}
-            <div className="w-40">
+            <div className="w-36">
               <select
-                className="w-full bg-slate-50/80 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 value={stageFilter}
                 onChange={(e) => setStageFilter(e.target.value)}
               >
@@ -447,9 +455,10 @@ export default function ClaimsHome({
             </div>
 
             {/* Date Range Selector */}
-            <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium cursor-pointer">
-              <Calendar size={14} className="text-slate-400" />
-              <span>{dateRange}</span>
+            <div className="flex items-center gap-1.5 px-3 h-9 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium cursor-pointer">
+              <Calendar size={13} className="text-slate-400" />
+              <span>01 Sept 2026 - 01 Oct 2026</span>
+              <ChevronDown size={12} className="text-slate-400 ml-1" />
             </div>
           </div>
 
@@ -457,15 +466,15 @@ export default function ClaimsHome({
             <button
               type="button"
               onClick={() => notify("Filters applied", "success")}
-              className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl border border-blue-200/70 transition-colors cursor-pointer"
+              className="w-9 h-9 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl border border-blue-200/70 transition-colors cursor-pointer"
               title="Apply filters"
             >
-              <Filter size={15} />
+              <Filter size={14} />
             </button>
             <button
               type="button"
               onClick={handleResetFilters}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              className="px-3.5 h-9 bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
             >
               Reset
             </button>
@@ -475,10 +484,10 @@ export default function ClaimsHome({
         {/* ── Claims Data Table ── */}
         <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="px-5 py-3.5 w-10">
+                <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-semibold text-slate-500">
+                  <th className="px-5 py-3.5 w-10 text-center">
                     <input
                       type="checkbox"
                       className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
@@ -503,9 +512,8 @@ export default function ClaimsHome({
                   const overdue = oq.some((x) => daysUntil(x.dueDate) < 0)
                   const initials = c.patientName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
                   const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
+                  const wardBadge = WARD_BADGES[c.encounterType || "IP"] || WARD_BADGES.IP
                   const insBadge = INSURER_BADGES[c.policy.insurerName] || {
-                    bg: "bg-blue-700",
-                    text: "text-white",
                     label: c.policy.insurerName.slice(0, 3).toUpperCase(),
                     logoBg: "bg-blue-700 text-white font-bold",
                   }
@@ -514,12 +522,12 @@ export default function ClaimsHome({
                   return (
                     <tr
                       key={c.id}
-                      className={`hover:bg-blue-50/40 transition-colors group cursor-pointer ${
-                        isSelected ? "bg-blue-50/60" : ""
+                      className={`hover:bg-blue-50/30 transition-colors group cursor-pointer ${
+                        isSelected ? "bg-blue-50/50" : ""
                       }`}
                     >
                       {/* Checkbox */}
-                      <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-5 py-4 text-center align-middle" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -529,47 +537,48 @@ export default function ClaimsHome({
                       </td>
 
                       {/* Patient & UHID */}
-                      <td className="px-4 py-4" onClick={() => setOpen(c.id)}>
+                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl border flex items-center justify-center font-bold text-xs shrink-0 ${avatarColor}`}>
+                          <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold text-[11px] shrink-0 ${avatarColor}`}>
                             {initials}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                              {c.patientName}
-                            </div>
-                            <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
-                              <span>{c.id}</span>
-                              <span className="text-slate-300">•</span>
-                              <span className="font-bold text-blue-700 bg-blue-50 border border-blue-200/60 rounded px-1.5 py-0.2 text-[10px]">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
+                                {c.patientName}
+                              </span>
+                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${wardBadge.bg} ${wardBadge.text} ${wardBadge.border}`}>
                                 {c.encounterType || "IP"}
                               </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                              {c.id}
                             </div>
                           </div>
                         </div>
                       </td>
 
                       {/* Insurer / TPA */}
-                      <td className="px-4 py-4" onClick={() => setOpen(c.id)}>
-                        <div className="flex items-start gap-2.5">
-                          <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] shrink-0 uppercase tracking-tighter ${insBadge.logoBg}`}>
+                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] shrink-0 uppercase tracking-tighter ${insBadge.logoBg}`}>
                             {insBadge.label}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-800">{c.policy.insurerName}</div>
-                            <div className="text-[11px] text-slate-400 font-normal mt-0.5">
-                              {c.policy.tpaName || "Direct / In-House"}
+                            <div className="font-semibold text-slate-800">{c.policy.insurerName}</div>
+                            <div className="text-[11px] text-slate-400 font-normal">
+                              {c.policy.tpaName || "In-House TPA"}
                             </div>
                           </div>
                         </div>
                       </td>
 
                       {/* Claim Stage & Progress */}
-                      <td className="px-4 py-4" onClick={() => setOpen(c.id)}>
-                        <div className="min-w-[160px]">
+                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
+                        <div className="min-w-[150px]">
                           <div className="flex items-center justify-between gap-2 mb-1.5">
-                            <span className="font-semibold text-slate-800 truncate">{s.title}</span>
-                            <span className="text-[10.5px] font-mono text-slate-500 font-bold px-1.5 py-0.2 bg-slate-100 rounded">
+                            <span className="font-medium text-slate-800 truncate">{s.title}</span>
+                            <span className="text-[10px] font-mono text-slate-400 font-semibold">
                               {s.n}/8
                             </span>
                           </div>
@@ -583,29 +592,29 @@ export default function ClaimsHome({
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-4" onClick={() => setOpen(c.id)}>
+                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
                         <StatusPill status={c.status} />
                       </td>
 
                       {/* Claim Amount */}
-                      <td className="px-4 py-4 text-right" onClick={() => setOpen(c.id)}>
-                        <div className="font-mono font-extrabold text-slate-900 text-[13px]">
+                      <td className="px-4 py-4 text-right align-middle" onClick={() => setOpen(c.id)}>
+                        <div className="font-mono font-bold text-slate-900 text-[12.5px]">
                           {inr(c.finalClaimAmount || c.preAuth?.requestedAmount || c.consumedBillAmount || 5380)}
                         </div>
                       </td>
 
                       {/* Next Required Action */}
-                      <td className="px-4 py-4" onClick={() => setOpen(c.id)}>
+                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-purple-50 border border-purple-200/80 text-purple-700 flex items-center justify-center shrink-0">
-                            {oq.length ? <AlertCircle size={14} /> : s.n >= 5 ? <Upload size={14} /> : <FileText size={14} />}
+                          <div className="w-6 h-6 rounded-md bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                            {oq.length ? <AlertCircle size={13} /> : s.n >= 5 ? <Upload size={13} /> : <FileText size={13} />}
                           </div>
                           <span
-                            className={`font-semibold text-[11.5px] line-clamp-1 ${
+                            className={`font-medium text-[11.5px] line-clamp-1 ${
                               overdue
-                                ? "text-rose-700"
+                                ? "text-rose-600 font-semibold"
                                 : oq.length
-                                  ? "text-amber-800"
+                                  ? "text-amber-700 font-semibold"
                                   : "text-slate-700"
                             }`}
                           >
@@ -617,16 +626,16 @@ export default function ClaimsHome({
                       </td>
 
                       {/* Updated Timestamp */}
-                      <td className="px-4 py-4 text-right text-[11px] font-mono text-slate-400 whitespace-nowrap" onClick={() => setOpen(c.id)}>
+                      <td className="px-4 py-4 text-right text-[11px] font-mono text-slate-400 whitespace-nowrap align-middle" onClick={() => setOpen(c.id)}>
                         {fmtDateTime(c.updatedAt)}
                       </td>
 
                       {/* Actions 3-dots dropdown */}
-                      <td className="px-4 py-4 text-center relative" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-4 text-center align-middle relative" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => setActionMenuOpenId(actionMenuOpenId === c.id ? null : c.id)}
-                          className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
+                          className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors mx-auto"
                         >
                           <MoreVertical size={14} />
                         </button>
