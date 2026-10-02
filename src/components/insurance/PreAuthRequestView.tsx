@@ -72,20 +72,20 @@ interface TemplateMeta {
 }
 
 const FORM_TEMPLATES: TemplateMeta[] = [
-  { id: "good_health_tpa", name: "Good Health Insurance TPA (4-Page Requisition)", code: "GHPL/CASHLESS/V2.4", tagColor: "bg-teal-50 text-teal-900 border-teal-200", accentBorder: "border-teal-600", description: "Official 4-page Good Health TPA cashless pre-authorization form with character box grids." },
-  { id: "care_health", name: "Care Health (Religare) Cashless Requisition", code: "CHI/CASHLESS/V4.2", tagColor: "bg-blue-50 text-blue-900 border-blue-200", accentBorder: "border-blue-600", description: "Official Care Health retail & corporate cashless pre-authorization requisition format." },
-  { id: "star_health", name: "Star Health & Allied Insurance Pre-Auth Form", code: "STAR/PREAUTH/2026", tagColor: "bg-red-50 text-red-900 border-red-200", accentBorder: "border-red-600", description: "Star Health cashless pre-authorization form with clinical history checklist." },
-  { id: "irdai_standard", name: "IRDAI Uniform Cashless Requisition Form", code: "IRDAI/HLT/REG/2016", tagColor: "bg-indigo-50 text-indigo-900 border-indigo-200", accentBorder: "border-indigo-600", description: "Standard IRDAI prescribed uniform cashless pre-authorization form." },
-  { id: "medi_assist", name: "Medi Assist TPA Standard Cashless Format", code: "MATPA/CASHLESS/V3", tagColor: "bg-emerald-50 text-emerald-900 border-emerald-200", accentBorder: "border-emerald-600", description: "Standard pre-authorization format for Medi Assist corporate & retail insurers." },
-  { id: "hdfc_fhpl", name: "HDFC ERGO / FHPL Cashless Requisition", code: "HDFC-FHPL/PA-01", tagColor: "bg-purple-50 text-purple-900 border-purple-200", accentBorder: "border-purple-600", description: "Official cashless requisition format for HDFC ERGO processed via FHPL TPA." },
-  { id: "pmjay_tms", name: "Ayushman Bharat PMJAY TMS Template", code: "PMJAY/TMS/HBP-2.2", tagColor: "bg-orange-50 text-orange-900 border-orange-200", accentBorder: "border-orange-600", description: "National Health Authority PMJAY Transaction Management System template." },
-  { id: "custom_template", name: "Custom Network Hospital Cashless Format", code: "HOSP/CUSTOM/2026", tagColor: "bg-slate-50 text-slate-900 border-slate-200", accentBorder: "border-slate-600", description: "Custom network hospital pre-authorization format with itemized tariff schedule." },
+  { id: "good_health_tpa", name: "Good Health Insurance TPA (4-Page Requisition)", code: "GHPL/CASHLESS/V2.4", tagColor: "bg-teal-50 text-teal-900 border-teal-300", accentBorder: "border-teal-700", description: "Official 4-page Good Health TPA cashless pre-authorization form with character box grids." },
+  { id: "care_health", name: "Care Health (Religare) Cashless Requisition", code: "CHI/CASHLESS/V4.2", tagColor: "bg-blue-50 text-blue-900 border-blue-300", accentBorder: "border-blue-700", description: "Official Care Health retail & corporate cashless pre-authorization requisition format." },
+  { id: "star_health", name: "Star Health & Allied Insurance Pre-Auth Form", code: "STAR/PREAUTH/2026", tagColor: "bg-red-50 text-red-900 border-red-300", accentBorder: "border-red-700", description: "Star Health cashless pre-authorization form with clinical history checklist." },
+  { id: "irdai_standard", name: "IRDAI Uniform Cashless Requisition Form", code: "IRDAI/HLT/REG/2016", tagColor: "bg-indigo-50 text-indigo-900 border-indigo-300", accentBorder: "border-indigo-700", description: "Standard IRDAI prescribed uniform cashless pre-authorization form." },
+  { id: "medi_assist", name: "Medi Assist TPA Standard Cashless Format", code: "MATPA/CASHLESS/V3", tagColor: "bg-emerald-50 text-emerald-900 border-emerald-300", accentBorder: "border-emerald-700", description: "Standard pre-authorization format for Medi Assist corporate & retail insurers." },
+  { id: "hdfc_fhpl", name: "HDFC ERGO / FHPL Cashless Requisition", code: "HDFC-FHPL/PA-01", tagColor: "bg-purple-50 text-purple-900 border-purple-300", accentBorder: "border-purple-700", description: "Official cashless requisition format for HDFC ERGO processed via FHPL TPA." },
+  { id: "pmjay_tms", name: "Ayushman Bharat PMJAY TMS Template", code: "PMJAY/TMS/HBP-2.2", tagColor: "bg-orange-50 text-orange-900 border-orange-300", accentBorder: "border-orange-700", description: "National Health Authority PMJAY Transaction Management System template." },
+  { id: "custom_template", name: "Custom Network Hospital Cashless Format", code: "HOSP/CUSTOM/2026", tagColor: "bg-slate-50 text-slate-900 border-slate-300", accentBorder: "border-slate-700", description: "Custom network hospital pre-authorization format with itemized tariff schedule." },
 ]
 
-// Sleek unified form field style matching the hospital design system
-const sqField = "h-10 px-3.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-2xs w-full"
+// Pure 0 border-radius field styles with crisp standard enterprise scale and subtle focus
+const sqField = "h-9 px-3 bg-white border border-slate-300 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-700 rounded-none w-full transition-colors shadow-xs"
 
-// Character box grid component for official letter-by-letter rendering in PDF boxes
+// Character box grid component for official letter-by-letter rendering in PDF boxes (0 border-radius)
 function CharBoxGrid({
   value,
   count = 20,
@@ -109,10 +109,10 @@ function CharBoxGrid({
         return (
           <div
             key={i}
-            className={`w-[20px] h-[22px] border rounded-[3px] flex items-center justify-center font-mono text-[11px] font-bold transition-all ${
+            className={`w-[19px] h-[21px] border rounded-none flex items-center justify-center font-mono text-[11px] font-bold transition-all ${
               char
                 ? highlight
-                  ? `${highlightColor} ring-1 ring-blue-400`
+                  ? `${highlightColor} ring-1 ring-blue-500`
                   : "bg-blue-50/90 border-blue-900 text-blue-950"
                 : "bg-white border-blue-900/40 text-slate-400"
             }`}
@@ -410,50 +410,51 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
   const currentTemplate = FORM_TEMPLATES.find((t) => t.id === selectedTemplate) || FORM_TEMPLATES[0]
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#F8FAFC] overflow-y-auto font-sans text-slate-800">
+    <div className="flex-1 flex flex-col h-full bg-slate-100 overflow-y-auto font-sans text-slate-800 rounded-none">
       {toastNode}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 1. TOP HEADER & WORKFLOW CONTROLS                             */}
+      {/* 1. TOP HEADER & BREADCRUMB (0 BORDER RADIUS / SQUARED)        */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-slate-200/80 px-8 py-4 sticky top-0 z-30 shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-4 max-w-[1700px] mx-auto">
+      <div className="bg-white border-b border-slate-300 px-6 py-3.5 sticky top-0 z-30 rounded-none shadow-md shadow-slate-200/50">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onBack}
-              className="w-9 h-9 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-              title="Go back"
-            >
-              <ArrowLeft size={16} />
-            </button>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold border border-blue-100">
-              <Mail size={18} />
+            <div className="w-10 h-10 rounded-none bg-blue-600 text-white flex items-center justify-center font-bold">
+              <Mail size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                <span className="hover:text-slate-700 cursor-pointer">Home</span>
+                <span>/</span>
+                <span className="hover:text-slate-700 cursor-pointer">Insurance</span>
+                <span>/</span>
+                <span className="hover:text-slate-700 cursor-pointer">Pre-Authorization</span>
+                <span>/</span>
+                <span className="text-slate-900 font-bold">New Request</span>
+              </div>
+              <div className="flex items-center gap-2.5 mt-0.5">
+                <h1 className="text-lg font-bold text-slate-900 tracking-tight">
                   Pre-Authorization Requisition
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="px-2 py-0.5 rounded-none text-[11px] font-mono font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
                   {activeInsurer.preAuthFormCode || "CHI/CASHLESS/V4.2"}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Create, review and submit cashless pre-authorization dossier to insurer / TPA desk.
+              <p className="text-xs text-slate-500">
+                Create and submit a pre-authorization request to insurer / TPA for cashless treatment.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-700">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-none bg-slate-100 border border-slate-300 text-xs font-mono text-slate-700">
               <span className="text-blue-600 font-bold">#</span> Case ID: <span className="font-bold text-slate-900">INS20250928056</span>
             </div>
 
             <button
               type="button"
-              className="h-9 px-3.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-              onClick={() => notify("Draft saved successfully to active local cache", "success")}
+              className="h-9 px-3.5 rounded-none bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              onClick={() => notify("Draft saved successfully", "success")}
             >
               <Save size={14} className="text-blue-600" /> Save Draft
             </button>
@@ -462,7 +463,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               <button
                 type="button"
                 onClick={() => setStep(2)}
-                className="h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                className="h-9 px-4 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <FileText size={14} /> View 4-Page Form <ChevronRight size={14} />
               </button>
@@ -470,7 +471,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="h-9 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="h-9 px-4 rounded-none bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 ← Edit Form Data
               </button>
@@ -479,9 +480,9 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
         </div>
 
         {/* ─────────────────────────────────────────────────────────── */}
-        {/* HORIZONTAL STEPPER                                          */}
+        {/* HORIZONTAL STEPPER (0 BORDER RADIUS / SQUARED)              */}
         {/* ─────────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between max-w-3xl mx-auto pt-4 pb-1 text-xs">
+        <div className="flex items-center justify-between max-w-4xl mx-auto pt-4 pb-1 text-xs">
           {[
             { n: 1, label: "Insurer & Clinical Details" },
             { n: 2, label: "Form Preview & Auto-Data" },
@@ -494,19 +495,19 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                 className="flex items-center gap-2 cursor-pointer group"
               >
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] transition-all border ${
+                  className={`w-6 h-6 rounded-none flex items-center justify-center font-bold text-[11px] transition-all border ${
                     step === s.n
-                      ? "bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-100"
+                      ? "bg-blue-600 text-white border-blue-700"
                       : step > s.n
-                      ? "bg-emerald-600 text-white border-emerald-600"
-                      : "bg-white text-slate-500 border-slate-200 group-hover:border-slate-400"
+                      ? "bg-slate-800 text-white border-slate-800"
+                      : "bg-white text-slate-500 border-slate-300 group-hover:border-slate-400"
                   }`}
                 >
                   {step > s.n ? <Check size={13} /> : s.n}
                 </div>
                 <span
-                  className={`font-semibold tracking-tight whitespace-nowrap ${
-                    step === s.n ? "text-blue-600 font-bold" : "text-slate-600 group-hover:text-slate-900"
+                  className={`font-semibold tracking-tight ${
+                    step === s.n ? "text-blue-700 font-bold" : "text-slate-600 group-hover:text-slate-900"
                   }`}
                 >
                   {s.label}
@@ -514,8 +515,8 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               </div>
               {idx < 3 && (
                 <div
-                  className={`flex-1 h-0.5 mx-3 rounded-full transition-all ${
-                    step > idx + 1 ? "bg-emerald-500" : "bg-slate-200"
+                  className={`flex-1 h-0.5 mx-3 transition-all ${
+                    step > idx + 1 ? "bg-slate-800" : "bg-slate-300"
                   }`}
                 />
               )}
@@ -525,21 +526,21 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
       </div>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 2. MAIN CONTENT (STEP 1: FORMULATION WORKSPACE)               */}
+      {/* 2. MAIN CONTENT (STEP 1: SQUARED ENTERPRISE DASHBOARD)        */}
       {/* ───────────────────────────────────────────────────────────── */}
       {step === 1 && (
-        <div className="p-8 max-w-[1700px] mx-auto w-full space-y-6">
+        <div className="p-6 max-w-[1600px] mx-auto w-full space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* ══════════════════════════════════════════════════════════ */}
             {/* LEFT COLUMN: 8 COLS (INSURER, CLINICAL & TARIFFS)          */}
             {/* ══════════════════════════════════════════════════════════ */}
             <div className="lg:col-span-8 space-y-6">
               {/* CARD 1: INSURER & FORM SELECTION */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-2xs space-y-4 hover:border-slate-300 transition-colors">
-                <div className="flex items-center justify-between cursor-pointer border-b border-slate-100 pb-3.5" onClick={() => setCollapseInsurer(!collapseInsurer)}>
+              <div className="bg-white border border-slate-300 rounded-none p-5 shadow-md shadow-slate-200/60 space-y-4">
+                <div className="flex items-center justify-between cursor-pointer border-b border-slate-200 pb-3" onClick={() => setCollapseInsurer(!collapseInsurer)}>
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center font-bold">
-                      <Building2 size={17} />
+                    <div className="w-8 h-8 rounded-none bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold">
+                      <Building2 size={16} />
                     </div>
                     <div>
                       <h2 className="text-sm font-bold text-slate-900">Insurer &amp; Form Selection</h2>
@@ -554,15 +555,15 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                 {!collapseInsurer && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                     {/* Select Insurer Card */}
-                    <div className="p-4 bg-slate-50/60 rounded-xl border border-slate-200/80 space-y-1.5">
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                    <div className="p-3.5 bg-slate-50 rounded-none border border-slate-300 space-y-1.5">
+                      <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
                         Insurance Partner (Master Data) *
                       </label>
                       <div className="relative">
                         <select
                           value={selectedInsurerId}
                           onChange={(e) => handleSelectInsurer(e.target.value)}
-                          className={`${sqField} font-semibold pr-8 cursor-pointer`}
+                          className={`${sqField} font-bold pr-8`}
                         >
                           {masterInsurers.map((ins) => (
                             <option key={ins.id} value={ins.id}>
@@ -570,26 +571,26 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                             </option>
                           ))}
                         </select>
-                        <ChevronDown size={15} className="absolute right-3 top-3 text-slate-400 pointer-events-none" />
+                        <ChevronDown size={15} className="absolute right-2.5 top-2.5 text-slate-400 pointer-events-none" />
                       </div>
                       <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-600">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 uppercase">
-                          TPA
+                        <span className="w-5 h-5 rounded-none bg-amber-200 text-amber-900 font-bold text-[9px] flex items-center justify-center uppercase border border-amber-300">
+                          care
                         </span>
                         <span>{activeInsurer.tpaName || "Medi Assist TPA / Direct"}</span>
                       </div>
                     </div>
 
                     {/* Select Template Card */}
-                    <div className="p-4 bg-slate-50/60 rounded-xl border border-slate-200/80 space-y-1.5">
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                    <div className="p-3.5 bg-slate-50 rounded-none border border-slate-300 space-y-1.5">
+                      <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
                         Pre-Authorization Form Template *
                       </label>
                       <div className="relative">
                         <select
                           value={selectedTemplate}
                           onChange={(e) => setSelectedTemplate(e.target.value as PreAuthTemplateKey)}
-                          className={`${sqField} font-semibold pr-8 cursor-pointer`}
+                          className={`${sqField} font-bold pr-8`}
                         >
                           {FORM_TEMPLATES.map((tpl) => (
                             <option key={tpl.id} value={tpl.id}>
@@ -597,12 +598,13 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                             </option>
                           ))}
                         </select>
-                        <ChevronDown size={15} className="absolute right-3 top-3 text-slate-400 pointer-events-none" />
+                        <ChevronDown size={15} className="absolute right-2.5 top-2.5 text-slate-400 pointer-events-none" />
                       </div>
                       <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-600">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200 font-mono">
-                          {activeInsurer.preAuthFormCode || currentTemplate.code}
+                        <span className="w-5 h-5 rounded-none bg-purple-100 text-purple-900 font-bold text-[10px] flex items-center justify-center border border-purple-300">
+                          <FileText size={12} />
                         </span>
+                        <span className="font-mono text-purple-900 font-bold">{activeInsurer.preAuthFormCode || currentTemplate.code}</span>
                       </div>
                     </div>
                   </div>
@@ -610,15 +612,15 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               </div>
 
               {/* CARD 2: TREATING CONSULTANT & CLINICAL INFORMATION */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-2xs space-y-4 hover:border-slate-300 transition-colors">
-                <div className="flex items-center justify-between cursor-pointer border-b border-slate-100 pb-3.5" onClick={() => setCollapseClinical(!collapseClinical)}>
+              <div className="bg-white border border-slate-300 rounded-none p-5 shadow-md shadow-slate-200/60 space-y-4">
+                <div className="flex items-center justify-between cursor-pointer border-b border-slate-200 pb-3" onClick={() => setCollapseClinical(!collapseClinical)}>
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-cyan-50 border border-cyan-100 text-cyan-700 flex items-center justify-center font-bold">
-                      <Stethoscope size={17} />
+                    <div className="w-8 h-8 rounded-none bg-cyan-50 border border-cyan-200 text-cyan-700 flex items-center justify-center font-bold">
+                      <Stethoscope size={16} />
                     </div>
                     <div>
                       <h2 className="text-sm font-bold text-slate-900">Treating Consultant &amp; Clinical Information</h2>
-                      <p className="text-xs text-slate-500">Enter consultant, diagnosis and proposed procedure details</p>
+                      <p className="text-xs text-slate-500">Enter consultant, diagnosis and procedure details</p>
                     </div>
                   </div>
                   <button type="button" className="text-slate-400 hover:text-slate-600 cursor-pointer">
@@ -627,15 +629,15 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                 </div>
 
                 {!collapseClinical && (
-                  <div className="space-y-4 pt-1 text-xs">
-                    {/* Row 1: Doctor, Reg No, Department */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-3.5 pt-1 text-xs">
+                    {/* Row 1: Doctor, Reg No, Department (Equal 3-column grid, perfectly aligned) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 truncate">
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
                           Treating Consultant *
                         </label>
                         <div className="relative">
-                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
                             <User size={14} />
                           </div>
                           <input
@@ -648,102 +650,158 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                       </div>
 
                       <div>
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 truncate">
-                          Doctor Registration No *
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
+                          State Council Reg No *
                         </label>
                         <div className="relative">
-                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
-                            <Hash size={14} />
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-600 pointer-events-none">
+                            <Shield size={14} />
                           </div>
                           <input
                             type="text"
                             value={doctorRegNo}
                             onChange={(e) => setDoctorRegNo(e.target.value)}
-                            className={`${sqField} pl-9 font-mono font-bold text-slate-900`}
+                            className={`${sqField} pl-9 font-mono font-bold text-blue-900`}
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 truncate">
-                          Specialty Department *
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
+                          Department *
                         </label>
                         <div className="relative">
-                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
                             <Building2 size={14} />
                           </div>
-                          <input
-                            type="text"
+                          <select
                             value={department}
                             onChange={(e) => setDepartment(e.target.value)}
                             className={`${sqField} pl-9 font-bold text-slate-900`}
-                          />
+                          >
+                            <option value="General Surgery">General Surgery</option>
+                            <option value="Orthopaedics">Orthopaedics</option>
+                            <option value="Cardiology">Cardiology</option>
+                            <option value="Gastroenterology">Gastroenterology</option>
+                            <option value="Neurosurgery">Neurosurgery</option>
+                          </select>
                         </div>
                       </div>
                     </div>
 
-                    {/* Row 2: Diagnosis & ICD-10 Code */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 truncate">
+                    {/* Row 2: Diagnosis, ICD-10 Code, ICD-10 PCS (Balanced 6-3-3 grid, perfectly aligned) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                      <div className="sm:col-span-6">
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
                           Provisional Diagnosis *
                         </label>
                         <div className="relative">
-                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
-                            <FileText size={14} />
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                            <Search size={14} />
                           </div>
                           <input
                             type="text"
                             value={provisionalDiagnosis}
                             onChange={(e) => setProvisionalDiagnosis(e.target.value)}
-                            className={`${sqField} pl-9 font-bold text-slate-900 uppercase`}
+                            className={`${sqField} pl-9 font-semibold text-slate-900`}
                           />
                         </div>
                       </div>
 
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 truncate">
+                      <div className="sm:col-span-3">
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
                           ICD-10 Diagnosis Code *
                         </label>
                         <div className="relative">
-                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
                             <Tag size={14} />
                           </div>
                           <input
                             type="text"
                             value={icd10Code}
                             onChange={(e) => setIcd10Code(e.target.value)}
-                            className={`${sqField} pl-9 font-mono font-bold text-blue-900 uppercase`}
+                            className={`${sqField} pl-9 font-mono font-bold text-emerald-800`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-3">
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
+                          ICD-10 PCS Code
+                        </label>
+                        <div className="relative">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                            <FileText size={14} />
+                          </div>
+                          <input
+                            type="text"
+                            value={icd10Pcs}
+                            onChange={(e) => setIcd10Pcs(e.target.value)}
+                            className={`${sqField} pl-9 font-mono font-semibold text-slate-800`}
                           />
                         </div>
                       </div>
                     </div>
 
-                    {/* Row 3: Procedure & Proposed Duration */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="sm:col-span-2">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 truncate">
-                          Proposed Surgical / Medical Procedure *
+                    {/* Row 3: Procedure, Consultation Date, Admission Date, Expected Stay (Balanced 4-col 4-3-3-2 grid with equal height labels) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                      <div className="sm:col-span-4">
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
+                          Proposed Procedure / Surgery *
                         </label>
                         <div className="relative">
-                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-600 pointer-events-none">
                             <Scissors size={14} />
                           </div>
                           <input
                             type="text"
                             value={procedure}
                             onChange={(e) => setProcedure(e.target.value)}
-                            className={`${sqField} pl-9 font-bold text-slate-900 uppercase`}
+                            className={`${sqField} pl-9 font-bold text-slate-900`}
                           />
                         </div>
                       </div>
 
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 truncate">
+                      <div className="sm:col-span-3">
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
+                          1st Consultation Date
+                        </label>
+                        <div className="relative">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                            <Calendar size={14} />
+                          </div>
+                          <input
+                            type="text"
+                            value={firstConsultDate}
+                            onChange={(e) => setFirstConsultDate(e.target.value)}
+                            className={`${sqField} pl-9 font-semibold`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-3">
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
+                          Planned Admission Date
+                        </label>
+                        <div className="relative">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                            <Calendar size={14} />
+                          </div>
+                          <input
+                            type="text"
+                            value={plannedAdmissionDate}
+                            onChange={(e) => setPlannedAdmissionDate(e.target.value)}
+                            className={`${sqField} pl-9 font-semibold`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="h-5 flex items-center text-[11.5px] font-bold text-slate-700 mb-1 whitespace-nowrap truncate">
                           Expected Stay (Days)
                         </label>
                         <div className="relative">
-                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
                             <Bed size={14} />
                           </div>
                           <input
@@ -758,21 +816,21 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
 
                     {/* Row 4: Clinical Findings & Notes */}
                     <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                      <div className="h-5 flex items-center justify-between mb-1">
+                        <label className="text-[11.5px] font-bold text-slate-700 block whitespace-nowrap">
                           Clinical Findings &amp; Examination Notes *
                         </label>
-                        <span className="text-[10px] text-slate-400 font-mono">142/1000 chars</span>
+                        <span className="text-[10px] text-slate-400 font-mono">142/1000</span>
                       </div>
                       <div className="relative">
-                        <div className="absolute left-3.5 top-3.5 text-blue-600 pointer-events-none">
+                        <div className="absolute left-3 top-3 text-blue-600 pointer-events-none">
                           <FileText size={15} />
                         </div>
                         <textarea
-                          rows={3}
+                          rows={2}
                           value={clinicalHistory}
                           onChange={(e) => setClinicalHistory(e.target.value)}
-                          className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 leading-relaxed shadow-2xs transition-all font-medium"
+                          className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-none text-xs text-slate-800 focus:outline-none focus:border-blue-700 leading-relaxed shadow-none"
                         />
                       </div>
                     </div>
@@ -781,21 +839,21 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               </div>
 
               {/* CARD 3: ITEMIZED HOSPITAL TARIFF & COST ESTIMATION */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-2xs space-y-4 hover:border-slate-300 transition-colors">
-                <div className="flex flex-wrap items-center justify-between gap-3 cursor-pointer border-b border-slate-100 pb-3.5" onClick={() => setCollapseTariff(!collapseTariff)}>
+              <div className="bg-white border border-slate-300 rounded-none p-5 shadow-md shadow-slate-200/60 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 cursor-pointer border-b border-slate-200 pb-3" onClick={() => setCollapseTariff(!collapseTariff)}>
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 flex items-center justify-center font-bold">
-                      <Layers size={17} />
+                    <div className="w-8 h-8 rounded-none bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center font-bold">
+                      <Layers size={16} />
                     </div>
                     <div>
                       <h2 className="text-sm font-bold text-slate-900">Itemized Hospital Tariff &amp; Cost Estimation</h2>
-                      <p className="text-xs text-slate-500">Estimated hospitalization charges for pre-authorization limit sanction</p>
+                      <p className="text-xs text-slate-500">Add estimated charges based on hospital package or itemized services</p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <span className="px-3 py-1 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 font-bold text-xs font-mono">
-                      Estimated Total: <span className="text-amber-800 font-black">₹ {totalEstimatedCost.toLocaleString()}</span>
+                    <span className="px-3 py-1 rounded-none bg-amber-50 text-amber-900 border border-amber-300 font-bold text-xs font-mono">
+                      Estimated Total: <span className="text-amber-700 font-black">₹ {totalEstimatedCost.toLocaleString()}</span>
                     </span>
                     <button type="button" className="text-slate-400 hover:text-slate-600 cursor-pointer">
                       {collapseTariff ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
@@ -804,24 +862,24 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                 </div>
 
                 {!collapseTariff && (
-                  <div className="space-y-3.5 pt-1">
-                    {/* Sub-tab pills */}
+                  <div className="space-y-3 pt-1">
+                    {/* Sub-tab pills (Squared) */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center bg-slate-100 p-1 border border-slate-200 text-xs font-semibold rounded-xl">
+                      <div className="flex items-center bg-slate-100 p-0.5 border border-slate-300 text-xs font-semibold rounded-none">
                         <button
                           type="button"
                           onClick={() => setActiveTariffTab("packages")}
-                          className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                            activeTariffTab === "packages" ? "bg-white text-slate-900 font-bold shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                          className={`px-3 py-1 rounded-none transition-all cursor-pointer ${
+                            activeTariffTab === "packages" ? "bg-slate-800 text-white font-bold" : "text-slate-700 hover:text-slate-900"
                           }`}
                         >
-                          Standard Tariff
+                          Common Packages
                         </button>
                         <button
                           type="button"
                           onClick={() => setActiveTariffTab("custom")}
-                          className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                            activeTariffTab === "custom" ? "bg-white text-slate-900 font-bold shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                          className={`px-3 py-1 rounded-none transition-all cursor-pointer ${
+                            activeTariffTab === "custom" ? "bg-slate-800 text-white font-bold" : "text-slate-700 hover:text-slate-900"
                           }`}
                         >
                           Custom Items
@@ -829,11 +887,11 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                         <button
                           type="button"
                           onClick={() => setActiveTariffTab("history")}
-                          className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                            activeTariffTab === "history" ? "bg-white text-slate-900 font-bold shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                          className={`px-3 py-1 rounded-none transition-all cursor-pointer ${
+                            activeTariffTab === "history" ? "bg-slate-800 text-white font-bold" : "text-slate-700 hover:text-slate-900"
                           }`}
                         >
-                          Rate Card History
+                          Previous History
                         </button>
                       </div>
 
@@ -851,42 +909,45 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                           setTariffRows([...tariffRows, newRow])
                           notify("Added custom service line item", "success")
                         }}
-                        className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 transition-colors"
+                        className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 cursor-pointer"
                       >
-                        <Plus size={14} /> Add Line Item
+                        <Plus size={14} /> Add Custom Item
                       </button>
                     </div>
 
-                    {/* Rich Data Table */}
-                    <div className="overflow-x-auto border border-slate-200/90 rounded-xl">
+                    {/* Rich Data Table (Squared) */}
+                    <div className="overflow-x-auto border border-slate-300 rounded-none">
                       <table className="w-full text-xs text-left">
                         <thead>
-                          <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
-                            <th className="py-3 px-3.5 w-12 text-center">#</th>
-                            <th className="py-3 px-3.5">Service Category</th>
-                            <th className="py-3 px-3.5">Description</th>
-                            <th className="py-3 px-3.5 text-right">Amount (₹)</th>
-                            <th className="py-3 px-3.5 w-20 text-center">Action</th>
+                          <tr className="bg-slate-100 border-b border-slate-300 text-slate-700 font-bold">
+                            <th className="py-2.5 px-3 w-12 text-center border-r border-slate-300">#</th>
+                            <th className="py-2.5 px-3 border-r border-slate-300">Service Category</th>
+                            <th className="py-2.5 px-3 border-r border-slate-300">Description</th>
+                            <th className="py-2.5 px-3 text-right border-r border-slate-300">Amount (₹)</th>
+                            <th className="py-2.5 px-3 w-20 text-center">Action</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-200">
                           {tariffRows.map((row) => (
-                            <tr key={row.id} className="hover:bg-blue-50/30 transition-colors font-medium">
-                              <td className="py-2.5 px-3.5 text-center text-slate-400 font-mono">{row.id}</td>
-                              <td className="py-2.5 px-3.5">
+                            <tr key={row.id} className="hover:bg-slate-50 transition-colors font-medium">
+                              <td className="py-2 px-3 text-center text-slate-500 border-r border-slate-200 font-mono">{row.id}</td>
+                              <td className="py-2 px-3 border-r border-slate-200">
                                 <div className="flex items-center gap-2">
-                                  <span className={`w-5 h-5 rounded text-white font-bold text-[10px] flex items-center justify-center ${row.catColor}`}>
+                                  <span className={`w-5 h-5 rounded-none text-white font-bold text-[10px] flex items-center justify-center ${row.catColor}`}>
                                     {row.catCode}
                                   </span>
                                   <span className="font-bold text-slate-800">{row.category}</span>
                                 </div>
                               </td>
-                              <td className="py-2.5 px-3.5 text-slate-600">{row.description}</td>
-                              <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-900">
+                              <td className="py-2 px-3 text-slate-600 border-r border-slate-200">{row.description}</td>
+                              <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 border-r border-slate-200">
                                 {row.amount.toLocaleString()}
                               </td>
-                              <td className="py-2.5 px-3.5 text-center">
+                              <td className="py-2 px-3 text-center">
                                 <div className="flex items-center justify-center gap-2 text-slate-400">
+                                  <button type="button" className="hover:text-blue-600 transition-colors cursor-pointer" title="Edit row">
+                                    <Edit3 size={13} />
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -894,7 +955,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                                         setTariffRows(tariffRows.filter((r) => r.id !== row.id))
                                       }
                                     }}
-                                    className="hover:text-red-600 transition-colors cursor-pointer p-1"
+                                    className="hover:text-red-600 transition-colors cursor-pointer"
                                     title="Remove row"
                                   >
                                     <Trash2 size={13} />
@@ -916,10 +977,10 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
             {/* ══════════════════════════════════════════════════════════ */}
             <div className="lg:col-span-4 space-y-6">
               {/* CARD A: PATIENT & POLICY DETAILS */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-2xs space-y-4 hover:border-slate-300 transition-colors">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+              <div className="bg-white border border-slate-300 rounded-none p-5 shadow-md shadow-slate-200/60 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-pink-50 border border-pink-100 text-pink-700 flex items-center justify-center font-bold">
+                    <div className="w-8 h-8 rounded-none bg-pink-50 border border-pink-200 text-pink-700 flex items-center justify-center font-bold">
                       <User size={16} />
                     </div>
                     <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Patient &amp; Policy Details</h3>
@@ -927,122 +988,158 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                   <button
                     type="button"
                     onClick={onBack}
-                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1 cursor-pointer"
                   >
-                    <ExternalLink size={12} /> From Intake
+                    <ExternalLink size={12} /> From Intake Desk
                   </button>
                 </div>
 
-                {/* Patient Avatar & Title */}
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 font-extrabold text-base flex items-center justify-center font-mono border border-emerald-200">
+                {/* Patient Avatar & Title (Squared) */}
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-none bg-blue-700 text-white font-black text-sm flex items-center justify-center font-mono">
                     RK
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900">{patientName}</h4>
-                    <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
-                      <span>{age} YRS · {gender}</span>
-                      <span className="text-slate-300">•</span>
-                      <span className="font-mono">{uhid}</span>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-slate-900">{patientName} ({age}Y/{gender})</h4>
+                      <span className="px-2 py-0.5 rounded-none bg-emerald-100 text-emerald-900 font-bold text-[10px] border border-emerald-300 flex items-center gap-0.5">
+                        <Check size={10} /> Active Case
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono">
+                      UHID: <strong className="text-slate-800">{uhid}</strong> | IP No: <strong className="text-slate-800">{admissionNo}</strong>
                     </div>
                   </div>
                 </div>
 
-                {/* Meta Rows */}
-                <div className="space-y-2 text-xs">
-                  <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-200/70 flex items-start gap-2">
-                    <CreditCard size={14} className="text-blue-600 shrink-0 mt-0.5" />
+                {/* 2x3 Grid of Patient Attribute Tiles (Squared) */}
+                <div className="grid grid-cols-2 gap-2.5 text-xs pt-1">
+                  <div className="p-2.5 bg-slate-50 rounded-none border border-slate-300 flex items-start gap-2">
+                    <div className="text-blue-700 mt-0.5"><Shield size={14} /></div>
                     <div>
-                      <div className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Policy Number</div>
-                      <div className="font-mono font-bold text-slate-900">{policyNo}</div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Policy Number</span>
+                      <span className="font-mono font-bold text-slate-900">{policyNo}</span>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-200/70 flex items-start gap-2">
-                    <Building2 size={14} className="text-purple-600 shrink-0 mt-0.5" />
+                  <div className="p-2.5 bg-slate-50 rounded-none border border-slate-300 flex items-start gap-2">
+                    <div className="text-blue-700 mt-0.5"><CreditCard size={14} /></div>
                     <div>
-                      <div className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Corporate / Group Plan</div>
-                      <div className="font-semibold text-slate-900">{corporate}</div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">TPA Card ID</span>
+                      <span className="font-mono font-bold text-slate-900">{tpaCardId}</span>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-200/70 flex items-start gap-2">
-                    <IndianRupee size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="p-2.5 bg-slate-50 rounded-none border border-slate-300 flex items-start gap-2">
+                    <div className="text-amber-700 mt-0.5"><Building2 size={14} /></div>
                     <div>
-                      <div className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Sum Insured Limit</div>
-                      <div className="font-mono font-bold text-emerald-700">₹ {parseInt(sumInsured).toLocaleString()}</div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Corporate Group</span>
+                      <span className="font-bold text-slate-900 truncate block max-w-[110px]" title={corporate}>{corporate}</span>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-200/70 flex items-start gap-2">
-                    <Bed size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="p-2.5 bg-slate-50 rounded-none border border-slate-300 flex items-start gap-2">
+                    <div className="text-emerald-700 mt-0.5"><IndianRupee size={14} /></div>
                     <div>
-                      <div className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Admitted Bed Category</div>
-                      <div className="font-semibold text-slate-900">{roomCategory}</div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Insured Amount</span>
+                      <span className="font-mono font-bold text-emerald-800">₹ {parseInt(sumInsured).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-50 rounded-none border border-slate-300 flex items-start gap-2">
+                    <div className="text-purple-700 mt-0.5"><Building2 size={14} /></div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Hospital</span>
+                      <span className="font-bold text-slate-900">{hospitalName}</span>
+                      <span className="text-[10px] text-slate-500 block">{hospitalCity}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-50 rounded-none border border-slate-300 flex items-start gap-2">
+                    <div className="text-indigo-700 mt-0.5"><Bed size={14} /></div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Admission Type</span>
+                      <span className="font-bold text-slate-900">{admissionType}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* CARD B: MANDATORY ATTACHMENTS */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-2xs space-y-4 hover:border-slate-300 transition-colors">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+              {/* CARD B: ATTACHED DOSSIER (5) */}
+              <div className="bg-white border border-slate-300 rounded-none p-5 shadow-md shadow-slate-200/60 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 flex items-center justify-center font-bold">
-                      <Paperclip size={16} />
+                    <div className="w-8 h-8 rounded-none bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center font-bold">
+                      <Layers size={16} />
                     </div>
-                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Mandatory Dossier Files</h3>
+                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Attached Dossier ({attachedFiles.length})</h3>
                   </div>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10.5px] border border-emerald-200 flex items-center gap-1">
-                    <Check size={11} /> 5/5 Ready
-                  </span>
+
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-none bg-emerald-100 text-emerald-900 font-bold text-[10px] border border-emerald-300 flex items-center gap-0.5">
+                      <Check size={10} /> Ready
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => notify("File upload dialog triggered", "success")}
+                      className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Plus size={13} /> Upload
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2 text-xs">
                   {attachedFiles.map((file) => (
                     <div
                       key={file.id}
-                      className="p-3 bg-slate-50/70 hover:bg-slate-100/70 rounded-xl border border-slate-200/80 flex items-center justify-between gap-2 transition-colors"
+                      className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-none border border-slate-300 flex items-center justify-between gap-2 transition-colors"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                        <span className={`w-6 h-6 rounded-lg text-white font-bold text-[9px] flex items-center justify-center shrink-0 ${file.iconBg}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2 h-2 rounded-none bg-emerald-600 shrink-0" />
+                        <span className={`w-5 h-5 rounded-none text-white font-bold text-[9px] flex items-center justify-center shrink-0 ${file.iconBg}`}>
                           <FileText size={11} />
                         </span>
-                        <span className="truncate font-semibold text-slate-800 text-[11.5px]">{file.name}</span>
+                        <span className="truncate font-semibold text-slate-800">{file.name}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[10.5px] text-slate-400 font-mono">{file.size}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-slate-500 font-mono">{file.size}</span>
+                        <button type="button" className="text-blue-600 hover:text-blue-800 p-0.5 cursor-pointer" title="View file">
+                          <Eye size={13} />
+                        </button>
+                        <button type="button" className="text-red-500 hover:text-red-700 p-0.5 cursor-pointer" title="Remove file">
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* CARD C: IMPORTANT NOTES */}
-              <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 space-y-2.5 text-xs text-blue-950">
-                <div className="flex items-center gap-2 font-bold text-blue-900">
-                  <Lightbulb size={16} className="text-blue-600" />
-                  <span>Submission Guidance</span>
+              {/* CARD C: IMPORTANT NOTES (Squared) */}
+              <div className="bg-amber-50/60 border-l-4 border-l-amber-500 border-y border-r border-amber-300 rounded-none p-4 space-y-2.5 text-xs">
+                <div className="flex items-center gap-2 text-amber-950 font-bold">
+                  <Lightbulb size={16} className="text-amber-700" />
+                  <span>Important Notes</span>
                 </div>
-                <ul className="space-y-1.5 text-[11.5px] text-blue-900/80 leading-normal list-disc pl-4">
-                  <li>Form is auto-populated from admission EMR &amp; treating doctor notes.</li>
-                  <li>Verify all clinical diagnoses and estimated charges before submission.</li>
-                  <li>Required KYC and diagnostic attachments are bundled automatically.</li>
-                  <li>TPA turnaround SLA is typically 2 to 4 hours for initial pre-auth response.</li>
+                <ul className="space-y-1.5 text-[11.5px] text-amber-950 leading-normal list-disc pl-4">
+                  <li>Form will be auto-populated with insured patient and admission details.</li>
+                  <li>Please verify all clinical and cost details before proceeding.</li>
+                  <li>Required documents must be attached to submit the request.</li>
+                  <li>You can save as draft and continue later.</li>
                 </ul>
               </div>
             </div>
           </div>
 
           {/* ─────────────────────────────────────────────────────────── */}
-          {/* BOTTOM ACTION BAR                                           */}
+          {/* BOTTOM ACTION BAR (0 BORDER RADIUS / SQUARED)               */}
           {/* ─────────────────────────────────────────────────────────── */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+          <div className="bg-white border border-slate-300 rounded-none p-4 flex flex-wrap items-center justify-between gap-3 shadow-md shadow-slate-200/60">
             <button
               type="button"
               onClick={onBack}
-              className="h-10 px-4 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="h-9 px-4 rounded-none bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <X size={14} /> Cancel
             </button>
@@ -1051,7 +1148,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               <button
                 type="button"
                 onClick={() => notify("All form fields validated with zero clinical discrepancies!", "success")}
-                className="h-10 px-4 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="h-9 px-4 rounded-none bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <CheckCircle2 size={14} className="text-purple-700" /> Validate Form
               </button>
@@ -1059,7 +1156,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               <button
                 type="button"
                 onClick={() => setStep(2)}
-                className="h-10 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
+                className="h-10 px-6 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer"
               >
                 <span>Continue to Step 2</span>
                 <ArrowRight size={14} />
@@ -1070,15 +1167,15 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 3. STEP 2: 4-PAGE AUTHENTIC OFFICIAL FORM VIEWER              */}
+      {/* 3. STEP 2: 4-PAGE AUTHENTIC OFFICIAL FORM VIEWER (SQUARED)    */}
       {/* ───────────────────────────────────────────────────────────── */}
       {step === 2 && (
-        <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
+        <div className="p-6 space-y-6 max-w-5xl mx-auto w-full">
           {/* Top 4-Page Navigation Control Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-none border border-slate-300 shadow-md shadow-slate-200/60">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Pages:</span>
-              <div className="flex items-center bg-slate-100 p-1 border border-slate-200 rounded-xl text-xs font-semibold">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Pages:</span>
+              <div className="flex items-center bg-slate-100 p-0.5 border border-slate-300 rounded-none text-xs font-semibold">
                 {[
                   { p: 1, label: "Page 1 (TPA & Patient)" },
                   { p: 2, label: "Page 2 (Doctor & Clinical)" },
@@ -1090,10 +1187,10 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                     key={item.p}
                     type="button"
                     onClick={() => setActivePdfPage(item.p)}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-none transition-all cursor-pointer ${
                       activePdfPage === item.p
-                        ? "bg-blue-600 text-white font-bold shadow-2xs"
-                        : "text-slate-600 hover:text-slate-900"
+                        ? "bg-blue-600 text-white font-bold"
+                        : "text-slate-700 hover:text-slate-900"
                     }`}
                   >
                     {item.label}
@@ -1106,10 +1203,10 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               <button
                 type="button"
                 onClick={() => setHighlightFields(!highlightFields)}
-                className={`h-9 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`h-9 px-3 rounded-none border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
                   highlightFields
-                    ? "bg-blue-50 border-blue-200 text-blue-900"
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "bg-blue-50 border-blue-400 text-blue-900"
+                    : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 <Sparkles size={13} className={highlightFields ? "text-blue-600" : "text-slate-400"} />
@@ -1119,7 +1216,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               <button
                 type="button"
                 onClick={handlePrintForm}
-                className="h-9 px-3.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                className="h-9 px-3.5 rounded-none bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Printer size={14} /> Print
               </button>
@@ -1127,9 +1224,9 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               <button
                 type="button"
                 onClick={handleDownloadFilledPdf}
-                className="h-9 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                className="h-9 px-4 rounded-none bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Download size={14} /> Download Form
+                <Download size={14} /> Download 4-Page Form
               </button>
             </div>
           </div>
@@ -1140,37 +1237,37 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
           <div className="space-y-8">
             {/* PAGE 1 */}
             {(activePdfPage === 1 || activePdfPage === 0) && (
-              <div className="bg-white border border-slate-300 p-8 rounded-2xl shadow-sm space-y-4 text-slate-900 font-sans relative">
+              <div className="bg-white border-2 border-slate-400 p-7 rounded-none shadow-xl shadow-slate-300/80 space-y-4 text-slate-900 font-sans relative">
                 {/* Official Header */}
-                <div className="bg-teal-600 text-white p-4 rounded-xl flex items-center justify-between">
+                <div className="bg-[#14b8a6] text-white p-3.5 rounded-none flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-extrabold tracking-wide uppercase">PRE – AUTHORIZATION FORM</h2>
-                    <p className="text-[10px] font-medium tracking-wide uppercase text-teal-100">REQUEST FOR CASHLESS HOSPITALIZATION FOR HEALTH INSURANCE POLICY / TO BE FILLED IN BLOCK LETTERS</p>
+                    <h2 className="text-lg font-black tracking-wide uppercase">PRE – AUTHORIZATION FORM</h2>
+                    <p className="text-[10px] font-medium tracking-wide uppercase">REQUEST FOR CASHLESS HOSPITALIZATION FOR HEALTH INSURANCE POLICY / TO BE FILLED IN BLOCK LETTERS</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs font-bold uppercase">{activeInsurer.companyName}</div>
+                    <div className="text-xs font-black uppercase">{activeInsurer.companyName}</div>
                     <div className="text-[9px] text-teal-100">IRDAI REG / TPA LICENCE NO: 017</div>
                   </div>
                 </div>
 
                 {/* Orange Page Ribbon & Contact Details Box */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 pb-2 text-[11px]">
-                  <span className="px-3 py-1 bg-amber-500 text-white font-bold text-[10.5px] rounded-lg">
-                    Please fill all pages : Page 1 of 4
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-800 pb-2 text-[11px]">
+                  <span className="px-3 py-1 bg-[#f97316] text-white font-bold text-[10.5px] rounded-none italic">
+                    Please fill all pages : This is Page 1 of 4
                   </span>
-                  <div className="text-right text-[10.5px] text-slate-600 font-mono">
-                    <span>Tel: 1860 425 3232 | Fax: 1860 425 4242 | Email: {emailTo}</span>
+                  <div className="text-right text-[10px] text-slate-700 font-mono">
+                    <span>Tel: 1860 425 3232 | Fax: 1860 425 4242 | Email: {emailTo} | Web: {activeInsurer.portalUrl || "www.goodhealthtpa.com"}</span>
                   </div>
                 </div>
 
                 {/* SECTION 1: DETAILS OF THIRD PARTY ADMINISTRATOR AND HOSPITAL */}
-                <div className="border border-blue-900/40 rounded-xl overflow-hidden">
-                  <div className="bg-slate-900 text-white px-3.5 py-2 text-xs font-bold flex items-center gap-2">
-                    <span className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-[10px]">1</span>
+                <div className="border border-blue-900 rounded-none overflow-hidden">
+                  <div className="bg-blue-950 text-white px-3 py-1.5 text-xs font-bold flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-none bg-blue-600 flex items-center justify-center text-[10px]">1</span>
                     <span>DETAILS OF THIRD PARTY ADMINISTRATOR AND HOSPITAL</span>
                   </div>
 
-                  <div className="p-3.5 bg-slate-50/70 space-y-2 text-[11px]">
+                  <div className="p-3 bg-slate-50 space-y-2 text-[11px]">
                     <div className="flex flex-wrap items-center justify-between gap-1">
                       <span className="w-44 font-semibold text-slate-700">NAME OF THE TPA:</span>
                       <CharBoxGrid value={activeInsurer.companyName} count={35} highlight={highlightFields} />
@@ -1211,13 +1308,13 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                 </div>
 
                 {/* SECTION 2: DETAILS OF INSURED/PATIENT */}
-                <div className="border border-blue-900/40 rounded-xl overflow-hidden">
-                  <div className="bg-slate-900 text-white px-3.5 py-2 text-xs font-bold flex items-center gap-2">
-                    <span className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-[10px]">2</span>
-                    <span>DETAILS OF INSURED / PATIENT (EMR RECORD)</span>
+                <div className="border border-blue-900 rounded-none overflow-hidden">
+                  <div className="bg-blue-950 text-white px-3 py-1.5 text-xs font-bold flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-none bg-blue-600 flex items-center justify-center text-[10px]">2</span>
+                    <span>TO BE FILLED IN BY INSURED/PATIENT : DETAILS OF INSURED/PATIENT</span>
                   </div>
 
-                  <div className="p-3.5 bg-slate-50/70 space-y-2 text-[11px]">
+                  <div className="p-3 bg-slate-50 space-y-2 text-[11px]">
                     <div className="flex flex-wrap items-center justify-between gap-1">
                       <span className="w-44 font-semibold text-slate-700">PATIENT NAME:</span>
                       <CharBoxGrid value={patientName} count={35} highlight={highlightFields} />
@@ -1229,6 +1326,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                         <div className="flex items-center gap-3 font-semibold text-xs">
                           <span className="flex items-center gap-1 text-blue-900 font-bold"><CheckSquare size={14} className="text-blue-600" /> MALE</span>
                           <span className="flex items-center gap-1 text-slate-400"><Square size={14} /> FEMALE</span>
+                          <span className="flex items-center gap-1 text-slate-400"><Square size={14} /> THIRD GENDER</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
@@ -1264,34 +1362,34 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
 
             {/* PAGE 2 */}
             {(activePdfPage === 2 || activePdfPage === 0) && (
-              <div className="bg-white border border-slate-300 p-8 rounded-2xl shadow-sm space-y-4 text-slate-900 font-sans relative">
-                <div className="bg-teal-600 text-white p-4 rounded-xl flex items-center justify-between">
+              <div className="bg-white border-2 border-slate-400 p-7 rounded-none shadow-xl shadow-slate-300/80 space-y-4 text-slate-900 font-sans relative">
+                <div className="bg-[#14b8a6] text-white p-3.5 rounded-none flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-extrabold tracking-wide uppercase">PRE – AUTHORIZATION FORM</h2>
-                    <p className="text-[10px] font-medium tracking-wide uppercase text-teal-100">REQUEST FOR CASHLESS HOSPITALIZATION FOR HEALTH INSURANCE POLICY / TO BE FILLED IN BLOCK LETTERS</p>
+                    <h2 className="text-lg font-black tracking-wide uppercase">PRE – AUTHORIZATION FORM</h2>
+                    <p className="text-[10px] font-medium tracking-wide uppercase">REQUEST FOR CASHLESS HOSPITALIZATION FOR HEALTH INSURANCE POLICY / TO BE FILLED IN BLOCK LETTERS</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs font-bold uppercase">{activeInsurer.companyName}</div>
+                    <div className="text-xs font-black uppercase">{activeInsurer.companyName}</div>
                     <div className="text-[9px] text-teal-100">IRDAI REG / TPA LICENCE NO: 017</div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 pb-2 text-[11px]">
-                  <span className="px-3 py-1 bg-amber-500 text-white font-bold text-[10.5px] rounded-lg">
-                    Please fill all pages : Page 2 of 4
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-800 pb-2 text-[11px]">
+                  <span className="px-3 py-1 bg-[#f97316] text-white font-bold text-[10.5px] rounded-none italic">
+                    Please fill all pages : This is Page 2 of 4
                   </span>
-                  <div className="text-right text-[10.5px] text-slate-600 font-mono">
+                  <div className="text-right text-[10px] text-slate-700 font-mono">
                     <span>Tel: 1860 425 3232 | Fax: 1860 425 4242 | Email: {emailTo}</span>
                   </div>
                 </div>
 
-                <div className="border border-emerald-900/40 rounded-xl overflow-hidden">
-                  <div className="bg-slate-900 text-white px-3.5 py-2 text-xs font-bold flex items-center gap-2">
-                    <span className="w-4 h-4 rounded-full bg-emerald-600 flex items-center justify-center text-[10px]">3</span>
+                <div className="border border-emerald-900 rounded-none overflow-hidden">
+                  <div className="bg-emerald-950 text-white px-3 py-1.5 text-xs font-bold flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-none bg-emerald-600 flex items-center justify-center text-[10px]">3</span>
                     <span>TO BE FILLED IN BY TREATING DOCTOR / HOSPITAL (CLINICAL DETAILS)</span>
                   </div>
 
-                  <div className="p-3.5 bg-slate-50/70 space-y-2.5 text-[11px]">
+                  <div className="p-3 bg-slate-50 space-y-2.5 text-[11px]">
                     <div className="flex flex-wrap items-center justify-between gap-1">
                       <div className="flex items-center gap-1">
                         <span className="w-44 font-semibold text-slate-700">TREATING DOCTOR NAME:</span>
@@ -1303,23 +1401,37 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span className="w-44 font-semibold text-slate-700">PROVISIONAL DIAGNOSIS:</span>
-                      <CharBoxGrid value={provisionalDiagnosis} count={35} highlight={highlightFields} />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="p-2 bg-white rounded-none border border-slate-300">
+                        <span className="text-slate-500 block text-[10px] uppercase font-bold">Provisional Diagnosis:</span>
+                        <span className="font-bold text-slate-900">{provisionalDiagnosis}</span>
+                      </div>
+                      <div className="p-2 bg-white rounded-none border border-slate-300 flex items-center justify-between">
+                        <span className="text-slate-500 text-[10px] uppercase font-bold">ICD-10 Code:</span>
+                        <CharBoxGrid value={icd10Code.replace(".", "")} count={6} highlight={highlightFields} />
+                      </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span className="w-44 font-semibold text-slate-700">ICD-10 CODE:</span>
-                      <CharBoxGrid value={icd10Code} count={10} highlight={highlightFields} />
+                    <div className="p-2.5 bg-white rounded-none border border-slate-300 space-y-1.5">
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Proposed Line of Treatment:</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs font-semibold">
+                        <span className="flex items-center gap-1 text-slate-400"><Square size={13} /> Medical</span>
+                        <span className="flex items-center gap-1 text-emerald-900 font-bold"><CheckSquare size={13} className="text-emerald-600" /> Surgical</span>
+                        <span className="flex items-center gap-1 text-slate-400"><Square size={13} /> Intensive Care</span>
+                        <span className="flex items-center gap-1 text-slate-400"><Square size={13} /> Investigation</span>
+                        <span className="flex items-center gap-1 text-slate-400"><Square size={13} /> Non-Allopathic</span>
+                      </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span className="w-44 font-semibold text-slate-700">PROPOSED PROCEDURE:</span>
-                      <CharBoxGrid value={procedure} count={35} highlight={highlightFields} />
-                    </div>
-
-                    <div className="p-2.5 bg-white border border-slate-200 rounded-lg text-slate-700 text-xs leading-relaxed">
-                      <strong className="text-slate-900">Clinical Summary:</strong> {clinicalHistory}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="p-2 bg-white rounded-none border border-slate-300">
+                        <span className="text-slate-500 block text-[10px] uppercase font-bold">Name of Surgery:</span>
+                        <span className="font-bold text-slate-900">{procedure}</span>
+                      </div>
+                      <div className="p-2 bg-white rounded-none border border-slate-300 flex items-center justify-between">
+                        <span className="text-slate-500 text-[10px] uppercase font-bold">ICD-10 PCS:</span>
+                        <CharBoxGrid value={icd10Pcs} count={7} highlight={highlightFields} />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1328,37 +1440,78 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
 
             {/* PAGE 3 */}
             {(activePdfPage === 3 || activePdfPage === 0) && (
-              <div className="bg-white border border-slate-300 p-8 rounded-2xl shadow-sm space-y-4 text-slate-900 font-sans relative">
-                <div className="bg-teal-600 text-white p-4 rounded-xl flex items-center justify-between">
+              <div className="bg-white border-2 border-slate-400 p-7 rounded-none shadow-xl shadow-slate-300/80 space-y-4 text-slate-900 font-sans relative">
+                <div className="bg-[#14b8a6] text-white p-3.5 rounded-none flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-extrabold tracking-wide uppercase">PRE – AUTHORIZATION FORM</h2>
-                    <p className="text-[10px] font-medium tracking-wide uppercase text-teal-100">PAGE 3: ITEMIZED TARIFF ESTIMATE</p>
+                    <h2 className="text-lg font-black tracking-wide uppercase">PRE – AUTHORIZATION FORM</h2>
+                    <p className="text-[10px] font-medium tracking-wide uppercase">REQUEST FOR CASHLESS HOSPITALIZATION FOR HEALTH INSURANCE POLICY / TO BE FILLED IN BLOCK LETTERS</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs font-bold uppercase">{activeInsurer.companyName}</div>
+                    <div className="text-xs font-black uppercase">{activeInsurer.companyName}</div>
                     <div className="text-[9px] text-teal-100">IRDAI REG / TPA LICENCE NO: 017</div>
                   </div>
                 </div>
 
-                <div className="border border-amber-900/40 rounded-xl overflow-hidden">
-                  <div className="bg-slate-900 text-white px-3.5 py-2 text-xs font-bold flex items-center gap-2">
-                    <span className="w-4 h-4 rounded-full bg-amber-600 flex items-center justify-center text-[10px]">4</span>
-                    <span>ESTIMATED COST OF HOSPITALIZATION &amp; TARIFF BREAKUP</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-800 pb-2 text-[11px]">
+                  <span className="px-3 py-1 bg-[#f97316] text-white font-bold text-[10.5px] rounded-none italic">
+                    Please fill all pages : This is Page 3 of 4
+                  </span>
+                  <div className="text-right text-[10px] text-slate-700 font-mono">
+                    <span>Tel: 1860 425 3232 | Fax: 1860 425 4242 | Email: {emailTo}</span>
+                  </div>
+                </div>
+
+                <div className="border border-amber-900 rounded-none overflow-hidden">
+                  <div className="bg-amber-950 text-white px-3 py-1.5 text-xs font-bold">
+                    DETAILS OF PATIENT ADMITTED &amp; COST ESTIMATION
                   </div>
 
-                  <div className="p-3.5 bg-slate-50/70 space-y-2 text-[11px]">
-                    <div className="space-y-1.5 font-mono text-xs">
-                      {tariffRows.map((r) => (
-                        <div key={r.id} className="flex items-center justify-between p-2 bg-white border border-slate-200 rounded-lg">
-                          <span className="font-sans font-semibold text-slate-800">{r.category}:</span>
-                          <span className="font-bold text-slate-900">₹ {r.amount.toLocaleString()}</span>
-                        </div>
-                      ))}
+                  <div className="p-3 bg-slate-50 space-y-2.5 text-[11px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-slate-700">DATE OF ADMISSION:</span>
+                        <CharBoxGrid value="28092026" count={8} highlight={highlightFields} />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-slate-700">EXPECTED STAY:</span>
+                        <CharBoxGrid value="03" count={2} highlight={highlightFields} />
+                        <span className="text-[10px] text-slate-500 font-semibold">DAYS</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-slate-700">ROOM TYPE:</span>
+                        <span className="font-bold text-slate-900">{roomCategory}</span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-200 font-bold text-xs text-amber-950 mt-2">
-                      <span>SUM-TOTAL ESTIMATED COST:</span>
-                      <span className="text-base font-black text-amber-800 font-mono">₹ {totalEstimatedCost.toLocaleString()}</span>
+                    {/* COST BREAKDOWN IN CHARACTER BOXES */}
+                    <div className="p-3 bg-white rounded-none border border-slate-300 space-y-2">
+                      <div className="text-xs font-bold text-amber-950 uppercase border-b pb-1">
+                        COST IN INR / RS. (ITEMIZED SCHEDULE)
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className="flex items-center justify-between p-1.5 border border-slate-300 rounded-none">
+                          <span>PER DAY ROOM RENT + NURSING &amp; DIET:</span>
+                          <CharBoxGrid value={"015000"} count={6} highlight={highlightFields} />
+                        </div>
+                        <div className="flex items-center justify-between p-1.5 border border-slate-300 rounded-none">
+                          <span>INVESTIGATIONS &amp; DIAGNOSTICS:</span>
+                          <CharBoxGrid value={"008000"} count={6} highlight={highlightFields} />
+                        </div>
+                        <div className="flex items-center justify-between p-1.5 border border-slate-300 rounded-none">
+                          <span>OT CHARGES &amp; CONSUMABLES:</span>
+                          <CharBoxGrid value={"010000"} count={6} highlight={highlightFields} />
+                        </div>
+                        <div className="flex items-center justify-between p-1.5 border border-slate-300 rounded-none">
+                          <span>PROFESSIONAL FEES SURGEON + ANESTHESIA:</span>
+                          <CharBoxGrid value={"045000"} count={6} highlight={highlightFields} />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-2 bg-amber-50 rounded-none border border-amber-300 font-bold text-xs text-amber-950">
+                        <span>SUM-TOTAL EXPECTED COST OF HOSPITALIZATION:</span>
+                        <CharBoxGrid value={String(totalEstimatedCost).padStart(6, "0")} count={6} highlight={highlightFields} />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1367,32 +1520,41 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
 
             {/* PAGE 4 */}
             {(activePdfPage === 4 || activePdfPage === 0) && (
-              <div className="bg-white border border-slate-300 p-8 rounded-2xl shadow-sm space-y-4 text-slate-900 font-sans relative">
-                <div className="bg-teal-600 text-white p-4 rounded-xl flex items-center justify-between">
+              <div className="bg-white border-2 border-slate-400 p-7 rounded-none shadow-xl shadow-slate-300/80 space-y-4 text-slate-900 font-sans relative">
+                <div className="bg-[#14b8a6] text-white p-3.5 rounded-none flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-extrabold tracking-wide uppercase">PRE – AUTHORIZATION FORM</h2>
-                    <p className="text-[10px] font-medium tracking-wide uppercase text-teal-100">PAGE 4: DECLARATIONS &amp; SIGNATURES</p>
+                    <h2 className="text-lg font-black tracking-wide uppercase">PRE – AUTHORIZATION FORM</h2>
+                    <p className="text-[10px] font-medium tracking-wide uppercase">REQUEST FOR CASHLESS HOSPITALIZATION FOR HEALTH INSURANCE POLICY / TO BE FILLED IN BLOCK LETTERS</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs font-bold uppercase">{activeInsurer.companyName}</div>
+                    <div className="text-xs font-black uppercase">{activeInsurer.companyName}</div>
                     <div className="text-[9px] text-teal-100">IRDAI REG / TPA LICENCE NO: 017</div>
                   </div>
                 </div>
 
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-800 pb-2 text-[11px]">
+                  <span className="px-3 py-1 bg-[#f97316] text-white font-bold text-[10.5px] rounded-none italic">
+                    Please fill all pages : This is Page 4 of 4
+                  </span>
+                  <div className="text-right text-[10px] text-slate-700 font-mono">
+                    <span>Tel: 1860 425 3232 | Fax: 1860 425 4242 | Email: {emailTo}</span>
+                  </div>
+                </div>
+
                 {/* SIGNATURE BLOCKS */}
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 text-xs">
-                  <div className="border border-slate-200 p-4 text-center rounded-xl bg-slate-50 space-y-1.5">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">DOCTOR'S NAME AND SIGN</div>
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t-2 border-slate-800 text-xs">
+                  <div className="border border-slate-400 p-3 text-center rounded-none bg-slate-50 space-y-1">
+                    <div className="text-[10px] text-slate-500 font-bold uppercase">DOCTOR'S NAME AND SIGN</div>
                     <div className="font-serif italic text-blue-900 text-sm font-bold py-1">{doctor}</div>
-                    <div className="text-[10.5px] text-slate-500">{doctorRegNo} · {doctorQualification}</div>
-                    <div className="text-[10px] text-emerald-700 font-bold">✓ Digitally Signed &amp; Verified</div>
+                    <div className="text-[10px] text-slate-500">{doctorRegNo} · {doctorQualification}</div>
+                    <div className="text-[9.5px] text-emerald-800 font-bold">✓ Digitally Signed &amp; Verified</div>
                   </div>
 
-                  <div className="border border-slate-200 p-4 text-center rounded-xl bg-slate-50 space-y-1.5">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">HOSPITAL SEAL &amp; NODAL SIGN</div>
+                  <div className="border border-slate-400 p-3 text-center rounded-none bg-slate-50 space-y-1">
+                    <div className="text-[10px] text-slate-500 font-bold uppercase">HOSPITAL SEAL INCLUDING HOSPITAL ID</div>
                     <div className="font-serif text-slate-900 text-xs font-bold py-1">{hospitalName}</div>
-                    <div className="text-[10.5px] text-slate-500 font-mono">ROHINI ID: {hospitalRohiniId}</div>
-                    <div className="text-[10px] text-blue-700 font-bold">Nodal Insurance Officer Sign-off</div>
+                    <div className="text-[10px] text-slate-500 font-mono">ROHINI ID: {hospitalRohiniId}</div>
+                    <div className="text-[9.5px] text-blue-800 font-bold">Nodal Insurance Officer Sign-off</div>
                   </div>
                 </div>
               </div>
@@ -1400,18 +1562,18 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
           </div>
 
           {/* Bottom Step 2 Navigation */}
-          <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+          <div className="flex items-center justify-between pt-4 border-t border-slate-300">
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="h-10 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs cursor-pointer transition-colors"
+              className="h-9 px-4 rounded-none bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs cursor-pointer"
             >
               ← Back to Requisition Form
             </button>
             <button
               type="button"
               onClick={() => setStep(3)}
-              className="h-10 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-2 cursor-pointer transition-colors shadow-xs"
+              className="h-10 px-6 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer transition-colors"
             >
               Proceed to Email Dispatch <ChevronRight size={15} />
             </button>
@@ -1420,14 +1582,14 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 4. STEP 3: EMAIL DISPATCH                                     */}
+      {/* 4. STEP 3: EMAIL DISPATCH (SQUARED)                            */}
       {/* ───────────────────────────────────────────────────────────── */}
       {step === 3 && (
-        <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-2xs space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+        <div className="p-6 max-w-4xl mx-auto w-full space-y-5">
+          <div className="bg-white border border-slate-300 rounded-none p-6 shadow-md shadow-slate-200/60 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                <div className="w-9 h-9 rounded-none bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold">
                   <Mail size={18} />
                 </div>
                 <div>
@@ -1436,60 +1598,60 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                 </div>
               </div>
 
-              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 font-mono">
+              <span className="text-xs font-semibold text-emerald-900 bg-emerald-50 px-2.5 py-0.5 rounded-none border border-emerald-300 font-mono">
                 5 Attachments Ready
               </span>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">To (TPA / Insurer Desk) *</label>
+                  <label className="block font-bold text-slate-700 mb-1">To (TPA / Insurer Pre-Auth Desk) *</label>
                   <input type="email" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} className={sqField} />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">CC (Hospital Desk &amp; Patient)</label>
+                  <label className="block font-bold text-slate-700 mb-1">CC (Hospital Desk &amp; Patient)</label>
                   <input type="text" value={emailCc} onChange={(e) => setEmailCc(e.target.value)} className={sqField} />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Subject *</label>
+                <label className="block font-bold text-slate-700 mb-1">Subject *</label>
                 <input type="text" value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} className={`${sqField} font-bold text-slate-900`} />
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Email Body *</label>
-                <textarea rows={8} value={emailBody} onChange={(e) => setEmailBody(e.target.value)} className="w-full p-3.5 rounded-xl bg-slate-50/80 border border-slate-200 font-mono text-xs text-slate-800 leading-relaxed focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-2xs" />
+                <label className="block font-bold text-slate-700 mb-1">Email Body *</label>
+                <textarea rows={8} value={emailBody} onChange={(e) => setEmailBody(e.target.value)} className="w-full p-3 rounded-none bg-slate-50 border border-slate-300 font-mono text-xs text-slate-900 leading-relaxed shadow-none focus:outline-none focus:border-blue-700" />
               </div>
 
               {/* Attached Files List */}
               <div>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                <label className="block font-bold text-slate-700 mb-1">
                   Attached Pre-Auth Dossier Files ({attachedFiles.length})
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50/60 p-3.5 rounded-xl border border-slate-200/80">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-3 rounded-none border border-slate-300">
                   {attachedFiles.map((f) => (
-                    <div key={f.id} className="flex items-center gap-2.5 text-xs text-slate-800 bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                      <FileCheck size={14} className="text-emerald-600 shrink-0" />
+                    <div key={f.id} className="flex items-center gap-2 text-xs text-slate-800 bg-white p-2 rounded-none border border-slate-300">
+                      <FileCheck size={14} className="text-emerald-700 shrink-0" />
                       <span className="truncate font-semibold">{f.name}</span>
-                      <span className="text-slate-400 font-mono text-[10px] shrink-0">({f.size})</span>
+                      <span className="text-slate-500 font-mono text-[10px] shrink-0">({f.size})</span>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-              <button type="button" onClick={() => setStep(2)} className="h-10 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs transition-colors cursor-pointer">
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+              <button type="button" onClick={() => setStep(2)} className="h-9 px-4 rounded-none bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs transition-colors cursor-pointer">
                 ← Back to Form Preview
               </button>
               <button
                 type="button"
                 onClick={handleSendEmailDispatch}
-                className="h-10 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
+                className="h-10 px-6 rounded-none bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer"
               >
-                <Send size={14} /> Send Pre-Auth Email
+                <Send size={14} /> Send 4-Page Pre-Auth Email
               </button>
             </div>
           </div>
@@ -1497,26 +1659,26 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 5. STEP 4: TRACK STATUS & INGEST INBOUND SANCTION             */}
+      {/* 5. STEP 4: TRACK STATUS & INGEST INBOUND SANCTION (SQUARED)   */}
       {/* ───────────────────────────────────────────────────────────── */}
       {step === 4 && (
-        <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-6 space-y-5 shadow-2xs">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-3.5">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg border ${
-                  approvalRecorded ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-blue-50 text-blue-800 border-blue-200"
+        <div className="p-6 max-w-4xl mx-auto w-full space-y-6">
+          <div className="bg-white border border-slate-300 rounded-none p-6 space-y-4 shadow-md shadow-slate-200/60">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-11 h-11 rounded-none flex items-center justify-center font-bold text-lg border ${
+                  approvalRecorded ? "bg-emerald-50 text-emerald-800 border-emerald-300" : "bg-blue-50 text-blue-800 border-blue-300"
                 }`}>
-                  {approvalRecorded ? <CheckCircle2 size={24} className="text-emerald-600" /> : <Clock size={24} className="text-blue-600" />}
+                  {approvalRecorded ? <CheckCircle2 size={24} className="text-emerald-700" /> : <Clock size={24} className="text-blue-700" />}
                 </div>
                 <div>
-                  <div className="text-[11px] text-slate-400 font-mono font-bold uppercase tracking-wider">
+                  <div className="text-xs text-slate-500 font-mono font-bold uppercase">
                     {approvalRecorded ? "PRE-AUTHORIZATION SANCTIONED BY INSURER" : "PRE-AUTH DISPATCHED — AWAITING TPA REPLY"}
                   </div>
-                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 mt-0.5">
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                     <span>Case Ref: INS20250928056</span>
                     {approvalRecorded && (
-                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold font-mono">
+                      <span className="text-xs px-2.5 py-0.5 rounded-none bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold font-mono">
                         AUTH: {approvalCode}
                       </span>
                     )}
@@ -1524,30 +1686,30 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                 </div>
               </div>
               <div>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                  approvalRecorded ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                <span className={`px-3 py-1 rounded-none text-xs font-bold border ${
+                  approvalRecorded ? "bg-emerald-50 text-emerald-900 border-emerald-300" : "bg-blue-50 text-blue-900 border-blue-300"
                 }`}>
                   {approvalRecorded ? "✓ Sanctioned & Approved" : "⏳ Emailed · In Review at TPA"}
                 </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 text-xs bg-slate-50/70 p-4 rounded-xl border border-slate-200/80">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-50 p-3.5 rounded-none border border-slate-300">
               <div>
-                <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Patient / UHID</span>
-                <div className="font-bold text-slate-900 mt-0.5">{patientName} ({uhid})</div>
+                <span className="text-slate-500 font-bold uppercase text-[10px]">Patient / UHID</span>
+                <div className="font-bold text-slate-900">{patientName} ({uhid})</div>
               </div>
               <div>
-                <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Insurer / Form</span>
-                <div className="font-bold text-slate-900 mt-0.5">{activeInsurer.companyName}</div>
+                <span className="text-slate-500 font-bold uppercase text-[10px]">Insurer / Form</span>
+                <div className="font-bold text-slate-900">{activeInsurer.companyName}</div>
               </div>
               <div>
-                <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Requested Amount</span>
-                <div className="font-bold text-slate-900 font-mono mt-0.5">₹ {totalEstimatedCost.toLocaleString()}</div>
+                <span className="text-slate-500 font-bold uppercase text-[10px]">Requested Amount</span>
+                <div className="font-bold text-slate-900 font-mono">₹ {totalEstimatedCost.toLocaleString()}</div>
               </div>
               <div>
-                <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">{approvalRecorded ? "Approved Amount" : "Current Status"}</span>
-                <div className={`font-black font-mono text-sm mt-0.5 ${approvalRecorded ? "text-emerald-700" : "text-blue-600"}`}>
+                <span className="text-slate-500 font-bold uppercase text-[10px]">{approvalRecorded ? "Approved Amount" : "Current Status"}</span>
+                <div className={`font-black font-mono text-sm ${approvalRecorded ? "text-emerald-700" : "text-blue-700"}`}>
                   {approvalRecorded ? `₹ ${parseInt(approvedAmount).toLocaleString()}` : "Emailed to TPA Desk"}
                 </div>
               </div>
@@ -1556,40 +1718,40 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
             {/* Ingestion & Action Section */}
             <div className="pt-2">
               {approvalRecorded ? (
-                <div className="p-5 bg-emerald-50/60 border border-emerald-200 rounded-2xl space-y-4">
+                <div className="p-4 bg-emerald-50/70 border border-emerald-300 rounded-none space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-bold text-emerald-950">
-                      <CheckCircle2 size={16} className="text-emerald-600" />
+                      <CheckCircle2 size={16} className="text-emerald-700" />
                       Sanction Letter Attached &amp; Validated
                     </div>
-                    <span className="text-[11px] font-mono text-emerald-800 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 font-semibold">
+                    <span className="text-[11px] font-mono text-emerald-900 bg-white px-2.5 py-0.5 rounded-none border border-emerald-300">
                       Received: {inboundEmailReceivedAt}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-white p-4 rounded-xl border border-emerald-100">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-white p-3.5 rounded-none border border-emerald-200">
                     <div>
-                      <div className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Authorization Code</div>
+                      <div className="text-slate-500 font-bold text-[10px] uppercase">Authorization Code</div>
                       <div className="font-bold text-slate-900 font-mono mt-0.5">{approvalCode}</div>
                     </div>
                     <div>
-                      <div className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Approved Amount</div>
+                      <div className="text-slate-500 font-bold text-[10px] uppercase">Approved Amount</div>
                       <div className="font-black text-emerald-700 font-mono mt-0.5">₹ {parseInt(approvedAmount).toLocaleString()}</div>
                     </div>
                     <div>
-                      <div className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Allowed Room Category</div>
+                      <div className="text-slate-500 font-bold text-[10px] uppercase">Allowed Room Category</div>
                       <div className="font-semibold text-slate-800 mt-0.5">{approvedRoom}</div>
                     </div>
                     <div>
-                      <div className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Attached Letter</div>
-                      <div className="font-semibold text-blue-600 mt-0.5 flex items-center gap-1">
+                      <div className="text-slate-500 font-bold text-[10px] uppercase">Attached Letter</div>
+                      <div className="font-semibold text-blue-700 mt-0.5 flex items-center gap-1">
                         <FileText size={13} /> {approvalLetterFile}
                       </div>
                     </div>
                   </div>
 
-                  <div className="text-xs text-slate-700 bg-white p-3.5 rounded-xl border border-emerald-100">
-                    <strong className="text-slate-900">TPA Notes:</strong> {approvalNotes}
+                  <div className="text-xs text-slate-700 bg-white p-3 rounded-none border border-emerald-200">
+                    <strong>TPA Notes:</strong> {approvalNotes}
                   </div>
 
                   <div className="pt-2 flex flex-wrap items-center gap-3">
@@ -1599,7 +1761,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                         notify("Patient admitted under approved cashless pre-auth!", "success")
                         onSubmitted(getActiveClaimId())
                       }}
-                      className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
+                      className="h-10 px-5 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer"
                     >
                       <Building2 size={15} /> Proceed to Inpatient Admission &amp; Bed Allocation <ArrowRight size={14} />
                     </button>
@@ -1607,14 +1769,14 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                     <button
                       type="button"
                       onClick={() => onSubmitted(getActiveClaimId())}
-                      className="h-10 px-4 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      className="h-10 px-4 rounded-none bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
                     >
                       <Package size={14} /> Open Case Management Hub
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="p-5 bg-slate-50/70 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-4">
+                <div className="p-4 bg-slate-50 border border-slate-300 rounded-none flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <div className="text-xs font-bold text-slate-900">Awaiting Insurer Sanction Response Email</div>
                     <div className="text-xs text-slate-500 mt-0.5">
@@ -1625,7 +1787,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                   <button
                     type="button"
                     onClick={() => setShowApprovalModal(true)}
-                    className="h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow-xs"
+                    className="h-9 px-4 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
                   >
                     <Paperclip size={14} /> Attach Sanction Letter &amp; Ingest
                   </button>
@@ -1634,14 +1796,14 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-            <button type="button" onClick={() => setStep(3)} className="h-10 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs transition-colors cursor-pointer">
+          <div className="flex items-center justify-between pt-3 border-t border-slate-300">
+            <button type="button" onClick={() => setStep(3)} className="h-9 px-4 rounded-none bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs transition-colors cursor-pointer">
               ← Back to Email Dispatch
             </button>
             <button
               type="button"
               onClick={() => onSubmitted(getActiveClaimId())}
-              className="h-10 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              className="h-9 px-5 rounded-none bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               View Case Details Hub <ArrowRight size={14} />
             </button>
@@ -1650,12 +1812,12 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* MODAL: INBOUND APPROVAL LETTER ATTACHMENT MODAL               */}
+      {/* MODAL: INBOUND APPROVAL LETTER ATTACHMENT MODAL (SQUARED)     */}
       {/* ───────────────────────────────────────────────────────────── */}
       {showApprovalModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto rounded-none">
+          <div className="bg-white rounded-none shadow-2xl border border-slate-400 w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between rounded-none">
               <div>
                 <h3 className="text-sm font-bold tracking-tight">Record TPA Pre-Auth Sanction</h3>
                 <p className="text-[11px] text-slate-400">Attach sanction letter received via email to authorize admission</p>
@@ -1663,7 +1825,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
               <button
                 type="button"
                 onClick={() => setShowApprovalModal(false)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                className="w-8 h-8 rounded-none hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -1671,7 +1833,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
 
             <div className="p-6 space-y-4 text-xs">
               <div>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Pre-Auth Decision Outcome *</label>
+                <label className="block font-bold text-slate-700 mb-1">Pre-Auth Decision Outcome *</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { id: "Approved", label: "Approved" },
@@ -1683,10 +1845,10 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                       key={o.id}
                       type="button"
                       onClick={() => setApprovalOutcome(o.id as any)}
-                      className={`py-2 px-3 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                      className={`py-2 px-3 rounded-none border text-xs font-bold transition-colors cursor-pointer ${
                         approvalOutcome === o.id
-                          ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
-                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                          ? "bg-emerald-700 text-white border-emerald-800"
+                          : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
                       }`}
                     >
                       {o.label}
@@ -1697,7 +1859,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Authorization / Sanction Code *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Authorization / Sanction Code *</label>
                   <input
                     type="text"
                     value={approvalCode}
@@ -1707,7 +1869,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Approved Initial Amount (₹) *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Approved Initial Amount (₹) *</label>
                   <input
                     type="text"
                     value={approvedAmount}
@@ -1718,7 +1880,7 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Allowed Room Category</label>
+                  <label className="block font-bold text-slate-700 mb-1">Allowed Room Category</label>
                   <input
                     type="text"
                     value={approvedRoom}
@@ -1727,38 +1889,38 @@ TOTAL PRE-AUTH ESTIMATE : Rs. ${totalEstimatedCost.toLocaleString()}
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Approval Letter Document Name</label>
+                  <label className="block font-bold text-slate-700 mb-1">Approval Letter Document Name</label>
                   <input
                     type="text"
                     value={approvalLetterFile}
                     readOnly
-                    className={`${sqField} bg-slate-100 font-mono text-slate-500`}
+                    className={`${sqField} bg-slate-100 font-mono`}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">TPA Approval Conditions &amp; Notes</label>
+                <label className="block font-bold text-slate-700 mb-1">TPA Approval Conditions &amp; Notes</label>
                 <textarea
                   rows={2}
                   value={approvalNotes}
                   onChange={(e) => setApprovalNotes(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-slate-50/80 border border-slate-200 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs font-medium"
+                  className="w-full p-2.5 rounded-none bg-white border border-slate-300 text-xs text-slate-800 shadow-none focus:outline-none focus:border-blue-700"
                 />
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-300">
                 <button
                   type="button"
                   onClick={() => setShowApprovalModal(false)}
-                  className="h-10 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs cursor-pointer transition-colors"
+                  className="h-9 px-4 rounded-none bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleRecordInboundApproval}
-                  className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors cursor-pointer shadow-xs"
+                  className="h-9 px-5 rounded-none bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition-colors cursor-pointer"
                 >
                   Save Sanction &amp; Proceed
                 </button>

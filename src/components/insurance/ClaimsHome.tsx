@@ -225,7 +225,7 @@ export default function ClaimsHome({
             <button
               type="button"
               onClick={() => setIsNewClaimOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-full shadow-xs transition-colors cursor-pointer"
             >
               <Plus size={15} />
               <span>New Claim</span>
@@ -469,10 +469,17 @@ export default function ClaimsHome({
                       label: c.policy.insurerName.slice(0, 4).toUpperCase(),
                     }
 
-                    // Compute contextual action label
-                    const actionLabel = openQs.length
-                      ? `Answer Insurer Query${isOverdue ? " (Overdue)" : ""}`
-                      : NEXT_SHORT[c.status] || "Review Claim Package"
+                    // Compute contextual action label matching standard desk guide
+                    let actionLabel = "Upload discharge papers and send claim"
+                    if (openQs.length > 0) {
+                      actionLabel = `Answer Insurer Query${isOverdue ? " (Overdue)" : ""}`
+                    } else if (c.status === "APPROVED" || c.status === "PARTIALLY_APPROVED") {
+                      actionLabel = "Enter settlement letter number"
+                    } else if (c.status === "PREAUTH_DRAFT" || c.status === "ELIGIBILITY_PENDING") {
+                      actionLabel = "Submit pre-auth requisition"
+                    } else if (c.status === "CLAIM_SUBMITTED") {
+                      actionLabel = "Track adjudication response"
+                    }
 
                     return (
                       <tr
@@ -556,11 +563,10 @@ export default function ClaimsHome({
                           </div>
                         </td>
 
-                        {/* Action Link / Button */}
-                        <td className="px-6 py-4">
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100/80 text-blue-700 font-bold text-[11.5px] transition-colors group-hover:shadow-2xs">
-                            <span>{actionLabel}</span>
-                            <ArrowRight size={13} className="text-blue-500 group-hover:translate-x-0.5 transition-transform" />
+                        {/* Action Link / Button Pill */}
+                        <td className="px-5 py-4">
+                          <div className="bg-[#EFF6FF] group-hover:bg-blue-100/70 text-blue-600 font-bold text-[11.5px] px-3.5 py-2.5 rounded-2xl text-center leading-tight transition-colors shadow-2xs max-w-[165px]">
+                            {actionLabel}
                           </div>
                         </td>
 
