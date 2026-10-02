@@ -70,7 +70,13 @@ export default function ClaimsHome({ onNavigate, initialCaseId, initialView }: {
     return (
       <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden">
         {toastNode}
-        <ClaimWorkspace c={current} notify={notify} onBack={() => setOpen(undefined)} onOpenBilling={() => onNavigate("billing_ip")} />
+        <ClaimWorkspace
+          c={current}
+          notify={notify}
+          onBack={() => setOpen(undefined)}
+          onOpenBilling={() => onNavigate("billing_ip")}
+          onOpenEmailHub={() => onNavigate("insurance_emails", current.id)}
+        />
       </div>
     )
 

@@ -96,6 +96,7 @@ export const ALL_SYSTEM_MODULES = [
   "insurance_eligibility",
   "insurance_claims",
   "insurance_queries",
+  "insurance_emails",
   "insurance_settlement",
   "insurance_masters",
   "analytics",
@@ -177,7 +178,7 @@ export const INSURANCE_PERMISSIONS = {
 } as const
 export type InsurancePermission = keyof typeof INSURANCE_PERMISSIONS
 const ALL_INSURANCE_PERMISSIONS = Object.keys(INSURANCE_PERMISSIONS) as InsurancePermission[]
-const INSURANCE_PAGES = ["insurance", "insurance_desk", "insurance_preauth", "insurance_claims", "insurance_queries", "insurance_settlement", "insurance_reconciliation"]
+const INSURANCE_PAGES = ["insurance", "insurance_desk", "insurance_preauth", "insurance_claims", "insurance_queries", "insurance_emails", "insurance_settlement", "insurance_reconciliation"]
 const INSURANCE_MASTER_PAGES = ["insurance_masters", "insurance_tpas", "insurance_packages", "insurance_pricing", "insurance_docrules"]
 
 // Super admin role gets everything

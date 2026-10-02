@@ -18,7 +18,19 @@ import { Mail, Sparkles, CheckCircle2, ArrowRight } from "lucide-react"
 const TABS = ["Current step", "Bills & Pharmacy", "Patient Journey", "Emails", "Documents", "Details", "History"] as const
 type Tab = (typeof TABS)[number]
 
-export default function ClaimWorkspace({ c, notify, onBack, onOpenBilling }: { c: ComprehensiveClaimRecord; notify: Notify; onBack: () => void; onOpenBilling?: () => void }) {
+export default function ClaimWorkspace({
+  c,
+  notify,
+  onBack,
+  onOpenBilling,
+  onOpenEmailHub,
+}: {
+  c: ComprehensiveClaimRecord
+  notify: Notify
+  onBack: () => void
+  onOpenBilling?: () => void
+  onOpenEmailHub?: () => void
+}) {
   const [tab, setTab] = useState<Tab>("Current step")
   const [composing, setComposing] = useState(false)
   const stage = stepOf(c)
@@ -145,7 +157,7 @@ export default function ClaimWorkspace({ c, notify, onBack, onOpenBilling }: { c
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         type="button"
-                        onClick={() => setTab("Emails")}
+                        onClick={() => (onOpenEmailHub ? onOpenEmailHub() : setTab("Emails"))}
                         className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 text-[12px] font-bold rounded-[6px] transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                       >
                         <Mail size={13} /> View Full Email Hub <ArrowRight size={13} />
