@@ -146,7 +146,7 @@ export default function Login({ onLogin }: LoginProps) {
         <div className="relative z-10">
           {/* Logo */}
           <div className="mb-6">
-            <HospAILogo variant="horizontal" theme="dark" className="h-12" />
+            <HospAILogo variant="horizontal" theme="dark" className="h-16" />
           </div>
 
           {/* Title & Subtitle directly below Logo */}

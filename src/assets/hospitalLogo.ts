@@ -1,6 +1,7 @@
-import { RECEIPT_LOGO_BASE64 } from "./receiptLogoBase64"
+import hospaiLogoImg from "./hospai-logo.png"
+import kalpraLogoImg from "./Kalpra-logo.png"
 
-export const HOSPITAL_LOGO = RECEIPT_LOGO_BASE64
-export const KALPRA_LOGO = RECEIPT_LOGO_BASE64
+export const HOSPITAL_LOGO = hospaiLogoImg
+export const KALPRA_LOGO = kalpraLogoImg
 
 export default HOSPITAL_LOGO
