@@ -3,6 +3,7 @@ import { Icon } from "./icons"
 import { StatusBadge, Btn, Input } from "./shared"
 import { db, DBPatient, DBOPEncounter } from "../services/db"
 import { getDoctorMaster, getDoctorConsultationFee } from "../services/doctorMaster"
+import { HospAILogo } from "./HospAILogo"
 
 export interface OPPatient {
   id?: string
@@ -1526,11 +1527,7 @@ export default function OPWorkflow({
 
               <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3.5 mb-4">
                 <div className="flex items-center gap-2.5">
-                  <img
-                    src="/logo.png"
-                    alt="HospAI"
-                    className="w-8 h-8 object-contain"
-                  />
+                  <HospAILogo variant="icon" className="w-8 h-8 shrink-0" />
                   <div>
                     <div className="font-bold text-[14px] text-gray-900">
                       HospAI General Hospital
@@ -3420,11 +3417,7 @@ export default function OPWorkflow({
                       {/* Header */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E2E8F0] pb-4 pt-1 gap-2">
                         <div className="flex items-center gap-3">
-                          <img
-                            src="/logo.png"
-                            alt="HospAI"
-                            className="w-10 h-10 object-contain"
-                          />
+                          <HospAILogo variant="icon" className="w-10 h-10 shrink-0" />
                           <div>
                             <div className="font-bold text-[16px] text-gray-900">
                               HospAI General Hospital

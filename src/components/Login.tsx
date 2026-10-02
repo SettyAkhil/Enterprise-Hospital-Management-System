@@ -4,6 +4,8 @@ import { AuditDatabase } from "../services/auditDb"
 import { DOCTOR_ROSTER } from "../services/doctorPortalDb"
 import { RoleDatabase } from "../services/roleDb"
 import { credentialsForRole } from "../lib/demoCredentials"
+import { HospAILogo } from "./HospAILogo"
+import { KalpraLogo } from "./KalpraLogo"
 
 interface LoginProps {
   onLogin: (userData: {
@@ -144,13 +146,7 @@ export default function Login({ onLogin }: LoginProps) {
         <div className="relative z-10">
           {/* Logo */}
           <div className="mb-6">
-            <div className="w-40 h-40 flex items-center justify-start flex-shrink-0">
-              <img
-                src="/logo.png"
-                alt="HospAI Logo"
-                className="w-40 h-40 object-contain pointer-events-none"
-              />
-            </div>
+            <HospAILogo variant="horizontal" theme="dark" className="h-12" />
           </div>
 
           {/* Title & Subtitle directly below Logo */}
@@ -209,17 +205,11 @@ export default function Login({ onLogin }: LoginProps) {
         </div>
 
         {/* Footer with Kalpra Tech logo at the complete bottom right (inside white curve) */}
-        <div className="absolute bottom-1 right-8 z-10 flex items-end gap-2">
-          <span className="text-[11.5px] text-[#475569] font-medium whitespace-nowrap mb-3.5">
+        <div className="absolute bottom-2 right-8 z-10 flex items-center gap-2">
+          <span className="text-[11.5px] text-[#475569] font-medium whitespace-nowrap mb-0.5">
             Powered by
           </span>
-          <div className="w-[100px] h-[100px] flex items-center justify-center flex-shrink-0">
-            <img
-              src="/kalpra_logo.png"
-              alt="Kalpra Tech Logo"
-              className="w-full h-full object-contain pointer-events-none"
-            />
-          </div>
+          <KalpraLogo dark={false} className="h-7" />
         </div>
       </div>
 
@@ -240,13 +230,7 @@ export default function Login({ onLogin }: LoginProps) {
 
         <div className="w-full max-w-sm mx-auto my-auto relative z-10">
           <div className="flex justify-center mb-6 lg:hidden">
-            <div className="w-24 h-24 flex items-center justify-center flex-shrink-0">
-              <img
-                src="/logo.png"
-                alt="HospAI Logo"
-                className="w-full h-full object-contain pointer-events-none"
-              />
-            </div>
+            <HospAILogo variant="horizontal" theme="light" className="h-10 justify-center" />
           </div>
 
           <div className="mb-6">

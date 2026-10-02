@@ -14,6 +14,7 @@ import {
   findMatchingPatient,
 } from "../services/db"
 import PatientJourneyModal from "./PatientJourneyModal"
+import { HospAILogo } from "./HospAILogo"
 
 // Accurate age calculation from Date of Birth
 const calculateAge = (dobString: string): number => {
@@ -1215,11 +1216,7 @@ export default function Registration({
 
                   <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-3.5 mb-4">
                     <div className="flex items-center gap-2.5">
-                      <img
-                        src="/logo.png"
-                        alt="HospAI"
-                        className="w-8 h-8 object-contain"
-                      />
+                      <HospAILogo variant="icon" className="w-8 h-8 shrink-0" />
                       <div>
                         <div className="font-bold text-[14px] text-gray-900">
                           HospAI General Hospital

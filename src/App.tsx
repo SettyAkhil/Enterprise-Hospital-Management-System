@@ -60,6 +60,7 @@ import InsuranceReportsView from "./components/insurance/InsuranceReportsView"
 import InsuranceIntakeView from "./components/insurance/InsuranceIntakeView"
 import PreAuthRequestView from "./components/insurance/PreAuthRequestView"
 import { InsuranceEngineService } from "./services/insuranceDb"
+import { HospAILogo } from "./components/HospAILogo"
 import BillingDashboard from "./components/billing/BillingDashboard"
 
 import RevenueDashboard from "./components/billing/RevenueDashboard"
@@ -1918,13 +1919,12 @@ export default function App() {
                 }`}
             >
               {/* Top Logo Section */}
-              <div className="flex items-center justify-center py-2.5 px-2 border-b border-[#1E2D42]/60 flex-shrink-0">
-                <img
-                  src="/logo.png"
-                  alt="HospAI Logo"
-                  className={`${sidebarCollapsed ? "w-8 h-8" : "w-40 h-40"
-                    } object-contain pointer-events-none transition-all duration-200`}
-                />
+              <div className="flex items-center justify-center py-3.5 px-3 border-b border-[#1E2D42]/80 flex-shrink-0">
+                {sidebarCollapsed ? (
+                  <HospAILogo variant="icon" className="w-8 h-8" />
+                ) : (
+                  <HospAILogo variant="horizontal" theme="dark" className="h-9 w-full" />
+                )}
               </div>
               <div
                 className={`flex-1 py-2 ${sidebarCollapsed ? "px-1" : "px-2"}`}
