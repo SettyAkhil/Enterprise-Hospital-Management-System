@@ -1921,9 +1921,9 @@ export default function App() {
               {/* Top Logo Section */}
               <div className="flex items-center justify-center py-3.5 px-3 border-b border-[#1E2D42]/80 flex-shrink-0">
                 {sidebarCollapsed ? (
-                  <HospAILogo variant="icon" className="w-8 h-8" />
+                  <HospAILogo variant="icon" className="w-10 h-10" />
                 ) : (
-                  <HospAILogo variant="horizontal" theme="dark" className="h-9 w-full" />
+                  <HospAILogo variant="horizontal" className="h-14 w-full" />
                 )}
               </div>
               <div

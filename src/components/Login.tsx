@@ -146,7 +146,7 @@ export default function Login({ onLogin }: LoginProps) {
         <div className="relative z-10">
           {/* Logo */}
           <div className="mb-6">
-            <HospAILogo variant="horizontal" theme="dark" className="h-16" />
+            <HospAILogo variant="horizontal" className="h-24" />
           </div>
 
           {/* Title & Subtitle directly below Logo */}
@@ -209,7 +209,7 @@ export default function Login({ onLogin }: LoginProps) {
           <span className="text-[11.5px] text-[#475569] font-medium whitespace-nowrap mb-0.5">
             Powered by
           </span>
-          <KalpraLogo dark={false} className="h-7" />
+          <KalpraLogo className="h-9" />
         </div>
       </div>
 
@@ -230,7 +230,7 @@ export default function Login({ onLogin }: LoginProps) {
 
         <div className="w-full max-w-sm mx-auto my-auto relative z-10">
           <div className="flex justify-center mb-6 lg:hidden">
-            <HospAILogo variant="horizontal" theme="light" className="h-10 justify-center" />
+            <HospAILogo variant="horizontal" className="h-16 justify-center" />
           </div>
 
           <div className="mb-6">
