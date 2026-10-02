@@ -104,6 +104,7 @@ export default function ImportAllResultsModal({
   }
 
   const handleSaveAll = () => {
+    if (order.billing.status !== "Paid") return
     const payload = testsData.map((t) => ({
       testId: t.testId,
       status: "Completed" as const,
@@ -154,6 +155,21 @@ export default function ImportAllResultsModal({
             ✕
           </button>
         </div>
+
+        {/* Warning Banner if Billing is Pending */}
+        {order.billing.status !== "Paid" && (
+          <div className="bg-amber-100 border-b border-amber-300 px-6 py-2.5 flex items-center justify-between text-xs text-amber-900 font-medium">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <span>
+                <strong>Billing Settlement Pending:</strong> Patient investigations have not been settled at Billing Desk. Result saving is restricted.
+              </span>
+            </div>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900 uppercase">
+              Restricted
+            </span>
+          </div>
+        )}
 
         {/* Test Selector Tabs */}
         <div className="bg-emerald-50/70 border-b border-emerald-200 px-6 py-2.5 flex items-center gap-2 overflow-x-auto">
@@ -338,8 +354,18 @@ export default function ImportAllResultsModal({
           <div className="flex items-center gap-3">
             <button
               type="button"
+              disabled={order.billing.status !== "Paid"}
               onClick={handleSaveAll}
-              className="px-6 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
+              title={
+                order.billing.status !== "Paid"
+                  ? "Action restricted: Billing payment is pending at reception desk"
+                  : "Save all test results"
+              }
+              className={`px-6 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm flex items-center gap-1.5 ${
+                order.billing.status === "Paid"
+                  ? "text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
+                  : "text-gray-400 bg-gray-300 border border-gray-300 cursor-not-allowed opacity-75"
+              }`}
             >
               <span>💾</span> Save All Results ({testsData.length} Tests)
             </button>

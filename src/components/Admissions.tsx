@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { Icon } from "./icons"
-import { BedCard, type BedCardData } from "./bed/BedCard"
+import { BedCard, bedOccupantName, type BedCardData } from "./bed/BedCard"
+import { AdmissionPaymentType } from "./insurance/integrations"
+import { Modal } from "./insurance/ui"
 import { apiFetch, reportError } from "../lib/api"
 import { formatDateTimeIST } from "../lib/format"
 import type { Notice } from "../types"
@@ -112,9 +114,20 @@ export default function Admissions({ setNotice, navigate }: Props) {
   }, [beds])
 
   const goToBedManagement = () => navigate?.("beds")
+  const [paymentFor, setPaymentFor] = useState<Bed | null>(null)
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F0F2F5]">
+      {paymentFor && (
+        <Modal wide title={`Payment type — ${bedOccupantName(paymentFor)}`} onClose={() => setPaymentFor(null)}>
+          <AdmissionPaymentType
+            patientId={paymentFor.patient_id || ""}
+            patientName={bedOccupantName(paymentFor)}
+            encounterType={paymentFor.bed_type === "ICU" ? "ICU" : "IP"}
+            department={paymentFor.bed_type === "ICU" ? "ICU" : "Inpatient"}
+          />
+        </Modal>
+      )}
       <div className="bg-white border-b border-[#DDE2EC] px-6 py-4 flex items-center justify-between gap-4 flex-shrink-0">
         <div className="min-w-0">
           <h1 className="text-base font-semibold text-gray-900 leading-tight">
@@ -284,7 +297,17 @@ export default function Admissions({ setNotice, navigate }: Props) {
                 ) : (
                   <div className="bed-info-card-grid">
                     {admittedToday.map((bed) => (
-                      <BedCard key={bed.id} bed={bed} readOnly />
+                      <div key={bed.id} className="flex flex-col gap-1.5">
+                        <BedCard bed={bed} readOnly />
+                        {/* Payment type is chosen per encounter; insurance opens its case. */}
+                        <button
+                          type="button"
+                          onClick={() => setPaymentFor(bed)}
+                          className="h-8 px-2 bg-white border border-[#DDE2EC] hover:border-[#1B4FD8] text-[12px] font-semibold text-gray-800 flex items-center justify-center gap-1.5"
+                        >
+                          💳 Payment type
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}

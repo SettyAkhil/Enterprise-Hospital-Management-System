@@ -7,6 +7,7 @@ import { formatDateTimeIST } from "../lib/format";
 import type { Notice, Patient } from "../types";
 import AddEvaluationModal from "./AddEvaluationModal";
 import PatientJourneyModal from "./PatientJourneyModal";
+import { PatientInsuranceTab } from "./insurance/integrations";
 import { db, DBOPEncounter } from "../services/db";
 
 // ==================== Directory (search across OP / IP / ER / ICU) ====================
@@ -507,7 +508,7 @@ const ENTRY_TYPE_COLOR: Record<string, { bg: string; text: string }> = {
   Treatment: { bg: "#ECFEFF", text: "#0E7490" },
 };
 
-const CHART_TABS = ["Summary", "Day-wise", "Timeline", "Problems", "Medications", "Allergies", "Vitals", "Labs", "Documents", "Billing"];
+const CHART_TABS = ["Summary", "Day-wise", "Timeline", "Problems", "Medications", "Allergies", "Vitals", "Labs", "Documents", "Billing", "Insurance"];
 
 export default function PatientChart({
   onBack,
@@ -1256,6 +1257,10 @@ export default function PatientChart({
                   )}
                 </Card>
               </div>
+            )}
+
+            {tab === "Insurance" && selectedRow && (
+              <PatientInsuranceTab patientId={selectedRow.patient_id} patientName={selectedRow.name} />
             )}
 
             {tab === "Billing" && (

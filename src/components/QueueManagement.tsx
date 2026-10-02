@@ -3,6 +3,7 @@ import { ACTIVE_DOCTORS } from "../services/doctorMaster"
 import { Icon } from "./icons"
 import { db, DBOPEncounter, DBPatient } from "../services/db"
 import { notifyPatientCalledToNurse } from "../services/patientNotifications"
+import { HospAILogo } from "./HospAILogo"
 
 interface QueueManagementProps {
   onNavigateToOPWorkflow?: (encId: string, step?: number) => void
@@ -1544,11 +1545,7 @@ export default function QueueManagement({
           {/* TV Top Header */}
           <div className="flex justify-between items-center border-b border-slate-800 pb-3">
             <div className="flex items-center gap-3">
-              <img
-                src="/logo.png"
-                alt="HospAI"
-                className="w-9 h-9 object-contain"
-              />
+              <HospAILogo variant="icon" className="w-14 h-14 shrink-0" />
               <div>
                 <div className="text-lg font-black text-white tracking-wider">
                   HOSPAI GENERAL HOSPITAL
