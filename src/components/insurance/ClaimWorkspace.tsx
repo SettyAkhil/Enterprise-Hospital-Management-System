@@ -12,8 +12,10 @@ import { AuditTable, BillLines, Consumption, Readiness } from "./widgets"
 
 import ClaimPharmacyBillsView from "./ClaimPharmacyBillsView"
 import ClaimPatientJourneyView from "./ClaimPatientJourneyView"
+import ClaimEmailTrackerView from "./ClaimEmailTrackerView"
+import { Mail, Sparkles, CheckCircle2, ArrowRight } from "lucide-react"
 
-const TABS = ["Current step", "Bills & Pharmacy", "Patient Journey", "Documents", "Emails", "Details", "History"] as const
+const TABS = ["Current step", "Bills & Pharmacy", "Patient Journey", "Emails", "Documents", "Details", "History"] as const
 type Tab = (typeof TABS)[number]
 
 export default function ClaimWorkspace({ c, notify, onBack, onOpenBilling }: { c: ComprehensiveClaimRecord; notify: Notify; onBack: () => void; onOpenBilling?: () => void }) {
@@ -102,8 +104,8 @@ export default function ClaimWorkspace({ c, notify, onBack, onOpenBilling }: { c
                 className={`h-11 px-3 -mb-px border-b-2 text-[13px] font-medium whitespace-nowrap cursor-pointer ${tab === t ? "border-blue-600 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}
               >
                 {t}
+                {t === "Emails" && <span className="ml-1.5 text-slate-400 tabular-nums">📬</span>}
                 {t === "Documents" && mand.length > 0 && <span className="ml-1.5 text-slate-400 tabular-nums">{verified}/{mand.length}</span>}
-                {t === "Emails" && mails.length > 0 && <span className="ml-1.5 text-slate-400 tabular-nums">{mails.length}</span>}
               </button>
             ))}
           </div>
@@ -111,6 +113,47 @@ export default function ClaimWorkspace({ c, notify, onBack, onOpenBilling }: { c
           <div className="p-6">
             {tab === "Current step" && (
               <div className="space-y-5">
+                {/* ── EMAIL & DECISION TRACKER BANNER (PROMINENT AT TOP) ── */}
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white rounded-[8px] p-4 shadow-sm border border-slate-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[11px] font-extrabold uppercase tracking-widest text-sky-400">
+                          Live Email &amp; TPA Decision Tracker
+                        </span>
+                        <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-slate-300 font-mono">
+                          {c.policy.tpaName || c.policy.insurerName}
+                        </span>
+                      </div>
+
+                      <div className="text-[13.5px] font-semibold text-white mt-1.5 flex items-center gap-2">
+                        {c.approvedPreAuthAmount > 0 ? (
+                          <span className="text-emerald-300 font-bold flex items-center gap-1">
+                            <CheckCircle2 size={15} /> Sanction Approved: {inr(c.approvedPreAuthAmount)} (Code: {c.preAuth?.approvalCode || "AUTH-APPROVED"})
+                          </span>
+                        ) : (
+                          <span>Inbound Decision Gateway Active — Tracking {c.id}</span>
+                        )}
+                      </div>
+
+                      <p className="text-[12px] text-slate-300 mt-0.5">
+                        Bi-directional email communication, deficiency query tracking, and cashless approval sanction letters.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setTab("Emails")}
+                        className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 text-[12px] font-bold rounded-[6px] transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        <Mail size={13} /> View Full Email Hub <ArrowRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <div className="text-[12px] text-slate-500">
                     Stage {stage.n} of 8
@@ -137,22 +180,11 @@ export default function ClaimWorkspace({ c, notify, onBack, onOpenBilling }: { c
               <ClaimPatientJourneyView c={c} />
             )}
 
-            {tab === "Documents" && <DocumentChecklist c={c} notify={notify} />}
-
             {tab === "Emails" && (
-              <div className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <p className="text-[13px] text-slate-500">Everything sent to and received from {c.policy.tpaName || c.policy.insurerName}.</p>
-                  {!composing && (
-                    <button type="button" className="text-[13px] font-medium text-blue-700 hover:underline cursor-pointer" onClick={() => setComposing(true)}>
-                      Write an email
-                    </button>
-                  )}
-                </div>
-                {composing && <MailComposer c={c} purpose="General" notify={(m, t) => (notify(m, t), t !== "error" && setComposing(false))} allowPortal={false} />}
-                <MailThread mails={mails} />
-              </div>
+              <ClaimEmailTrackerView c={c} notify={notify} />
             )}
+
+            {tab === "Documents" && <DocumentChecklist c={c} notify={notify} />}
 
             {tab === "Details" && <Details c={c} />}
 
