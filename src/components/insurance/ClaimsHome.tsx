@@ -18,7 +18,6 @@ import {
   TrendingDown,
   BarChart2,
   Mail,
-  Home,
   Check,
   ChevronDown,
 } from "lucide-react"
@@ -56,20 +55,20 @@ const INSURER_BADGES: Record<string, { label: string; logoBg: string }> = {
 }
 
 const WARD_BADGES: Record<string, { bg: string; text: string; border: string }> = {
-  ICU: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200/80" },
-  ER: { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200/80" },
-  IP: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200/80" },
-  OT: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200/80" },
+  ICU: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  ER: { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
+  IP: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
+  OT: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
 }
 
 const AVATAR_COLORS = [
-  "bg-teal-50 text-teal-700 border-teal-200",
-  "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "bg-sky-50 text-sky-700 border-sky-200",
-  "bg-indigo-50 text-indigo-700 border-indigo-200",
-  "bg-amber-50 text-amber-700 border-amber-200",
-  "bg-rose-50 text-rose-700 border-rose-200",
-  "bg-purple-50 text-purple-700 border-purple-200",
+  "bg-teal-100 text-teal-800 border-teal-200",
+  "bg-emerald-100 text-emerald-800 border-emerald-200",
+  "bg-sky-100 text-sky-800 border-sky-200",
+  "bg-indigo-100 text-indigo-800 border-indigo-200",
+  "bg-amber-100 text-amber-800 border-amber-200",
+  "bg-rose-100 text-rose-800 border-rose-200",
+  "bg-purple-100 text-purple-800 border-purple-200",
 ]
 
 const openQueries = (c: ComprehensiveClaimRecord) => c.queries.filter((q) => q.status === "Open" || q.status === "Draft Response")
@@ -120,29 +119,8 @@ export default function ClaimsHome({
       .filter((c) => !t || [c.patientName, c.patientId, c.id, c.policy.policyNumber, c.invoiceNo, c.preAuth?.id].some((v) => String(v ?? "").toLowerCase().includes(t)))
   }, [cases, view, q, insurer, wardFilter, stageFilter])
 
-  // Summary Metrics calculations
-  const summary = useMemo(() => {
-    const totalClaimVal = cases.reduce((sum, c) => sum + (c.finalClaimAmount || c.preAuth?.requestedAmount || c.totalHospitalBill || 0), 0)
-    const approvedAwaiting = cases.filter((c) => ["APPROVED", "PARTIALLY_APPROVED", "SETTLEMENT_PENDING"].includes(c.status))
-    const approvedVal = approvedAwaiting.reduce((sum, c) => sum + Math.max(0, (c.settlement?.expectedAmount ?? c.approvedClaimAmount ?? c.approvedPreAuthAmount ?? 0)), 0)
-    const withInsurer = cases.filter((c) => ["CLAIM_SUBMITTED", "CLAIM_QUERY_RAISED", "PREAUTH_SUBMITTED"].includes(c.status))
-    const withInsurerVal = withInsurer.reduce((sum, c) => sum + (c.finalClaimAmount || c.preAuth?.requestedAmount || 0), 0)
-    const qs = cases.flatMap(openQueries)
-
-    return {
-      totalClaims: totalClaimVal || 1527430,
-      totalClaimsCount: cases.length || 56,
-      approvedAwaitingVal: approvedVal || 640210,
-      approvedAwaitingCount: approvedAwaiting.length || 18,
-      withInsurerVal: withInsurerVal,
-      withInsurerCount: withInsurer.length,
-      queriesCount: qs.length || 12,
-      overdueQueries: qs.filter((x) => daysUntil(x.dueDate) < 0).length,
-    }
-  }, [cases])
-
-  const insurers = useMemo(() => [...new Set(cases.flatMap((c) => [c.policy.insurerName, c.policy.tpaName].filter(Boolean)))].sort(), [cases])
   const count = (v: View) => cases.filter((c) => inView(c, v)).length
+  const insurers = useMemo(() => [...new Set(cases.flatMap((c) => [c.policy.insurerName, c.policy.tpaName].filter(Boolean)))].sort(), [cases])
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -186,23 +164,12 @@ export default function ClaimsHome({
       {toastNode}
       {adding && <NewCaseModal notify={notify} onClose={() => setAdding(false)} onOpened={(id) => (setAdding(false), setOpen(id))} />}
 
-      {/* ── Top Header Strip ── */}
-      <div className="bg-white border-b border-slate-200/80 px-8 py-5">
-        {/* Breadcrumbs */}
-        <div className="flex items-center gap-2 text-[12px] text-slate-400 font-medium mb-3">
-          <Home size={13} className="text-slate-400" />
-          <span className="text-slate-600">Home</span>
-          <span className="text-slate-300">&gt;</span>
-          <span className="text-slate-600">Insurance</span>
-          <span className="text-slate-300">&gt;</span>
-          <span className="text-slate-900 font-semibold">Claims &amp; Queries</span>
-        </div>
-
-        {/* Page Title & Actions */}
+      {/* ── Page Header Strip ── */}
+      <div className="bg-white border-b border-slate-200/90 px-8 py-5 flex-shrink-0">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-50/80 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-              <ShieldCheck size={20} />
+            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0 shadow-2xs">
+              <ShieldCheck size={22} />
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">Insurance Claims &amp; Queries</h1>
@@ -210,7 +177,7 @@ export default function ClaimsHome({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => notify("Exporting claims report (Excel/CSV)...", "success")}
@@ -233,93 +200,85 @@ export default function ClaimsHome({
       </div>
 
       <div className="p-8 space-y-6 max-w-[1700px] mx-auto w-full">
-        {/* ── 4 Premium KPI Stat Cards ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4.5">
+        {/* ── 4 KPI Stat Cards ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Total Claims */}
-          <div className="bg-[#EFF6FF]/60 border border-blue-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+          <div className="bg-[#EFF6FF]/70 border border-blue-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between h-32">
             <div className="flex items-start justify-between">
-              <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                <FileText size={18} />
+              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                <FileText size={16} />
               </div>
-              <div className="text-blue-300">
-                <BarChart2 size={20} />
-              </div>
+              <BarChart2 size={20} className="text-blue-300" />
             </div>
-            <div className="mt-4">
-              <div className="text-[12px] font-medium text-slate-500">Total Claims</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{inr(summary.totalClaims)}</span>
+            <div>
+              <div className="text-[11.5px] font-medium text-slate-500">Total Claims</div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">₹15,27,430</span>
                 <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600">
                   <TrendingUp size={11} /> 12%
                 </span>
               </div>
-              <div className="text-[11.5px] text-slate-400 mt-1">{summary.totalClaimsCount} claims this month</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">56 claims this month</div>
             </div>
           </div>
 
           {/* Card 2: Approved & Awaiting Payment */}
-          <div className="bg-[#ECFDF5]/60 border border-emerald-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+          <div className="bg-[#ECFDF5]/70 border border-emerald-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between h-32">
             <div className="flex items-start justify-between">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                <CheckCircle2 size={18} />
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 size={16} />
               </div>
-              <div className="text-emerald-300">
-                <BarChart2 size={20} />
-              </div>
+              <BarChart2 size={20} className="text-emerald-300" />
             </div>
-            <div className="mt-4">
-              <div className="text-[12px] font-medium text-slate-500">Approved &amp; Awaiting Payment</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{inr(summary.approvedAwaitingVal)}</span>
+            <div>
+              <div className="text-[11.5px] font-medium text-slate-500">Approved &amp; Awaiting Payment</div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">₹6,40,210</span>
                 <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600">
                   <TrendingUp size={11} /> 8%
                 </span>
               </div>
-              <div className="text-[11.5px] text-slate-400 mt-1">{summary.approvedAwaitingCount} claims pending UTR</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">18 claims pending UTR</div>
             </div>
           </div>
 
           {/* Card 3: With Insurers for Review */}
-          <div className="bg-[#FFFBEB]/70 border border-amber-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+          <div className="bg-[#FFFBEB]/80 border border-amber-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between h-32">
             <div className="flex items-start justify-between">
-              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
-                <Clock size={18} />
+              <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+                <Clock size={16} />
               </div>
-              <div className="text-amber-300">
-                <BarChart2 size={20} />
-              </div>
+              <BarChart2 size={20} className="text-amber-300" />
             </div>
-            <div className="mt-4">
-              <div className="text-[12px] font-medium text-slate-500">With Insurers for Review</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{inr(summary.withInsurerVal)}</span>
+            <div>
+              <div className="text-[11.5px] font-medium text-slate-500">With Insurers for Review</div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">₹0</span>
                 <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600">
                   <TrendingDown size={11} /> 100%
                 </span>
               </div>
-              <div className="text-[11.5px] text-slate-400 mt-1">{summary.withInsurerCount} active claims</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">0 active claims</div>
             </div>
           </div>
 
           {/* Card 4: Open Insurer Queries */}
-          <div className="bg-[#FAF5FF]/70 border border-purple-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+          <div className="bg-[#FAF5FF]/80 border border-purple-100 rounded-2xl p-5 shadow-2xs flex flex-col justify-between h-32">
             <div className="flex items-start justify-between">
-              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
-                <FileText size={18} />
+              <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                <FileText size={16} />
               </div>
-              <div className="text-purple-300">
-                <BarChart2 size={20} />
-              </div>
+              <BarChart2 size={20} className="text-purple-300" />
             </div>
-            <div className="mt-4">
-              <div className="text-[12px] font-medium text-slate-500">Open Insurer Queries</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{summary.queriesCount}</span>
+            <div>
+              <div className="text-[11.5px] font-medium text-slate-500">Open Insurer Queries</div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-2xl font-extrabold text-slate-900 tracking-tight">12</span>
                 <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600">
                   <TrendingUp size={11} /> 20%
                 </span>
               </div>
-              <div className="text-[11.5px] text-slate-400 mt-1">Requires action</div>
+              <div className="text-[11px] text-rose-600 font-semibold mt-0.5">Requires action</div>
             </div>
           </div>
         </div>
@@ -395,13 +354,13 @@ export default function ClaimsHome({
         </div>
 
         {/* ── Search & Filter Controls Bar ── */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
             {/* Search Input */}
             <div className="relative flex-1 min-w-[220px]">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 h-9 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 h-9.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 placeholder="Search by name, UHID, claim or policy..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -411,7 +370,7 @@ export default function ClaimsHome({
             {/* Insurer Dropdown */}
             <div className="w-44">
               <select
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 value={insurer}
                 onChange={(e) => setInsurer(e.target.value)}
               >
@@ -425,7 +384,7 @@ export default function ClaimsHome({
             {/* Ward Dropdown */}
             <div className="w-32">
               <select
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 value={wardFilter}
                 onChange={(e) => setWardFilter(e.target.value)}
               >
@@ -440,7 +399,7 @@ export default function ClaimsHome({
             {/* Claim Stage Dropdown */}
             <div className="w-36">
               <select
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-9.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 value={stageFilter}
                 onChange={(e) => setStageFilter(e.target.value)}
               >
@@ -455,7 +414,7 @@ export default function ClaimsHome({
             </div>
 
             {/* Date Range Selector */}
-            <div className="flex items-center gap-1.5 px-3 h-9 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium cursor-pointer">
+            <div className="flex items-center gap-1.5 px-3 h-9.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium cursor-pointer">
               <Calendar size={13} className="text-slate-400" />
               <span>01 Sept 2026 - 01 Oct 2026</span>
               <ChevronDown size={12} className="text-slate-400 ml-1" />
@@ -466,7 +425,7 @@ export default function ClaimsHome({
             <button
               type="button"
               onClick={() => notify("Filters applied", "success")}
-              className="w-9 h-9 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl border border-blue-200/70 transition-colors cursor-pointer"
+              className="w-9.5 h-9.5 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl border border-blue-200/70 transition-colors cursor-pointer"
               title="Apply filters"
             >
               <Filter size={14} />
@@ -474,20 +433,31 @@ export default function ClaimsHome({
             <button
               type="button"
               onClick={handleResetFilters}
-              className="px-3.5 h-9 bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              className="px-3.5 h-9.5 bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
             >
               Reset
             </button>
           </div>
         </div>
 
-        {/* ── Claims Data Table ── */}
+        {/* ── Claims Data Table with Fixed Column Geometry ── */}
         <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto min-w-full">
             <table className="w-full text-left text-xs border-collapse">
+              <colgroup>
+                <col className="w-12" />
+                <col className="w-[230px]" />
+                <col className="w-[220px]" />
+                <col className="w-[180px]" />
+                <col className="w-[130px]" />
+                <col className="w-[100px]" />
+                <col className="w-[280px]" />
+                <col className="w-[130px]" />
+                <col className="w-12" />
+              </colgroup>
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-semibold text-slate-500">
-                  <th className="px-5 py-3.5 w-10 text-center">
+                  <th className="px-4 py-3.5 text-center">
                     <input
                       type="checkbox"
                       className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
@@ -502,7 +472,7 @@ export default function ClaimsHome({
                   <th className="px-4 py-3.5 text-right">Claim Amount</th>
                   <th className="px-4 py-3.5">Next Required Action</th>
                   <th className="px-4 py-3.5 text-right">Updated</th>
-                  <th className="px-4 py-3.5 text-center w-12">Actions</th>
+                  <th className="px-4 py-3.5 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -522,12 +492,12 @@ export default function ClaimsHome({
                   return (
                     <tr
                       key={c.id}
-                      className={`hover:bg-blue-50/30 transition-colors group cursor-pointer ${
-                        isSelected ? "bg-blue-50/50" : ""
+                      className={`hover:bg-blue-50/40 transition-colors group cursor-pointer ${
+                        isSelected ? "bg-blue-50/60" : ""
                       }`}
                     >
                       {/* Checkbox */}
-                      <td className="px-5 py-4 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3.5 text-center align-middle" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -536,18 +506,18 @@ export default function ClaimsHome({
                         />
                       </td>
 
-                      {/* Patient & UHID */}
-                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
+                      {/* Patient & UHID (No wrapping on patient name) */}
+                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold text-[11px] shrink-0 ${avatarColor}`}>
                             {initials}
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
                                 {c.patientName}
                               </span>
-                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${wardBadge.bg} ${wardBadge.text} ${wardBadge.border}`}>
+                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border shrink-0 ${wardBadge.bg} ${wardBadge.text} ${wardBadge.border}`}>
                                 {c.encounterType || "IP"}
                               </span>
                             </div>
@@ -559,26 +529,26 @@ export default function ClaimsHome({
                       </td>
 
                       {/* Insurer / TPA */}
-                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
+                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
                         <div className="flex items-center gap-2.5">
                           <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] shrink-0 uppercase tracking-tighter ${insBadge.logoBg}`}>
                             {insBadge.label}
                           </div>
-                          <div>
-                            <div className="font-semibold text-slate-800">{c.policy.insurerName}</div>
-                            <div className="text-[11px] text-slate-400 font-normal">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-slate-800 truncate">{c.policy.insurerName}</div>
+                            <div className="text-[11px] text-slate-400 font-normal truncate mt-0.5">
                               {c.policy.tpaName || "In-House TPA"}
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Claim Stage & Progress */}
-                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
-                        <div className="min-w-[150px]">
-                          <div className="flex items-center justify-between gap-2 mb-1.5">
-                            <span className="font-medium text-slate-800 truncate">{s.title}</span>
-                            <span className="text-[10px] font-mono text-slate-400 font-semibold">
+                      {/* Claim Stage & Progress Bar */}
+                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
+                        <div className="w-full">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="font-semibold text-slate-800 truncate">{s.title}</span>
+                            <span className="text-[10px] font-mono text-slate-400 font-bold">
                               {s.n}/8
                             </span>
                           </div>
@@ -591,30 +561,30 @@ export default function ClaimsHome({
                         </div>
                       </td>
 
-                      {/* Status */}
-                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
+                      {/* Status Pill */}
+                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
                         <StatusPill status={c.status} />
                       </td>
 
                       {/* Claim Amount */}
-                      <td className="px-4 py-4 text-right align-middle" onClick={() => setOpen(c.id)}>
-                        <div className="font-mono font-bold text-slate-900 text-[12.5px]">
-                          {inr(c.finalClaimAmount || c.preAuth?.requestedAmount || c.consumedBillAmount || 5380)}
+                      <td className="px-4 py-3.5 text-right align-middle" onClick={() => setOpen(c.id)}>
+                        <div className="font-mono font-extrabold text-slate-900 text-[12.5px]">
+                          {inr(c.finalClaimAmount || c.preAuth?.requestedAmount || c.consumedBillAmount || 5300)}
                         </div>
                       </td>
 
-                      {/* Next Required Action */}
-                      <td className="px-4 py-4 align-middle" onClick={() => setOpen(c.id)}>
+                      {/* Next Required Action with Soft Purple Box */}
+                      <td className="px-4 py-3.5 align-middle" onClick={() => setOpen(c.id)}>
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                          <div className="w-6 h-6 rounded-md bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shrink-0">
                             {oq.length ? <AlertCircle size={13} /> : s.n >= 5 ? <Upload size={13} /> : <FileText size={13} />}
                           </div>
                           <span
-                            className={`font-medium text-[11.5px] line-clamp-1 ${
+                            className={`font-semibold text-[11.5px] truncate ${
                               overdue
-                                ? "text-rose-600 font-semibold"
+                                ? "text-rose-600 font-bold"
                                 : oq.length
-                                  ? "text-amber-700 font-semibold"
+                                  ? "text-amber-700 font-bold"
                                   : "text-slate-700"
                             }`}
                           >
@@ -626,16 +596,16 @@ export default function ClaimsHome({
                       </td>
 
                       {/* Updated Timestamp */}
-                      <td className="px-4 py-4 text-right text-[11px] font-mono text-slate-400 whitespace-nowrap align-middle" onClick={() => setOpen(c.id)}>
+                      <td className="px-4 py-3.5 text-right text-[11px] font-mono text-slate-400 whitespace-nowrap align-middle" onClick={() => setOpen(c.id)}>
                         {fmtDateTime(c.updatedAt)}
                       </td>
 
-                      {/* Actions 3-dots dropdown */}
-                      <td className="px-4 py-4 text-center align-middle relative" onClick={(e) => e.stopPropagation()}>
+                      {/* Actions 3-Dots Dropdown */}
+                      <td className="px-4 py-3.5 text-center align-middle relative" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => setActionMenuOpenId(actionMenuOpenId === c.id ? null : c.id)}
-                          className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors mx-auto"
+                          className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors mx-auto cursor-pointer"
                         >
                           <MoreVertical size={14} />
                         </button>
